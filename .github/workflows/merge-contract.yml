@@ -425,6 +425,44 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Download preflight artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: preflight-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/merge/${{ needs.preflight.outputs.head_sha }}
+
+      - name: Download docs-drift artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-drift-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/docs-drift/${{ needs.preflight.outputs.head_sha }}
+
+      - name: Download codex-review artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: codex-review-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/review/${{ needs.preflight.outputs.head_sha }}
+
+      - name: Download ci-pipeline artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-pipeline-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/ci-pipeline/${{ needs.preflight.outputs.head_sha }}
+
+      - name: Download browser-evidence artifact
+        if: ${{ needs.preflight.outputs.browser_evidence_required == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: browser-evidence-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/browser-evidence/${{ needs.preflight.outputs.head_sha }}
+
+      - name: Download harness-smoke artifact
+        if: ${{ needs.preflight.outputs.harness_smoke_required == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: harness-smoke-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/harness-smoke/${{ needs.preflight.outputs.head_sha }}
+
       - name: Enforce merge contract
         env:
           HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}

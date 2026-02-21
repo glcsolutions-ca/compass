@@ -6,7 +6,7 @@ One place to see work, time, and delivery across your company.
 
 Requirements:
 
-- Node.js `24.13.1`
+- Node.js `24.x` (from `.nvmrc`; enforced by `engines >=24.8.0 <25`)
 - pnpm `10.30.1`
 
 ```bash

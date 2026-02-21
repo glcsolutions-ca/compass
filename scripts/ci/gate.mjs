@@ -122,17 +122,18 @@ async function main() {
 
   if (await fileExists(reviewPath)) {
     const review = await readJsonFile(reviewPath);
+    const codexReviewRequired = requiredChecks.includes("codex-review");
     if (review.headSha !== headSha) {
       reasons.push(`codex-review headSha mismatch: expected ${headSha}, got ${review.headSha}`);
     }
     if (review.tier !== tier) {
       reasons.push(`codex-review tier mismatch: expected ${tier}, got ${review.tier}`);
     }
-    if (tier === "t3" && review.mode !== "full") {
-      reasons.push("codex-review mode must be full for t3");
+    if (codexReviewRequired && review.mode !== "full") {
+      reasons.push("codex-review mode must be full when required by policy");
     }
-    if (tier !== "t3" && review.mode !== "no-op") {
-      reasons.push(`codex-review mode must be no-op for ${tier}`);
+    if (!codexReviewRequired && review.mode !== "no-op") {
+      reasons.push("codex-review mode must be no-op when not required by policy");
     }
   }
 

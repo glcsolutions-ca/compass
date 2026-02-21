@@ -1,0 +1,494 @@
+name: Merge Contract
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  preflight:
+    name: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      preflight_path: ${{ steps.preflight.outputs.preflight_path }}
+      base_sha: ${{ steps.preflight.outputs.base_sha }}
+      head_sha: ${{ steps.preflight.outputs.head_sha }}
+      pr_number: ${{ steps.preflight.outputs.pr_number }}
+      tier: ${{ steps.preflight.outputs.tier }}
+      required_checks_json: ${{ steps.preflight.outputs.required_checks_json }}
+      changed_files_json: ${{ steps.preflight.outputs.changed_files_json }}
+      required_flow_ids_csv: ${{ steps.preflight.outputs.required_flow_ids_csv }}
+      browser_evidence_required: ${{ steps.preflight.outputs.browser_evidence_required }}
+      harness_smoke_required: ${{ steps.preflight.outputs.harness_smoke_required }}
+      codex_review_required: ${{ steps.preflight.outputs.codex_review_required }}
+      codex_review_enabled: ${{ steps.preflight.outputs.codex_review_enabled }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.1
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run preflight
+        id: preflight
+        env:
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: pnpm ci:preflight
+
+      - name: Upload preflight artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: preflight-${{ steps.preflight.outputs.head_sha }}
+          path: ${{ steps.preflight.outputs.preflight_path }}
+
+  docs_drift:
+    name: docs-drift
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      docs_drift_path: ${{ steps.docs_drift.outputs.docs_drift_path }}
+      docs_drift_status: ${{ steps.docs_drift.outputs.docs_drift_status }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.1
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Evaluate docs drift
+        id: docs_drift
+        env:
+          HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+          RISK_TIER: ${{ needs.preflight.outputs.tier }}
+          CHANGED_FILES_JSON: ${{ needs.preflight.outputs.changed_files_json }}
+        run: pnpm ci:docs-drift
+
+      - name: Upload docs-drift artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-drift-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/docs-drift/${{ needs.preflight.outputs.head_sha }}/result.json
+          if-no-files-found: warn
+
+  codex_review:
+    name: codex-review
+    needs:
+      - preflight
+      - docs_drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      review_path: ${{ steps.codex_review.outputs.review_path }}
+      review_mode: ${{ steps.codex_review.outputs.review_mode }}
+      review_overall: ${{ steps.codex_review.outputs.review_overall }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.1
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run codex-review
+        id: codex_review
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+          RISK_TIER: ${{ needs.preflight.outputs.tier }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          CHANGED_FILES_JSON: ${{ needs.preflight.outputs.changed_files_json }}
+          CODEX_REVIEW_ENABLED: ${{ needs.preflight.outputs.codex_review_enabled }}
+        run: pnpm ci:codex-review
+
+      - name: Upload codex-review artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-review-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/review/${{ needs.preflight.outputs.head_sha }}
+          if-no-files-found: warn
+
+  ci_pipeline:
+    name: ci-pipeline
+    needs:
+      - preflight
+      - codex_review
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      ci_pipeline_path: ${{ steps.write_result.outputs.ci_pipeline_path }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.1
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ci-pipeline
+        id: run_pipeline
+        env:
+          HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+          RISK_TIER: ${{ needs.preflight.outputs.tier }}
+        run: pnpm ci:pipeline
+
+      - name: Write ci-pipeline artifact
+        if: ${{ always() }}
+        id: write_result
+        env:
+          HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+          RISK_TIER: ${{ needs.preflight.outputs.tier }}
+          PIPELINE_OUTCOME: ${{ steps.run_pipeline.outcome }}
+        run: |
+          mkdir -p .artifacts/ci-pipeline/$HEAD_SHA
+          status="fail"
+          if [ "$PIPELINE_OUTCOME" = "success" ]; then
+            status="pass"
+          fi
+          cat > .artifacts/ci-pipeline/$HEAD_SHA/result.json <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "tier": "$RISK_TIER",
+            "status": "$status"
+          }
+          JSON
+          echo "ci_pipeline_path=.artifacts/ci-pipeline/$HEAD_SHA/result.json" >> "$GITHUB_OUTPUT"
+
+      - name: Upload ci-pipeline artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-pipeline-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/ci-pipeline/${{ needs.preflight.outputs.head_sha }}/result.json
+          if-no-files-found: warn
+
+  browser_evidence:
+    name: browser-evidence
+    needs:
+      - preflight
+      - codex_review
+    if: ${{ needs.preflight.outputs.browser_evidence_required == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    outputs:
+      browser_manifest_path: ${{ steps.browser_paths.outputs.browser_manifest_path }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.1
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Generate dev bearer token
+        id: token
+        run: |
+          token=$(node -e 'const crypto=require("node:crypto"); const h=Buffer.from(JSON.stringify({alg:"HS256",typ:"JWT"})).toString("base64url"); const p=Buffer.from(JSON.stringify({sub:"employee-123",scp:"time.read",roles:[]})).toString("base64url"); const s=crypto.createHmac("sha256","dev-secret-change-me").update(h+"."+p).digest("base64url"); process.stdout.write(h+"."+p+"."+s);')
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Build API
+        run: pnpm --filter @compass/api build
+
+      - name: Build Web
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:3001
+          NEXT_PUBLIC_DEV_BEARER_TOKEN: ${{ steps.token.outputs.token }}
+        run: pnpm --filter @compass/web build
+
+      - name: Start API server
+        run: |
+          pnpm --filter @compass/api start > /tmp/compass-api.log 2>&1 &
+          echo $! > /tmp/compass-api.pid
+
+      - name: Wait for API readiness
+        run: |
+          for i in $(seq 1 60); do
+            if curl --silent --fail http://127.0.0.1:3001/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/compass-api.log || true
+          exit 1
+
+      - name: Start Web server
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:3001
+          NEXT_PUBLIC_DEV_BEARER_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          pnpm --filter @compass/web start > /tmp/compass-web.log 2>&1 &
+          echo $! > /tmp/compass-web.pid
+
+      - name: Wait for Web readiness
+        run: |
+          for i in $(seq 1 90); do
+            if curl --silent --fail http://127.0.0.1:3000 > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/compass-web.log || true
+          exit 1
+
+      - name: Run browser-evidence
+        env:
+          HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+          PR_NUMBER: ${{ needs.preflight.outputs.pr_number }}
+          RISK_TIER: ${{ needs.preflight.outputs.tier }}
+          WEB_BASE_URL: http://127.0.0.1:3000
+          EXPECTED_ENTRYPOINT: /
+          EXPECTED_ACCOUNT_IDENTITY: employee-123
+          EVIDENCE_FLOW_ID: compass-smoke
+        run: pnpm ci:browser-evidence
+
+      - name: Set browser evidence outputs
+        id: browser_paths
+        if: ${{ always() }}
+        env:
+          HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+        run: echo "browser_manifest_path=.artifacts/browser-evidence/$HEAD_SHA/manifest.json" >> "$GITHUB_OUTPUT"
+
+      - name: Upload browser-evidence artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-evidence-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/browser-evidence/${{ needs.preflight.outputs.head_sha }}
+          if-no-files-found: warn
+
+      - name: Stop background servers
+        if: ${{ always() }}
+        run: |
+          if [ -f /tmp/compass-web.pid ]; then
+            kill "$(cat /tmp/compass-web.pid)" || true
+          fi
+          if [ -f /tmp/compass-api.pid ]; then
+            kill "$(cat /tmp/compass-api.pid)" || true
+          fi
+
+      - name: Print server logs on failure
+        if: ${{ failure() }}
+        run: |
+          echo "--- API LOG ---"
+          cat /tmp/compass-api.log || true
+          echo "--- WEB LOG ---"
+          cat /tmp/compass-web.log || true
+
+  harness_smoke:
+    name: harness-smoke
+    needs:
+      - preflight
+      - codex_review
+    if: ${{ needs.preflight.outputs.harness_smoke_required == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      harness_smoke_path: ${{ steps.harness_smoke.outputs.harness_smoke_path }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.1
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run harness-smoke
+        id: harness_smoke
+        env:
+          HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+          RISK_TIER: ${{ needs.preflight.outputs.tier }}
+        run: pnpm ci:harness-smoke
+
+      - name: Upload harness-smoke artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-smoke-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/harness-smoke/${{ needs.preflight.outputs.head_sha }}/result.json
+          if-no-files-found: warn
+
+  risk_policy_gate:
+    name: risk-policy-gate
+    if: ${{ always() }}
+    needs:
+      - preflight
+      - docs_drift
+      - codex_review
+      - ci_pipeline
+      - browser_evidence
+      - harness_smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.1
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download preflight artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: preflight-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/merge/${{ needs.preflight.outputs.head_sha }}
+
+      - name: Download docs-drift artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-drift-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/docs-drift/${{ needs.preflight.outputs.head_sha }}
+
+      - name: Download codex-review artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: codex-review-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/review/${{ needs.preflight.outputs.head_sha }}
+
+      - name: Download ci-pipeline artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-pipeline-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/ci-pipeline/${{ needs.preflight.outputs.head_sha }}
+
+      - name: Download browser-evidence artifact
+        if: ${{ needs.preflight.outputs.browser_evidence_required == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: browser-evidence-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/browser-evidence/${{ needs.preflight.outputs.head_sha }}
+
+      - name: Download harness-smoke artifact
+        if: ${{ needs.preflight.outputs.harness_smoke_required == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: harness-smoke-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/harness-smoke/${{ needs.preflight.outputs.head_sha }}
+
+      - name: Enforce merge contract
+        env:
+          HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+          RISK_TIER: ${{ needs.preflight.outputs.tier }}
+          REQUIRED_CHECKS_JSON: ${{ needs.preflight.outputs.required_checks_json }}
+          REQUIRED_FLOW_IDS: ${{ needs.preflight.outputs.required_flow_ids_csv }}
+          CHECK_PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+          CHECK_DOCS_DRIFT_RESULT: ${{ needs.docs_drift.result }}
+          CHECK_CODEX_REVIEW_RESULT: ${{ needs.codex_review.result }}
+          CHECK_CI_PIPELINE_RESULT: ${{ needs.ci_pipeline.result }}
+          CHECK_BROWSER_EVIDENCE_RESULT: ${{ needs.browser_evidence.result }}
+          CHECK_HARNESS_SMOKE_RESULT: ${{ needs.harness_smoke.result }}
+          PREFLIGHT_PATH: ${{ needs.preflight.outputs.preflight_path }}
+          DOCS_DRIFT_PATH: ${{ needs.docs_drift.outputs.docs_drift_path }}
+          REVIEW_PATH: ${{ needs.codex_review.outputs.review_path }}
+          CI_PIPELINE_PATH: ${{ needs.ci_pipeline.outputs.ci_pipeline_path }}
+          BROWSER_EVIDENCE_MANIFEST_PATH: ${{ needs.browser_evidence.outputs.browser_manifest_path }}
+          HARNESS_SMOKE_PATH: ${{ needs.harness_smoke.outputs.harness_smoke_path }}
+        run: pnpm ci:gate
+
+      - name: Upload risk-policy-gate artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: risk-policy-gate-${{ needs.preflight.outputs.head_sha }}
+          path: .artifacts/risk-policy-gate/${{ needs.preflight.outputs.head_sha }}/result.json
+          if-no-files-found: warn

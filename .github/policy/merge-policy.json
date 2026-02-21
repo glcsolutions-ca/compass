@@ -1,0 +1,64 @@
+{
+  "version": "1",
+  "riskTierRules": {
+    "t3": [
+      ".github/workflows/**",
+      ".github/policy/**",
+      "scripts/ci/**",
+      "apps/api/src/features/auth/**",
+      "infra/**",
+      "migrations/**",
+      "deploy/**"
+    ],
+    "t2": ["apps/web/**"],
+    "t1": ["apps/api/**", "apps/worker/**", "packages/**"],
+    "t0": ["**"]
+  },
+  "mergePolicy": {
+    "t3": {
+      "requiredChecks": ["risk-policy-gate", "ci-pipeline", "harness-smoke", "codex-review"]
+    },
+    "t2": {
+      "requiredChecks": ["risk-policy-gate", "ci-pipeline", "browser-evidence"]
+    },
+    "t1": {
+      "requiredChecks": ["risk-policy-gate", "ci-pipeline"]
+    },
+    "t0": {
+      "requiredChecks": ["risk-policy-gate", "ci-pipeline"]
+    }
+  },
+  "docsDriftRules": {
+    "blockingPaths": [".github/workflows/**", ".github/policy/**", "scripts/ci/**"],
+    "docsCriticalPaths": [
+      "contracts/**",
+      "schemas/**",
+      "openapi/**",
+      "proto/**",
+      "migrations/**",
+      "config/**",
+      "infra/**",
+      "packages/contracts/**",
+      "packages/contracts/openapi/**"
+    ],
+    "docTargets": [
+      "docs/merge-policy.md",
+      "docs/branch-protection.md",
+      ".github/policy/README.md",
+      ".github/workflows/README.md",
+      "docs/contracts/**",
+      "docs/runbooks/**"
+    ]
+  },
+  "uiEvidenceRules": {
+    "paths": ["apps/web/**"],
+    "requiredFlowIds": ["compass-smoke"]
+  },
+  "reviewPolicy": {
+    "codexReviewEnabled": false
+  },
+  "staleRules": {
+    "requireHeadShaMatch": true,
+    "requireTierMatch": true
+  }
+}

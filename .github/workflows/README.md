@@ -1,5 +1,15 @@
 # Workflows
 
-GitHub Actions workflows for this repository.
+- `merge-contract.yml`: deterministic merge-contract workflow with ordered checks:
+  - `preflight`
+  - `docs-drift`
+  - `codex-review` (no-op or full based on `reviewPolicy.codexReviewEnabled`)
+  - `ci-pipeline`
+  - `browser-evidence` (conditional)
+  - `harness-smoke` (conditional)
+  - `risk-policy-gate` (final required gate)
 
-- `ci.yml`: runs on pull requests and pushes to `main` (plus manual dispatch), installs dependencies, runs `pnpm check:format`, `pnpm check:lint`, `pnpm check:typecheck`, `pnpm check:test`, and `pnpm check:contract`, then validates production build output with `pnpm build`.
+Related references:
+
+- Policy contract: `.github/policy/merge-policy.json`
+- Agent docs: `docs/agents/README.md`

@@ -3,6 +3,7 @@
 ## `docs-drift` Failure
 
 - Cause: Control-plane or docs-critical paths changed without doc target updates.
+- Where it appears: `risk-policy-preflight` job.
 - Fix: Update required docs (`docs/merge-policy.md`, `.github/workflows/README.md`, or matching doc targets in policy).
 
 ## `codex-review` Failure
@@ -12,8 +13,8 @@
 
 ## `risk-policy-gate` Failure
 
-- Cause: Missing/stale/invalid artifacts or failed required checks for current head SHA/tier.
-- Fix: Regenerate required evidence on latest commit and verify artifact paths.
+- Cause: Required check-runs did not succeed for current head SHA/tier, or browser-evidence manifest assertions failed for required flows.
+- Fix: Rerun failed required checks on the latest commit; for UI-required PRs, verify browser manifest flow status, entrypoint, identity, and assertions.
 
 ## Stale Evidence After Push
 

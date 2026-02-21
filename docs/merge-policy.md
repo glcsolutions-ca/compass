@@ -18,6 +18,7 @@ Branch protection requires only:
 
 `risk-policy-gate` enforces all dynamic tier checks (`ci-pipeline`, `browser-evidence`, `harness-smoke`, `codex-review`) for the current head SHA.
 `codex-review` enforcement is controlled by `reviewPolicy.codexReviewEnabled` in `.github/policy/merge-policy.json`.
+`risk-policy-gate` enforces required check-runs by result and validates browser evidence manifest assertions only when UI evidence is required.
 
 ## Deterministic tiers
 
@@ -30,13 +31,12 @@ If multiple tiers match, highest tier wins.
 
 ## Deterministic order
 
-1. `risk-policy-preflight`
-2. `docs-drift`
-3. `codex-review`
-4. `ci-pipeline`
-5. `browser-evidence` (conditional)
-6. `harness-smoke` (conditional)
-7. `risk-policy-gate` (final fail-closed enforcement)
+1. `risk-policy-preflight` (includes docs-drift evaluation)
+2. `codex-review`
+3. `ci-pipeline`
+4. `browser-evidence` (conditional)
+5. `harness-smoke` (conditional)
+6. `risk-policy-gate` (final fail-closed enforcement)
 
 ## Bootstrap review mode
 
@@ -62,6 +62,9 @@ When ready, enable blocking review by:
 
 Accepted docs updates are defined in `docsDriftRules.docTargets`.
 
+`docs-drift` runs as part of `risk-policy-preflight` and still emits a standalone
+artifact at `.artifacts/docs-drift/<headSha>/result.json`.
+
 ## Stale evidence rules
 
 Evidence is valid only when:
@@ -69,13 +72,17 @@ Evidence is valid only when:
 - `headSha` matches current PR head SHA
 - `tier` matches preflight-computed tier for that head SHA
 
+## Runtime baseline
+
+Control-plane scripts (`preflight`, `docs-drift`, `codex-review`, `gate`) rely on Node core APIs only.
+Workflow and local contract checks require Node `24.13.1` (including `path.posix.matchesGlob`).
+
 ## Flow
 
 ```mermaid
 flowchart TD
-  A["PR opened or synchronized"] --> B["risk-policy-preflight"]
-  B --> C["docs-drift"]
-  C --> D["codex-review"]
+  A["PR opened or synchronized"] --> B["risk-policy-preflight (+ docs-drift)"]
+  B --> D["codex-review"]
   D --> E["ci-pipeline"]
   D --> F{"browser-evidence required?"}
   D --> G{"harness-smoke required?"}

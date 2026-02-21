@@ -3,6 +3,7 @@ import {
   computeRequiredChecks,
   evaluateDocsDrift,
   loadMergePolicyObject,
+  matchesAnyPattern,
   resolveRiskTier,
   requiresBrowserEvidence
 } from "./utils.mjs";
@@ -79,5 +80,18 @@ describe("docs drift", () => {
     ]);
 
     expect(result.shouldBlock).toBe(false);
+  });
+});
+
+describe("glob matching engine", () => {
+  it("matches control-plane patterns for dot-prefixed directories", () => {
+    expect(
+      matchesAnyPattern(".github/workflows/merge-contract.yml", [".github/workflows/**"])
+    ).toBe(true);
+  });
+
+  it("uses path.posix.matchesGlob semantics for '**' against dot-prefixed paths", () => {
+    expect(matchesAnyPattern(".github/policy/merge-policy.json", ["**"])).toBe(false);
+    expect(matchesAnyPattern("README.md", ["**"])).toBe(true);
   });
 });

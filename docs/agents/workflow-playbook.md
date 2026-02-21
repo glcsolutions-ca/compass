@@ -14,11 +14,13 @@ pnpm build
 
 ```bash
 pnpm ci:preflight
-pnpm ci:docs-drift
 pnpm ci:codex-review
 pnpm ci:pipeline
 pnpm ci:gate
 ```
+
+`pnpm ci:preflight` now includes docs-drift enforcement. Run `pnpm ci:docs-drift` only when you
+need focused local debugging of docs-drift behavior.
 
 4. Confirm references and docs are updated if policy/workflow/scripting changed.
 

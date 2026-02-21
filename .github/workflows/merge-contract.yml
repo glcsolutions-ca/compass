@@ -15,7 +15,7 @@ on:
 
 jobs:
   preflight:
-    name: preflight
+    name: risk-policy-preflight
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -35,6 +35,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Setup pnpm
@@ -71,11 +72,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      docs_drift_path: ${{ steps.docs_drift.outputs.docs_drift_path }}
+      docs_drift_path: ${{ steps.docs_drift_paths.outputs.docs_drift_path }}
       docs_drift_status: ${{ steps.docs_drift.outputs.docs_drift_status }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -100,6 +104,13 @@ jobs:
           CHANGED_FILES_JSON: ${{ needs.preflight.outputs.changed_files_json }}
         run: pnpm ci:docs-drift
 
+      - name: Set docs-drift outputs
+        id: docs_drift_paths
+        if: ${{ always() }}
+        env:
+          HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+        run: echo "docs_drift_path=.artifacts/docs-drift/$HEAD_SHA/result.json" >> "$GITHUB_OUTPUT"
+
       - name: Upload docs-drift artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -116,21 +127,49 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     outputs:
-      review_path: ${{ steps.codex_review.outputs.review_path }}
-      review_mode: ${{ steps.codex_review.outputs.review_mode }}
-      review_overall: ${{ steps.codex_review.outputs.review_overall }}
+      review_path: ${{ steps.review_paths.outputs.review_path }}
+      review_mode: ${{ steps.review_paths.outputs.review_mode }}
+      review_overall: ${{ steps.review_paths.outputs.review_overall }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
+      - name: Fast no-op when codex-review is not required
+        id: codex_review_noop
+        if: ${{ needs.preflight.outputs.codex_review_required != 'true' }}
+        env:
+          HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+          RISK_TIER: ${{ needs.preflight.outputs.tier }}
+        run: |
+          mkdir -p .artifacts/review/$HEAD_SHA
+          cat > .artifacts/review/$HEAD_SHA/review.json <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "mode": "no-op",
+            "headSha": "$HEAD_SHA",
+            "tier": "$RISK_TIER",
+            "overall": "pass",
+            "summary": "codex-review not required by policy for this risk tier/head SHA",
+            "noOpReason": "not-required-by-policy",
+            "findings": []
+          }
+          JSON
+          echo "review_path=.artifacts/review/$HEAD_SHA/review.json" >> "$GITHUB_OUTPUT"
+          echo "review_mode=no-op" >> "$GITHUB_OUTPUT"
+          echo "review_overall=pass" >> "$GITHUB_OUTPUT"
+
       - name: Setup pnpm
+        if: ${{ needs.preflight.outputs.codex_review_required == 'true' }}
         uses: pnpm/action-setup@v4
         with:
           version: 10.30.1
 
       - name: Setup Node
+        if: ${{ needs.preflight.outputs.codex_review_required == 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version: 24.13.1
@@ -138,10 +177,12 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
+        if: ${{ needs.preflight.outputs.codex_review_required == 'true' }}
         run: pnpm install --frozen-lockfile
 
       - name: Run codex-review
         id: codex_review
+        if: ${{ needs.preflight.outputs.codex_review_required == 'true' }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
@@ -150,6 +191,25 @@ jobs:
           CHANGED_FILES_JSON: ${{ needs.preflight.outputs.changed_files_json }}
           CODEX_REVIEW_ENABLED: ${{ needs.preflight.outputs.codex_review_enabled }}
         run: pnpm ci:codex-review
+
+      - name: Set codex-review outputs
+        id: review_paths
+        if: ${{ always() }}
+        env:
+          HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+          REVIEW_PATH_FULL: ${{ steps.codex_review.outputs.review_path }}
+          REVIEW_MODE_FULL: ${{ steps.codex_review.outputs.review_mode }}
+          REVIEW_OVERALL_FULL: ${{ steps.codex_review.outputs.review_overall }}
+          REVIEW_PATH_NOOP: ${{ steps.codex_review_noop.outputs.review_path }}
+          REVIEW_MODE_NOOP: ${{ steps.codex_review_noop.outputs.review_mode }}
+          REVIEW_OVERALL_NOOP: ${{ steps.codex_review_noop.outputs.review_overall }}
+        run: |
+          review_path="${REVIEW_PATH_FULL:-${REVIEW_PATH_NOOP:-.artifacts/review/$HEAD_SHA/review.json}}"
+          review_mode="${REVIEW_MODE_FULL:-${REVIEW_MODE_NOOP:-full}}"
+          review_overall="${REVIEW_OVERALL_FULL:-${REVIEW_OVERALL_NOOP:-fail}}"
+          echo "review_path=$review_path" >> "$GITHUB_OUTPUT"
+          echo "review_mode=$review_mode" >> "$GITHUB_OUTPUT"
+          echo "review_overall=$review_overall" >> "$GITHUB_OUTPUT"
 
       - name: Upload codex-review artifact
         if: ${{ always() }}
@@ -171,6 +231,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -239,6 +302,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -316,7 +382,7 @@ jobs:
           WEB_BASE_URL: http://127.0.0.1:3000
           EXPECTED_ENTRYPOINT: /
           EXPECTED_ACCOUNT_IDENTITY: employee-123
-          EVIDENCE_FLOW_ID: compass-smoke
+          EVIDENCE_FLOW_ID: ${{ needs.preflight.outputs.required_flow_ids_csv }}
         run: pnpm ci:browser-evidence
 
       - name: Set browser evidence outputs
@@ -361,10 +427,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
-      harness_smoke_path: ${{ steps.harness_smoke.outputs.harness_smoke_path }}
+      harness_smoke_path: ${{ steps.harness_paths.outputs.harness_smoke_path }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -387,6 +456,13 @@ jobs:
           HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
           RISK_TIER: ${{ needs.preflight.outputs.tier }}
         run: pnpm ci:harness-smoke
+
+      - name: Set harness-smoke outputs
+        id: harness_paths
+        if: ${{ always() }}
+        env:
+          HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+        run: echo "harness_smoke_path=.artifacts/harness-smoke/$HEAD_SHA/result.json" >> "$GITHUB_OUTPUT"
 
       - name: Upload harness-smoke artifact
         if: ${{ always() }}
@@ -411,6 +487,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4

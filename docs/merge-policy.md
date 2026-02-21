@@ -30,7 +30,7 @@ If multiple tiers match, highest tier wins.
 
 ## Deterministic order
 
-1. `preflight`
+1. `risk-policy-preflight`
 2. `docs-drift`
 3. `codex-review`
 4. `ci-pipeline`
@@ -73,7 +73,7 @@ Evidence is valid only when:
 
 ```mermaid
 flowchart TD
-  A["PR opened or synchronized"] --> B["preflight"]
+  A["PR opened or synchronized"] --> B["risk-policy-preflight"]
   B --> C["docs-drift"]
   C --> D["codex-review"]
   D --> E["ci-pipeline"]

@@ -1,9 +1,9 @@
 # Workflows
 
 - `merge-contract.yml`: deterministic merge-contract workflow with ordered checks:
-  - `preflight`
+  - `risk-policy-preflight`
   - `docs-drift`
-  - `codex-review` (no-op or full based on `reviewPolicy.codexReviewEnabled`)
+  - `codex-review` (fast no-op when policy does not require review)
   - `ci-pipeline`
   - `browser-evidence` (conditional)
   - `harness-smoke` (conditional)

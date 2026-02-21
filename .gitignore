@@ -12,7 +12,6 @@ coverage
 .artifacts
 test-results
 .notes
-.codex
 .DS_Store
 *.log
 *.tsbuildinfo

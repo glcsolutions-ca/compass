@@ -4,6 +4,7 @@
     "t3": [
       ".github/workflows/**",
       ".github/policy/**",
+      ".github/dependabot.yml",
       "scripts/ci/**",
       "apps/api/src/features/auth/**",
       "infra/**",
@@ -11,7 +12,15 @@
       "deploy/**"
     ],
     "t2": ["apps/web/**"],
-    "t1": ["apps/api/**", "apps/worker/**", "packages/**"],
+    "t1": [
+      "apps/api/**",
+      "apps/worker/**",
+      "packages/**",
+      "package.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "**/package.json"
+    ],
     "t0": ["**"]
   },
   "mergePolicy": {

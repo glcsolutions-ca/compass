@@ -11,9 +11,9 @@ import {
 const policy = loadMergePolicyObject({
   version: "1",
   riskTierRules: {
-    t3: ["apps/api/src/features/auth/**", ".github/workflows/**"],
+    t3: ["apps/api/src/features/auth/**", ".github/workflows/**", ".github/dependabot.yml"],
     t2: ["apps/web/**"],
-    t1: ["apps/api/**", "packages/**"],
+    t1: ["apps/api/**", "packages/**", "package.json", "pnpm-lock.yaml", "**/package.json"],
     t0: ["**"]
   },
   mergePolicy: {
@@ -46,6 +46,11 @@ describe("risk tier resolution", () => {
     expect(tier).toBe("t3");
   });
 
+  it("treats dependabot control-plane config as t3", () => {
+    const tier = resolveRiskTier(policy, [".github/dependabot.yml"]);
+    expect(tier).toBe("t3");
+  });
+
   it("chooses t2 for web paths", () => {
     const tier = resolveRiskTier(policy, ["apps/web/src/app/page.tsx"]);
     expect(tier).toBe("t2");
@@ -54,6 +59,11 @@ describe("risk tier resolution", () => {
   it("falls back to t0 for docs-only changes", () => {
     const tier = resolveRiskTier(policy, ["README.md"]);
     expect(tier).toBe("t0");
+  });
+
+  it("classifies dependency manifest updates as t1 core changes", () => {
+    const tier = resolveRiskTier(policy, ["pnpm-lock.yaml"]);
+    expect(tier).toBe("t1");
   });
 });
 

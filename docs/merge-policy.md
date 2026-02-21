@@ -45,6 +45,9 @@ During bootstrap, `reviewPolicy.codexReviewEnabled` may be `false`:
 - `codex-review` still runs and emits deterministic no-op artifacts.
 - `risk-policy-gate` does not require `codex-review` in required checks.
 
+When `codex-review` is enabled but `OPENAI_API_KEY` is missing, `codex-review` emits a deterministic
+bootstrap no-op artifact instead of failing.
+
 When ready, enable blocking review by:
 
 1. Adding repository secret `OPENAI_API_KEY`.

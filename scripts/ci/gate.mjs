@@ -129,8 +129,14 @@ async function main() {
     if (review.tier !== tier) {
       reasons.push(`codex-review tier mismatch: expected ${tier}, got ${review.tier}`);
     }
-    if (codexReviewRequired && review.mode !== "full") {
-      reasons.push("codex-review mode must be full when required by policy");
+    if (codexReviewRequired) {
+      const allowNoOpForBootstrap =
+        review.mode === "no-op" &&
+        (review.noOpReason === "missing-api-key" || review.noOpReason === "disabled-by-policy");
+
+      if (review.mode !== "full" && !allowNoOpForBootstrap) {
+        reasons.push("codex-review mode must be full, or approved bootstrap no-op, when required");
+      }
     }
     if (!codexReviewRequired && review.mode !== "no-op") {
       reasons.push("codex-review mode must be no-op when not required by policy");

@@ -117,7 +117,7 @@ async function writeFailureReport(reviewPath, headSha, tier, reason) {
   await writeJsonFile(reviewPath, payload);
 }
 
-async function writeNoOpReport(reviewPath, headSha, tier, reason) {
+async function writeNoOpReport(reviewPath, headSha, tier, reason, noOpReason) {
   const payload = {
     schemaVersion: "1",
     generatedAt: new Date().toISOString(),
@@ -126,6 +126,7 @@ async function writeNoOpReport(reviewPath, headSha, tier, reason) {
     tier,
     overall: "pass",
     summary: reason,
+    noOpReason,
     findings: []
   };
 
@@ -153,7 +154,8 @@ async function main() {
       reviewPath,
       headSha,
       tier,
-      `codex-review disabled (no secret configured): tier=${tier}; sha=${headSha}`
+      `codex-review disabled by policy: tier=${tier}; sha=${headSha}`,
+      "disabled-by-policy"
     );
     console.info(`codex-review no-op (disabled by policy) for ${tier}`);
     return;
@@ -164,7 +166,8 @@ async function main() {
       reviewPath,
       headSha,
       tier,
-      `Skipped by policy: tier=${tier}; sha=${headSha}`
+      `Skipped by policy: tier=${tier}; sha=${headSha}`,
+      "skipped-by-policy"
     );
     console.info(`codex-review no-op for ${tier}`);
     return;
@@ -226,7 +229,15 @@ async function main() {
 
   try {
     if (!process.env.OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is required for full codex-review on t3");
+      await writeNoOpReport(
+        reviewPath,
+        headSha,
+        tier,
+        `codex-review no-op: OPENAI_API_KEY missing; tier=${tier}; sha=${headSha}`,
+        "missing-api-key"
+      );
+      console.info("codex-review no-op (missing OPENAI_API_KEY)");
+      return;
     }
 
     await runCommand("npx", [

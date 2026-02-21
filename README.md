@@ -24,6 +24,12 @@ pnpm install
 pnpm dev
 ```
 
+## Root Doorway
+
+- `README.md`: project and engineering baseline.
+- `AGENTS.md`: agent entrypoint and navigation to agent playbooks.
+- `CONTRIBUTING.md`: agent-focused contribution and merge-contract workflow.
+
 ## Toolchain Baseline
 
 - One-time baseline update: Node `24.13.1` and `pnpm@10.30.1`.
@@ -96,8 +102,14 @@ pnpm dev
 pnpm check
 ```
 
-- CI required workflow runs explicit quality steps (`check:format`, `check:lint`, `check:typecheck`,
-  `check:test`, `check:contract`) and then `pnpm build` on pull requests and pushes to `main`.
+- PR CI uses a deterministic merge-contract workflow:
+  - `preflight` computes tier + required checks from `.github/policy/merge-policy.json`.
+  - `docs-drift` blocks control-plane/docs-critical changes without docs updates.
+  - `codex-review` runs no-op or full mode based on `reviewPolicy.codexReviewEnabled`.
+  - with review enabled, `t3` runs full blocking review; lower tiers remain no-op artifacts.
+  - `ci-pipeline` runs `pnpm check` and `pnpm build`.
+  - `browser-evidence` and `harness-smoke` run only when policy requires them.
+  - `risk-policy-gate` is the final fail-closed gate and only required branch-protection check.
 
 - Validate workspace TypeScript references:
 
@@ -112,24 +124,45 @@ pnpm contract:generate
 pnpm contract:check
 ```
 
+- Merge-contract commands:
+
+```bash
+pnpm ci:preflight
+pnpm ci:docs-drift
+pnpm ci:codex-review
+pnpm ci:pipeline
+pnpm ci:browser-evidence
+pnpm ci:harness-smoke
+pnpm ci:gate
+pnpm test:merge-contract
+```
+
 ## Command Matrix
 
-| Command                  | Contract                                                                                                                   |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev`               | Starts all workspace dev processes through Turbo in parallel.                                                              |
-| `pnpm build`             | Runs each workspace runtime build (`dist` for TypeScript packages/apps, `.next` for web).                                  |
-| `pnpm test`              | Runs workspace tests from source through Turbo without requiring upstream builds first.                                    |
-| `pnpm typecheck`         | Runs workspace-level `tsc --noEmit` checks through Turbo.                                                                  |
-| `pnpm typecheck:refs`    | Runs root solution references with `tsc -b --pretty false` using `tsconfig.ref.json` targets and declaration-only outputs. |
-| `pnpm check`             | Runs formatting, linting, type checks, reference checks, tests, and contract checks as the pre-PR gate.                    |
-| `pnpm check:format`      | Runs Prettier in check mode for the full repository.                                                                       |
-| `pnpm check:lint`        | Runs workspace lint tasks through Turbo.                                                                                   |
-| `pnpm check:typecheck`   | Runs workspace type checks and root TypeScript reference checks.                                                           |
-| `pnpm check:test`        | Runs workspace tests through Turbo.                                                                                        |
-| `pnpm check:contract`    | Runs contract generation and fails if committed generated artifacts drift.                                                 |
-| `GitHub CI`              | Runs `check:format`, `check:lint`, `check:typecheck`, `check:test`, `check:contract`, then `pnpm build`.                   |
-| `pnpm contract:generate` | Regenerates OpenAPI and SDK artifacts.                                                                                     |
-| `pnpm contract:check`    | Regenerates contracts and verifies committed artifacts are unchanged.                                                      |
+| Command                    | Contract                                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm dev`                 | Starts all workspace dev processes through Turbo in parallel.                                                                                          |
+| `pnpm build`               | Runs each workspace runtime build (`dist` for TypeScript packages/apps, `.next` for web).                                                              |
+| `pnpm test`                | Runs workspace tests from source through Turbo without requiring upstream builds first.                                                                |
+| `pnpm typecheck`           | Runs workspace-level `tsc --noEmit` checks through Turbo.                                                                                              |
+| `pnpm typecheck:refs`      | Runs root solution references with `tsc -b --pretty false` using `tsconfig.ref.json` targets and declaration-only outputs.                             |
+| `pnpm check`               | Runs formatting, linting, type checks, reference checks, tests, and contract checks as the pre-PR gate.                                                |
+| `pnpm check:format`        | Runs Prettier in check mode for the full repository.                                                                                                   |
+| `pnpm check:lint`          | Runs workspace lint tasks through Turbo.                                                                                                               |
+| `pnpm check:typecheck`     | Runs workspace type checks and root TypeScript reference checks.                                                                                       |
+| `pnpm check:test`          | Runs workspace tests through Turbo.                                                                                                                    |
+| `pnpm check:contract`      | Runs contract generation and fails if committed generated artifacts drift.                                                                             |
+| `GitHub PR`                | Runs deterministic merge contract: `preflight` -> `docs-drift` -> `codex-review` -> `ci-pipeline` -> conditional evidence/smoke -> `risk-policy-gate`. |
+| `pnpm contract:generate`   | Regenerates OpenAPI and SDK artifacts.                                                                                                                 |
+| `pnpm contract:check`      | Regenerates contracts and verifies committed artifacts are unchanged.                                                                                  |
+| `pnpm ci:preflight`        | Computes changed files, tier, and required checks from `.github/policy/merge-policy.json`.                                                             |
+| `pnpm ci:docs-drift`       | Enforces blocking docs-drift rules for control-plane and docs-critical paths.                                                                          |
+| `pnpm ci:codex-review`     | Runs no-op or full review based on policy; full mode is enforced only when `reviewPolicy.codexReviewEnabled=true`.                                     |
+| `pnpm ci:pipeline`         | Runs `pnpm check` and `pnpm build`.                                                                                                                    |
+| `pnpm ci:browser-evidence` | Runs Playwright smoke and writes browser evidence manifest under `.artifacts/browser-evidence/<headSha>/`.                                             |
+| `pnpm ci:harness-smoke`    | Runs targeted harness smoke checks and writes `.artifacts/harness-smoke/<headSha>/result.json`.                                                        |
+| `pnpm ci:gate`             | Enforces required-evidence validity for current head SHA and tier, then fails closed on violations.                                                    |
+| `pnpm test:merge-contract` | Runs merge-contract utility tests.                                                                                                                     |
 
 ## Service Endpoints
 
@@ -141,10 +174,27 @@ pnpm contract:check
 ## Project Structure
 
 ```text
+.github/workflows/
+  merge-contract.yml
+
+.github/policy/
+  merge-policy.json
+
 apps/
   api/
   web/
   worker/
+
+scripts/
+  ci/
+
+tests/
+  e2e/
+  harness/
+
+docs/
+  merge-policy.md
+  branch-protection.md
 
 packages/
   contracts/
@@ -155,7 +205,11 @@ packages/
 
 - Brand architecture: `docs/brand-architecture.md`
 - Stack decision record: `docs/TDR-001-initial-stack-baseline.md`
+- Merge policy single pager: `docs/merge-policy.md`
+- Branch protection setup: `docs/branch-protection.md`
+- Agent knowledge store: `docs/agents/README.md`
 
 ## Contributing
 
 - Contributor guide: `CONTRIBUTING.md`
+- Agent guide index: `AGENTS.md`

@@ -1,10 +1,17 @@
 # Contributing
 
+This repository is agent-first. Merge safety is enforced in CI by `risk-policy-gate`.
+
+## Root Doorway
+
+- `README.md`: project overview and baseline commands.
+- `AGENTS.md`: agent navigation and operating docs.
+- `CONTRIBUTING.md`: required contribution and validation flow.
+
 ## Prerequisites
 
-- Node.js 24.13.1 (`.nvmrc`)
-- `pnpm` (`packageManager` is pinned in `package.json`)
-- One-time toolchain baseline only; no recurring update automation is configured yet.
+- Node.js `24.13.1` (`.nvmrc`)
+- `pnpm` (`packageManager` pinned in `package.json`)
 
 ## Daily Workflow
 
@@ -13,56 +20,59 @@ pnpm install
 pnpm dev
 ```
 
-- Use `pnpm clean` when you need to clear generated artifacts (`dist`, `dist-types`, `.next`, `.turbo`, coverage, and `*.tsbuildinfo`).
+Use `pnpm clean` when you need to clear generated artifacts.
 
-## Required Gates
+## Required Local Validation
 
-- Before opening or updating a PR, run:
+Run before opening/updating a PR:
 
 ```bash
 pnpm check
+pnpm build
 ```
 
-- CI runs:
-  - `pnpm check:format`
-  - `pnpm check:lint`
-  - `pnpm check:typecheck`
-  - `pnpm check:test`
-  - `pnpm check:contract`
-  - `pnpm build`
+## Deterministic Merge Contract Flow
 
-## Baseline Conventions
+CI order is fixed:
 
-- Use `kebab-case` for filenames.
-- Use `PascalCase` for interfaces, types, classes, and enums.
-- Use `camelCase` for functions, methods, variables, and properties.
-- Co-locate tests with source files as `*.test.ts`.
-- In NodeNext workspaces, use `.js` extensions for relative imports in TypeScript source.
-- Keep import boundaries strict:
-  - Relative imports within a package/app.
-  - Package-root imports across boundaries (for example `@compass/contracts`).
-  - No deep imports from `@compass/*/src/*` or `@compass/*/dist/*`.
+1. `preflight`
+2. `docs-drift`
+3. `codex-review`
+4. `ci-pipeline`
+5. `browser-evidence` (policy conditional)
+6. `harness-smoke` (policy conditional)
+7. `risk-policy-gate` (final required check)
 
-## TypeScript Config Split
+`risk-policy-gate` fails closed on missing/stale/invalid evidence and enforces current head SHA discipline.
 
-- `tsconfig.ref.json`: reference graph and declaration-only outputs for solution builds.
-- `tsconfig.build.json`: runtime build output to `dist` (excluding tests where configured).
+`codex-review` behavior is controlled by `reviewPolicy.codexReviewEnabled` in `.github/policy/merge-policy.json`.
+Set it to `true` (with `OPENAI_API_KEY` configured) to enforce full blocking review for policy-required tiers.
 
-## Generated Artifacts
-
-- Keep these committed and in sync:
-  - `packages/contracts/openapi/openapi.json`
-  - `packages/sdk/src/generated/schema.ts`
-- Validate artifact drift with:
+## Merge Contract Commands
 
 ```bash
-pnpm contract:check
+pnpm ci:preflight
+pnpm ci:docs-drift
+pnpm ci:codex-review
+pnpm ci:pipeline
+pnpm ci:browser-evidence
+pnpm ci:harness-smoke
+pnpm ci:gate
+pnpm test:merge-contract
 ```
+
+## Contract and Policy Paths
+
+- Merge policy contract: `.github/policy/merge-policy.json`
+- Policy docs: `docs/merge-policy.md`
+- Branch protection docs: `docs/branch-protection.md`
+- Workflow docs: `.github/workflows/README.md`
+- Agent docs index: `docs/agents/README.md`
 
 ## PR Checklist
 
 - [ ] `pnpm check` passes locally.
 - [ ] `pnpm build` passes locally.
-- [ ] Naming/import conventions follow baseline rules.
-- [ ] Contract artifacts are generated and committed if schemas changed.
-- [ ] No unrelated files or generated noise are included in the PR.
+- [ ] Merge-contract commands are used when changing control-plane surfaces.
+- [ ] If control-plane files changed, docs were updated (`docs/merge-policy.md` and `.github/workflows/README.md`).
+- [ ] No unrelated files or generated noise are included.

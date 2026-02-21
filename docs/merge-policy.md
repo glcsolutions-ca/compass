@@ -75,7 +75,7 @@ Evidence is valid only when:
 ## Runtime baseline
 
 Control-plane scripts (`preflight`, `docs-drift`, `codex-review`, `gate`) rely on Node core APIs only.
-Workflow and local contract checks require Node `24.13.1` (including `path.posix.matchesGlob`).
+Workflow and local contract checks require Node `24` with minimum `24.8.0` (for `path.posix.matchesGlob`), sourced from `.nvmrc`.
 
 ## Flow
 

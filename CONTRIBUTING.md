@@ -1,78 +1,38 @@
 # Contributing
 
-This repository is agent-first. Merge safety is enforced in CI by `risk-policy-gate`.
+This repo treats CI as the source of truth for merge safety.
 
-## Root Doorway
+## Start Here
 
-- `README.md`: project overview and baseline commands.
-- `AGENTS.md`: agent navigation and operating docs.
-- `CONTRIBUTING.md`: required contribution and validation flow.
+- Human policy: `docs/merge-policy.md`
+- Machine policy: `.github/policy/merge-policy.json`
+- CI workflow: `.github/workflows/merge-contract.yml`
 
 ## Prerequisites
 
 - Node.js `24.13.1` (`.nvmrc`)
 - `pnpm` (`packageManager` pinned in `package.json`)
 
-## Daily Workflow
+## Local Workflow (Convenience)
 
 ```bash
 pnpm install
 pnpm dev
-```
-
-Use `pnpm clean` when you need to clear generated artifacts.
-
-## Required Local Validation
-
-Run before opening/updating a PR:
-
-```bash
 pnpm check
 pnpm build
 ```
 
-## Deterministic Merge Contract Flow
+Use `pnpm clean` when needed.
 
-CI order is fixed:
+## CI Merge Contract
 
-1. `preflight`
-2. `docs-drift`
-3. `codex-review`
-4. `ci-pipeline`
-5. `browser-evidence` (policy conditional)
-6. `harness-smoke` (policy conditional)
-7. `risk-policy-gate` (final required check)
+CI runs deterministic ordered checks and fails closed at `risk-policy-gate`.
+Branch protection should require only `risk-policy-gate`.
 
-`risk-policy-gate` fails closed on missing/stale/invalid evidence and enforces current head SHA discipline.
-
-`codex-review` behavior is controlled by `reviewPolicy.codexReviewEnabled` in `.github/policy/merge-policy.json`.
-Set it to `true` (with `OPENAI_API_KEY` configured) to enforce full blocking review for policy-required tiers.
-
-## Merge Contract Commands
-
-```bash
-pnpm ci:preflight
-pnpm ci:docs-drift
-pnpm ci:codex-review
-pnpm ci:pipeline
-pnpm ci:browser-evidence
-pnpm ci:harness-smoke
-pnpm ci:gate
-pnpm test:merge-contract
-```
-
-## Contract and Policy Paths
-
-- Merge policy contract: `.github/policy/merge-policy.json`
-- Policy docs: `docs/merge-policy.md`
-- Branch protection docs: `docs/branch-protection.md`
-- Workflow docs: `.github/workflows/README.md`
-- Agent docs index: `docs/agents/README.md`
+`codex-review` enforcement is controlled by `reviewPolicy.codexReviewEnabled` in `.github/policy/merge-policy.json`.
 
 ## PR Checklist
 
-- [ ] `pnpm check` passes locally.
-- [ ] `pnpm build` passes locally.
-- [ ] Merge-contract commands are used when changing control-plane surfaces.
-- [ ] If control-plane files changed, docs were updated (`docs/merge-policy.md` and `.github/workflows/README.md`).
+- [ ] Local convenience checks pass (`pnpm check`, `pnpm build`).
+- [ ] Control-plane edits also update policy/docs where required.
 - [ ] No unrelated files or generated noise are included.

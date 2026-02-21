@@ -25,7 +25,14 @@
     "typecheck:refs": "tsc -b --pretty false",
     "contract:generate": "pnpm generate",
     "contract:check": "pnpm contract:generate && git diff --exit-code -- packages/contracts/openapi/openapi.json packages/sdk/src/generated/schema.ts",
-    "prepare": "command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath git-hooks || exit 0"
+    "ci:preflight": "node scripts/ci/preflight.mjs",
+    "ci:docs-drift": "node scripts/ci/docs-drift.mjs",
+    "ci:codex-review": "node scripts/ci/codex-review.mjs",
+    "ci:pipeline": "pnpm check && pnpm build",
+    "ci:browser-evidence": "playwright test tests/e2e/smoke.spec.ts --config tests/e2e/playwright.config.ts --reporter=line --workers=1",
+    "ci:harness-smoke": "tsx tests/harness/smoke.ts",
+    "ci:gate": "node scripts/ci/gate.mjs",
+    "test:merge-contract": "vitest run scripts/ci/utils.test.mjs"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
@@ -37,15 +44,19 @@
     ]
   },
   "devDependencies": {
+    "@playwright/test": "1.57.0",
     "@eslint/js": "10.0.1",
     "@next/eslint-plugin-next": "15.5.12",
     "@types/node": "24.10.13",
     "eslint": "10.0.1",
     "eslint-config-prettier": "10.1.8",
     "lint-staged": "16.2.7",
+    "minimatch": "10.1.1",
+    "playwright": "1.57.0",
     "prettier": "3.8.1",
     "rimraf": "6.1.3",
     "turbo": "2.8.10",
+    "tsx": "4.21.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.56.0",
     "vite-tsconfig-paths": "6.1.1",

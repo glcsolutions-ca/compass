@@ -1,68 +1,38 @@
 # Contributing
 
+This repo treats CI as the source of truth for merge safety.
+
+## Start Here
+
+- Human policy: `docs/merge-policy.md`
+- Machine policy: `.github/policy/merge-policy.json`
+- CI workflow: `.github/workflows/merge-contract.yml`
+
 ## Prerequisites
 
-- Node.js 24.13.1 (`.nvmrc`)
-- `pnpm` (`packageManager` is pinned in `package.json`)
-- One-time toolchain baseline only; no recurring update automation is configured yet.
+- Node.js `24.13.1` (`.nvmrc`)
+- `pnpm` (`packageManager` pinned in `package.json`)
 
-## Daily Workflow
+## Local Workflow (Convenience)
 
 ```bash
 pnpm install
 pnpm dev
-```
-
-- Use `pnpm clean` when you need to clear generated artifacts (`dist`, `dist-types`, `.next`, `.turbo`, coverage, and `*.tsbuildinfo`).
-
-## Required Gates
-
-- Before opening or updating a PR, run:
-
-```bash
 pnpm check
+pnpm build
 ```
 
-- CI runs:
-  - `pnpm check:format`
-  - `pnpm check:lint`
-  - `pnpm check:typecheck`
-  - `pnpm check:test`
-  - `pnpm check:contract`
-  - `pnpm build`
+Use `pnpm clean` when needed.
 
-## Baseline Conventions
+## CI Merge Contract
 
-- Use `kebab-case` for filenames.
-- Use `PascalCase` for interfaces, types, classes, and enums.
-- Use `camelCase` for functions, methods, variables, and properties.
-- Co-locate tests with source files as `*.test.ts`.
-- In NodeNext workspaces, use `.js` extensions for relative imports in TypeScript source.
-- Keep import boundaries strict:
-  - Relative imports within a package/app.
-  - Package-root imports across boundaries (for example `@compass/contracts`).
-  - No deep imports from `@compass/*/src/*` or `@compass/*/dist/*`.
+CI runs deterministic ordered checks and fails closed at `risk-policy-gate`.
+Branch protection should require only `risk-policy-gate`.
 
-## TypeScript Config Split
-
-- `tsconfig.ref.json`: reference graph and declaration-only outputs for solution builds.
-- `tsconfig.build.json`: runtime build output to `dist` (excluding tests where configured).
-
-## Generated Artifacts
-
-- Keep these committed and in sync:
-  - `packages/contracts/openapi/openapi.json`
-  - `packages/sdk/src/generated/schema.ts`
-- Validate artifact drift with:
-
-```bash
-pnpm contract:check
-```
+`codex-review` enforcement is controlled by `reviewPolicy.codexReviewEnabled` in `.github/policy/merge-policy.json`.
 
 ## PR Checklist
 
-- [ ] `pnpm check` passes locally.
-- [ ] `pnpm build` passes locally.
-- [ ] Naming/import conventions follow baseline rules.
-- [ ] Contract artifacts are generated and committed if schemas changed.
-- [ ] No unrelated files or generated noise are included in the PR.
+- [ ] Local convenience checks pass (`pnpm check`, `pnpm build`).
+- [ ] Control-plane edits also update policy/docs where required.
+- [ ] No unrelated files or generated noise are included.

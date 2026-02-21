@@ -9,6 +9,10 @@ dist
 dist-types
 coverage
 .next
+.artifacts
+test-results
+.notes
+.codex
 .DS_Store
 *.log
 *.tsbuildinfo

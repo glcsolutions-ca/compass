@@ -1,0 +1,8 @@
+# Project-scoped Codex configuration.
+#
+# Keep this file free of secrets (it is intended to be committed).
+# See:
+# - https://developers.openai.com/codex/config-basic
+#
+# This repo intentionally keeps Codex config minimal until requirements stabilize.
+

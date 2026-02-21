@@ -1,0 +1,12 @@
+.codex
+.notes
+node_modules
+.pnpm-store
+.turbo
+dist
+dist-types
+coverage
+.next
+pnpm-lock.yaml
+packages/contracts/openapi/openapi.json
+packages/sdk/src/generated/schema.ts

@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/contracts/tsconfig.ref.json"
+    },
+    {
+      "path": "./packages/sdk/tsconfig.ref.json"
+    },
+    {
+      "path": "./apps/api/tsconfig.ref.json"
+    },
+    {
+      "path": "./apps/worker/tsconfig.ref.json"
+    },
+    {
+      "path": "./apps/web/tsconfig.ref.json"
+    }
+  ]
+}

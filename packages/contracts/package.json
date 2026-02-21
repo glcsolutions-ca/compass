@@ -1,0 +1,33 @@
+{
+  "name": "@compass/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./openapi/openapi.json": "./openapi/openapi.json"
+  },
+  "files": [
+    "dist",
+    "openapi/openapi.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "generate": "tsx src/generate-openapi.ts",
+    "lint": "eslint . --ext .ts --max-warnings=0",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.ref.json --noEmit"
+  },
+  "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^7.3.4",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "tsx": "4.21.0"
+  }
+}

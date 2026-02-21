@@ -10,7 +10,7 @@ This repo treats CI as the source of truth for merge safety.
 
 ## Prerequisites
 
-- Node.js `24.13.1` (`.nvmrc`)
+- Node.js `24.x` (`.nvmrc`; enforced range `>=24.8.0 <25`)
 - `pnpm` (`packageManager` pinned in `package.json`)
 
 ## Local Workflow (Convenience)

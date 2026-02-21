@@ -161,7 +161,9 @@ jobs:
 
   ci_pipeline:
     name: ci-pipeline
-    needs: codex_review
+    needs:
+      - preflight
+      - codex_review
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:

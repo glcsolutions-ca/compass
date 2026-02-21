@@ -2,6 +2,39 @@ import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { test } from "@playwright/test";
 
+function parseRequiredFlowIds() {
+  const requiredFlowIdsJson = process.env.REQUIRED_FLOW_IDS_JSON?.trim();
+  if (requiredFlowIdsJson && requiredFlowIdsJson.length > 0) {
+    let parsed: unknown;
+
+    try {
+      parsed = JSON.parse(requiredFlowIdsJson);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`REQUIRED_FLOW_IDS_JSON must be valid JSON: ${message}`);
+    }
+
+    if (!Array.isArray(parsed)) {
+      throw new Error("REQUIRED_FLOW_IDS_JSON must be a JSON array");
+    }
+
+    const flowIds = parsed
+      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .filter((value) => value.length > 0);
+
+    if (flowIds.length === 0) {
+      throw new Error("REQUIRED_FLOW_IDS_JSON must contain at least one flow ID when provided");
+    }
+
+    return flowIds;
+  }
+
+  return (process.env.EVIDENCE_FLOW_ID ?? "compass-smoke")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
 test("compass smoke flow", async ({ page }) => {
   const headSha = process.env.HEAD_SHA ?? "local";
   const tier = process.env.RISK_TIER ?? "t2";
@@ -9,10 +42,7 @@ test("compass smoke flow", async ({ page }) => {
   const baseUrl = process.env.WEB_BASE_URL ?? "http://127.0.0.1:3000";
   const expectedEntrypoint = process.env.EXPECTED_ENTRYPOINT ?? "/";
   const expectedIdentity = process.env.EXPECTED_ACCOUNT_IDENTITY ?? "employee-123";
-  const flowIds = (process.env.EVIDENCE_FLOW_ID ?? "compass-smoke")
-    .split(",")
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
+  const flowIds = parseRequiredFlowIds();
 
   const outputDir = path.join(".artifacts", "browser-evidence", headSha);
   await mkdir(outputDir, { recursive: true });

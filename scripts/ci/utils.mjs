@@ -2,7 +2,6 @@ import { execFile } from "node:child_process";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { minimatch } from "minimatch";
 
 const execFileAsync = promisify(execFile);
 
@@ -10,7 +9,6 @@ export const TIER_ORDER = ["t3", "t2", "t1", "t0"];
 export const KNOWN_CHECKS = [
   "risk-policy-gate",
   "preflight",
-  "docs-drift",
   "ci-pipeline",
   "browser-evidence",
   "harness-smoke",
@@ -57,7 +55,8 @@ export async function getChangedFiles(baseSha, headSha) {
 }
 
 export function matchesAnyPattern(filePath, patterns) {
-  return patterns.some((pattern) => minimatch(filePath, pattern, { dot: true }));
+  const normalizedPath = filePath.replaceAll("\\", "/");
+  return patterns.some((pattern) => path.posix.matchesGlob(normalizedPath, pattern));
 }
 
 export async function readJsonFile(filePath) {

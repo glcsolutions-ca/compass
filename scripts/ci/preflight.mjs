@@ -9,7 +9,6 @@ import {
   getPrNumberFromEvent,
   loadMergePolicy,
   resolveRiskTier,
-  requiresBrowserEvidence,
   writeJsonFile
 } from "./utils.mjs";
 
@@ -65,7 +64,7 @@ async function main() {
     tier,
     required_checks_json: JSON.stringify(requiredChecks),
     changed_files_json: JSON.stringify(changedFiles),
-    required_flow_ids_csv: policy.uiEvidenceRules.requiredFlowIds.join(","),
+    required_flow_ids_json: JSON.stringify(policy.uiEvidenceRules.requiredFlowIds),
     browser_evidence_required: String(browserEvidenceRequired),
     harness_smoke_required: String(harnessSmokeRequired),
     codex_review_required: String(codexReviewRequired),

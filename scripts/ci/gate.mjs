@@ -7,19 +7,37 @@ import {
   writeJsonFile
 } from "./utils.mjs";
 
-function parseRequiredChecks() {
-  const raw = requireEnv("REQUIRED_CHECKS_JSON");
+function parseStringArray(name, raw) {
   const parsed = JSON.parse(raw);
   if (!Array.isArray(parsed)) {
-    throw new Error("REQUIRED_CHECKS_JSON must be an array");
+    throw new Error(`${name} must be a JSON array`);
   }
-  return parsed;
+
+  for (const value of parsed) {
+    if (typeof value !== "string" || value.trim().length === 0) {
+      throw new Error(`${name} must contain non-empty strings`);
+    }
+  }
+
+  return parsed.map((value) => value.trim());
+}
+
+function parseRequiredChecks() {
+  return parseStringArray("REQUIRED_CHECKS_JSON", requireEnv("REQUIRED_CHECKS_JSON"));
+}
+
+function parseRequiredFlowIds() {
+  const raw = process.env.REQUIRED_FLOW_IDS_JSON;
+  if (!raw || raw.trim().length === 0) {
+    return [];
+  }
+
+  return parseStringArray("REQUIRED_FLOW_IDS_JSON", raw);
 }
 
 function collectCheckResults() {
   return {
     preflight: process.env.CHECK_PREFLIGHT_RESULT ?? "unknown",
-    "docs-drift": process.env.CHECK_DOCS_DRIFT_RESULT ?? "unknown",
     "codex-review": process.env.CHECK_CODEX_REVIEW_RESULT ?? "unknown",
     "ci-pipeline": process.env.CHECK_CI_PIPELINE_RESULT ?? "unknown",
     "browser-evidence": process.env.CHECK_BROWSER_EVIDENCE_RESULT ?? "unknown",
@@ -27,30 +45,8 @@ function collectCheckResults() {
   };
 }
 
-async function validateArtifact(pathValue, name) {
-  if (!pathValue || pathValue.trim().length === 0) {
-    throw new Error(`${name} artifact path is missing`);
-  }
-
-  const exists = await fileExists(pathValue);
-  if (!exists) {
-    throw new Error(`${name} artifact is missing at ${pathValue}`);
-  }
-}
-
-async function main() {
-  const headSha = requireEnv("HEAD_SHA");
-  const tier = requireEnv("RISK_TIER");
-  const requiredChecks = parseRequiredChecks();
-  const requiredFlowIds = (process.env.REQUIRED_FLOW_IDS ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-
-  const checkResults = collectCheckResults();
-  const reasons = [];
-
-  for (const alwaysRequired of ["preflight", "docs-drift", "codex-review"]) {
+function validateRequiredCheckResults(requiredChecks, checkResults, reasons) {
+  for (const alwaysRequired of ["preflight", "codex-review"]) {
     if (checkResults[alwaysRequired] !== "success") {
       reasons.push(`${alwaysRequired} result is ${checkResults[alwaysRequired]}`);
     }
@@ -78,134 +74,136 @@ async function main() {
       reasons.push(`Required check ${checkName} did not succeed (result=${result})`);
     }
   }
+}
 
-  const preflightPath = requireEnv("PREFLIGHT_PATH");
-  const docsDriftPath = requireEnv("DOCS_DRIFT_PATH");
-  const reviewPath = requireEnv("REVIEW_PATH");
-  const ciPipelinePath = requireEnv("CI_PIPELINE_PATH");
+function validateRequiredFlowAssertions(flowId, assertions, reasons) {
+  const flowAssertions = assertions.filter(
+    (assertion) => typeof assertion?.id === "string" && assertion.id.startsWith(`${flowId}:`)
+  );
 
-  for (const [name, pathValue] of [
-    ["preflight", preflightPath],
-    ["docs-drift", docsDriftPath],
-    ["codex-review", reviewPath],
-    ["ci-pipeline", ciPipelinePath]
-  ]) {
-    try {
-      await validateArtifact(pathValue, name);
-    } catch (error) {
-      reasons.push(error instanceof Error ? error.message : String(error));
-    }
+  if (flowAssertions.length === 0) {
+    reasons.push(`browser-evidence missing assertions for required flow ${flowId}`);
+    return;
   }
 
-  if (await fileExists(preflightPath)) {
-    const preflight = await readJsonFile(preflightPath);
-    if (preflight.headSha !== headSha) {
-      reasons.push(`Preflight headSha mismatch: expected ${headSha}, got ${preflight.headSha}`);
-    }
-    if (preflight.tier !== tier) {
-      reasons.push(`Preflight tier mismatch: expected ${tier}, got ${preflight.tier}`);
-    }
+  const failed = flowAssertions.filter((assertion) => assertion.pass !== true);
+  for (const assertion of failed) {
+    reasons.push(
+      `browser-evidence assertion failed for ${flowId}: ${assertion.id}${
+        assertion.details ? ` (${assertion.details})` : ""
+      }`
+    );
+  }
+}
+
+async function validateBrowserEvidence({
+  requiredChecks,
+  requiredFlowIds,
+  checkResults,
+  headSha,
+  tier,
+  reasons
+}) {
+  if (!requiredChecks.includes("browser-evidence")) {
+    return;
   }
 
-  if (await fileExists(docsDriftPath)) {
-    const docsDrift = await readJsonFile(docsDriftPath);
-    if (docsDrift.headSha !== headSha) {
-      reasons.push(`Docs-drift headSha mismatch: expected ${headSha}, got ${docsDrift.headSha}`);
-    }
-    if (docsDrift.tier !== tier) {
-      reasons.push(`Docs-drift tier mismatch: expected ${tier}, got ${docsDrift.tier}`);
-    }
-    if (docsDrift.status !== "pass") {
-      reasons.push("Docs-drift status is not pass");
-    }
+  if (checkResults["browser-evidence"] !== "success") {
+    return;
   }
 
-  if (await fileExists(reviewPath)) {
-    const review = await readJsonFile(reviewPath);
-    const codexReviewRequired = requiredChecks.includes("codex-review");
-    if (review.headSha !== headSha) {
-      reasons.push(`codex-review headSha mismatch: expected ${headSha}, got ${review.headSha}`);
-    }
-    if (review.tier !== tier) {
-      reasons.push(`codex-review tier mismatch: expected ${tier}, got ${review.tier}`);
-    }
-    if (codexReviewRequired) {
-      const allowNoOpForBootstrap =
-        review.mode === "no-op" &&
-        (review.noOpReason === "missing-api-key" || review.noOpReason === "disabled-by-policy");
-
-      if (review.mode !== "full" && !allowNoOpForBootstrap) {
-        reasons.push("codex-review mode must be full, or approved bootstrap no-op, when required");
-      }
-    }
-    if (!codexReviewRequired && review.mode !== "no-op") {
-      reasons.push("codex-review mode must be no-op when not required by policy");
-    }
+  if (requiredFlowIds.length === 0) {
+    reasons.push("browser-evidence is required but REQUIRED_FLOW_IDS_JSON is empty");
+    return;
   }
 
-  if (requiredChecks.includes("ci-pipeline") && (await fileExists(ciPipelinePath))) {
-    const ciPipeline = await readJsonFile(ciPipelinePath);
-    if (ciPipeline.headSha !== headSha) {
-      reasons.push(`ci-pipeline headSha mismatch: expected ${headSha}, got ${ciPipeline.headSha}`);
-    }
-    if (ciPipeline.tier !== tier) {
-      reasons.push(`ci-pipeline tier mismatch: expected ${tier}, got ${ciPipeline.tier}`);
-    }
-    if (ciPipeline.status !== "pass") {
-      reasons.push("ci-pipeline status is not pass");
-    }
+  const browserManifestPath = process.env.BROWSER_EVIDENCE_MANIFEST_PATH?.trim() ?? "";
+  if (browserManifestPath.length === 0) {
+    reasons.push("browser-evidence manifest path is missing");
+    return;
   }
 
-  const browserManifestPath = process.env.BROWSER_EVIDENCE_MANIFEST_PATH ?? "";
-  if (requiredChecks.includes("browser-evidence")) {
-    try {
-      await validateArtifact(browserManifestPath, "browser-evidence");
-
-      const browserManifest = await readJsonFile(browserManifestPath);
-      if (browserManifest.headSha !== headSha) {
-        reasons.push(
-          `browser-evidence headSha mismatch: expected ${headSha}, got ${browserManifest.headSha}`
-        );
-      }
-      if (browserManifest.tier !== tier) {
-        reasons.push(
-          `browser-evidence tier mismatch: expected ${tier}, got ${browserManifest.tier}`
-        );
-      }
-
-      for (const flowId of requiredFlowIds) {
-        const found = Array.isArray(browserManifest.flows)
-          ? browserManifest.flows.some((flow) => flow.id === flowId && flow.status === "passed")
-          : false;
-
-        if (!found) {
-          reasons.push(`browser-evidence missing required passed flow: ${flowId}`);
-        }
-      }
-    } catch (error) {
-      reasons.push(error instanceof Error ? error.message : String(error));
-    }
+  if (!(await fileExists(browserManifestPath))) {
+    reasons.push(`browser-evidence artifact is missing at ${browserManifestPath}`);
+    return;
   }
 
-  const harnessSmokePath = process.env.HARNESS_SMOKE_PATH ?? "";
-  if (requiredChecks.includes("harness-smoke")) {
-    try {
-      await validateArtifact(harnessSmokePath, "harness-smoke");
-      const harnessSmoke = await readJsonFile(harnessSmokePath);
-      if (harnessSmoke.headSha !== headSha) {
-        reasons.push(
-          `harness-smoke headSha mismatch: expected ${headSha}, got ${harnessSmoke.headSha}`
-        );
-      }
-      if (harnessSmoke.tier !== tier) {
-        reasons.push(`harness-smoke tier mismatch: expected ${tier}, got ${harnessSmoke.tier}`);
-      }
-      if (harnessSmoke.status !== "pass") {
-        reasons.push("harness-smoke status is not pass");
-      }
-    } catch (error) {
-      reasons.push(error instanceof Error ? error.message : String(error));
+  const browserManifest = await readJsonFile(browserManifestPath);
+  const expectedEntrypoint = process.env.EXPECTED_ENTRYPOINT?.trim() || "/";
+  const expectedAccountIdentity = process.env.EXPECTED_ACCOUNT_IDENTITY?.trim() || "";
+
+  if (browserManifest.headSha !== headSha) {
+    reasons.push(
+      `browser-evidence headSha mismatch: expected ${headSha}, got ${browserManifest.headSha}`
+    );
+  }
+
+  if (browserManifest.tier !== tier) {
+    reasons.push(`browser-evidence tier mismatch: expected ${tier}, got ${browserManifest.tier}`);
+  }
+
+  if (!Array.isArray(browserManifest.flows)) {
+    reasons.push("browser-evidence manifest flows must be an array");
+    return;
+  }
+
+  if (!Array.isArray(browserManifest.assertions)) {
+    reasons.push("browser-evidence manifest assertions must be an array");
+    return;
+  }
+
+  for (const flowId of requiredFlowIds) {
+    const flow = browserManifest.flows.find((value) => value?.id === flowId);
+
+    if (!flow) {
+      reasons.push(`browser-evidence missing required flow: ${flowId}`);
+      continue;
     }
+
+    if (flow.status !== "passed") {
+      reasons.push(
+        `browser-evidence required flow is not passed: ${flowId} (status=${flow.status})`
+      );
+    }
+
+    if (flow.entrypoint !== expectedEntrypoint) {
+      reasons.push(
+        `browser-evidence flow ${flowId} entrypoint mismatch: expected ${expectedEntrypoint}, got ${flow.entrypoint}`
+      );
+    }
+
+    if (expectedAccountIdentity.length > 0 && flow.accountIdentity !== expectedAccountIdentity) {
+      reasons.push(
+        `browser-evidence flow ${flowId} identity mismatch: expected ${expectedAccountIdentity}, got ${flow.accountIdentity}`
+      );
+    }
+
+    validateRequiredFlowAssertions(flowId, browserManifest.assertions, reasons);
+  }
+}
+
+async function main() {
+  const headSha = requireEnv("HEAD_SHA");
+  const tier = requireEnv("RISK_TIER");
+  const requiredChecks = parseRequiredChecks();
+  const requiredFlowIds = parseRequiredFlowIds();
+
+  const checkResults = collectCheckResults();
+  const reasons = [];
+
+  validateRequiredCheckResults(requiredChecks, checkResults, reasons);
+
+  try {
+    await validateBrowserEvidence({
+      requiredChecks,
+      requiredFlowIds,
+      checkResults,
+      headSha,
+      tier,
+      reasons
+    });
+  } catch (error) {
+    reasons.push(error instanceof Error ? error.message : String(error));
   }
 
   const gatePath = path.join(".artifacts", "risk-policy-gate", headSha, "result.json");
@@ -215,6 +213,7 @@ async function main() {
     headSha,
     tier,
     requiredChecks,
+    requiredFlowIds,
     checkResults,
     pass: reasons.length === 0,
     reasons

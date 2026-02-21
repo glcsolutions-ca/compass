@@ -11,10 +11,9 @@ Compass uses a deterministic merge contract.
 
 ## Canonical Check Order
 
-1. `risk-policy-preflight`
-2. `docs-drift`
-3. `codex-review`
-4. `ci-pipeline`
-5. `browser-evidence` (conditional)
-6. `harness-smoke` (conditional)
-7. `risk-policy-gate`
+1. `risk-policy-preflight` (includes `docs-drift`)
+2. `codex-review`
+3. `ci-pipeline`
+4. `browser-evidence` (conditional)
+5. `harness-smoke` (conditional)
+6. `risk-policy-gate`

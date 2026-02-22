@@ -21,6 +21,7 @@ jobs:
     timeout-minutes: 30
     env:
       HEAD_SHA: ${{ github.sha }}
+      IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,9 +54,6 @@ jobs:
           POSTGRES_VERSION: ${{ vars.POSTGRES_VERSION }}
           POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
           POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
-          ACA_API_IMAGE: ${{ vars.ACA_API_IMAGE }}
-          ACA_WEB_IMAGE: ${{ vars.ACA_WEB_IMAGE }}
-          ACA_MIGRATE_IMAGE: ${{ vars.ACA_MIGRATE_IMAGE }}
           ENTRA_ISSUER: ${{ vars.ENTRA_ISSUER }}
           ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
           ENTRA_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
@@ -82,9 +80,6 @@ jobs:
             POSTGRES_VERSION
             POSTGRES_SKU_NAME
             POSTGRES_STORAGE_MB
-            ACA_API_IMAGE
-            ACA_WEB_IMAGE
-            ACA_MIGRATE_IMAGE
             ENTRA_ISSUER
             ENTRA_AUDIENCE
             ENTRA_JWKS_URI
@@ -137,6 +132,34 @@ jobs:
             fi
           done
 
+      - name: Resolve release-candidate images
+        id: images
+        run: |
+          set -euo pipefail
+          api_image="${IMAGE_PREFIX}/compass-api:${HEAD_SHA}"
+          web_image="${IMAGE_PREFIX}/compass-web:${HEAD_SHA}"
+          migrate_image="${IMAGE_PREFIX}/compass-migrate:${HEAD_SHA}"
+
+          for image in "$api_image" "$web_image" "$migrate_image"; do
+            echo "Waiting for image availability: $image"
+            found=0
+            for attempt in {1..60}; do
+              if docker manifest inspect "$image" >/dev/null 2>&1; then
+                found=1
+                break
+              fi
+              sleep 10
+            done
+            if [ "$found" -ne 1 ]; then
+              echo "Image not available after waiting: $image" >&2
+              exit 1
+            fi
+          done
+
+          echo "api_image=$api_image" >> "$GITHUB_OUTPUT"
+          echo "web_image=$web_image" >> "$GITHUB_OUTPUT"
+          echo "migrate_image=$migrate_image" >> "$GITHUB_OUTPUT"
+
       - name: Build Bicep params JSON
         run: |
           mkdir -p .artifacts/infra/$HEAD_SHA
@@ -170,9 +193,9 @@ jobs:
             --parameters postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
             --parameters databaseUrl="${{ secrets.DATABASE_URL }}" \
             --parameters webBearerToken="${{ secrets.WEB_BEARER_TOKEN }}" \
-            --parameters apiImage="${{ vars.ACA_API_IMAGE }}" \
-            --parameters webImage="${{ vars.ACA_WEB_IMAGE }}" \
-            --parameters migrateImage="${{ vars.ACA_MIGRATE_IMAGE }}" \
+            --parameters apiImage="${{ steps.images.outputs.api_image }}" \
+            --parameters webImage="${{ steps.images.outputs.web_image }}" \
+            --parameters migrateImage="${{ steps.images.outputs.migrate_image }}" \
             --parameters entraIssuer="${{ vars.ENTRA_ISSUER }}" \
             --parameters entraAudience="${{ vars.ENTRA_AUDIENCE }}" \
             --parameters entraJwksUri="${{ vars.ENTRA_JWKS_URI }}"
@@ -202,9 +225,9 @@ jobs:
             --parameters postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
             --parameters databaseUrl="${{ secrets.DATABASE_URL }}" \
             --parameters webBearerToken="${{ secrets.WEB_BEARER_TOKEN }}" \
-            --parameters apiImage="${{ vars.ACA_API_IMAGE }}" \
-            --parameters webImage="${{ vars.ACA_WEB_IMAGE }}" \
-            --parameters migrateImage="${{ vars.ACA_MIGRATE_IMAGE }}" \
+            --parameters apiImage="${{ steps.images.outputs.api_image }}" \
+            --parameters webImage="${{ steps.images.outputs.web_image }}" \
+            --parameters migrateImage="${{ steps.images.outputs.migrate_image }}" \
             --parameters entraIssuer="${{ vars.ENTRA_ISSUER }}" \
             --parameters entraAudience="${{ vars.ENTRA_AUDIENCE }}" \
             --parameters entraJwksUri="${{ vars.ENTRA_JWKS_URI }}" \

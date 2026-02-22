@@ -10,8 +10,10 @@
   - `risk-policy-gate` (final required gate; check-run aggregation + browser manifest assertions)
 - `dependabot-auto-merge.yml`: metadata-only safe-lane auto-merge for Dependabot PRs (patch/minor only, no PR checkout)
 - `deploy.yml`: push-to-main production deploy using ACR + Azure Container Apps deploy action (GitHub Environment `production`)
+  - current-head SHA guard runs before rollout and again before smoke gates
   - migration job runs before API/Web rollout (expand-first gate)
   - API image is shared by runtime and migration command path (single-image pattern)
+  - API and Web images are built/pushed explicitly, then deployed via `imageToDeploy`
   - derives ACR login server from `ACR_NAME`
   - runs subscription-scoped drift assertions before switching to subscription-less smoke identity
   - normalizes CLI mode output (`Single`/`single`) before drift-policy comparison
@@ -22,9 +24,11 @@
   - provider registration preflight
   - explicit ACR `authentication-as-arm` convergence check/enable
   - single shared runtime parameter payload for validate/create
+  - fail-closed preflight for private Postgres DNS zone suffix and Burstable SKU pairing
   - image resolution precedence: `image_tag` input > currently deployed image > current SHA
 - `acr-cleanup.yml`: scheduled/manual ACR tag cleanup for cost control
   - keeps newest N tags per repository (`compass-api`, `compass-web`)
+  - default keep count is 15 tags per repository
   - emits machine-readable artifact under `.artifacts/infra/<sha>/acr-cleanup.json`
 - `identity-plan.yml`: Terraform identity plan workflow for `infra/identity/**` (GitHub Environment `production`)
 - `identity-apply.yml`: manual Terraform identity apply workflow (GitHub Environment `production`)

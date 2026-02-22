@@ -50,6 +50,7 @@ All concrete deploy values must be stored in the GitHub `production` environment
   - `minReplicas: 0`
   - `maxReplicas: 1`
 - API and Web run in `activeRevisionsMode: single`.
+- API and Web keep at most `maxInactiveRevisions: 2`.
 - In single-revision mode, ACA routes app traffic to the latest ready revision automatically.
 - Web app calls API through the stable app FQDN (`https://<api-app>.<aca-default-domain>`), not a revision FQDN.
 
@@ -74,22 +75,25 @@ All concrete deploy values must be stored in the GitHub `production` environment
 
 ## Deploy Sequence
 
-1. Azure OIDC login (deploy identity).
-2. Build/push API image to ACR.
-3. Update and execute ACA migration job (`start-migration-job.mjs`, `wait-migration-job.mjs`) using the API image.
-4. API deploy via `azure/container-apps-deploy-action` using the same API image.
-5. Web deploy via `azure/container-apps-deploy-action`.
-6. Azure OIDC login (smoke identity), mint Entra access token.
-7. API smoke verification (`verify-api-smoke.mjs`) against production URL.
-8. Browser evidence against production Web URL, reusing the same Entra smoke token via Playwright request-header injection (`BROWSER_SMOKE_BEARER_TOKEN`).
-9. Drift assertions verify `activeRevisionsMode=single`, `minReplicas=0`, and one active revision per app.
-10. Publish deploy artifacts.
+1. Current-head SHA guard checks workflow SHA still matches `origin/main`.
+2. Azure OIDC login (deploy identity).
+3. Build/push API image to ACR.
+4. Build/push Web image to ACR.
+5. Update and execute ACA migration job (`start-migration-job.mjs`, `wait-migration-job.mjs`) using the API image.
+6. API deploy via `azure/container-apps-deploy-action` using `imageToDeploy`.
+7. Web deploy via `azure/container-apps-deploy-action` using `imageToDeploy`.
+8. Drift assertions verify `activeRevisionsMode=single`, `minReplicas=0`, and one active revision per app.
+9. Current-head SHA guard runs again before smoke.
+10. Azure OIDC login (smoke identity), mint Entra access token.
+11. API smoke verification (`verify-api-smoke.mjs`) against production URL.
+12. Browser evidence against production Web URL, reusing the same Entra smoke token via Playwright request-header injection (`BROWSER_SMOKE_BEARER_TOKEN`).
+13. Publish deploy artifacts.
 
 ## ACR Tag Retention
 
 - Workflow file: `.github/workflows/acr-cleanup.yml`
 - Trigger: weekly schedule + `workflow_dispatch`
-- Default retention policy: keep newest 30 tags for `compass-api` and `compass-web`; prune older tags
+- Default retention policy: keep newest 15 tags for `compass-api` and `compass-web`; prune older tags
 - Cleanup artifact: `.artifacts/infra/<sha>/acr-cleanup.json`
 
 ## Rollback (Single Revision Mode)

@@ -32,6 +32,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Guard current main HEAD (pre-rollout)
+        run: |
+          set -euo pipefail
+
+          remote_head="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [ -z "$remote_head" ]; then
+            echo "Failed to resolve origin/main head SHA." >&2
+            exit 1
+          fi
+
+          if [ "$remote_head" != "$HEAD_SHA" ]; then
+            echo "Stale deploy candidate: workflow SHA=$HEAD_SHA, origin/main=$remote_head" >&2
+            exit 1
+          fi
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -112,6 +127,21 @@ jobs:
           echo "api_image=$api_image" >> "$GITHUB_OUTPUT"
           echo "api_digest=$api_digest" >> "$GITHUB_OUTPUT"
 
+      - name: Build and push Web image to ACR
+        id: web_image
+        run: |
+          set -euo pipefail
+
+          web_image="$ACR_REGISTRY/compass-web:$HEAD_SHA"
+
+          docker build -f apps/web/Dockerfile -t "$web_image" .
+          docker push "$web_image"
+
+          web_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$web_image" || true)
+
+          echo "web_image=$web_image" >> "$GITHUB_OUTPUT"
+          echo "web_digest=$web_digest" >> "$GITHUB_OUTPUT"
+
       - name: Update migration job image
         run: |
           az containerapp job update \
@@ -147,10 +177,7 @@ jobs:
       - name: Deploy Web via ACA deploy action
         uses: azure/container-apps-deploy-action@v1
         with:
-          appSourcePath: ${{ github.workspace }}
-          dockerfilePath: apps/web/Dockerfile
-          imageToBuild: ${{ env.ACR_REGISTRY }}/compass-web:${{ env.HEAD_SHA }}
-          acrName: ${{ env.ACR_NAME }}
+          imageToDeploy: ${{ steps.web_image.outputs.web_image }}
           containerAppName: ${{ env.ACA_WEB_APP_NAME }}
           resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
           disableTelemetry: true
@@ -233,6 +260,21 @@ jobs:
             fi
           done
 
+      - name: Guard current main HEAD (pre-smoke)
+        run: |
+          set -euo pipefail
+
+          remote_head="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [ -z "$remote_head" ]; then
+            echo "Failed to resolve origin/main head SHA." >&2
+            exit 1
+          fi
+
+          if [ "$remote_head" != "$HEAD_SHA" ]; then
+            echo "Stale deploy candidate before smoke: workflow SHA=$HEAD_SHA, origin/main=$remote_head" >&2
+            exit 1
+          fi
+
       - name: Azure login (smoke identity)
         uses: azure/login@v2
         with:
@@ -288,7 +330,8 @@ jobs:
         env:
           JOB_STATUS: ${{ job.status }}
           API_IMAGE: ${{ steps.api_image.outputs.api_image }}
-          WEB_IMAGE: ${{ env.ACR_REGISTRY }}/compass-web:${{ env.HEAD_SHA }}
+          WEB_IMAGE: ${{ steps.web_image.outputs.web_image }}
+          WEB_DIGEST: ${{ steps.web_image.outputs.web_digest }}
           MIGRATE_IMAGE: ${{ steps.api_image.outputs.api_image }}
           MIGRATE_DIGEST: ${{ steps.api_image.outputs.api_digest }}
           API_PROD_URL: ${{ steps.prod_urls.outputs.api_prod_url }}
@@ -305,6 +348,7 @@ jobs:
             "images": {
               "api": "$API_IMAGE",
               "web": "$WEB_IMAGE",
+              "webDigest": "$WEB_DIGEST",
               "migrate": "$MIGRATE_IMAGE",
               "migrateDigest": "$MIGRATE_DIGEST"
             },

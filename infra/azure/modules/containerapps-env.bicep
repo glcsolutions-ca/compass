@@ -14,7 +14,7 @@ resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   }
 }
 
-resource managedEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' = {
+resource managedEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: environmentName
   location: location
   properties: {
@@ -22,7 +22,7 @@ resource managedEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' = {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
         customerId: workspace.properties.customerId
-        sharedKey: listKeys(workspace.id, workspace.apiVersion).primarySharedKey
+        sharedKey: workspace.listKeys().primarySharedKey
       }
     }
     workloadProfiles: [

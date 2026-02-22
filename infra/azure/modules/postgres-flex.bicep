@@ -38,7 +38,8 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' =
 }
 
 resource postgresDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
-  name: '${postgresServer.name}/${databaseName}'
+  parent: postgresServer
+  name: databaseName
 }
 
 output serverId string = postgresServer.id

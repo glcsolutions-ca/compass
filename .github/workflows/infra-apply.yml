@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: Optional image tag for API/Web/migrate images (when set, always used)
+        description: Optional image tag for API/Web images (when set, always used)
         required: false
         type: string
   push:
@@ -124,6 +124,19 @@ jobs:
               exit 1
             fi
           done
+
+          expected_private_dns_suffix=".private."
+          expected_private_dns_suffix="${expected_private_dns_suffix}postgres.database.azure.com"
+          if [[ "$AZURE_PRIVATE_DNS_ZONE_NAME" != *"$expected_private_dns_suffix" ]]; then
+            echo "AZURE_PRIVATE_DNS_ZONE_NAME must use the Azure PostgreSQL private DNS suffix" >&2
+            exit 1
+          fi
+
+          normalized_postgres_tier="$(echo "$POSTGRES_SKU_TIER" | tr '[:upper:]' '[:lower:]')"
+          if [ "$normalized_postgres_tier" = "burstable" ] && ! [[ "$POSTGRES_SKU_NAME" =~ ^Standard_B ]]; then
+            echo "POSTGRES_SKU_NAME must start with Standard_B when POSTGRES_SKU_TIER=Burstable" >&2
+            exit 1
+          fi
 
           actual_subscription="$(az account show --query id -o tsv)"
           actual_tenant="$(az account show --query tenantId -o tsv)"

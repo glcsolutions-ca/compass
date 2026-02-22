@@ -114,8 +114,9 @@ Registry policy:
 - `AcrPull` role assignment is applied at ACR scope for the shared pull identity.
 - `infra-apply` explicitly checks/enables ACR `authentication-as-arm`.
 - `infra-apply` derives the ACR login server from `ACR_NAME` and resolves image references from current deployed image or `image_tag` override.
+- `image_tag` override applies to API/Web images only.
 - Migration job image is pinned to the API image (single-image release artifact pattern).
-- ACR storage lifecycle is controlled by `.github/workflows/acr-cleanup.yml` (scheduled/manual tag pruning).
+- ACR storage lifecycle is controlled by `.github/workflows/acr-cleanup.yml` (scheduled/manual tag pruning, keep newest 15 tags by default).
 
 Database policy:
 
@@ -126,9 +127,11 @@ Database policy:
   - `POSTGRES_ADMIN_PASSWORD`
 - Host is canonical Azure Flexible Server FQDN form:
   - `<POSTGRES_SERVER_NAME>.postgres.database.azure.com`
+- Private DNS zone input is fail-closed in `infra-apply`: must use the Azure PostgreSQL private DNS suffix format.
 - Cost-first default sizing is supported with:
   - `POSTGRES_SKU_TIER=Burstable`
   - `POSTGRES_SKU_NAME=Standard_B1ms`
+- Burstable pairing is fail-closed in `infra-apply`: `POSTGRES_SKU_NAME` must begin with `Standard_B`.
 - Burstable is only appropriate for mostly-idle workloads. If CPU credits deplete under sustained load, move to `GeneralPurpose` and monitor `CPU Credits Remaining`.
 
 ## Entra Identity (Terraform)

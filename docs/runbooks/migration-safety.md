@@ -5,6 +5,7 @@
 Deploy-time migrations must remain compatible with the current app image and the previous rollback image.
 Use an expand/migrate/contract sequence.
 Pipeline migration job is the only production migration path.
+Do not run schema migrations in API/Web startup hooks, init containers, or sidecars.
 
 ## Command-Level Role Separation
 

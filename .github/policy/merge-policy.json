@@ -12,15 +12,8 @@
       "deploy/**"
     ],
     "t2": ["apps/web/**"],
-    "t1": [
-      "apps/api/**",
-      "apps/worker/**",
-      "packages/**",
-      "package.json",
-      "pnpm-lock.yaml",
-      "pnpm-workspace.yaml",
-      "**/package.json"
-    ],
+    "t1": ["apps/api/**", "apps/worker/**", "packages/**"],
+    "deps": ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "**/package.json"],
     "t0": ["**"]
   },
   "mergePolicy": {
@@ -31,6 +24,9 @@
       "requiredChecks": ["risk-policy-gate", "ci-pipeline", "browser-evidence"]
     },
     "t1": {
+      "requiredChecks": ["risk-policy-gate", "ci-pipeline"]
+    },
+    "deps": {
       "requiredChecks": ["risk-policy-gate", "ci-pipeline"]
     },
     "t0": {

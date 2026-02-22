@@ -7,7 +7,7 @@ This repository uses split control-plane IaC:
 - Azure resources (network, ACA, Postgres): `infra/azure/**` (Bicep)
 - Entra identities and app registrations: `infra/identity/**` (Terraform `azuread`)
 
-Both are versioned and reviewed in PRs.
+Both paths are versioned and reviewed in PRs.
 
 ## Non-Commit Policy (Required)
 
@@ -21,8 +21,35 @@ Do not commit organization-specific infra values to tracked files. This includes
 - organization-specific GitHub slugs used for production identity/deploy wiring
 
 Concrete values must be stored only in GitHub Environment configuration (`production` vars/secrets).
-
 CI enforces this via `scripts/ci/no-org-infra-leak.mjs` in `.github/workflows/merge-contract.yml`.
+
+## Bootstrap Trust Anchor (One-Time Manual)
+
+Bootstrap is manual once. After bootstrap, identity/infra/deploy runs through workflows.
+
+Required operator permissions:
+
+- Entra role admin capability (to assign `Application Administrator`)
+- Azure RBAC to create storage and role assignments for tfstate
+- GitHub repo admin to write `production` environment vars/secrets
+
+Bootstrap steps:
+
+1. Create bootstrap app + service principal (`compass-identity-bootstrap-prod`).
+2. Add federated credential subject:
+   - `repo:<org>/<repo>:environment:production`
+3. Assign `Application Administrator` to bootstrap SP.
+4. Create tfstate storage and grant bootstrap SP `Storage Blob Data Contributor`.
+5. Set GitHub environment secret `AZURE_IDENTITY_CLIENT_ID`.
+
+### Bootstrap Identity Rotation
+
+1. Create a new bootstrap app/SP.
+2. Add the same federated credential subject.
+3. Grant the same Entra/Azure roles.
+4. Update `production` secret `AZURE_IDENTITY_CLIENT_ID`.
+5. Run `identity-plan` to verify auth.
+6. Remove old role assignments/app when replacement is verified.
 
 ## Azure Infra (Bicep)
 
@@ -64,51 +91,14 @@ Required GitHub environment variables for infra apply:
 Required GitHub environment secrets for infra apply:
 
 - `AZURE_DEPLOY_CLIENT_ID`
-- `GHCR_USERNAME`
-- `GHCR_PASSWORD`
 - `POSTGRES_ADMIN_PASSWORD`
 - `DATABASE_URL`
 - `WEB_BEARER_TOKEN` (optional)
 
-Apply manually:
+Registry policy:
 
-```bash
-az bicep build-params \
-  --file infra/azure/environments/prod.bicepparam \
-  --outfile /tmp/prod.parameters.json
-
-az deployment group create \
-  --resource-group "$AZURE_RESOURCE_GROUP" \
-  --template-file infra/azure/main.bicep \
-  --parameters @/tmp/prod.parameters.json \
-  --parameters location="$AZURE_LOCATION" \
-  --parameters vnetName="$AZURE_VNET_NAME" \
-  --parameters acaSubnetName="$AZURE_ACA_SUBNET_NAME" \
-  --parameters postgresSubnetName="$AZURE_POSTGRES_SUBNET_NAME" \
-  --parameters privateDnsZoneName="$AZURE_PRIVATE_DNS_ZONE_NAME" \
-  --parameters environmentName="$ACA_ENVIRONMENT_NAME" \
-  --parameters logAnalyticsWorkspaceName="$AZURE_LOG_ANALYTICS_WORKSPACE_NAME" \
-  --parameters apiAppName="$ACA_API_APP_NAME" \
-  --parameters webAppName="$ACA_WEB_APP_NAME" \
-  --parameters migrationJobName="$ACA_MIGRATE_JOB_NAME" \
-  --parameters postgresServerName="$POSTGRES_SERVER_NAME" \
-  --parameters postgresDatabaseName="$POSTGRES_DATABASE_NAME" \
-  --parameters postgresAdminUsername="$POSTGRES_ADMIN_USERNAME" \
-  --parameters postgresVersion="$POSTGRES_VERSION" \
-  --parameters postgresSkuName="$POSTGRES_SKU_NAME" \
-  --parameters postgresStorageMb="$POSTGRES_STORAGE_MB" \
-  --parameters ghcrServer="$GHCR_SERVER" \
-  --parameters ghcrUsername="$GHCR_USERNAME" \
-  --parameters ghcrPassword="$GHCR_PASSWORD" \
-  --parameters postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD" \
-  --parameters databaseUrl="$DATABASE_URL" \
-  --parameters apiImage="$ACA_API_IMAGE" \
-  --parameters webImage="$ACA_WEB_IMAGE" \
-  --parameters migrateImage="$ACA_MIGRATE_IMAGE" \
-  --parameters entraIssuer="$ENTRA_ISSUER" \
-  --parameters entraAudience="$ENTRA_AUDIENCE" \
-  --parameters entraJwksUri="$ENTRA_JWKS_URI"
-```
+- Default path is server-only GHCR config (`ghcr.io`) for public images.
+- If ACA image pull fails with GHCR auth/pull errors, restore PAT-based registry credentials path.
 
 ## Entra Identity (Terraform)
 
@@ -117,43 +107,72 @@ az deployment group create \
 - Plan workflow: `.github/workflows/identity-plan.yml`
 - Apply workflow: `.github/workflows/identity-apply.yml`
 - GitHub environment source: `production`
+- Backend: remote `azurerm` (OIDC + Azure AD auth)
 
 Required GitHub environment variables for identity workflows:
 
-- `GH_ORGANIZATION`
-- `GH_REPOSITORY_NAME`
-- `GH_MAIN_BRANCH_REF`
-- `ENTRA_AUDIENCE`
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
+- `GH_ORGANIZATION`
+- `GH_REPOSITORY_NAME`
+- `ENTRA_AUDIENCE`
+- `IDENTITY_OWNER_OBJECT_IDS_JSON` (JSON array of owner object IDs)
+- `TFSTATE_RESOURCE_GROUP`
+- `TFSTATE_STORAGE_ACCOUNT`
+- `TFSTATE_CONTAINER`
+- `TFSTATE_KEY`
 
 Required GitHub environment secrets for identity workflows:
 
 - `AZURE_IDENTITY_CLIENT_ID`
 
-Local plan/apply (with environment variables):
+### Identity Workflow Evidence
+
+`identity-plan` artifact:
+
+- `.artifacts/identity/<sha>/plan.json`
+
+`identity-apply` artifact:
+
+- `.artifacts/identity/<sha>/outputs.json`
+
+Expected outputs consumed downstream:
+
+- `deploy_application_client_id`
+- `smoke_application_client_id`
+- `entra_issuer`
+- `entra_jwks_uri`
+- `entra_audience`
+
+Map these outputs into GitHub `production` vars/secrets before production deploy.
+
+## Local Identity Commands (Optional)
 
 ```bash
-terraform -chdir=infra/identity init
+terraform -chdir=infra/identity init \
+  -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \
+  -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \
+  -backend-config="container_name=$TFSTATE_CONTAINER" \
+  -backend-config="key=$TFSTATE_KEY" \
+  -backend-config="use_oidc=true" \
+  -backend-config="use_azuread_auth=true" \
+  -backend-config="tenant_id=$AZURE_TENANT_ID" \
+  -backend-config="subscription_id=$AZURE_SUBSCRIPTION_ID" \
+  -backend-config="client_id=$AZURE_IDENTITY_CLIENT_ID"
+
 terraform -chdir=infra/identity plan \
   -var-file=env/prod.tfvars \
   -var "github_organization=$GH_ORGANIZATION" \
   -var "github_repository=$GH_REPOSITORY_NAME" \
-  -var "github_main_branch_ref=$GH_MAIN_BRANCH_REF" \
-  -var "api_identifier_uri=$ENTRA_AUDIENCE"
+  -var "github_environment_name=production" \
+  -var "api_identifier_uri=$ENTRA_AUDIENCE" \
+  -var "owners=$IDENTITY_OWNER_OBJECT_IDS_JSON"
+
 terraform -chdir=infra/identity apply \
   -var-file=env/prod.tfvars \
   -var "github_organization=$GH_ORGANIZATION" \
   -var "github_repository=$GH_REPOSITORY_NAME" \
-  -var "github_main_branch_ref=$GH_MAIN_BRANCH_REF" \
-  -var "api_identifier_uri=$ENTRA_AUDIENCE"
+  -var "github_environment_name=production" \
+  -var "api_identifier_uri=$ENTRA_AUDIENCE" \
+  -var "owners=$IDENTITY_OWNER_OBJECT_IDS_JSON"
 ```
-
-## Identity Outputs Used By API/Deploy
-
-- `entra_issuer`
-- `entra_jwks_uri`
-- `entra_audience`
-- deploy/smoke application client IDs
-
-Map these outputs to GitHub environment `production` variables/secrets before enabling production deploys.

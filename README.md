@@ -103,6 +103,8 @@ Infrastructure runtime values are environment-driven:
 - Store concrete Azure/Entra/resource naming values in GitHub Environment `production` vars/secrets.
 - Keep tracked files organization-neutral (no committed tenant IDs, subscription IDs, concrete app names, private DNS zones, or server FQDNs).
 - CI leak guard (`scripts/ci/no-org-infra-leak.mjs`) blocks commits with org-specific infra literals.
+- Identity workflows use environment-scoped OIDC trust (`repo:<org>/<repo>:environment:production`) with remote tfstate backend.
+- Bootstrap trust anchor is manual once (`AZURE_IDENTITY_CLIENT_ID` + tfstate vars), then identity/infra/deploy flows are workflow-driven.
 
 ## Source of Truth
 

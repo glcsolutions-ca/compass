@@ -25,9 +25,6 @@ param postgresVersion string = '16'
 param postgresStorageMb int = 32768
 
 param ghcrServer string = 'SET_IN_GITHUB_ENV'
-param ghcrUsername string
-@secure()
-param ghcrPassword string
 
 @secure()
 param databaseUrl string
@@ -92,8 +89,6 @@ module api './modules/containerapp-api.bicep' = {
     managedEnvironmentId: containerEnvironment.outputs.environmentId
     image: apiImage
     ghcrServer: ghcrServer
-    ghcrUsername: ghcrUsername
-    ghcrPassword: ghcrPassword
     databaseUrl: databaseUrl
     authMode: authMode
     requiredScope: requiredScope
@@ -111,8 +106,6 @@ module web './modules/containerapp-web.bicep' = {
     managedEnvironmentId: containerEnvironment.outputs.environmentId
     image: webImage
     ghcrServer: ghcrServer
-    ghcrUsername: ghcrUsername
-    ghcrPassword: ghcrPassword
     apiBaseUrl: api.outputs.latestRevisionFqdn != ''
       ? 'https://${api.outputs.latestRevisionFqdn}'
       : 'https://${apiAppName}'
@@ -128,8 +121,6 @@ module migrateJob './modules/containerapp-job-migrate.bicep' = {
     managedEnvironmentId: containerEnvironment.outputs.environmentId
     image: migrateImage
     ghcrServer: ghcrServer
-    ghcrUsername: ghcrUsername
-    ghcrPassword: ghcrPassword
     databaseUrl: databaseUrl
   }
 }

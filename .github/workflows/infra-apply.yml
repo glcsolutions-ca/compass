@@ -169,8 +169,6 @@ jobs:
             --parameters postgresSkuName="${{ vars.POSTGRES_SKU_NAME }}" \
             --parameters postgresStorageMb="${{ vars.POSTGRES_STORAGE_MB }}" \
             --parameters ghcrServer="${{ vars.GHCR_SERVER }}" \
-            --parameters ghcrUsername="${{ secrets.GHCR_USERNAME }}" \
-            --parameters ghcrPassword="${{ secrets.GHCR_PASSWORD }}" \
             --parameters postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
             --parameters databaseUrl="${{ secrets.DATABASE_URL }}" \
             --parameters webBearerToken="${{ secrets.WEB_BEARER_TOKEN }}" \
@@ -204,8 +202,6 @@ jobs:
             --parameters postgresSkuName="${{ vars.POSTGRES_SKU_NAME }}" \
             --parameters postgresStorageMb="${{ vars.POSTGRES_STORAGE_MB }}" \
             --parameters ghcrServer="${{ vars.GHCR_SERVER }}" \
-            --parameters ghcrUsername="${{ secrets.GHCR_USERNAME }}" \
-            --parameters ghcrPassword="${{ secrets.GHCR_PASSWORD }}" \
             --parameters postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
             --parameters databaseUrl="${{ secrets.DATABASE_URL }}" \
             --parameters webBearerToken="${{ secrets.WEB_BEARER_TOKEN }}" \

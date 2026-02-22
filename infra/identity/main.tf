@@ -1,6 +1,6 @@
 locals {
-  repo_slug = "${var.github_organization}/${var.github_repository}"
-  deploy_subject = "repo:${local.repo_slug}:ref:${var.github_main_branch_ref}"
+  repo_slug      = "${var.github_organization}/${var.github_repository}"
+  deploy_subject = "repo:${local.repo_slug}:environment:${var.github_environment_name}"
 }
 
 resource "azuread_application" "api" {

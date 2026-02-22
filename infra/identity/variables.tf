@@ -14,10 +14,10 @@ variable "github_repository" {
   type        = string
 }
 
-variable "github_main_branch_ref" {
-  description = "Git ref allowed for production deploy federation"
+variable "github_environment_name" {
+  description = "GitHub environment name allowed for production deploy federation"
   type        = string
-  default     = "refs/heads/main"
+  default     = "production"
 }
 
 variable "federated_audience" {

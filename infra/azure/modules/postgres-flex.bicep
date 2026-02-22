@@ -6,7 +6,8 @@ param privateDnsZoneId string
 param adminLogin string
 @secure()
 param adminPassword string
-param skuName string = 'Standard_D2s_v3'
+param skuName string = 'Standard_B2s'
+param skuTier string = 'Burstable'
 param postgresVersion string = '16'
 param storageSizeMb int = 32768
 
@@ -15,7 +16,7 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-pr
   location: location
   sku: {
     name: skuName
-    tier: 'GeneralPurpose'
+    tier: skuTier
   }
   properties: {
     version: postgresVersion

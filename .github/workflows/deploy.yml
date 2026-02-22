@@ -23,9 +23,8 @@ jobs:
       HEAD_SHA: ${{ github.sha }}
       RISK_TIER: t3
       ACR_NAME: ${{ vars.ACR_NAME }}
-      ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+      ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-      AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
       ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
@@ -57,8 +56,6 @@ jobs:
 
       - name: Ensure Azure CLI extensions
         run: az extension add --name containerapp --upgrade --only-show-errors
-      - name: Ensure Log Analytics CLI extension
-        run: az extension add --name log-analytics --upgrade --only-show-errors
 
       - name: Verify required resources exist
         run: |
@@ -104,7 +101,7 @@ jobs:
         with:
           appSourcePath: ${{ github.workspace }}
           dockerfilePath: apps/api/Dockerfile
-          imageToBuild: ${{ env.ACR_LOGIN_SERVER }}/compass-api:${{ env.HEAD_SHA }}
+          imageToBuild: ${{ env.ACR_REGISTRY }}/compass-api:${{ env.HEAD_SHA }}
           acrName: ${{ env.ACR_NAME }}
           containerAppName: ${{ env.ACA_API_APP_NAME }}
           resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
@@ -115,18 +112,52 @@ jobs:
         with:
           appSourcePath: ${{ github.workspace }}
           dockerfilePath: apps/web/Dockerfile
-          imageToBuild: ${{ env.ACR_LOGIN_SERVER }}/compass-web:${{ env.HEAD_SHA }}
+          imageToBuild: ${{ env.ACR_REGISTRY }}/compass-web:${{ env.HEAD_SHA }}
           acrName: ${{ env.ACR_NAME }}
           containerAppName: ${{ env.ACA_WEB_APP_NAME }}
           resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
           disableTelemetry: true
+
+      - name: Verify latest revisions are traffic-serving
+        run: |
+          set -euo pipefail
+
+          verify_app() {
+            local app_name="$1"
+
+            latest_revision="$(az containerapp show \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$app_name" \
+              --query properties.latestRevisionName \
+              --output tsv)"
+
+            traffic_revision="$(az containerapp ingress traffic show \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$app_name" \
+              --query '[?weight==`100`].revisionName | [0]' \
+              --output tsv)"
+
+            if [ -z "$latest_revision" ] || [ -z "$traffic_revision" ]; then
+              echo "Failed to resolve revision state for $app_name" >&2
+              exit 1
+            fi
+
+            if [ "$latest_revision" != "$traffic_revision" ]; then
+              echo "Latest revision is not serving traffic for $app_name" >&2
+              echo "latest=$latest_revision traffic=$traffic_revision" >&2
+              exit 1
+            fi
+          }
+
+          verify_app "$ACA_API_APP_NAME"
+          verify_app "$ACA_WEB_APP_NAME"
 
       - name: Build and push migration image to ACR
         id: migration_image
         run: |
           set -euo pipefail
 
-          migrate_image="$ACR_LOGIN_SERVER/compass-migrate:$HEAD_SHA"
+          migrate_image="$ACR_REGISTRY/compass-migrate:$HEAD_SHA"
 
           az acr login --name "$ACR_NAME" --only-show-errors
           docker build -f deploy/Dockerfile.migrate -t "$migrate_image" .
@@ -159,7 +190,6 @@ jobs:
           ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
           MIGRATION_EXECUTION_NAME: ${{ steps.migration_start.outputs.migration_execution_name }}
           MIGRATION_TIMEOUT_SECONDS: 900
-          AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ env.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
         run: node scripts/deploy/wait-migration-job.mjs
 
       - name: Resolve production URLs
@@ -240,8 +270,8 @@ jobs:
         if: ${{ always() }}
         env:
           JOB_STATUS: ${{ job.status }}
-          API_IMAGE: ${{ env.ACR_LOGIN_SERVER }}/compass-api:${{ env.HEAD_SHA }}
-          WEB_IMAGE: ${{ env.ACR_LOGIN_SERVER }}/compass-web:${{ env.HEAD_SHA }}
+          API_IMAGE: ${{ env.ACR_REGISTRY }}/compass-api:${{ env.HEAD_SHA }}
+          WEB_IMAGE: ${{ env.ACR_REGISTRY }}/compass-web:${{ env.HEAD_SHA }}
           MIGRATE_IMAGE: ${{ steps.migration_image.outputs.migrate_image }}
           MIGRATE_DIGEST: ${{ steps.migration_image.outputs.migrate_digest }}
           API_PROD_URL: ${{ steps.prod_urls.outputs.api_prod_url }}

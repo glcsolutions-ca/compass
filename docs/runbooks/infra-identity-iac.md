@@ -76,12 +76,13 @@ Required GitHub environment variables for infra apply:
 - `ACA_MIGRATE_JOB_NAME`
 - `ACR_PULL_IDENTITY_NAME`
 - `ACR_NAME`
-- `ACR_LOGIN_SERVER`
+- `ACR_SKU`
 - `POSTGRES_SERVER_NAME`
 - `POSTGRES_DATABASE_NAME`
 - `POSTGRES_ADMIN_USERNAME`
 - `POSTGRES_VERSION`
 - `POSTGRES_SKU_NAME`
+- `POSTGRES_SKU_TIER`
 - `POSTGRES_STORAGE_MB`
 - `ENTRA_ISSUER`
 - `ENTRA_AUDIENCE`
@@ -112,9 +113,9 @@ Registry policy:
 - ACR is provisioned in Bicep with `adminUserEnabled=false`.
 - API/Web/Job resources use a shared user-assigned managed identity for image pulls.
 - `AcrPull` role assignment is applied at ACR scope for the shared pull identity.
-- `infra-apply` resolves image references from `ACR_LOGIN_SERVER` and commit SHA.
+- `infra-apply` derives the ACR login server from `ACR_NAME` and resolves image references from current deployed image or `image_tag` override.
 
-Database URL policy:
+Database policy:
 
 - Production `DATABASE_URL` is derived in Bicep from:
   - `POSTGRES_SERVER_NAME`
@@ -123,6 +124,9 @@ Database URL policy:
   - `POSTGRES_ADMIN_PASSWORD`
 - Host is canonical Azure Flexible Server FQDN form:
   - `<POSTGRES_SERVER_NAME>.postgres.database.azure.com`
+- Cost-first default sizing is supported with:
+  - `POSTGRES_SKU_TIER=Burstable`
+  - `POSTGRES_SKU_NAME=Standard_B2s`
 
 ## Entra Identity (Terraform)
 

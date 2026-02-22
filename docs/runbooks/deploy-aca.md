@@ -31,7 +31,6 @@ All concrete deploy values must be stored in the GitHub `production` environment
 - `ACA_WEB_APP_NAME=<container-app-web-name>`
 - `ACA_MIGRATE_JOB_NAME=<container-app-job-name>`
 - `ACR_NAME=<acr-name>`
-- `ACR_LOGIN_SERVER=<acr-login-server>`
 - `ENTRA_ISSUER=<issuer-url>`
 - `ENTRA_JWKS_URI=<jwks-url>`
 - `ENTRA_AUDIENCE=<api-audience>`
@@ -43,11 +42,22 @@ All concrete deploy values must be stored in the GitHub `production` environment
 - `AZURE_DEPLOY_CLIENT_ID`
 - `AZURE_SMOKE_CLIENT_ID`
 
+## Runtime Sizing and Revision Policy
+
+- API and Web are configured for cost-first runtime:
+  - `cpu: 0.25`
+  - `memory: 0.5Gi`
+  - `minReplicas: 0`
+  - `maxReplicas: 2`
+- API and Web run in `activeRevisionsMode: single`.
+- Deploy pipeline verifies latest revision is traffic-serving before migration/smoke gates continue.
+
 ## Registry + Runtime Auth Contract
 
 - Production images are stored in ACR only.
 - ACR is provisioned with `adminUserEnabled=false`.
 - Deploy workflow authenticates to Azure via OIDC and pushes images to ACR.
+- ACR login server is derived in workflow as `${ACR_NAME}.azurecr.io`.
 - ACA API/Web/Job resources pull images through managed identity (shared user-assigned pull identity).
 - `AcrPull` role assignment for the shared pull identity is provisioned by Bicep (`infra/azure/main.bicep`).
 
@@ -56,30 +66,22 @@ All concrete deploy values must be stored in the GitHub `production` environment
 1. Azure OIDC login (deploy identity).
 2. API deploy via `azure/container-apps-deploy-action`.
 3. Web deploy via `azure/container-apps-deploy-action`.
-4. Build/push migration image to ACR.
-5. Update and execute ACA migration job (`start-migration-job.mjs`, `wait-migration-job.mjs`).
-6. Azure OIDC login (smoke identity), mint Entra access token.
-7. API smoke verification (`verify-api-smoke.mjs`) against production URL.
-8. Browser evidence against production Web URL, reusing the same Entra smoke token via Playwright request-header injection (`BROWSER_SMOKE_BEARER_TOKEN`).
-9. Publish deploy artifacts.
+4. Guard check verifies latest API/Web revisions are traffic-serving.
+5. Build/push migration image to ACR.
+6. Update and execute ACA migration job (`start-migration-job.mjs`, `wait-migration-job.mjs`).
+7. Azure OIDC login (smoke identity), mint Entra access token.
+8. API smoke verification (`verify-api-smoke.mjs`) against production URL.
+9. Browser evidence against production Web URL, reusing the same Entra smoke token via Playwright request-header injection (`BROWSER_SMOKE_BEARER_TOKEN`).
+10. Publish deploy artifacts.
 
-## Manual Rollback Drill (Multiple Revisions Mode)
+## Rollback (Single Revision Mode)
 
-Use this drill to validate operational rollback readiness without changing infra code:
+With single revision mode, rollback is image-based, not traffic-split based:
 
-1. Identify latest and previous healthy revisions for API and Web:
-   - `az containerapp revision list --resource-group <rg> --name <api-app>`
-   - `az containerapp revision list --resource-group <rg> --name <web-app>`
-2. Shift 100% traffic to previous healthy revisions:
-   - `az containerapp ingress traffic set --resource-group <rg> --name <api-app> --revision-weight <prev-api-revision>=100`
-   - `az containerapp ingress traffic set --resource-group <rg> --name <web-app> --revision-weight <prev-web-revision>=100`
-3. Verify API and Web endpoints return healthy responses.
-4. Restore 100% traffic to current revisions:
-   - `az containerapp ingress traffic set --resource-group <rg> --name <api-app> --revision-weight <current-api-revision>=100`
-   - `az containerapp ingress traffic set --resource-group <rg> --name <web-app> --revision-weight <current-web-revision>=100`
-5. Re-verify endpoints and confirm traffic state with:
-   - `az containerapp ingress traffic show --resource-group <rg> --name <api-app>`
-   - `az containerapp ingress traffic show --resource-group <rg> --name <web-app>`
+1. Identify the last known-good image tag (typically a prior commit SHA).
+2. Run `Infra Apply` manually with `image_tag=<known-good-sha>`.
+3. Confirm API/Web use expected image tags and health checks pass.
+4. Re-run deploy smoke checks if needed.
 
 ## Artifacts
 

@@ -96,28 +96,6 @@ jobs:
             exit 1
           fi
 
-      - name: Deploy API via ACA deploy action
-        uses: azure/container-apps-deploy-action@v1
-        with:
-          appSourcePath: ${{ github.workspace }}
-          dockerfilePath: apps/api/Dockerfile
-          imageToBuild: ${{ env.ACR_REGISTRY }}/compass-api:${{ env.HEAD_SHA }}
-          acrName: ${{ env.ACR_NAME }}
-          containerAppName: ${{ env.ACA_API_APP_NAME }}
-          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
-          disableTelemetry: true
-
-      - name: Deploy Web via ACA deploy action
-        uses: azure/container-apps-deploy-action@v1
-        with:
-          appSourcePath: ${{ github.workspace }}
-          dockerfilePath: apps/web/Dockerfile
-          imageToBuild: ${{ env.ACR_REGISTRY }}/compass-web:${{ env.HEAD_SHA }}
-          acrName: ${{ env.ACR_NAME }}
-          containerAppName: ${{ env.ACA_WEB_APP_NAME }}
-          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
-          disableTelemetry: true
-
       - name: Build and push migration image to ACR
         id: migration_image
         run: |
@@ -157,6 +135,28 @@ jobs:
           MIGRATION_EXECUTION_NAME: ${{ steps.migration_start.outputs.migration_execution_name }}
           MIGRATION_TIMEOUT_SECONDS: 900
         run: node scripts/deploy/wait-migration-job.mjs
+
+      - name: Deploy API via ACA deploy action
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          appSourcePath: ${{ github.workspace }}
+          dockerfilePath: apps/api/Dockerfile
+          imageToBuild: ${{ env.ACR_REGISTRY }}/compass-api:${{ env.HEAD_SHA }}
+          acrName: ${{ env.ACR_NAME }}
+          containerAppName: ${{ env.ACA_API_APP_NAME }}
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          disableTelemetry: true
+
+      - name: Deploy Web via ACA deploy action
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          appSourcePath: ${{ github.workspace }}
+          dockerfilePath: apps/web/Dockerfile
+          imageToBuild: ${{ env.ACR_REGISTRY }}/compass-web:${{ env.HEAD_SHA }}
+          acrName: ${{ env.ACR_NAME }}
+          containerAppName: ${{ env.ACA_WEB_APP_NAME }}
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          disableTelemetry: true
 
       - name: Resolve production URLs
         id: prod_urls
@@ -232,6 +232,45 @@ jobs:
             expected_identity="employee-123"
           fi
           EXPECTED_ACCOUNT_IDENTITY="$expected_identity" pnpm ci:browser-evidence
+
+      - name: Assert single-revision and scale drift policy
+        run: |
+          set -euo pipefail
+
+          for app in "$ACA_API_APP_NAME" "$ACA_WEB_APP_NAME"; do
+            mode=$(az containerapp show \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$app" \
+              --query 'properties.configuration.activeRevisionsMode' \
+              --output tsv)
+
+            min_replicas=$(az containerapp show \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$app" \
+              --query 'properties.template.scale.minReplicas' \
+              --output tsv)
+
+            active_count=$(az containerapp revision list \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$app" \
+              --query '[?properties.active==`true`]|length(@)' \
+              --output tsv)
+
+            if [ "$mode" != "single" ]; then
+              echo "$app is not in single revision mode (actual: $mode)" >&2
+              exit 1
+            fi
+
+            if [ "${min_replicas:-0}" != "0" ]; then
+              echo "$app minReplicas drifted (actual: ${min_replicas:-unset})" >&2
+              exit 1
+            fi
+
+            if [ "${active_count:-0}" != "1" ]; then
+              echo "$app active revision count is ${active_count:-0} (expected: 1)" >&2
+              exit 1
+            fi
+          done
 
       - name: Write final deploy result artifact
         if: ${{ always() }}

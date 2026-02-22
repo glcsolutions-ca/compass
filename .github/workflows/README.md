@@ -10,10 +10,13 @@
   - `risk-policy-gate` (final required gate; check-run aggregation + browser manifest assertions)
 - `dependabot-auto-merge.yml`: metadata-only safe-lane auto-merge for Dependabot PRs (patch/minor only, no PR checkout)
 - `deploy.yml`: push-to-main production deploy using ACR + Azure Container Apps deploy action (GitHub Environment `production`)
+  - migration job runs before API/Web rollout (expand-first gate)
   - derives ACR login server from `ACR_NAME`
-  - runs migration job, API smoke, and browser evidence
+  - runs API smoke and browser evidence
+  - asserts post-deploy drift policy (`single` revision mode, `minReplicas=0`, one active revision per app)
 - `infra-apply.yml`: Azure Bicep infra apply workflow for `infra/azure/**` (GitHub Environment `production`)
   - provider registration preflight
+  - explicit ACR `authentication-as-arm` convergence check/enable
   - single shared runtime parameter payload for validate/create
   - image resolution precedence: `image_tag` input > currently deployed image > current SHA
 - `identity-plan.yml`: Terraform identity plan workflow for `infra/identity/**` (GitHub Environment `production`)

@@ -48,10 +48,19 @@ All concrete deploy values must be stored in the GitHub `production` environment
   - `cpu: 0.25`
   - `memory: 0.5Gi`
   - `minReplicas: 0`
-  - `maxReplicas: 2`
+  - `maxReplicas: 1`
 - API and Web run in `activeRevisionsMode: single`.
 - In single-revision mode, ACA routes app traffic to the latest ready revision automatically.
 - Web app calls API through the stable app FQDN (`https://<api-app>.<aca-default-domain>`), not a revision FQDN.
+
+## App Topology Decision
+
+- API and Web remain separate Container Apps.
+- Do not merge API and Web into one app with sidecars or init containers.
+- Rationale:
+  - separate apps keep independent rollout/failure boundaries and avoid ingress/port coupling complexity
+  - sidecars are for tightly coupled support processes, not for consolidating unrelated front-end/API workloads
+  - migrations remain finite gate tasks and stay in ACA Jobs
 
 ## Registry + Runtime Auth Contract
 
@@ -65,14 +74,15 @@ All concrete deploy values must be stored in the GitHub `production` environment
 ## Deploy Sequence
 
 1. Azure OIDC login (deploy identity).
-2. API deploy via `azure/container-apps-deploy-action`.
-3. Web deploy via `azure/container-apps-deploy-action`.
-4. Build/push migration image to ACR.
-5. Update and execute ACA migration job (`start-migration-job.mjs`, `wait-migration-job.mjs`).
+2. Build/push migration image to ACR.
+3. Update and execute ACA migration job (`start-migration-job.mjs`, `wait-migration-job.mjs`).
+4. API deploy via `azure/container-apps-deploy-action`.
+5. Web deploy via `azure/container-apps-deploy-action`.
 6. Azure OIDC login (smoke identity), mint Entra access token.
 7. API smoke verification (`verify-api-smoke.mjs`) against production URL.
 8. Browser evidence against production Web URL, reusing the same Entra smoke token via Playwright request-header injection (`BROWSER_SMOKE_BEARER_TOKEN`).
-9. Publish deploy artifacts.
+9. Drift assertions verify `activeRevisionsMode=single`, `minReplicas=0`, and one active revision per app.
+10. Publish deploy artifacts.
 
 ## Rollback (Single Revision Mode)
 

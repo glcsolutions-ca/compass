@@ -6,6 +6,8 @@
   - `codex-review` (fast no-op when policy does not require review)
   - `ci-pipeline`
   - `browser-evidence` (conditional)
+    - injects browser smoke auth via `BROWSER_SMOKE_BEARER_TOKEN` (no `NEXT_PUBLIC_*` token wiring)
+    - starts web in CI with standalone output (`pnpm --filter @compass/web start:standalone`)
   - `harness-smoke` (conditional)
   - `risk-policy-gate` (final required gate; check-run aggregation + browser manifest assertions)
 - `dependabot-auto-merge.yml`: metadata-only safe-lane auto-merge for Dependabot PRs (patch/minor only, no PR checkout)
@@ -17,7 +19,7 @@
   - normalizes CLI mode output (`Single`/`single`) before drift-policy comparison
   - allows bounded convergence time for active revision count after deploy (up to 120s)
   - runs API smoke and browser evidence
-  - asserts post-deploy drift policy (`single` revision mode, `minReplicas=0`, one active revision per app)
+  - asserts post-deploy drift policy (`single` revision mode, `minReplicas=0`, `maxReplicas=1`, `cpu=0.25`, `memory=0.5Gi`, `maxInactiveRevisions<=2`, one active revision per app)
 - `infra-apply.yml`: Azure Bicep infra apply workflow for `infra/azure/**` (GitHub Environment `production`)
   - provider registration preflight
   - explicit ACR `authentication-as-arm` convergence check/enable

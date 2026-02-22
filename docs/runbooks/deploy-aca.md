@@ -50,6 +50,7 @@ All concrete deploy values must be stored in the GitHub `production` environment
   - `minReplicas: 0`
   - `maxReplicas: 1`
 - API and Web run in `activeRevisionsMode: single`.
+- API and Web keep `maxInactiveRevisions: 2` to cap revision sprawl while preserving quick rollback depth.
 - In single-revision mode, ACA routes app traffic to the latest ready revision automatically.
 - Web app calls API through the stable app FQDN (`https://<api-app>.<aca-default-domain>`), not a revision FQDN.
 
@@ -79,11 +80,16 @@ All concrete deploy values must be stored in the GitHub `production` environment
 3. Update and execute ACA migration job (`start-migration-job.mjs`, `wait-migration-job.mjs`) using the API image.
 4. API deploy via `azure/container-apps-deploy-action` using the same API image.
 5. Web deploy via `azure/container-apps-deploy-action`.
-6. Azure OIDC login (smoke identity), mint Entra access token.
-7. API smoke verification (`verify-api-smoke.mjs`) against production URL.
-8. Browser evidence against production Web URL, reusing the same Entra smoke token via Playwright request-header injection (`BROWSER_SMOKE_BEARER_TOKEN`).
-9. Drift assertions verify `activeRevisionsMode=single`, `minReplicas=0`, and one active revision per app.
+6. Drift assertions verify `activeRevisionsMode=single`, `minReplicas=0`, `maxReplicas=1`, `cpu=0.25`, `memory=0.5Gi`, `maxInactiveRevisions<=2`, and one active revision per app.
+7. Azure OIDC login (smoke identity), mint Entra access token.
+8. API smoke verification (`verify-api-smoke.mjs`) against production URL.
+9. Browser evidence against production Web URL, reusing the same Entra smoke token via Playwright request-header injection (`BROWSER_SMOKE_BEARER_TOKEN`).
 10. Publish deploy artifacts.
+
+Browser evidence token policy:
+
+- Browser smoke tokens are runtime-injected only (`BROWSER_SMOKE_BEARER_TOKEN`).
+- Do not use `NEXT_PUBLIC_*` token plumbing for CI/prod evidence flows.
 
 ## ACR Tag Retention
 

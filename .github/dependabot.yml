@@ -16,116 +16,24 @@ updates:
       prefix: "deps"
       include: "scope"
     groups:
-      security-updates:
-        applies-to: security-updates
+      prod-patch-minor:
+        dependency-type: "production"
+        update-types:
+          - "patch"
+          - "minor"
         patterns:
           - "*"
-
-      web-major:
-        patterns:
-          - "next"
-          - "react"
-          - "react-dom"
-          - "@types/react"
-          - "@types/react-dom"
-          - "@next/*"
+      dev-patch-minor:
+        dependency-type: "development"
         update-types:
-          - "major"
-
-      web-minor-patch:
-        patterns:
-          - "next"
-          - "react"
-          - "react-dom"
-          - "@types/react"
-          - "@types/react-dom"
-          - "@next/*"
-        update-types:
-          - "minor"
           - "patch"
-
-      runtime-major:
-        patterns:
-          - "@fastify/*"
-          - "fastify*"
-          - "jose"
-          - "dotenv"
-          - "@azure/*"
-          - "openapi-fetch"
-          - "openapi-typescript"
-          - "@asteasolutions/*"
-          - "zod"
-        update-types:
-          - "major"
-
-      runtime-minor-patch:
-        patterns:
-          - "@fastify/*"
-          - "fastify*"
-          - "jose"
-          - "dotenv"
-          - "@azure/*"
-          - "openapi-fetch"
-          - "openapi-typescript"
-          - "@asteasolutions/*"
-          - "zod"
-        update-types:
           - "minor"
-          - "patch"
-
-      tooling-major:
-        patterns:
-          - "@playwright/*"
-          - "playwright"
-          - "typescript"
-          - "typescript-eslint"
-          - "@eslint/*"
-          - "eslint*"
-          - "prettier"
-          - "vitest*"
-          - "@vitest/*"
-          - "turbo"
-          - "tsx"
-          - "@types/node"
-          - "vite-tsconfig-paths"
-          - "lint-staged"
-          - "rimraf"
-        update-types:
-          - "major"
-
-      tooling-minor-patch:
-        patterns:
-          - "@playwright/*"
-          - "playwright"
-          - "typescript"
-          - "typescript-eslint"
-          - "@eslint/*"
-          - "eslint*"
-          - "prettier"
-          - "vitest*"
-          - "@vitest/*"
-          - "turbo"
-          - "tsx"
-          - "@types/node"
-          - "vite-tsconfig-paths"
-          - "lint-staged"
-          - "rimraf"
-        update-types:
-          - "minor"
-          - "patch"
-
-      misc-major:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "*"
         update-types:
-          - "major"
-
-      misc-minor-patch:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
+          - "version-update:semver-major"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -142,10 +50,10 @@ updates:
       prefix: "ci"
       include: "scope"
     groups:
-      security-updates:
-        applies-to: security-updates
+      gha-patch-minor:
         patterns:
           - "*"
-      actions-version-updates:
-        patterns:
-          - "*"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"

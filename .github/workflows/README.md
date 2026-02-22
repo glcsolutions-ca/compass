@@ -7,6 +7,7 @@
   - `browser-evidence` (conditional)
   - `harness-smoke` (conditional)
   - `risk-policy-gate` (final required gate; check-run aggregation + browser manifest assertions)
+- `dependabot-auto-merge.yml`: metadata-only safe-lane auto-merge for Dependabot PRs (patch/minor only, no PR checkout)
 
 Related references:
 

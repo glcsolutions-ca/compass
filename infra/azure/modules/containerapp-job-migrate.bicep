@@ -3,6 +3,7 @@ param jobName string
 param managedEnvironmentId string
 param image string
 param registryServer string
+param registryIdentityResourceId string
 @secure()
 param databaseUrl string
 
@@ -10,7 +11,10 @@ resource migrateJob 'Microsoft.App/jobs@2023-05-01' = {
   name: jobName
   location: location
   identity: {
-    type: 'SystemAssigned'
+    type: 'SystemAssigned,UserAssigned'
+    userAssignedIdentities: {
+      '${registryIdentityResourceId}': {}
+    }
   }
   properties: {
     environmentId: managedEnvironmentId
@@ -25,7 +29,7 @@ resource migrateJob 'Microsoft.App/jobs@2023-05-01' = {
       registries: [
         {
           server: registryServer
-          identity: 'system'
+          identity: registryIdentityResourceId
         }
       ]
       secrets: [

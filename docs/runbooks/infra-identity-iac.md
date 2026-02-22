@@ -74,6 +74,7 @@ Required GitHub environment variables for infra apply:
 - `ACA_API_APP_NAME`
 - `ACA_WEB_APP_NAME`
 - `ACA_MIGRATE_JOB_NAME`
+- `ACR_PULL_IDENTITY_NAME`
 - `ACR_NAME`
 - `ACR_LOGIN_SERVER`
 - `POSTGRES_SERVER_NAME`
@@ -112,7 +113,7 @@ Registry policy:
 - ACR is provisioned in Bicep with `adminUserEnabled=false`.
 - API/Web/Job resources use system-assigned managed identity for image pulls.
 - `AcrPull` role assignments are applied at ACR scope for API, Web, and migration job identities.
-- `infra-apply` resolves image references from `ACR_LOGIN_SERVER` and commit SHA without GHCR prechecks.
+- `infra-apply` resolves image references from `ACR_LOGIN_SERVER` and commit SHA.
 
 ## Entra Identity (Terraform)
 

@@ -14,6 +14,7 @@ param logAnalyticsWorkspaceName string = 'SET_IN_GITHUB_ENV'
 param apiAppName string = 'SET_IN_GITHUB_ENV'
 param webAppName string = 'SET_IN_GITHUB_ENV'
 param migrationJobName string = 'SET_IN_GITHUB_ENV'
+param acrPullIdentityName string = 'SET_IN_GITHUB_ENV'
 param acrName string = 'SET_IN_GITHUB_ENV'
 param acrSku string = 'Standard'
 
@@ -95,6 +96,25 @@ module postgres './modules/postgres-flex.bicep' = {
   }
 }
 
+resource acrPullIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: acrPullIdentityName
+  location: location
+}
+
+resource acrRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
+  name: acrName
+}
+
+resource acrPullIdentityRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(acrRegistry.id, acrPullIdentityName, 'AcrPull')
+  scope: acrRegistry
+  properties: {
+    principalId: acrPullIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: acrPullRoleDefinitionId
+  }
+}
+
 module api './modules/containerapp-api.bicep' = {
   name: 'containerapp-api'
   params: {
@@ -103,6 +123,7 @@ module api './modules/containerapp-api.bicep' = {
     managedEnvironmentId: containerEnvironment.outputs.environmentId
     image: apiImage
     registryServer: acr.outputs.loginServer
+    registryIdentityResourceId: acrPullIdentity.id
     databaseUrl: databaseUrl
     authMode: authMode
     requiredScope: requiredScope
@@ -110,6 +131,9 @@ module api './modules/containerapp-api.bicep' = {
     entraAudience: entraAudience
     entraJwksUri: entraJwksUri
   }
+  dependsOn: [
+    acrPullIdentityRoleAssignment
+  ]
 }
 
 module web './modules/containerapp-web.bicep' = {
@@ -120,11 +144,15 @@ module web './modules/containerapp-web.bicep' = {
     managedEnvironmentId: containerEnvironment.outputs.environmentId
     image: webImage
     registryServer: acr.outputs.loginServer
+    registryIdentityResourceId: acrPullIdentity.id
     apiBaseUrl: api.outputs.latestRevisionFqdn != ''
       ? 'https://${api.outputs.latestRevisionFqdn}'
       : 'https://${apiAppName}'
     bearerToken: webBearerToken
   }
+  dependsOn: [
+    acrPullIdentityRoleAssignment
+  ]
 }
 
 module migrateJob './modules/containerapp-job-migrate.bicep' = {
@@ -135,42 +163,12 @@ module migrateJob './modules/containerapp-job-migrate.bicep' = {
     managedEnvironmentId: containerEnvironment.outputs.environmentId
     image: migrateImage
     registryServer: acr.outputs.loginServer
+    registryIdentityResourceId: acrPullIdentity.id
     databaseUrl: databaseUrl
   }
-}
-
-resource acrRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
-  name: acrName
-}
-
-resource apiAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(acrRegistry.id, apiAppName, 'AcrPull')
-  scope: acrRegistry
-  properties: {
-    principalId: api.outputs.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: acrPullRoleDefinitionId
-  }
-}
-
-resource webAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(acrRegistry.id, webAppName, 'AcrPull')
-  scope: acrRegistry
-  properties: {
-    principalId: web.outputs.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: acrPullRoleDefinitionId
-  }
-}
-
-resource migrateAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(acrRegistry.id, migrationJobName, 'AcrPull')
-  scope: acrRegistry
-  properties: {
-    principalId: migrateJob.outputs.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: acrPullRoleDefinitionId
-  }
+  dependsOn: [
+    acrPullIdentityRoleAssignment
+  ]
 }
 
 output containerAppsEnvironmentName string = containerEnvironment.outputs.environmentNameOutput
@@ -179,6 +177,8 @@ output containerAppsDefaultDomain string = containerEnvironment.outputs.defaultD
 output acrId string = acr.outputs.registryId
 output acrNameOutput string = acr.outputs.registryNameOutput
 output acrLoginServer string = acr.outputs.loginServer
+output acrPullIdentityId string = acrPullIdentity.id
+output acrPullIdentityPrincipalId string = acrPullIdentity.properties.principalId
 
 output apiContainerAppName string = api.outputs.appName
 output apiLatestRevision string = api.outputs.latestRevisionName

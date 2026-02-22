@@ -109,6 +109,8 @@ Registry policy:
 - For public GHCR images, do not set explicit ACA registry credentials in Bicep.
 - Container Apps pulls images directly from `ghcr.io` via the image reference.
 - Infra apply resolves image tags from current commit SHA (`ghcr.io/<owner>/compass-*:HEAD_SHA`) and waits for image availability before template validation/apply.
+- Infra apply runs `scripts/infra/sanitize-ghcr-registries.mjs` before validation to remove stale `ghcr.io` registry entries that have an empty `passwordSecretRef`.
+  This keeps deployments deterministic when older ACA resources were created with invalid registry metadata.
 
 ## Entra Identity (Terraform)
 

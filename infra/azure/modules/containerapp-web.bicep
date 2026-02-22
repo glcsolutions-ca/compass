@@ -19,6 +19,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
         allowInsecure: false
         transport: 'auto'
       }
+      registries: []
       secrets: [
         {
           name: 'web-bearer-token'

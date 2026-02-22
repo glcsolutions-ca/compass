@@ -18,6 +18,7 @@ resource migrateJob 'Microsoft.App/jobs@2023-05-01' = {
         parallelism: 1
         replicaCompletionCount: 1
       }
+      registries: []
       secrets: [
         {
           name: 'database-url'

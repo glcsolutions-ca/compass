@@ -48,6 +48,8 @@ All concrete deploy values must be stored in the GitHub `production` environment
 - Public GHCR images are deployed without explicit registry credentials in ACA Bicep resources.
 - Images are referenced directly as `ghcr.io/<org>/<image>:<sha>`.
 - `infra-apply` resolves API/Web/migrate images from the current commit SHA and waits until those tags are available in GHCR.
+- Before candidate rollout, deploy workflow runs `scripts/infra/sanitize-ghcr-registries.mjs` to remove stale `ghcr.io` registry entries with empty `passwordSecretRef` from existing apps/jobs.
+  This prevents `ContainerAppRegistriesPasswordSecretRefNotFound` failures caused by legacy config drift.
 
 ## Gate Sequence
 

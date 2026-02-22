@@ -99,6 +99,15 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Sanitize invalid GHCR registry references
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
+          ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+          ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+          GHCR_SERVER: ghcr.io
+        run: node scripts/infra/sanitize-ghcr-registries.mjs
+
       - name: Gate 2 - Deploy candidate revisions (0% traffic)
         id: candidate
         env:

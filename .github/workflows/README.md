@@ -12,6 +12,7 @@
 - `deploy.yml`: push-to-main production deploy using ACR + Azure Container Apps deploy action (GitHub Environment `production`)
   - derives ACR login server from `ACR_NAME`
   - verifies latest API/Web revision is traffic-serving
+  - handles ACA single-revision traffic payloads that use `latestRevision=true` without `revisionName`
   - runs migration job, API smoke, and browser evidence
 - `infra-apply.yml`: Azure Bicep infra apply workflow for `infra/azure/**` (GitHub Environment `production`)
   - provider registration preflight

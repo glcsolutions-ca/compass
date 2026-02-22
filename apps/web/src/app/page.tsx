@@ -1,69 +1,21 @@
-"use client";
+import HomeClient from "./home-client";
 
-import { createApiClient } from "@compass/sdk";
-import { useMemo, useState } from "react";
-import type { FormEvent } from "react";
+export const dynamic = "force-dynamic";
 
-const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
-const defaultToken = process.env.NEXT_PUBLIC_DEV_BEARER_TOKEN;
+function resolveApiBaseUrl() {
+  return (
+    process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001"
+  );
+}
+
+function resolveBearerToken() {
+  return (
+    process.env.BEARER_TOKEN ??
+    process.env.NEXT_PUBLIC_BEARER_TOKEN ??
+    process.env.NEXT_PUBLIC_DEV_BEARER_TOKEN
+  );
+}
 
 export default function HomePage() {
-  const client = useMemo(
-    () =>
-      createApiClient({
-        baseUrl,
-        token: defaultToken
-      }),
-    []
-  );
-
-  const [employeeId, setEmployeeId] = useState("employee-123");
-  const [state, setState] = useState<{
-    loading: boolean;
-    error: string | null;
-    payload: unknown;
-  }>({ loading: false, error: null, payload: null });
-
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setState({ loading: true, error: null, payload: null });
-
-    const response = await client.GET("/api/v1/employees/{employeeId}/consolidated-view", {
-      params: {
-        path: {
-          employeeId
-        }
-      }
-    });
-
-    if (response.error) {
-      setState({ loading: false, error: JSON.stringify(response.error), payload: null });
-      return;
-    }
-
-    setState({ loading: false, error: null, payload: response.data ?? null });
-  }
-
-  return (
-    <main>
-      <h1>Compass Hub</h1>
-      <p className="helper">
-        Compass by GLC gives clients, teams, and project managers a real-time snapshot of
-        assignments, workload, time investment, and project health.
-      </p>
-      <form onSubmit={onSubmit}>
-        <input
-          value={employeeId}
-          onChange={(event) => setEmployeeId(event.target.value)}
-          placeholder="employee-123"
-          aria-label="Employee ID"
-        />
-        <button type="submit" disabled={state.loading}>
-          {state.loading ? "Loading..." : "Load View"}
-        </button>
-      </form>
-      {state.error ? <pre>{state.error}</pre> : null}
-      {state.payload ? <pre>{JSON.stringify(state.payload, null, 2)}</pre> : null}
-    </main>
-  );
+  return <HomeClient baseUrl={resolveApiBaseUrl()} defaultToken={resolveBearerToken()} />;
 }

@@ -5,6 +5,7 @@ describe("loadApiConfig", () => {
   it("uses defaults when environment variables are not provided", () => {
     const config = loadApiConfig({});
 
+    expect(config.nodeEnv).toBe("development");
     expect(config.databaseUrl).toBeUndefined();
     expect(config.port).toBe(3001);
     expect(config.host).toBe("0.0.0.0");
@@ -48,5 +49,14 @@ describe("loadApiConfig", () => {
         DB_POOL_MAX: "0"
       })
     ).toThrow();
+  });
+
+  it("requires AUTH_MODE=entra in production", () => {
+    expect(() =>
+      loadApiConfig({
+        NODE_ENV: "production",
+        AUTH_MODE: "development"
+      })
+    ).toThrow("AUTH_MODE must be entra when NODE_ENV=production");
   });
 });

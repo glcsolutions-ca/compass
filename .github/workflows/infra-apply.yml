@@ -1,0 +1,228 @@
+name: Infra Apply
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - infra/azure/**
+      - .github/workflows/infra-apply.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  bicep_apply:
+    name: infra-apply
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HEAD_SHA: ${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Preflight Azure context, region, vars, and providers
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+          AZURE_VNET_NAME: ${{ vars.AZURE_VNET_NAME }}
+          AZURE_ACA_SUBNET_NAME: ${{ vars.AZURE_ACA_SUBNET_NAME }}
+          AZURE_POSTGRES_SUBNET_NAME: ${{ vars.AZURE_POSTGRES_SUBNET_NAME }}
+          AZURE_PRIVATE_DNS_ZONE_NAME: ${{ vars.AZURE_PRIVATE_DNS_ZONE_NAME }}
+          ACA_ENVIRONMENT_NAME: ${{ vars.ACA_ENVIRONMENT_NAME }}
+          AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
+          ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
+          ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+          ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+          POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
+          POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
+          POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
+          POSTGRES_VERSION: ${{ vars.POSTGRES_VERSION }}
+          POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
+          POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
+          GHCR_SERVER: ${{ vars.GHCR_SERVER }}
+          ACA_API_IMAGE: ${{ vars.ACA_API_IMAGE }}
+          ACA_WEB_IMAGE: ${{ vars.ACA_WEB_IMAGE }}
+          ACA_MIGRATE_IMAGE: ${{ vars.ACA_MIGRATE_IMAGE }}
+          ENTRA_ISSUER: ${{ vars.ENTRA_ISSUER }}
+          ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
+          ENTRA_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
+        run: |
+          set -euo pipefail
+
+          required_vars=(
+            AZURE_TENANT_ID
+            AZURE_SUBSCRIPTION_ID
+            AZURE_RESOURCE_GROUP
+            AZURE_LOCATION
+            AZURE_VNET_NAME
+            AZURE_ACA_SUBNET_NAME
+            AZURE_POSTGRES_SUBNET_NAME
+            AZURE_PRIVATE_DNS_ZONE_NAME
+            ACA_ENVIRONMENT_NAME
+            AZURE_LOG_ANALYTICS_WORKSPACE_NAME
+            ACA_API_APP_NAME
+            ACA_WEB_APP_NAME
+            ACA_MIGRATE_JOB_NAME
+            POSTGRES_SERVER_NAME
+            POSTGRES_DATABASE_NAME
+            POSTGRES_ADMIN_USERNAME
+            POSTGRES_VERSION
+            POSTGRES_SKU_NAME
+            POSTGRES_STORAGE_MB
+            GHCR_SERVER
+            ACA_API_IMAGE
+            ACA_WEB_IMAGE
+            ACA_MIGRATE_IMAGE
+            ENTRA_ISSUER
+            ENTRA_AUDIENCE
+            ENTRA_JWKS_URI
+          )
+
+          for name in "${required_vars[@]}"; do
+            value="${!name:-}"
+            if [ -z "$value" ]; then
+              echo "Missing required GitHub environment variable: $name" >&2
+              exit 1
+            fi
+          done
+
+          actual_subscription="$(az account show --query id -o tsv)"
+          actual_tenant="$(az account show --query tenantId -o tsv)"
+          if [ "$actual_subscription" != "$AZURE_SUBSCRIPTION_ID" ]; then
+            echo "Azure login is on subscription $actual_subscription (expected $AZURE_SUBSCRIPTION_ID)" >&2
+            exit 1
+          fi
+          if [ "$actual_tenant" != "$AZURE_TENANT_ID" ]; then
+            echo "Azure login is on tenant $actual_tenant (expected $AZURE_TENANT_ID)" >&2
+            exit 1
+          fi
+
+          rg_location_raw="$(az group show --name "$AZURE_RESOURCE_GROUP" --query location -o tsv)"
+          rg_location="$(echo "$rg_location_raw" | tr '[:upper:]' '[:lower:]')"
+          expected_location="$(echo "$AZURE_LOCATION" | tr '[:upper:]' '[:lower:]')"
+          if [ "$rg_location" != "$expected_location" ]; then
+            echo "Resource group location is $rg_location_raw (expected $AZURE_LOCATION)" >&2
+            exit 1
+          fi
+
+          providers=(
+            "Microsoft.App"
+            "Microsoft.Network"
+            "Microsoft.DBforPostgreSQL"
+            "Microsoft.OperationalInsights"
+          )
+          for namespace in "${providers[@]}"; do
+            state="$(az provider show --namespace "$namespace" --query registrationState -o tsv)"
+            if [ "$state" != "Registered" ]; then
+              echo "Registering provider $namespace (current state: $state)"
+              az provider register --namespace "$namespace" --wait
+            fi
+            state="$(az provider show --namespace "$namespace" --query registrationState -o tsv)"
+            if [ "$state" != "Registered" ]; then
+              echo "Provider $namespace did not reach Registered state (current state: $state)" >&2
+              exit 1
+            fi
+          done
+
+      - name: Build Bicep params JSON
+        run: |
+          mkdir -p .artifacts/infra/$HEAD_SHA
+          az bicep build-params \
+            --file infra/azure/environments/prod.bicepparam \
+            --outfile .artifacts/infra/$HEAD_SHA/prod.parameters.json
+
+      - name: Validate Bicep template
+        run: |
+          az bicep version
+          az deployment group validate \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --template-file infra/azure/main.bicep \
+            --parameters @.artifacts/infra/$HEAD_SHA/prod.parameters.json \
+            --parameters location="${{ vars.AZURE_LOCATION }}" \
+            --parameters vnetName="${{ vars.AZURE_VNET_NAME }}" \
+            --parameters acaSubnetName="${{ vars.AZURE_ACA_SUBNET_NAME }}" \
+            --parameters postgresSubnetName="${{ vars.AZURE_POSTGRES_SUBNET_NAME }}" \
+            --parameters privateDnsZoneName="${{ vars.AZURE_PRIVATE_DNS_ZONE_NAME }}" \
+            --parameters environmentName="${{ vars.ACA_ENVIRONMENT_NAME }}" \
+            --parameters logAnalyticsWorkspaceName="${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}" \
+            --parameters apiAppName="${{ vars.ACA_API_APP_NAME }}" \
+            --parameters webAppName="${{ vars.ACA_WEB_APP_NAME }}" \
+            --parameters migrationJobName="${{ vars.ACA_MIGRATE_JOB_NAME }}" \
+            --parameters postgresServerName="${{ vars.POSTGRES_SERVER_NAME }}" \
+            --parameters postgresDatabaseName="${{ vars.POSTGRES_DATABASE_NAME }}" \
+            --parameters postgresAdminUsername="${{ vars.POSTGRES_ADMIN_USERNAME }}" \
+            --parameters postgresVersion="${{ vars.POSTGRES_VERSION }}" \
+            --parameters postgresSkuName="${{ vars.POSTGRES_SKU_NAME }}" \
+            --parameters postgresStorageMb="${{ vars.POSTGRES_STORAGE_MB }}" \
+            --parameters ghcrServer="${{ vars.GHCR_SERVER }}" \
+            --parameters ghcrUsername="${{ secrets.GHCR_USERNAME }}" \
+            --parameters ghcrPassword="${{ secrets.GHCR_PASSWORD }}" \
+            --parameters postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
+            --parameters databaseUrl="${{ secrets.DATABASE_URL }}" \
+            --parameters webBearerToken="${{ secrets.WEB_BEARER_TOKEN }}" \
+            --parameters apiImage="${{ vars.ACA_API_IMAGE }}" \
+            --parameters webImage="${{ vars.ACA_WEB_IMAGE }}" \
+            --parameters migrateImage="${{ vars.ACA_MIGRATE_IMAGE }}" \
+            --parameters entraIssuer="${{ vars.ENTRA_ISSUER }}" \
+            --parameters entraAudience="${{ vars.ENTRA_AUDIENCE }}" \
+            --parameters entraJwksUri="${{ vars.ENTRA_JWKS_URI }}"
+
+      - name: Apply Bicep template
+        run: |
+          az deployment group create \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --template-file infra/azure/main.bicep \
+            --parameters @.artifacts/infra/$HEAD_SHA/prod.parameters.json \
+            --parameters location="${{ vars.AZURE_LOCATION }}" \
+            --parameters vnetName="${{ vars.AZURE_VNET_NAME }}" \
+            --parameters acaSubnetName="${{ vars.AZURE_ACA_SUBNET_NAME }}" \
+            --parameters postgresSubnetName="${{ vars.AZURE_POSTGRES_SUBNET_NAME }}" \
+            --parameters privateDnsZoneName="${{ vars.AZURE_PRIVATE_DNS_ZONE_NAME }}" \
+            --parameters environmentName="${{ vars.ACA_ENVIRONMENT_NAME }}" \
+            --parameters logAnalyticsWorkspaceName="${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}" \
+            --parameters apiAppName="${{ vars.ACA_API_APP_NAME }}" \
+            --parameters webAppName="${{ vars.ACA_WEB_APP_NAME }}" \
+            --parameters migrationJobName="${{ vars.ACA_MIGRATE_JOB_NAME }}" \
+            --parameters postgresServerName="${{ vars.POSTGRES_SERVER_NAME }}" \
+            --parameters postgresDatabaseName="${{ vars.POSTGRES_DATABASE_NAME }}" \
+            --parameters postgresAdminUsername="${{ vars.POSTGRES_ADMIN_USERNAME }}" \
+            --parameters postgresVersion="${{ vars.POSTGRES_VERSION }}" \
+            --parameters postgresSkuName="${{ vars.POSTGRES_SKU_NAME }}" \
+            --parameters postgresStorageMb="${{ vars.POSTGRES_STORAGE_MB }}" \
+            --parameters ghcrServer="${{ vars.GHCR_SERVER }}" \
+            --parameters ghcrUsername="${{ secrets.GHCR_USERNAME }}" \
+            --parameters ghcrPassword="${{ secrets.GHCR_PASSWORD }}" \
+            --parameters postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
+            --parameters databaseUrl="${{ secrets.DATABASE_URL }}" \
+            --parameters webBearerToken="${{ secrets.WEB_BEARER_TOKEN }}" \
+            --parameters apiImage="${{ vars.ACA_API_IMAGE }}" \
+            --parameters webImage="${{ vars.ACA_WEB_IMAGE }}" \
+            --parameters migrateImage="${{ vars.ACA_MIGRATE_IMAGE }}" \
+            --parameters entraIssuer="${{ vars.ENTRA_ISSUER }}" \
+            --parameters entraAudience="${{ vars.ENTRA_AUDIENCE }}" \
+            --parameters entraJwksUri="${{ vars.ENTRA_JWKS_URI }}" \
+            --output json > .artifacts/infra/$HEAD_SHA/deployment.json
+
+      - name: Upload infra artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-apply-${{ env.HEAD_SHA }}
+          path: |
+            .artifacts/infra/${{ env.HEAD_SHA }}/deployment.json
+            .artifacts/infra/${{ env.HEAD_SHA }}/prod.parameters.json
+          if-no-files-found: warn

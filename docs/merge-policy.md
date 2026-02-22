@@ -26,7 +26,7 @@ Branch protection requires only:
 - `deps`: dependency manifests/lockfiles only (`package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`)
 - `t1`: core backend/shared logic
 - `t2`: UI/user flow changes
-- `t3`: high risk (`auth`, control-plane config like workflows/policy/dependabot, infra/deploy, migrations)
+- `t3`: high risk (`auth`, control-plane config like workflows/policy/dependabot, deploy scripts, infra, migrations)
 
 If multiple tiers match, highest tier wins.
 
@@ -75,8 +75,21 @@ Evidence is valid only when:
 
 ## Runtime baseline
 
-Control-plane scripts (`preflight`, `docs-drift`, `codex-review`, `gate`) rely on Node core APIs only.
+Control-plane scripts (`preflight`, `docs-drift`, `codex-review`, `gate`, deploy scripts) rely on Node core APIs only.
 Workflow and local contract checks require Node `24` with minimum `24.8.0` (for `path.posix.matchesGlob`), sourced from `.nvmrc`.
+
+## Control-Plane Paths
+
+The following paths are treated as explicit control-plane surfaces and are elevated to high-risk:
+
+- `.github/workflows/**`
+- `.github/policy/**`
+- `scripts/ci/**`
+- `scripts/deploy/**`
+- `scripts/infra/**`
+- `infra/azure/**`
+- `infra/identity/**`
+- `deploy/**`
 
 ## Flow
 

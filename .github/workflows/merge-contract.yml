@@ -33,6 +33,8 @@ jobs:
       codex_review_enabled: ${{ steps.preflight.outputs.codex_review_enabled }}
       docs_drift_path: ${{ steps.docs_drift.outputs.docs_drift_path }}
       docs_drift_status: ${{ steps.docs_drift.outputs.docs_drift_status }}
+      no_org_infra_path: ${{ steps.no_org_infra.outputs.no_org_infra_path }}
+      no_org_infra_status: ${{ steps.no_org_infra.outputs.no_org_infra_status }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -58,6 +60,21 @@ jobs:
         with:
           name: preflight-${{ steps.preflight.outputs.head_sha }}
           path: ${{ steps.preflight.outputs.preflight_path }}
+          if-no-files-found: warn
+
+      - name: Enforce no committed org-specific infra values
+        id: no_org_infra
+        env:
+          HEAD_SHA: ${{ steps.preflight.outputs.head_sha }}
+          RISK_TIER: ${{ steps.preflight.outputs.tier }}
+        run: node scripts/ci/no-org-infra-leak.mjs
+
+      - name: Upload no-org-infra artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: no-org-infra-${{ steps.preflight.outputs.head_sha }}
+          path: .artifacts/no-org-infra/${{ steps.preflight.outputs.head_sha }}/result.json
           if-no-files-found: warn
 
       - name: Evaluate docs drift
@@ -260,6 +277,9 @@ jobs:
         run: |
           token=$(node -e 'const crypto=require("node:crypto"); const h=Buffer.from(JSON.stringify({alg:"HS256",typ:"JWT"})).toString("base64url"); const p=Buffer.from(JSON.stringify({sub:"employee-123",scp:"time.read",roles:[]})).toString("base64url"); const s=crypto.createHmac("sha256","dev-secret-change-me").update(h+"."+p).digest("base64url"); process.stdout.write(h+"."+p+"."+s);')
           echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Build contracts package
+        run: pnpm --filter @compass/contracts build
 
       - name: Build API
         run: pnpm --filter @compass/api build

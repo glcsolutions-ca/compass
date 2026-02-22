@@ -4,6 +4,7 @@ const BooleanStringSchema = z.enum(["true", "false"]).transform((value) => value
 
 const ApiConfigSchema = z
   .object({
+    nodeEnv: z.enum(["development", "test", "production"]).default("development"),
     port: z.number().int().positive().default(3001),
     host: z.string().min(1).default("0.0.0.0"),
     databaseUrl: z.string().min(1).optional(),
@@ -20,6 +21,13 @@ const ApiConfigSchema = z
     entraJwksUri: z.string().url().optional()
   })
   .superRefine((value, context) => {
+    if (value.nodeEnv === "production" && value.authMode !== "entra") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "AUTH_MODE must be entra when NODE_ENV=production"
+      });
+    }
+
     if (value.authMode === "entra") {
       if (!value.entraIssuer) {
         context.addIssue({
@@ -48,6 +56,7 @@ export type ApiConfig = z.infer<typeof ApiConfigSchema>;
 
 export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   return ApiConfigSchema.parse({
+    nodeEnv: env.NODE_ENV,
     port: env.API_PORT ? Number(env.API_PORT) : undefined,
     host: env.API_HOST,
     databaseUrl: env.DATABASE_URL,

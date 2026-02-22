@@ -1,0 +1,12 @@
+.git
+.github
+.codex
+node_modules
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/dist-types
+**/*.tsbuildinfo
+.artifacts
+coverage

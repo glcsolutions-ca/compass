@@ -1,0 +1,58 @@
+name: Identity Apply
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  terraform_apply:
+    name: identity-apply
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HEAD_SHA: ${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform init
+        run: terraform -chdir=infra/identity init -input=false
+
+      - name: Terraform apply
+        run: |
+          terraform -chdir=infra/identity apply \
+            -input=false \
+            -auto-approve \
+            -var-file=env/prod.tfvars \
+            -var "github_organization=${{ vars.GH_ORGANIZATION }}" \
+            -var "github_repository=${{ vars.GH_REPOSITORY_NAME }}" \
+            -var "github_main_branch_ref=${{ vars.GH_MAIN_BRANCH_REF }}" \
+            -var "api_identifier_uri=${{ vars.ENTRA_AUDIENCE }}"
+
+      - name: Capture terraform outputs
+        if: ${{ always() }}
+        run: |
+          mkdir -p .artifacts/identity/$HEAD_SHA
+          terraform -chdir=infra/identity output -json > .artifacts/identity/$HEAD_SHA/outputs.json
+
+      - name: Upload identity-apply artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: identity-apply-${{ env.HEAD_SHA }}
+          path: .artifacts/identity/${{ env.HEAD_SHA }}/outputs.json
+          if-no-files-found: warn

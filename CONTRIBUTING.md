@@ -7,6 +7,8 @@ This repo treats CI as the source of truth for merge safety.
 - Human policy: `docs/merge-policy.md`
 - Machine policy: `.github/policy/merge-policy.json`
 - CI workflow: `.github/workflows/merge-contract.yml`
+- Deploy workflow: `.github/workflows/deploy.yml`
+- Infra/Identity workflows: `.github/workflows/infra-apply.yml`, `.github/workflows/identity-plan.yml`, `.github/workflows/identity-apply.yml`
 
 ## Prerequisites
 
@@ -57,3 +59,13 @@ Branch protection should require only `risk-policy-gate`.
 - [ ] Local convenience checks pass (`pnpm check`, `pnpm build`).
 - [ ] Control-plane edits also update policy/docs where required.
 - [ ] No unrelated files or generated noise are included.
+- [ ] `pnpm check:no-org-infra` passes.
+
+## Deploy + IaC Checklist
+
+- [ ] `infra/identity/**` changes include updated `identity-plan` evidence and docs when behavior changes.
+- [ ] `infra/azure/**` changes include `infra-apply` validation and docs updates.
+- [ ] CAF naming (`type-workload-env-region-instance`) is preserved for Azure resource names.
+- [ ] Concrete production values are sourced from GitHub Environment `production` vars/secrets, not tracked files.
+- [ ] `scripts/deploy/**` or workflow changes preserve machine-verifiable artifacts under `.artifacts/deploy/<sha>/`.
+- [ ] Deploy gates remain SHA-bound and rollback-capable.

@@ -13,6 +13,7 @@
   - migration job runs before API/Web rollout (expand-first gate)
   - API image is shared by runtime and migration command path (single-image pattern)
   - derives ACR login server from `ACR_NAME`
+  - runs subscription-scoped drift assertions before switching to subscription-less smoke identity
   - runs API smoke and browser evidence
   - asserts post-deploy drift policy (`single` revision mode, `minReplicas=0`, one active revision per app)
 - `infra-apply.yml`: Azure Bicep infra apply workflow for `infra/azure/**` (GitHub Environment `production`)

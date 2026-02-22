@@ -91,7 +91,6 @@ Required GitHub environment secrets for infra apply:
 
 - `AZURE_DEPLOY_CLIENT_ID`
 - `POSTGRES_ADMIN_PASSWORD`
-- `DATABASE_URL`
 - `WEB_BEARER_TOKEN` (optional)
 
 ACA managed environment profile policy:
@@ -111,9 +110,19 @@ Registry policy:
 
 - ACR is the only production container registry for ACA.
 - ACR is provisioned in Bicep with `adminUserEnabled=false`.
-- API/Web/Job resources use system-assigned managed identity for image pulls.
-- `AcrPull` role assignments are applied at ACR scope for API, Web, and migration job identities.
+- API/Web/Job resources use a shared user-assigned managed identity for image pulls.
+- `AcrPull` role assignment is applied at ACR scope for the shared pull identity.
 - `infra-apply` resolves image references from `ACR_LOGIN_SERVER` and commit SHA.
+
+Database URL policy:
+
+- Production `DATABASE_URL` is derived in Bicep from:
+  - `POSTGRES_SERVER_NAME`
+  - `POSTGRES_DATABASE_NAME`
+  - `POSTGRES_ADMIN_USERNAME`
+  - `POSTGRES_ADMIN_PASSWORD`
+- Host is canonical Azure Flexible Server FQDN form:
+  - `<POSTGRES_SERVER_NAME>.postgres.database.azure.com`
 
 ## Entra Identity (Terraform)
 

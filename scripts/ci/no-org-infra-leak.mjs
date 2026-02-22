@@ -77,7 +77,6 @@ const SENSITIVE_BICEP_PARAMS = new Set([
   "postgresServerName",
   "postgresDatabaseName",
   "postgresAdminUsername",
-  "databaseUrl",
   "postgresAdminPassword",
   "apiImage",
   "webImage",

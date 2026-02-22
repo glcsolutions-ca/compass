@@ -5,6 +5,7 @@ import { buildApiApp } from "./app.js";
 import { InMemoryConsolidatedViewRepository } from "./features/consolidated-view/repository.js";
 
 const authConfig = {
+  nodeEnv: "test" as const,
   authMode: "development" as const,
   devJwtSecret: "dev-secret-change-me",
   requiredScope: "time.read",

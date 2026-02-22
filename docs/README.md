@@ -16,3 +16,10 @@ General documentation and architecture records live here.
 
 - `brand-architecture.md`
 - `TDR-001-initial-stack-baseline.md`
+
+## Runbooks
+
+- `runbooks/postgres-local.md`
+- `runbooks/deploy-aca.md`
+- `runbooks/infra-identity-iac.md`
+- `runbooks/migration-safety.md`

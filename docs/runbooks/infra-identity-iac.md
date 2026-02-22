@@ -95,6 +95,11 @@ Required GitHub environment secrets for infra apply:
 - `DATABASE_URL`
 - `WEB_BEARER_TOKEN` (optional)
 
+ACA managed environment profile policy:
+
+- `infra/azure/modules/containerapps-env.bicep` must declare the `Consumption` workload profile explicitly.
+- This avoids update-time `WorkloadProfileCannotRemoveAll` failures when the environment already exists.
+
 Provider registration preflight (enforced in `.github/workflows/infra-apply.yml`):
 
 - `Microsoft.App`

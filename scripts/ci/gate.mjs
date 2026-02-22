@@ -46,10 +46,8 @@ function collectCheckResults() {
 }
 
 function validateRequiredCheckResults(requiredChecks, checkResults, reasons) {
-  for (const alwaysRequired of ["preflight", "codex-review"]) {
-    if (checkResults[alwaysRequired] !== "success") {
-      reasons.push(`${alwaysRequired} result is ${checkResults[alwaysRequired]}`);
-    }
+  if (checkResults.preflight !== "success") {
+    reasons.push(`preflight result is ${checkResults.preflight}`);
   }
 
   const checkToJobResult = {

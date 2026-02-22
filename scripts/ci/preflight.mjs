@@ -33,6 +33,7 @@ async function main() {
   const harnessSmokeRequired = requiredChecks.includes("harness-smoke");
   const codexReviewRequired = requiredChecks.includes("codex-review");
   const codexReviewEnabled = policy.reviewPolicy.codexReviewEnabled;
+  const ciMode = tier === "t0" ? "fast" : "full";
 
   const preflightPath = path.join(".artifacts", "merge", headSha, "preflight.json");
   const prNumber = await getPrNumberFromEvent();
@@ -47,6 +48,7 @@ async function main() {
     changedFiles,
     tier,
     requiredChecks,
+    ciMode,
     browserEvidenceRequired,
     harnessSmokeRequired,
     codexReviewRequired,
@@ -63,6 +65,7 @@ async function main() {
     pr_number: prNumber ? String(prNumber) : "",
     tier,
     required_checks_json: JSON.stringify(requiredChecks),
+    ci_mode: ciMode,
     changed_files_json: JSON.stringify(changedFiles),
     required_flow_ids_json: JSON.stringify(policy.uiEvidenceRules.requiredFlowIds),
     browser_evidence_required: String(browserEvidenceRequired),
@@ -78,6 +81,7 @@ async function main() {
       `- Head SHA: \`${headSha}\``,
       `- Tier: \`${tier}\``,
       `- Changed files: ${changedFiles.length}`,
+      `- CI mode: \`${ciMode}\``,
       `- Required checks: ${requiredChecks.map((name) => `\`${name}\``).join(", ")}`,
       `- Browser evidence required: \`${browserEvidenceRequired}\``,
       `- Harness smoke required: \`${harnessSmokeRequired}\``,
@@ -85,7 +89,9 @@ async function main() {
     ].join("\n")
   );
 
-  console.info(`Preflight complete: tier=${tier}, requiredChecks=${requiredChecks.join(",")}`);
+  console.info(
+    `Preflight complete: tier=${tier}, ciMode=${ciMode}, requiredChecks=${requiredChecks.join(",")}`
+  );
 }
 
 void main();

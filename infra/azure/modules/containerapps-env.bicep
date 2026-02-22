@@ -25,6 +25,12 @@ resource managedEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' = {
         sharedKey: listKeys(workspace.id, workspace.apiVersion).primarySharedKey
       }
     }
+    workloadProfiles: [
+      {
+        name: 'Consumption'
+        workloadProfileType: 'Consumption'
+      }
+    ]
     vnetConfiguration: {
       infrastructureSubnetId: infrastructureSubnetId
       internal: false

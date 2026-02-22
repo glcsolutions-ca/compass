@@ -99,6 +99,50 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Gate 1.5 - Verify infra resources exist
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
+          ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+          ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+        run: |
+          set -euo pipefail
+
+          missing=()
+
+          if ! az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_API_APP_NAME" \
+            --query name \
+            --output tsv >/dev/null 2>&1; then
+            missing+=("container app: $ACA_API_APP_NAME")
+          fi
+
+          if ! az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_WEB_APP_NAME" \
+            --query name \
+            --output tsv >/dev/null 2>&1; then
+            missing+=("container app: $ACA_WEB_APP_NAME")
+          fi
+
+          if ! az containerapp job show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_MIGRATE_JOB_NAME" \
+            --query name \
+            --output tsv >/dev/null 2>&1; then
+            missing+=("container app job: $ACA_MIGRATE_JOB_NAME")
+          fi
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf 'Missing required infra resources in %s:\n' "$AZURE_RESOURCE_GROUP" >&2
+            for item in "${missing[@]}"; do
+              printf ' - %s\n' "$item" >&2
+            done
+            echo "Run .github/workflows/infra-apply.yml on main, then rerun deploy." >&2
+            exit 1
+          fi
+
       - name: Gate 2 - Deploy candidate revisions (0% traffic)
         id: candidate
         env:

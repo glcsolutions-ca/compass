@@ -11,6 +11,7 @@ param requiredScope string = 'time.read'
 param entraIssuer string
 param entraAudience string
 param entraJwksUri string
+param logLevel string = 'warn'
 
 resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   name: containerAppName
@@ -24,7 +25,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   properties: {
     managedEnvironmentId: managedEnvironmentId
     configuration: {
-      activeRevisionsMode: 'multiple'
+      activeRevisionsMode: 'single'
       ingress: {
         external: true
         targetPort: 3001
@@ -90,16 +91,20 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
               name: 'ENTRA_JWKS_URI'
               value: entraJwksUri
             }
+            {
+              name: 'LOG_LEVEL'
+              value: logLevel
+            }
           ]
           resources: {
-            cpu: json('0.5')
-            memory: '1Gi'
+            cpu: json('0.25')
+            memory: '0.5Gi'
           }
         }
       ]
       scale: {
-        minReplicas: 1
-        maxReplicas: 3
+        minReplicas: 0
+        maxReplicas: 2
       }
     }
   }

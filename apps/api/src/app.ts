@@ -41,7 +41,11 @@ export function buildApiApp(options: BuildApiAppOptions = {}) {
   const config = options.config ?? loadApiConfig();
   const now = options.now ?? (() => new Date());
 
-  const app = Fastify({ logger: true });
+  const app = Fastify({
+    logger: {
+      level: config.logLevel
+    }
+  });
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   app.register(cors, { origin: true });

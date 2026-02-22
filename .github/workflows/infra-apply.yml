@@ -2,6 +2,11 @@ name: Infra Apply
 
 on:
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Optional image tag for API/Web/migrate images (defaults to commit SHA)
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -21,10 +26,25 @@ jobs:
     timeout-minutes: 30
     env:
       HEAD_SHA: ${{ github.sha }}
-      IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+      TARGET_IMAGE_TAG: ${{ inputs.image_tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        run: |
+          set -euo pipefail
+          image_tag="${TARGET_IMAGE_TAG:-}"
+          if [ -z "$image_tag" ]; then
+            image_tag="$HEAD_SHA"
+          fi
+
+          if ! [[ "$image_tag" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
+            echo "Invalid image tag: $image_tag" >&2
+            exit 1
+          fi
+
+          echo "HEAD_SHA=$image_tag" >> "$GITHUB_ENV"
 
       - name: Azure login (OIDC)
         uses: azure/login@v2
@@ -48,14 +68,14 @@ jobs:
           ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
           ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
           ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
           POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
           POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
           POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
           POSTGRES_VERSION: ${{ vars.POSTGRES_VERSION }}
           POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
           POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
-          GHCR_USERNAME: ${{ vars.GHCR_USERNAME }}
-          GHCR_PASSWORD: ${{ secrets.GHCR_PASSWORD }}
           ENTRA_ISSUER: ${{ vars.ENTRA_ISSUER }}
           ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
           ENTRA_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
@@ -76,14 +96,14 @@ jobs:
             ACA_API_APP_NAME
             ACA_WEB_APP_NAME
             ACA_MIGRATE_JOB_NAME
+            ACR_NAME
+            ACR_LOGIN_SERVER
             POSTGRES_SERVER_NAME
             POSTGRES_DATABASE_NAME
             POSTGRES_ADMIN_USERNAME
             POSTGRES_VERSION
             POSTGRES_SKU_NAME
             POSTGRES_STORAGE_MB
-            GHCR_USERNAME
-            GHCR_PASSWORD
             ENTRA_ISSUER
             ENTRA_AUDIENCE
             ENTRA_JWKS_URI
@@ -136,33 +156,15 @@ jobs:
             fi
           done
 
-      - name: Login to GHCR for image checks
-        run: |
-          echo "${{ secrets.GHCR_PASSWORD }}" | docker login ghcr.io -u "${{ vars.GHCR_USERNAME }}" --password-stdin
-
       - name: Resolve release-candidate images
         id: images
+        env:
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
         run: |
           set -euo pipefail
-          api_image="${IMAGE_PREFIX}/compass-api:${HEAD_SHA}"
-          web_image="${IMAGE_PREFIX}/compass-web:${HEAD_SHA}"
-          migrate_image="${IMAGE_PREFIX}/compass-migrate:${HEAD_SHA}"
-
-          for image in "$api_image" "$web_image" "$migrate_image"; do
-            echo "Waiting for image availability: $image"
-            found=0
-            for attempt in {1..60}; do
-              if docker manifest inspect "$image" >/dev/null 2>&1; then
-                found=1
-                break
-              fi
-              sleep 10
-            done
-            if [ "$found" -ne 1 ]; then
-              echo "Image not available after waiting: $image" >&2
-              exit 1
-            fi
-          done
+          api_image="${ACR_LOGIN_SERVER}/compass-api:${HEAD_SHA}"
+          web_image="${ACR_LOGIN_SERVER}/compass-web:${HEAD_SHA}"
+          migrate_image="${ACR_LOGIN_SERVER}/compass-migrate:${HEAD_SHA}"
 
           echo "api_image=$api_image" >> "$GITHUB_OUTPUT"
           echo "web_image=$web_image" >> "$GITHUB_OUTPUT"
@@ -192,6 +194,7 @@ jobs:
             --parameters apiAppName="${{ vars.ACA_API_APP_NAME }}" \
             --parameters webAppName="${{ vars.ACA_WEB_APP_NAME }}" \
             --parameters migrationJobName="${{ vars.ACA_MIGRATE_JOB_NAME }}" \
+            --parameters acrName="${{ vars.ACR_NAME }}" \
             --parameters postgresServerName="${{ vars.POSTGRES_SERVER_NAME }}" \
             --parameters postgresDatabaseName="${{ vars.POSTGRES_DATABASE_NAME }}" \
             --parameters postgresAdminUsername="${{ vars.POSTGRES_ADMIN_USERNAME }}" \
@@ -200,8 +203,6 @@ jobs:
             --parameters postgresStorageMb="${{ vars.POSTGRES_STORAGE_MB }}" \
             --parameters postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
             --parameters databaseUrl="${{ secrets.DATABASE_URL }}" \
-            --parameters ghcrUsername="${{ vars.GHCR_USERNAME }}" \
-            --parameters ghcrPassword="${{ secrets.GHCR_PASSWORD }}" \
             --parameters webBearerToken="${{ secrets.WEB_BEARER_TOKEN }}" \
             --parameters apiImage="${{ steps.images.outputs.api_image }}" \
             --parameters webImage="${{ steps.images.outputs.web_image }}" \
@@ -226,6 +227,7 @@ jobs:
             --parameters apiAppName="${{ vars.ACA_API_APP_NAME }}" \
             --parameters webAppName="${{ vars.ACA_WEB_APP_NAME }}" \
             --parameters migrationJobName="${{ vars.ACA_MIGRATE_JOB_NAME }}" \
+            --parameters acrName="${{ vars.ACR_NAME }}" \
             --parameters postgresServerName="${{ vars.POSTGRES_SERVER_NAME }}" \
             --parameters postgresDatabaseName="${{ vars.POSTGRES_DATABASE_NAME }}" \
             --parameters postgresAdminUsername="${{ vars.POSTGRES_ADMIN_USERNAME }}" \
@@ -234,8 +236,6 @@ jobs:
             --parameters postgresStorageMb="${{ vars.POSTGRES_STORAGE_MB }}" \
             --parameters postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
             --parameters databaseUrl="${{ secrets.DATABASE_URL }}" \
-            --parameters ghcrUsername="${{ vars.GHCR_USERNAME }}" \
-            --parameters ghcrPassword="${{ secrets.GHCR_PASSWORD }}" \
             --parameters webBearerToken="${{ secrets.WEB_BEARER_TOKEN }}" \
             --parameters apiImage="${{ steps.images.outputs.api_image }}" \
             --parameters webImage="${{ steps.images.outputs.web_image }}" \

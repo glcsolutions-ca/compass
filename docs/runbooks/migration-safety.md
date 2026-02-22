@@ -13,6 +13,11 @@ Pipeline migration job is the only production migration path.
 - Migration job command: `node scripts/db/migrate.mjs up`
 - This keeps one immutable release artifact per commit while preserving separate execution roles.
 
+## Migration File Format
+
+- Migration files must use ESM exports (`export const up/down`) because the runtime image is Node ESM (`"type": "module"`).
+- CommonJS migration syntax (`exports.up/down`) will fail in the ACA migration job and block deploy promotion.
+
 ## Allowed In Deploy Gate (Expand)
 
 - Create new tables

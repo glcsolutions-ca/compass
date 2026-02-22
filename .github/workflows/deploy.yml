@@ -213,6 +213,7 @@ jobs:
           TARGET_API_BASE_URL: ${{ steps.prod_urls.outputs.api_prod_url }}
           ACCESS_TOKEN: ${{ steps.token.outputs.smoke_token }}
           EXPECTED_EMPLOYEE_ID: ${{ vars.SMOKE_EXPECTED_ACCOUNT_IDENTITY }}
+          REQUIRE_EMPLOYEE_FOUND: ${{ vars.SMOKE_REQUIRE_EMPLOYEE_FOUND }}
         run: node scripts/deploy/verify-api-smoke.mjs
 
       - name: Install Playwright browser

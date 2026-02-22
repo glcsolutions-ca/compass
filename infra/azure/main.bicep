@@ -14,6 +14,8 @@ param logAnalyticsWorkspaceName string = 'SET_IN_GITHUB_ENV'
 param apiAppName string = 'SET_IN_GITHUB_ENV'
 param webAppName string = 'SET_IN_GITHUB_ENV'
 param migrationJobName string = 'SET_IN_GITHUB_ENV'
+param acrName string = 'SET_IN_GITHUB_ENV'
+param acrSku string = 'Standard'
 
 param postgresServerName string = 'SET_IN_GITHUB_ENV'
 param postgresDatabaseName string = 'SET_IN_GITHUB_ENV'
@@ -32,15 +34,17 @@ param webBearerToken string = ''
 param apiImage string = 'SET_IN_GITHUB_ENV'
 param webImage string = 'SET_IN_GITHUB_ENV'
 param migrateImage string = 'SET_IN_GITHUB_ENV'
-param ghcrUsername string = 'SET_IN_GITHUB_ENV'
-@secure()
-param ghcrPassword string
 
 param authMode string = 'entra'
 param requiredScope string = 'time.read'
 param entraIssuer string
 param entraAudience string
 param entraJwksUri string
+
+var acrPullRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '7f951dda-4ed3-4680-a7ca-43fe172d538d'
+)
 
 module network './modules/network.bicep' = {
   name: 'network'
@@ -63,6 +67,15 @@ module containerEnvironment './modules/containerapps-env.bicep' = {
     environmentName: environmentName
     infrastructureSubnetId: network.outputs.acaInfrastructureSubnetId
     logAnalyticsWorkspaceName: logAnalyticsWorkspaceName
+  }
+}
+
+module acr './modules/acr.bicep' = {
+  name: 'acr'
+  params: {
+    location: location
+    registryName: acrName
+    skuName: acrSku
   }
 }
 
@@ -89,8 +102,7 @@ module api './modules/containerapp-api.bicep' = {
     containerAppName: apiAppName
     managedEnvironmentId: containerEnvironment.outputs.environmentId
     image: apiImage
-    registryUsername: ghcrUsername
-    registryPassword: ghcrPassword
+    registryServer: acr.outputs.loginServer
     databaseUrl: databaseUrl
     authMode: authMode
     requiredScope: requiredScope
@@ -107,8 +119,7 @@ module web './modules/containerapp-web.bicep' = {
     containerAppName: webAppName
     managedEnvironmentId: containerEnvironment.outputs.environmentId
     image: webImage
-    registryUsername: ghcrUsername
-    registryPassword: ghcrPassword
+    registryServer: acr.outputs.loginServer
     apiBaseUrl: api.outputs.latestRevisionFqdn != ''
       ? 'https://${api.outputs.latestRevisionFqdn}'
       : 'https://${apiAppName}'
@@ -123,15 +134,51 @@ module migrateJob './modules/containerapp-job-migrate.bicep' = {
     jobName: migrationJobName
     managedEnvironmentId: containerEnvironment.outputs.environmentId
     image: migrateImage
-    registryUsername: ghcrUsername
-    registryPassword: ghcrPassword
+    registryServer: acr.outputs.loginServer
     databaseUrl: databaseUrl
+  }
+}
+
+resource acrRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
+  name: acrName
+}
+
+resource apiAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(acrRegistry.id, apiAppName, 'AcrPull')
+  scope: acrRegistry
+  properties: {
+    principalId: api.outputs.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: acrPullRoleDefinitionId
+  }
+}
+
+resource webAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(acrRegistry.id, webAppName, 'AcrPull')
+  scope: acrRegistry
+  properties: {
+    principalId: web.outputs.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: acrPullRoleDefinitionId
+  }
+}
+
+resource migrateAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(acrRegistry.id, migrationJobName, 'AcrPull')
+  scope: acrRegistry
+  properties: {
+    principalId: migrateJob.outputs.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: acrPullRoleDefinitionId
   }
 }
 
 output containerAppsEnvironmentName string = containerEnvironment.outputs.environmentNameOutput
 output containerAppsEnvironmentId string = containerEnvironment.outputs.environmentId
 output containerAppsDefaultDomain string = containerEnvironment.outputs.defaultDomain
+output acrId string = acr.outputs.registryId
+output acrNameOutput string = acr.outputs.registryNameOutput
+output acrLoginServer string = acr.outputs.loginServer
 
 output apiContainerAppName string = api.outputs.appName
 output apiLatestRevision string = api.outputs.latestRevisionName

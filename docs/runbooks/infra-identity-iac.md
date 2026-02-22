@@ -74,7 +74,8 @@ Required GitHub environment variables for infra apply:
 - `ACA_API_APP_NAME`
 - `ACA_WEB_APP_NAME`
 - `ACA_MIGRATE_JOB_NAME`
-- `GHCR_USERNAME`
+- `ACR_NAME`
+- `ACR_LOGIN_SERVER`
 - `POSTGRES_SERVER_NAME`
 - `POSTGRES_DATABASE_NAME`
 - `POSTGRES_ADMIN_USERNAME`
@@ -88,7 +89,6 @@ Required GitHub environment variables for infra apply:
 Required GitHub environment secrets for infra apply:
 
 - `AZURE_DEPLOY_CLIENT_ID`
-- `GHCR_PASSWORD` (PAT with `read:packages` for the GitHub user in `GHCR_USERNAME`)
 - `POSTGRES_ADMIN_PASSWORD`
 - `DATABASE_URL`
 - `WEB_BEARER_TOKEN` (optional)
@@ -108,13 +108,11 @@ Provider registration preflight (enforced in `.github/workflows/infra-apply.yml`
 
 Registry policy:
 
-- For private GHCR images, configure ACA registry credentials in Bicep (`server`, `username`, `passwordSecretRef`).
-- `GHCR_USERNAME` must be the GitHub user login that owns `GHCR_PASSWORD`.
-- Use a dedicated machine-user PAT for production GHCR pulls (not a personal developer token).
-- If the organization enforces SAML SSO, authorize the PAT for org package access.
-- Keep `GHCR_USERNAME` in GitHub environment variables and `GHCR_PASSWORD` (PAT) in GitHub environment secrets.
-- `infra-apply` performs a GHCR login before SHA image availability checks (`docker manifest inspect`) so private tags can be resolved deterministically.
-- Infra apply resolves image tags from current commit SHA (`ghcr.io/<owner>/compass-*:HEAD_SHA`) and waits for image availability before template validation/apply.
+- ACR is the only production container registry for ACA.
+- ACR is provisioned in Bicep with `adminUserEnabled=false`.
+- API/Web/Job resources use system-assigned managed identity for image pulls.
+- `AcrPull` role assignments are applied at ACR scope for API, Web, and migration job identities.
+- `infra-apply` resolves image references from `ACR_LOGIN_SERVER` and commit SHA without GHCR prechecks.
 
 ## Entra Identity (Terraform)
 

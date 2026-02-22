@@ -11,14 +11,11 @@
 - `dependabot-auto-merge.yml`: metadata-only safe-lane auto-merge for Dependabot PRs (patch/minor only, no PR checkout)
 - `deploy.yml`: push-to-main production deploy using ACR + Azure Container Apps deploy action (GitHub Environment `production`)
   - derives ACR login server from `ACR_NAME`
-  - verifies latest API/Web revision is traffic-serving
-  - handles ACA single-revision traffic payloads that use `latestRevision=true` without `revisionName`
   - runs migration job, API smoke, and browser evidence
 - `infra-apply.yml`: Azure Bicep infra apply workflow for `infra/azure/**` (GitHub Environment `production`)
   - provider registration preflight
   - single shared runtime parameter payload for validate/create
   - image resolution precedence: `image_tag` input > currently deployed image > current SHA
-  - post-apply zero-traffic revision cleanup
 - `identity-plan.yml`: Terraform identity plan workflow for `infra/identity/**` (GitHub Environment `production`)
 - `identity-apply.yml`: manual Terraform identity apply workflow (GitHub Environment `production`)
 

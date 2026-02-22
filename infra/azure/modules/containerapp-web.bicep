@@ -12,7 +12,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   name: containerAppName
   location: location
   identity: {
-    type: 'SystemAssigned,UserAssigned'
+    type: 'UserAssigned'
     userAssignedIdentities: {
       '${registryIdentityResourceId}': {}
     }
@@ -80,4 +80,3 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
 output appName string = containerApp.name
 output latestRevisionName string = containerApp.properties.latestRevisionName
 output latestRevisionFqdn string = containerApp.properties.latestRevisionFqdn
-output principalId string = containerApp.identity.principalId

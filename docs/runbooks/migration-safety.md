@@ -2,7 +2,7 @@
 
 ## Policy
 
-Deploy-time migrations must remain compatible with mixed app revisions during rollout.
+Deploy-time migrations must remain compatible with the current app image and the previous rollback image.
 Use an expand/migrate/contract sequence.
 
 ## Allowed In Deploy Gate (Expand)

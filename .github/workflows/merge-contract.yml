@@ -287,6 +287,17 @@ jobs:
       - name: Build Web
         run: pnpm --filter @compass/web build
 
+      - name: Prepare Web standalone assets
+        run: |
+          rm -rf apps/web/.next/standalone/apps/web/.next/static
+          rm -rf apps/web/.next/standalone/apps/web/public
+          mkdir -p apps/web/.next/standalone/apps/web/.next
+          mkdir -p apps/web/.next/standalone/apps/web/public
+          cp -R apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
+          if [ -d apps/web/public ]; then
+            cp -R apps/web/public/. apps/web/.next/standalone/apps/web/public/
+          fi
+
       - name: Start API server
         run: |
           pnpm --filter @compass/api start > /tmp/compass-api.log 2>&1 &

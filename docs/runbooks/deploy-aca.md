@@ -45,8 +45,8 @@ All concrete deploy values must be stored in the GitHub `production` environment
 
 ## GHCR Pull Policy
 
-- Default: server-only GHCR registry config for public images.
-- Fallback: if ACA revisions fail with GHCR auth/pull errors, restore PAT-based GHCR credentials path and redeploy.
+- Public GHCR images are deployed without explicit registry credentials in ACA Bicep resources.
+- Images are referenced directly as `ghcr.io/<org>/<image>:<sha>`.
 
 ## Gate Sequence
 

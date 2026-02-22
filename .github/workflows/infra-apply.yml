@@ -53,7 +53,6 @@ jobs:
           POSTGRES_VERSION: ${{ vars.POSTGRES_VERSION }}
           POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
           POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
-          GHCR_SERVER: ${{ vars.GHCR_SERVER }}
           ACA_API_IMAGE: ${{ vars.ACA_API_IMAGE }}
           ACA_WEB_IMAGE: ${{ vars.ACA_WEB_IMAGE }}
           ACA_MIGRATE_IMAGE: ${{ vars.ACA_MIGRATE_IMAGE }}
@@ -83,7 +82,6 @@ jobs:
             POSTGRES_VERSION
             POSTGRES_SKU_NAME
             POSTGRES_STORAGE_MB
-            GHCR_SERVER
             ACA_API_IMAGE
             ACA_WEB_IMAGE
             ACA_MIGRATE_IMAGE
@@ -169,7 +167,6 @@ jobs:
             --parameters postgresVersion="${{ vars.POSTGRES_VERSION }}" \
             --parameters postgresSkuName="${{ vars.POSTGRES_SKU_NAME }}" \
             --parameters postgresStorageMb="${{ vars.POSTGRES_STORAGE_MB }}" \
-            --parameters ghcrServer="${{ vars.GHCR_SERVER }}" \
             --parameters postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
             --parameters databaseUrl="${{ secrets.DATABASE_URL }}" \
             --parameters webBearerToken="${{ secrets.WEB_BEARER_TOKEN }}" \
@@ -202,7 +199,6 @@ jobs:
             --parameters postgresVersion="${{ vars.POSTGRES_VERSION }}" \
             --parameters postgresSkuName="${{ vars.POSTGRES_SKU_NAME }}" \
             --parameters postgresStorageMb="${{ vars.POSTGRES_STORAGE_MB }}" \
-            --parameters ghcrServer="${{ vars.GHCR_SERVER }}" \
             --parameters postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
             --parameters databaseUrl="${{ secrets.DATABASE_URL }}" \
             --parameters webBearerToken="${{ secrets.WEB_BEARER_TOKEN }}" \

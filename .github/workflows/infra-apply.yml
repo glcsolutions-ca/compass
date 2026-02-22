@@ -201,7 +201,6 @@ jobs:
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
           ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
           ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
-          ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
         run: |
           set -euo pipefail
 
@@ -210,7 +209,6 @@ jobs:
           if [ "${IMAGE_TAG_FROM_INPUT:-false}" = "true" ]; then
             api_image="${acr_registry}/compass-api:${RESOLVED_IMAGE_TAG}"
             web_image="${acr_registry}/compass-web:${RESOLVED_IMAGE_TAG}"
-            migrate_image="${acr_registry}/compass-migrate:${RESOLVED_IMAGE_TAG}"
           else
             api_image="$(az containerapp show \
               --resource-group "$AZURE_RESOURCE_GROUP" \
@@ -224,26 +222,16 @@ jobs:
               --query 'properties.template.containers[0].image' \
               --output tsv 2>/dev/null || true)"
 
-            migrate_image="$(az containerapp job show \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --name "$ACA_MIGRATE_JOB_NAME" \
-              --query 'properties.template.containers[0].image' \
-              --output tsv 2>/dev/null || true)"
-
             if [ -z "$api_image" ]; then
               api_image="${acr_registry}/compass-api:${RESOLVED_IMAGE_TAG}"
             fi
             if [ -z "$web_image" ]; then
               web_image="${acr_registry}/compass-web:${RESOLVED_IMAGE_TAG}"
             fi
-            if [ -z "$migrate_image" ]; then
-              migrate_image="${acr_registry}/compass-migrate:${RESOLVED_IMAGE_TAG}"
-            fi
           fi
 
           echo "api_image=$api_image" >> "$GITHUB_OUTPUT"
           echo "web_image=$web_image" >> "$GITHUB_OUTPUT"
-          echo "migrate_image=$migrate_image" >> "$GITHUB_OUTPUT"
 
       - name: Build runtime parameter overrides
         env:
@@ -273,7 +261,6 @@ jobs:
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
           API_IMAGE: ${{ steps.images.outputs.api_image }}
           WEB_IMAGE: ${{ steps.images.outputs.web_image }}
-          MIGRATE_IMAGE: ${{ steps.images.outputs.migrate_image }}
         run: |
           set -euo pipefail
           mkdir -p ".artifacts/infra/$HEAD_SHA"
@@ -307,7 +294,6 @@ jobs:
             --arg postgresAdminPassword "$POSTGRES_ADMIN_PASSWORD" \
             --arg apiImage "$API_IMAGE" \
             --arg webImage "$WEB_IMAGE" \
-            --arg migrateImage "$MIGRATE_IMAGE" \
             --arg entraIssuer "$ENTRA_ISSUER" \
             --arg entraAudience "$ENTRA_AUDIENCE" \
             --arg entraJwksUri "$ENTRA_JWKS_URI" \
@@ -338,7 +324,6 @@ jobs:
                 "postgresAdminPassword": {"value": $postgresAdminPassword},
                 "apiImage": {"value": $apiImage},
                 "webImage": {"value": $webImage},
-                "migrateImage": {"value": $migrateImage},
                 "entraIssuer": {"value": $entraIssuer},
                 "entraAudience": {"value": $entraAudience},
                 "entraJwksUri": {"value": $entraJwksUri}

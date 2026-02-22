@@ -96,28 +96,28 @@ jobs:
             exit 1
           fi
 
-      - name: Build and push migration image to ACR
-        id: migration_image
+      - name: Build and push API image to ACR
+        id: api_image
         run: |
           set -euo pipefail
 
-          migrate_image="$ACR_REGISTRY/compass-migrate:$HEAD_SHA"
+          api_image="$ACR_REGISTRY/compass-api:$HEAD_SHA"
 
           az acr login --name "$ACR_NAME" --only-show-errors
-          docker build -f deploy/Dockerfile.migrate -t "$migrate_image" .
-          docker push "$migrate_image"
+          docker build -f apps/api/Dockerfile -t "$api_image" .
+          docker push "$api_image"
 
-          migrate_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$migrate_image" || true)
+          api_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$api_image" || true)
 
-          echo "migrate_image=$migrate_image" >> "$GITHUB_OUTPUT"
-          echo "migrate_digest=$migrate_digest" >> "$GITHUB_OUTPUT"
+          echo "api_image=$api_image" >> "$GITHUB_OUTPUT"
+          echo "api_digest=$api_digest" >> "$GITHUB_OUTPUT"
 
       - name: Update migration job image
         run: |
           az containerapp job update \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "$ACA_MIGRATE_JOB_NAME" \
-            --image "${{ steps.migration_image.outputs.migrate_image }}" \
+            --image "${{ steps.api_image.outputs.api_image }}" \
             --output none
 
       - name: Run migration job
@@ -139,10 +139,7 @@ jobs:
       - name: Deploy API via ACA deploy action
         uses: azure/container-apps-deploy-action@v1
         with:
-          appSourcePath: ${{ github.workspace }}
-          dockerfilePath: apps/api/Dockerfile
-          imageToBuild: ${{ env.ACR_REGISTRY }}/compass-api:${{ env.HEAD_SHA }}
-          acrName: ${{ env.ACR_NAME }}
+          imageToDeploy: ${{ steps.api_image.outputs.api_image }}
           containerAppName: ${{ env.ACA_API_APP_NAME }}
           resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
           disableTelemetry: true
@@ -276,10 +273,10 @@ jobs:
         if: ${{ always() }}
         env:
           JOB_STATUS: ${{ job.status }}
-          API_IMAGE: ${{ env.ACR_REGISTRY }}/compass-api:${{ env.HEAD_SHA }}
+          API_IMAGE: ${{ steps.api_image.outputs.api_image }}
           WEB_IMAGE: ${{ env.ACR_REGISTRY }}/compass-web:${{ env.HEAD_SHA }}
-          MIGRATE_IMAGE: ${{ steps.migration_image.outputs.migrate_image }}
-          MIGRATE_DIGEST: ${{ steps.migration_image.outputs.migrate_digest }}
+          MIGRATE_IMAGE: ${{ steps.api_image.outputs.api_image }}
+          MIGRATE_DIGEST: ${{ steps.api_image.outputs.api_digest }}
           API_PROD_URL: ${{ steps.prod_urls.outputs.api_prod_url }}
           WEB_PROD_URL: ${{ steps.prod_urls.outputs.web_prod_url }}
         run: |

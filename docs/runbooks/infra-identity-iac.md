@@ -114,6 +114,8 @@ Registry policy:
 - `AcrPull` role assignment is applied at ACR scope for the shared pull identity.
 - `infra-apply` explicitly checks/enables ACR `authentication-as-arm`.
 - `infra-apply` derives the ACR login server from `ACR_NAME` and resolves image references from current deployed image or `image_tag` override.
+- Migration job image is pinned to the API image (single-image release artifact pattern).
+- ACR storage lifecycle is controlled by `.github/workflows/acr-cleanup.yml` (scheduled/manual tag pruning).
 
 Database policy:
 

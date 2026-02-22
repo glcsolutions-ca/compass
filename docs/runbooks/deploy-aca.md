@@ -7,7 +7,7 @@ Deploy every commit on `main` to Azure Container Apps using the standard ACR-bac
 - `azure/container-apps-deploy-action` for API and Web
 - private ACR images tagged by commit SHA
 - managed-identity image pulls (`AcrPull`) at runtime
-- migration execution through ACA Job inside the VNet
+- migration execution through ACA Job inside the VNet using the API image
 - post-deploy API smoke and browser evidence
 
 ## Non-Commit Rule
@@ -61,6 +61,7 @@ All concrete deploy values must be stored in the GitHub `production` environment
   - separate apps keep independent rollout/failure boundaries and avoid ingress/port coupling complexity
   - sidecars are for tightly coupled support processes, not for consolidating unrelated front-end/API workloads
   - migrations remain finite gate tasks and stay in ACA Jobs
+- Startup migrations are not allowed on API or Web containers in production.
 
 ## Registry + Runtime Auth Contract
 
@@ -74,15 +75,22 @@ All concrete deploy values must be stored in the GitHub `production` environment
 ## Deploy Sequence
 
 1. Azure OIDC login (deploy identity).
-2. Build/push migration image to ACR.
-3. Update and execute ACA migration job (`start-migration-job.mjs`, `wait-migration-job.mjs`).
-4. API deploy via `azure/container-apps-deploy-action`.
+2. Build/push API image to ACR.
+3. Update and execute ACA migration job (`start-migration-job.mjs`, `wait-migration-job.mjs`) using the API image.
+4. API deploy via `azure/container-apps-deploy-action` using the same API image.
 5. Web deploy via `azure/container-apps-deploy-action`.
 6. Azure OIDC login (smoke identity), mint Entra access token.
 7. API smoke verification (`verify-api-smoke.mjs`) against production URL.
 8. Browser evidence against production Web URL, reusing the same Entra smoke token via Playwright request-header injection (`BROWSER_SMOKE_BEARER_TOKEN`).
 9. Drift assertions verify `activeRevisionsMode=single`, `minReplicas=0`, and one active revision per app.
 10. Publish deploy artifacts.
+
+## ACR Tag Retention
+
+- Workflow file: `.github/workflows/acr-cleanup.yml`
+- Trigger: weekly schedule + `workflow_dispatch`
+- Default retention policy: keep newest 30 tags for `compass-api` and `compass-web`; prune older tags
+- Cleanup artifact: `.artifacts/infra/<sha>/acr-cleanup.json`
 
 ## Rollback (Single Revision Mode)
 

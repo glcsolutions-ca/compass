@@ -92,7 +92,6 @@ Required GitHub environment secrets for infra apply:
 
 - `AZURE_DEPLOY_CLIENT_ID`
 - `POSTGRES_ADMIN_PASSWORD`
-- `WEB_BEARER_TOKEN` (optional)
 
 ACA managed environment profile policy:
 
@@ -113,6 +112,7 @@ Registry policy:
 - ACR is provisioned in Bicep with `adminUserEnabled=false`.
 - API/Web/Job resources use a shared user-assigned managed identity for image pulls.
 - `AcrPull` role assignment is applied at ACR scope for the shared pull identity.
+- `infra-apply` explicitly checks/enables ACR `authentication-as-arm`.
 - `infra-apply` derives the ACR login server from `ACR_NAME` and resolves image references from current deployed image or `image_tag` override.
 
 Database policy:
@@ -126,7 +126,7 @@ Database policy:
   - `<POSTGRES_SERVER_NAME>.postgres.database.azure.com`
 - Cost-first default sizing is supported with:
   - `POSTGRES_SKU_TIER=Burstable`
-  - `POSTGRES_SKU_NAME=Standard_B2s`
+  - `POSTGRES_SKU_NAME=Standard_B1ms`
 - Burstable is only appropriate for mostly-idle workloads. If CPU credits deplete under sustained load, move to `GeneralPurpose` and monitor `CPU Credits Remaining`.
 
 ## Entra Identity (Terraform)

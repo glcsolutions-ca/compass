@@ -23,13 +23,10 @@ param postgresDatabaseName string = 'SET_IN_GITHUB_ENV'
 param postgresAdminUsername string = 'SET_IN_GITHUB_ENV'
 @secure()
 param postgresAdminPassword string
-param postgresSkuName string = 'Standard_B2s'
+param postgresSkuName string = 'Standard_B1ms'
 param postgresSkuTier string = 'Burstable'
 param postgresVersion string = '16'
 param postgresStorageMb int = 32768
-
-@secure()
-param webBearerToken string = ''
 
 param apiImage string = 'SET_IN_GITHUB_ENV'
 param webImage string = 'SET_IN_GITHUB_ENV'
@@ -153,7 +150,6 @@ module web './modules/containerapp-web.bicep' = {
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
     apiBaseUrl: 'https://${apiAppName}.${containerEnvironment.outputs.defaultDomain}'
-    bearerToken: webBearerToken
   }
   dependsOn: [
     acrPullIdentityRoleAssignment

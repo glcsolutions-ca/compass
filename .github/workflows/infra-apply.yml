@@ -162,11 +162,40 @@ jobs:
         id: images
         env:
           ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
+          ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+          ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
         run: |
           set -euo pipefail
-          api_image="${ACR_LOGIN_SERVER}/compass-api:${HEAD_SHA}"
-          web_image="${ACR_LOGIN_SERVER}/compass-web:${HEAD_SHA}"
-          migrate_image="${ACR_LOGIN_SERVER}/compass-migrate:${HEAD_SHA}"
+
+          api_image="$(az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_API_APP_NAME" \
+            --query 'properties.template.containers[0].image' \
+            --output tsv 2>/dev/null || true)"
+
+          web_image="$(az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_WEB_APP_NAME" \
+            --query 'properties.template.containers[0].image' \
+            --output tsv 2>/dev/null || true)"
+
+          migrate_image="$(az containerapp job show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_MIGRATE_JOB_NAME" \
+            --query 'properties.template.containers[0].image' \
+            --output tsv 2>/dev/null || true)"
+
+          if [ -z "$api_image" ]; then
+            api_image="${ACR_LOGIN_SERVER}/compass-api:${HEAD_SHA}"
+          fi
+          if [ -z "$web_image" ]; then
+            web_image="${ACR_LOGIN_SERVER}/compass-web:${HEAD_SHA}"
+          fi
+          if [ -z "$migrate_image" ]; then
+            migrate_image="${ACR_LOGIN_SERVER}/compass-migrate:${HEAD_SHA}"
+          fi
 
           echo "api_image=$api_image" >> "$GITHUB_OUTPUT"
           echo "web_image=$web_image" >> "$GITHUB_OUTPUT"
@@ -205,7 +234,6 @@ jobs:
             --parameters postgresSkuName="${{ vars.POSTGRES_SKU_NAME }}" \
             --parameters postgresStorageMb="${{ vars.POSTGRES_STORAGE_MB }}" \
             --parameters postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
-            --parameters databaseUrl="${{ secrets.DATABASE_URL }}" \
             --parameters webBearerToken="${{ secrets.WEB_BEARER_TOKEN }}" \
             --parameters apiImage="${{ steps.images.outputs.api_image }}" \
             --parameters webImage="${{ steps.images.outputs.web_image }}" \
@@ -239,7 +267,6 @@ jobs:
             --parameters postgresSkuName="${{ vars.POSTGRES_SKU_NAME }}" \
             --parameters postgresStorageMb="${{ vars.POSTGRES_STORAGE_MB }}" \
             --parameters postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
-            --parameters databaseUrl="${{ secrets.DATABASE_URL }}" \
             --parameters webBearerToken="${{ secrets.WEB_BEARER_TOKEN }}" \
             --parameters apiImage="${{ steps.images.outputs.api_image }}" \
             --parameters webImage="${{ steps.images.outputs.web_image }}" \

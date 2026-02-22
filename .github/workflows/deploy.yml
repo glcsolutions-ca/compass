@@ -25,6 +25,7 @@ jobs:
       ACR_NAME: ${{ vars.ACR_NAME }}
       ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
       ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
@@ -54,8 +55,10 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Ensure ACA CLI extension
+      - name: Ensure Azure CLI extensions
         run: az extension add --name containerapp --upgrade --only-show-errors
+      - name: Ensure Log Analytics CLI extension
+        run: az extension add --name log-analytics --upgrade --only-show-errors
 
       - name: Verify required resources exist
         run: |
@@ -156,6 +159,7 @@ jobs:
           ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
           MIGRATION_EXECUTION_NAME: ${{ steps.migration_start.outputs.migration_execution_name }}
           MIGRATION_TIMEOUT_SECONDS: 900
+          AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ env.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
         run: node scripts/deploy/wait-migration-job.mjs
 
       - name: Resolve production URLs

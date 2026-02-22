@@ -41,17 +41,14 @@ All concrete deploy values must be stored in the GitHub `production` environment
 
 - `AZURE_DEPLOY_CLIENT_ID`
 - `AZURE_SMOKE_CLIENT_ID`
-- `DATABASE_URL`
-- `POSTGRES_ADMIN_PASSWORD`
-- `WEB_BEARER_TOKEN` (optional)
 
 ## Registry + Runtime Auth Contract
 
 - Production images are stored in ACR only.
 - ACR is provisioned with `adminUserEnabled=false`.
 - Deploy workflow authenticates to Azure via OIDC and pushes images to ACR.
-- ACA API/Web/Job resources pull images through system-assigned managed identity.
-- `AcrPull` role assignments for API/Web/Job identities are provisioned by Bicep (`infra/azure/main.bicep`).
+- ACA API/Web/Job resources pull images through managed identity (shared user-assigned pull identity).
+- `AcrPull` role assignment for the shared pull identity is provisioned by Bicep (`infra/azure/main.bicep`).
 
 ## Deploy Sequence
 

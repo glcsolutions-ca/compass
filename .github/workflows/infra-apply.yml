@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: Optional image tag for API/Web/migrate images (when set, always used)
+        description: Optional image tag for API/Web images (when set, always used)
         required: false
         type: string
   push:

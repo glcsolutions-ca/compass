@@ -80,7 +80,6 @@ const SENSITIVE_BICEP_PARAMS = new Set([
   "postgresAdminPassword",
   "apiImage",
   "webImage",
-  "migrateImage",
   "entraIssuer",
   "entraAudience",
   "entraJwksUri"

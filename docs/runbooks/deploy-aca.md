@@ -50,8 +50,15 @@ All concrete deploy values must be stored in the GitHub `production` environment
   - `minReplicas: 0`
   - `maxReplicas: 1`
 - API and Web run in `activeRevisionsMode: single`.
+- API and Web keep at most `maxInactiveRevisions: 2` for short rollback depth without revision sprawl.
 - In single-revision mode, ACA routes app traffic to the latest ready revision automatically.
-- Web app calls API through the stable app FQDN (`https://<api-app>.<aca-default-domain>`), not a revision FQDN.
+
+## Web/API Boundary (Standardized)
+
+- Browser requests stay same-origin and call `/api/v1/*` on the Web app.
+- The Web app route handler proxies those requests to the API app using runtime `API_BASE_URL`.
+- Do not use `NEXT_PUBLIC_*` token or API URL wiring for production/CI smoke behavior.
+- Browser evidence authentication is injected at test time via `BROWSER_SMOKE_BEARER_TOKEN`.
 
 ## App Topology Decision
 
@@ -76,14 +83,15 @@ All concrete deploy values must be stored in the GitHub `production` environment
 
 1. Azure OIDC login (deploy identity).
 2. Build/push API image to ACR.
-3. Update and execute ACA migration job (`start-migration-job.mjs`, `wait-migration-job.mjs`) using the API image.
-4. API deploy via `azure/container-apps-deploy-action` using the same API image.
-5. Web deploy via `azure/container-apps-deploy-action`.
-6. Azure OIDC login (smoke identity), mint Entra access token.
-7. API smoke verification (`verify-api-smoke.mjs`) against production URL.
-8. Browser evidence against production Web URL, reusing the same Entra smoke token via Playwright request-header injection (`BROWSER_SMOKE_BEARER_TOKEN`).
-9. Drift assertions verify `activeRevisionsMode=single`, `minReplicas=0`, and one active revision per app.
-10. Publish deploy artifacts.
+3. Build/push Web image to ACR.
+4. Update and execute ACA migration job (`start-migration-job.mjs`, `wait-migration-job.mjs`) using the API image.
+5. API deploy via `azure/container-apps-deploy-action` using the same API image.
+6. Web deploy via `azure/container-apps-deploy-action` using the prebuilt Web image.
+7. Azure OIDC login (smoke identity), mint Entra access token.
+8. API smoke verification (`verify-api-smoke.mjs`) against production URL.
+9. Browser evidence against production Web URL, reusing the same Entra smoke token via Playwright request-header injection (`BROWSER_SMOKE_BEARER_TOKEN`).
+10. Drift assertions verify `activeRevisionsMode=single`, `minReplicas=0`, `maxReplicas=1`, `cpu=0.25`, `memory=0.5Gi`, `maxInactiveRevisions<=2`, and one active revision per app.
+11. Publish deploy artifacts.
 
 ## ACR Tag Retention
 

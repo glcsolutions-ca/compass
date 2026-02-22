@@ -19,7 +19,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: managedEnvironmentId
     configuration: {
       activeRevisionsMode: 'single'
-      maxInactiveRevisions: 5
+      maxInactiveRevisions: 2
       ingress: {
         external: true
         targetPort: 3000
@@ -41,10 +41,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             {
               name: 'API_BASE_URL'
-              value: apiBaseUrl
-            }
-            {
-              name: 'NEXT_PUBLIC_API_BASE_URL'
               value: apiBaseUrl
             }
           ]

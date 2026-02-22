@@ -16,14 +16,15 @@ param webAppName string = 'SET_IN_GITHUB_ENV'
 param migrationJobName string = 'SET_IN_GITHUB_ENV'
 param acrPullIdentityName string = 'SET_IN_GITHUB_ENV'
 param acrName string = 'SET_IN_GITHUB_ENV'
-param acrSku string = 'Standard'
+param acrSku string = 'Basic'
 
 param postgresServerName string = 'SET_IN_GITHUB_ENV'
 param postgresDatabaseName string = 'SET_IN_GITHUB_ENV'
 param postgresAdminUsername string = 'SET_IN_GITHUB_ENV'
 @secure()
 param postgresAdminPassword string
-param postgresSkuName string = 'Standard_D2s_v3'
+param postgresSkuName string = 'Standard_B2s'
+param postgresSkuTier string = 'Burstable'
 param postgresVersion string = '16'
 param postgresStorageMb int = 32768
 
@@ -36,6 +37,7 @@ param migrateImage string = 'SET_IN_GITHUB_ENV'
 
 param authMode string = 'entra'
 param requiredScope string = 'time.read'
+param apiLogLevel string = 'warn'
 param entraIssuer string
 param entraAudience string
 param entraJwksUri string
@@ -89,6 +91,7 @@ module postgres './modules/postgres-flex.bicep' = {
     adminLogin: postgresAdminUsername
     adminPassword: postgresAdminPassword
     skuName: postgresSkuName
+    skuTier: postgresSkuTier
     postgresVersion: postgresVersion
     storageSizeMb: postgresStorageMb
   }
@@ -130,6 +133,7 @@ module api './modules/containerapp-api.bicep' = {
     databaseUrl: databaseUrl
     authMode: authMode
     requiredScope: requiredScope
+    logLevel: apiLogLevel
     entraIssuer: entraIssuer
     entraAudience: entraAudience
     entraJwksUri: entraJwksUri
@@ -150,7 +154,7 @@ module web './modules/containerapp-web.bicep' = {
     registryIdentityResourceId: acrPullIdentity.id
     apiBaseUrl: api.outputs.latestRevisionFqdn != ''
       ? 'https://${api.outputs.latestRevisionFqdn}'
-      : 'https://${apiAppName}'
+      : 'https://${apiAppName}.${containerEnvironment.outputs.defaultDomain}'
     bearerToken: webBearerToken
   }
   dependsOn: [

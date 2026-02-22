@@ -64,8 +64,8 @@ resource migrateJob 'Microsoft.App/jobs@2023-05-01' = {
             }
           ]
           resources: {
-            cpu: json('0.5')
-            memory: '1Gi'
+            cpu: json('0.25')
+            memory: '0.5Gi'
           }
         }
       ]

@@ -92,9 +92,16 @@ pnpm db:migrate:status
 
 `main` is deployed through a single ACR-first Azure Container Apps pipeline. The deploy workflow:
 
-1. Builds and deploys SHA-tagged API and Web images to ACR via `azure/container-apps-deploy-action`.
-2. Builds and pushes the migration image to ACR, then runs the ACA migration job inside the private VNet.
-3. Verifies production via API smoke and browser evidence.
+1. Builds SHA-tagged API and Web images and pushes them to ACR.
+2. Runs the DB migration ACA Job first using the same API image.
+3. Deploys API and Web with `azure/container-apps-deploy-action`.
+4. Runs API smoke and browser-evidence gates before finishing.
+
+Why SHA tags:
+
+- Every image, test artifact, and deploy result points to one exact commit.
+- Replays and rollbacks stay deterministic.
+- Older commits cannot silently replace newer `main`.
 
 Infrastructure runtime values are environment-driven:
 

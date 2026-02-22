@@ -1,5 +1,12 @@
 # Workflows
 
+## Release Cycle (Plain-English)
+
+1. PR runs `merge-contract.yml` and must pass `risk-policy-gate`.
+2. Merge to `main` runs `deploy.yml` for that exact SHA.
+3. Deploy runs migration job first, then API/Web deploy, then smoke + browser evidence.
+4. Infra changes run through `infra-apply.yml`; identity changes run through `identity-plan.yml` and `identity-apply.yml`.
+
 - `merge-contract.yml`: deterministic merge-contract workflow with ordered checks:
   - `risk-policy-preflight` (includes `docs-drift` evaluation)
   - `no-org-infra` leak guard (fails on committed org-specific infra values)
@@ -14,7 +21,7 @@
   - rejects stale deploy candidates when `${GITHUB_SHA}` is no longer current `origin/main`
   - migration job runs before API/Web rollout (expand-first gate)
   - API image is shared by runtime and migration command path (single-image pattern)
-  - API and Web images are both built/pushed explicitly, then deployed via `imageToDeploy`
+  - API and Web images are both built/pushed explicitly, then deployed by image reference (`imageToDeploy`)
   - derives ACR login server from `ACR_NAME`
   - runs subscription-scoped drift assertions before switching to subscription-less smoke identity
   - normalizes CLI mode output (`Single`/`single`) before drift-policy comparison

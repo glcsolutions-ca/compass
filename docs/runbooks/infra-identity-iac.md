@@ -127,6 +127,7 @@ Database policy:
 - Cost-first default sizing is supported with:
   - `POSTGRES_SKU_TIER=Burstable`
   - `POSTGRES_SKU_NAME=Standard_B2s`
+- Burstable is only appropriate for mostly-idle workloads. If CPU credits deplete under sustained load, move to `GeneralPurpose` and monitor `CPU Credits Remaining`.
 
 ## Entra Identity (Terraform)
 

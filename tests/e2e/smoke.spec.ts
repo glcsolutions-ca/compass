@@ -43,6 +43,9 @@ test("compass smoke flow", async ({ page }) => {
   const expectedEntrypoint = process.env.EXPECTED_ENTRYPOINT ?? "/";
   const expectedIdentity = process.env.EXPECTED_ACCOUNT_IDENTITY ?? "employee-123";
   const browserSmokeBearerToken = process.env.BROWSER_SMOKE_BEARER_TOKEN?.trim() ?? "";
+  const payloadTimeoutMsRaw = Number(process.env.BROWSER_SMOKE_PAYLOAD_TIMEOUT_MS ?? "45000");
+  const payloadTimeoutMs =
+    Number.isFinite(payloadTimeoutMsRaw) && payloadTimeoutMsRaw > 0 ? payloadTimeoutMsRaw : 45_000;
   const flowIds = parseRequiredFlowIds();
 
   const outputDir = path.join(".artifacts", "browser-evidence", headSha);
@@ -109,7 +112,7 @@ test("compass smoke flow", async ({ page }) => {
       await page.getByRole("button", { name: "Load View" }).click();
 
       const payloadLocator = page.locator("pre").first();
-      await payloadLocator.waitFor({ state: "visible", timeout: 15_000 });
+      await payloadLocator.waitFor({ state: "visible", timeout: payloadTimeoutMs });
       const payloadText = (await payloadLocator.textContent()) ?? "";
 
       const identityPass = payloadText.includes(expectedIdentity);

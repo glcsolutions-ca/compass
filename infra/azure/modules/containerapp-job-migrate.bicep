@@ -2,6 +2,10 @@ param location string
 param jobName string
 param managedEnvironmentId string
 param image string
+param registryServer string = 'ghcr.io'
+param registryUsername string
+@secure()
+param registryPassword string
 @secure()
 param databaseUrl string
 
@@ -18,7 +22,18 @@ resource migrateJob 'Microsoft.App/jobs@2023-05-01' = {
         parallelism: 1
         replicaCompletionCount: 1
       }
+      registries: [
+        {
+          server: registryServer
+          username: registryUsername
+          passwordSecretRef: 'ghcr-password'
+        }
+      ]
       secrets: [
+        {
+          name: 'ghcr-password'
+          value: registryPassword
+        }
         {
           name: 'database-url'
           value: databaseUrl

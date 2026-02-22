@@ -4,6 +4,14 @@
 
 Deploy-time migrations must remain compatible with the current app image and the previous rollback image.
 Use an expand/migrate/contract sequence.
+Pipeline migration job is the only production migration path.
+
+## Command-Level Role Separation
+
+- API and migration share the same container image.
+- API runtime command: `node dist/index.js`
+- Migration job command: `node scripts/db/migrate.mjs up`
+- This keeps one immutable release artifact per commit while preserving separate execution roles.
 
 ## Allowed In Deploy Gate (Expand)
 

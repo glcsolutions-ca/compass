@@ -31,7 +31,6 @@ param postgresAdminPassword = 'SET_IN_GITHUB_ENV'
 
 param apiImage = 'SET_IN_GITHUB_ENV'
 param webImage = 'SET_IN_GITHUB_ENV'
-param migrateImage = 'SET_IN_GITHUB_ENV'
 
 param authMode = 'entra'
 param requiredScope = 'time.read'

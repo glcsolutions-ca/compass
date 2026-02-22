@@ -13,7 +13,7 @@ param entraAudience string
 param entraJwksUri string
 param logLevel string = 'warn'
 
-resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
+resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: containerAppName
   location: location
   identity: {
@@ -26,6 +26,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
     managedEnvironmentId: managedEnvironmentId
     configuration: {
       activeRevisionsMode: 'single'
+      maxInactiveRevisions: 5
       ingress: {
         external: true
         targetPort: 3001
@@ -100,6 +101,32 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
             cpu: json('0.25')
             memory: '0.5Gi'
           }
+          probes: [
+            {
+              type: 'Startup'
+              httpGet: {
+                path: '/health'
+                port: 3001
+              }
+              initialDelaySeconds: 5
+            }
+            {
+              type: 'Readiness'
+              httpGet: {
+                path: '/health'
+                port: 3001
+              }
+              initialDelaySeconds: 5
+            }
+            {
+              type: 'Liveness'
+              httpGet: {
+                path: '/health'
+                port: 3001
+              }
+              initialDelaySeconds: 30
+            }
+          ]
         }
       ]
       scale: {

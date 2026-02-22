@@ -1,6 +1,6 @@
-exports.shorthands = undefined;
+export const shorthands = undefined;
 
-exports.up = (pgm) => {
+export const up = (pgm) => {
   pgm.sql(`
     CREATE TABLE IF NOT EXISTS consolidated_employee_views (
       employee_id text PRIMARY KEY NOT NULL,
@@ -21,6 +21,6 @@ exports.up = (pgm) => {
   `);
 };
 
-exports.down = (pgm) => {
+export const down = (pgm) => {
   pgm.sql("DROP TABLE IF EXISTS consolidated_employee_views");
 };

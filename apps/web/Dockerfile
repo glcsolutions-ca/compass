@@ -7,14 +7,6 @@ WORKDIR /workspace
 COPY . .
 RUN mkdir -p /workspace/apps/web/public
 
-ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:3001
-ARG NEXT_PUBLIC_BEARER_TOKEN=
-ARG NEXT_PUBLIC_DEV_BEARER_TOKEN=
-
-ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
-ENV NEXT_PUBLIC_BEARER_TOKEN=${NEXT_PUBLIC_BEARER_TOKEN}
-ENV NEXT_PUBLIC_DEV_BEARER_TOKEN=${NEXT_PUBLIC_DEV_BEARER_TOKEN}
-
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @compass/sdk build
 RUN pnpm --filter @compass/web build

@@ -20,7 +20,7 @@ resource migrateJob 'Microsoft.App/jobs@2024-03-01' = {
     environmentId: managedEnvironmentId
     configuration: {
       triggerType: 'Manual'
-      replicaTimeout: 1800
+      replicaTimeout: 900
       replicaRetryLimit: 1
       manualTriggerConfig: {
         parallelism: 1

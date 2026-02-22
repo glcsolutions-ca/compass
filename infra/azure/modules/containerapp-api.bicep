@@ -26,7 +26,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: managedEnvironmentId
     configuration: {
       activeRevisionsMode: 'single'
-      maxInactiveRevisions: 5
+      maxInactiveRevisions: 2
       ingress: {
         external: true
         targetPort: 3001

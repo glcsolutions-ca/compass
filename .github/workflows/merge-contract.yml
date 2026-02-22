@@ -285,10 +285,18 @@ jobs:
         run: pnpm --filter @compass/api build
 
       - name: Build Web
-        env:
-          NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:3001
-          NEXT_PUBLIC_DEV_BEARER_TOKEN: ${{ steps.token.outputs.token }}
         run: pnpm --filter @compass/web build
+
+      - name: Prepare Web standalone assets
+        run: |
+          rm -rf apps/web/.next/standalone/apps/web/.next/static
+          rm -rf apps/web/.next/standalone/apps/web/public
+          mkdir -p apps/web/.next/standalone/apps/web/.next
+          mkdir -p apps/web/.next/standalone/apps/web/public
+          cp -R apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
+          if [ -d apps/web/public ]; then
+            cp -R apps/web/public/. apps/web/.next/standalone/apps/web/public/
+          fi
 
       - name: Start API server
         run: |
@@ -308,10 +316,9 @@ jobs:
 
       - name: Start Web server
         env:
-          NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:3001
-          NEXT_PUBLIC_DEV_BEARER_TOKEN: ${{ steps.token.outputs.token }}
+          API_BASE_URL: http://127.0.0.1:3001
         run: |
-          pnpm --filter @compass/web start > /tmp/compass-web.log 2>&1 &
+          pnpm --filter @compass/web start:standalone > /tmp/compass-web.log 2>&1 &
           echo $! > /tmp/compass-web.pid
 
       - name: Wait for Web readiness
@@ -331,6 +338,7 @@ jobs:
           PR_NUMBER: ${{ needs.preflight.outputs.pr_number }}
           RISK_TIER: ${{ needs.preflight.outputs.tier }}
           WEB_BASE_URL: http://127.0.0.1:3000
+          BROWSER_SMOKE_BEARER_TOKEN: ${{ steps.token.outputs.token }}
           EXPECTED_ENTRYPOINT: /
           EXPECTED_ACCOUNT_IDENTITY: employee-123
           REQUIRED_FLOW_IDS_JSON: ${{ needs.preflight.outputs.required_flow_ids_json }}

@@ -5,6 +5,7 @@
 Deploy-time migrations must remain compatible with the current app image and the previous rollback image.
 Use an expand/migrate/contract sequence.
 Pipeline migration job is the only production migration path.
+Do not run migrations at API startup or in init containers.
 
 ## Command-Level Role Separation
 
@@ -28,6 +29,7 @@ Pipeline migration job is the only production migration path.
 
 - Backfills and data reshaping run as separate jobs
 - Large backfills should not block deployment unless explicitly required
+- Do not merge API and Web into a single sidecar deployment to run migrations.
 
 ## Deferred Contract Steps
 

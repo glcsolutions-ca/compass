@@ -60,7 +60,7 @@ All concrete deploy values must be stored in the GitHub `production` environment
 5. Update and execute ACA migration job (`start-migration-job.mjs`, `wait-migration-job.mjs`).
 6. Azure OIDC login (smoke identity), mint Entra access token.
 7. API smoke verification (`verify-api-smoke.mjs`) against production URL.
-8. Browser evidence against production Web URL.
+8. Browser evidence against production Web URL, reusing the same Entra smoke token via Playwright request-header injection (`BROWSER_SMOKE_BEARER_TOKEN`).
 9. Publish deploy artifacts.
 
 ## Artifacts

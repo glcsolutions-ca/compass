@@ -13,13 +13,15 @@ const policy = loadMergePolicyObject({
   riskTierRules: {
     t3: ["apps/api/src/features/auth/**", ".github/workflows/**", ".github/dependabot.yml"],
     t2: ["apps/web/**"],
-    t1: ["apps/api/**", "packages/**", "package.json", "pnpm-lock.yaml", "**/package.json"],
+    t1: ["apps/api/**", "packages/**"],
+    deps: ["package.json", "pnpm-lock.yaml", "**/package.json"],
     t0: ["**"]
   },
   mergePolicy: {
     t3: { requiredChecks: ["risk-policy-gate", "ci-pipeline", "harness-smoke", "codex-review"] },
     t2: { requiredChecks: ["risk-policy-gate", "ci-pipeline", "browser-evidence"] },
     t1: { requiredChecks: ["risk-policy-gate", "ci-pipeline"] },
+    deps: { requiredChecks: ["risk-policy-gate", "ci-pipeline"] },
     t0: { requiredChecks: ["risk-policy-gate", "ci-pipeline"] }
   },
   docsDriftRules: {
@@ -61,8 +63,13 @@ describe("risk tier resolution", () => {
     expect(tier).toBe("t0");
   });
 
-  it("classifies dependency manifest updates as t1 core changes", () => {
+  it("classifies dependency manifest updates as deps-only changes", () => {
     const tier = resolveRiskTier(policy, ["pnpm-lock.yaml"]);
+    expect(tier).toBe("deps");
+  });
+
+  it("keeps mixed deps and code updates in a higher tier", () => {
+    const tier = resolveRiskTier(policy, ["apps/api/src/index.ts", "pnpm-lock.yaml"]);
     expect(tier).toBe("t1");
   });
 });

@@ -1,0 +1,69 @@
+name: Dependabot Auto Merge
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  enable_auto_merge:
+    name: dependabot-auto-merge
+    if: ${{ github.actor == 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Classify safe lane
+        id: safe_lane
+        env:
+          UPDATE_TYPES_RAW: ${{ steps.metadata.outputs.update-type }}
+        run: |
+          set -euo pipefail
+          update_types="${UPDATE_TYPES_RAW// /}"
+
+          if [ -z "$update_types" ]; then
+            echo "safe=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          IFS=',' read -r -a types <<< "$update_types"
+          for update_type in "${types[@]}"; do
+            case "$update_type" in
+              version-update:semver-patch|version-update:semver-minor)
+                ;;
+              *)
+                echo "safe=false" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+            esac
+          done
+
+          echo "safe=true" >> "$GITHUB_OUTPUT"
+
+      - name: Enable auto-merge
+        if: ${{ steps.safe_lane.outputs.safe == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if gh pr merge --repo "$REPOSITORY" --auto --merge "$PR_NUMBER"; then
+            echo "Auto-merge enabled for Dependabot safe-lane PR #$PR_NUMBER"
+          else
+            echo "Unable to enable auto-merge for PR #$PR_NUMBER; leaving PR open for manual action."
+          fi

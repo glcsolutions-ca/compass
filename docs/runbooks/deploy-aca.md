@@ -10,6 +10,15 @@ Deploy every commit on `main` to Azure Container Apps using the standard ACR-bac
 - migration execution through ACA Job inside the VNet using the API image
 - post-deploy API smoke and browser evidence
 
+## Deploy Cycle (Plain-English)
+
+1. Build API/Web images for the current commit SHA.
+2. Run DB migrations with ACA Job (same API image).
+3. Deploy API, then Web.
+4. Run API smoke and browser evidence.
+5. Publish artifacts tied to that SHA.
+6. If any gate fails, release is blocked.
+
 ## Non-Commit Rule
 
 Do not commit organization-specific infrastructure values in this repository.

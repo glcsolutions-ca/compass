@@ -24,6 +24,16 @@ need focused local debugging of docs-drift behavior.
 
 4. Confirm references and docs are updated if policy/workflow/scripting changed.
 
+## CI/CD Cycle (Plain-English)
+
+1. Open PR from a short-lived branch.
+2. CI calculates risk tier from changed paths.
+3. CI runs only the checks required for that tier.
+4. `risk-policy-gate` blocks merge unless current-head evidence is complete and valid.
+5. Merge to `main` creates a release candidate for that exact SHA.
+6. Deploy pipeline runs migration job, deploys API/Web, then runs smoke and browser evidence.
+7. Any failed gate blocks release; rerun only after a fix commit.
+
 ## High-Risk Paths
 
 If a change resolves to higher tiers by policy, expect additional required evidence:

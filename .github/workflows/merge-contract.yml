@@ -35,13 +35,13 @@ jobs:
       docs_drift_status: ${{ steps.docs_drift.outputs.docs_drift_status }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
 
@@ -54,7 +54,7 @@ jobs:
 
       - name: Upload preflight artifact
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: preflight-${{ steps.preflight.outputs.head_sha }}
           path: ${{ steps.preflight.outputs.preflight_path }}
@@ -70,7 +70,7 @@ jobs:
 
       - name: Upload docs-drift artifact
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: docs-drift-${{ steps.preflight.outputs.head_sha }}
           path: .artifacts/docs-drift/${{ steps.preflight.outputs.head_sha }}/result.json
@@ -87,13 +87,13 @@ jobs:
       review_overall: ${{ steps.codex_review.outputs.review_overall }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
 
@@ -110,7 +110,7 @@ jobs:
 
       - name: Upload codex-review artifact
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: codex-review-${{ needs.preflight.outputs.head_sha }}
           path: .artifacts/review/${{ needs.preflight.outputs.head_sha }}
@@ -127,7 +127,7 @@ jobs:
       ci_pipeline_path: ${{ steps.write_result.outputs.ci_pipeline_path }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -138,7 +138,7 @@ jobs:
           version: 10.30.1
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -180,7 +180,7 @@ jobs:
 
       - name: Upload ci-pipeline artifact
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ci-pipeline-${{ needs.preflight.outputs.head_sha }}
           path: .artifacts/ci-pipeline/${{ needs.preflight.outputs.head_sha }}/result.json
@@ -198,7 +198,7 @@ jobs:
       browser_manifest_path: ${{ steps.browser_paths.outputs.browser_manifest_path }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -209,7 +209,7 @@ jobs:
           version: 10.30.1
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -291,7 +291,7 @@ jobs:
 
       - name: Upload browser-evidence artifact
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: browser-evidence-${{ needs.preflight.outputs.head_sha }}
           path: .artifacts/browser-evidence/${{ needs.preflight.outputs.head_sha }}
@@ -327,7 +327,7 @@ jobs:
       harness_smoke_path: ${{ steps.harness_paths.outputs.harness_smoke_path }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -338,7 +338,7 @@ jobs:
           version: 10.30.1
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -363,7 +363,7 @@ jobs:
 
       - name: Upload harness-smoke artifact
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: harness-smoke-${{ needs.preflight.outputs.head_sha }}
           path: .artifacts/harness-smoke/${{ needs.preflight.outputs.head_sha }}/result.json
@@ -382,20 +382,20 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
 
       - name: Download browser-evidence artifact
         if: ${{ needs.preflight.outputs.browser_evidence_required == 'true' && needs.browser_evidence.result == 'success' }}
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: browser-evidence-${{ needs.preflight.outputs.head_sha }}
           path: .artifacts/browser-evidence/${{ needs.preflight.outputs.head_sha }}
@@ -418,7 +418,7 @@ jobs:
 
       - name: Upload risk-policy-gate artifact
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: risk-policy-gate-${{ needs.preflight.outputs.head_sha }}
           path: .artifacts/risk-policy-gate/${{ needs.preflight.outputs.head_sha }}/result.json

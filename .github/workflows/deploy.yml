@@ -185,38 +185,50 @@ jobs:
           set -euo pipefail
 
           for app in "$ACA_API_APP_NAME" "$ACA_WEB_APP_NAME"; do
-            mode=$(az containerapp show \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --name "$app" \
-              --query 'properties.configuration.activeRevisionsMode' \
-              --output tsv)
+            converged="false"
 
-            normalized_mode=$(echo "$mode" | tr '[:upper:]' '[:lower:]')
+            for attempt in {1..12}; do
+              mode=$(az containerapp show \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --name "$app" \
+                --query 'properties.configuration.activeRevisionsMode' \
+                --output tsv)
 
-            min_replicas=$(az containerapp show \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --name "$app" \
-              --query 'properties.template.scale.minReplicas' \
-              --output tsv)
+              normalized_mode=$(echo "$mode" | tr '[:upper:]' '[:lower:]')
 
-            active_count=$(az containerapp revision list \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --name "$app" \
-              --query '[?properties.active==`true`]|length(@)' \
-              --output tsv)
+              min_replicas=$(az containerapp show \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --name "$app" \
+                --query 'properties.template.scale.minReplicas' \
+                --output tsv)
 
-            if [ "$normalized_mode" != "single" ]; then
-              echo "$app is not in single revision mode (actual: $mode)" >&2
-              exit 1
-            fi
+              active_count=$(az containerapp revision list \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --name "$app" \
+                --query '[?properties.active==`true`]|length(@)' \
+                --output tsv)
 
-            if [ "${min_replicas:-0}" != "0" ]; then
-              echo "$app minReplicas drifted (actual: ${min_replicas:-unset})" >&2
-              exit 1
-            fi
+              if [ "$normalized_mode" != "single" ]; then
+                echo "$app is not in single revision mode (actual: $mode)" >&2
+                exit 1
+              fi
 
-            if [ "${active_count:-0}" != "1" ]; then
-              echo "$app active revision count is ${active_count:-0} (expected: 1)" >&2
+              if [ "${min_replicas:-0}" != "0" ]; then
+                echo "$app minReplicas drifted (actual: ${min_replicas:-unset})" >&2
+                exit 1
+              fi
+
+              if [ "${active_count:-0}" = "1" ]; then
+                converged="true"
+                break
+              fi
+
+              echo "$app active revision count is ${active_count:-0}; waiting for single-revision convergence (attempt $attempt/12)"
+              sleep 10
+            done
+
+            if [ "$converged" != "true" ]; then
+              echo "$app did not converge to exactly one active revision within 120 seconds" >&2
               exit 1
             fi
           done

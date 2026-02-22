@@ -5,12 +5,14 @@ import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 
 export default function HomeClient() {
+  const baseUrl = typeof window === "undefined" ? "" : window.location.origin;
+
   const client = useMemo(
     () =>
       createApiClient({
-        baseUrl: "/"
+        baseUrl
       }),
-    []
+    [baseUrl]
   );
 
   const [employeeId, setEmployeeId] = useState("employee-123");

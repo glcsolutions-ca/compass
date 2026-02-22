@@ -17,12 +17,33 @@ This repo treats CI as the source of truth for merge safety.
 
 ```bash
 pnpm install
+pnpm db:postgres:up
 pnpm dev
 pnpm check
 pnpm build
 ```
 
 Use `pnpm clean` when needed.
+
+`pnpm db:postgres:up` runs the standard local DB flow:
+
+- starts Docker PostgreSQL
+- waits until the DB is ready
+- applies migrations from `migrations/`
+- seeds local demo data
+
+The API uses PostgreSQL when `DATABASE_URL` is set in `apps/api/.env` (see `apps/api/.env.example`).
+Use `pnpm db:postgres:down` to stop PostgreSQL.
+Use `pnpm db:postgres:reset` to drop local volumes and rebuild the DB from migrations + seed data.
+
+## Migration Workflow
+
+```bash
+pnpm db:migrate:create -- <migration_name>
+pnpm db:migrate:up
+pnpm db:migrate:status
+pnpm db:migrate:down -- 1
+```
 
 ## CI Merge Contract
 

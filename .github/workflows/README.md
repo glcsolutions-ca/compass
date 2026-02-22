@@ -15,6 +15,7 @@
   - derives ACR login server from `ACR_NAME`
   - runs subscription-scoped drift assertions before switching to subscription-less smoke identity
   - normalizes CLI mode output (`Single`/`single`) before drift-policy comparison
+  - allows bounded convergence time for active revision count after deploy (up to 120s)
   - runs API smoke and browser evidence
   - asserts post-deploy drift policy (`single` revision mode, `minReplicas=0`, one active revision per app)
 - `infra-apply.yml`: Azure Bicep infra apply workflow for `infra/azure/**` (GitHub Environment `production`)

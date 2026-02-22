@@ -191,6 +191,8 @@ jobs:
               --query 'properties.configuration.activeRevisionsMode' \
               --output tsv)
 
+            normalized_mode=$(echo "$mode" | tr '[:upper:]' '[:lower:]')
+
             min_replicas=$(az containerapp show \
               --resource-group "$AZURE_RESOURCE_GROUP" \
               --name "$app" \
@@ -203,7 +205,7 @@ jobs:
               --query '[?properties.active==`true`]|length(@)' \
               --output tsv)
 
-            if [ "$mode" != "single" ]; then
+            if [ "$normalized_mode" != "single" ]; then
               echo "$app is not in single revision mode (actual: $mode)" >&2
               exit 1
             fi

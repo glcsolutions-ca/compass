@@ -6,8 +6,12 @@
       ".github/policy/**",
       ".github/dependabot.yml",
       "scripts/ci/**",
+      "scripts/deploy/**",
+      "scripts/infra/**",
       "apps/api/src/features/auth/**",
       "infra/**",
+      "infra/azure/**",
+      "infra/identity/**",
       "migrations/**",
       "deploy/**"
     ],
@@ -34,7 +38,16 @@
     }
   },
   "docsDriftRules": {
-    "blockingPaths": [".github/workflows/**", ".github/policy/**", "scripts/ci/**"],
+    "blockingPaths": [
+      ".github/workflows/**",
+      ".github/policy/**",
+      "scripts/ci/**",
+      "scripts/deploy/**",
+      "scripts/infra/**",
+      "infra/azure/**",
+      "infra/identity/**",
+      "deploy/**"
+    ],
     "docsCriticalPaths": [
       "contracts/**",
       "schemas/**",
@@ -43,6 +56,8 @@
       "migrations/**",
       "config/**",
       "infra/**",
+      "infra/azure/**",
+      "infra/identity/**",
       "packages/contracts/**",
       "packages/contracts/openapi/**"
     ],

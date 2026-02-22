@@ -8,6 +8,19 @@ This directory is the machine source of truth for merge control.
 
 `risk-policy-gate` enforces tier-specific evidence, docs-drift, and stale SHA rules for the current PR head.
 
+## Control-Plane Coverage
+
+`merge-policy.json` treats deploy and infra paths as high-risk control plane, including:
+
+- `.github/workflows/**`
+- `.github/policy/**`
+- `scripts/ci/**`
+- `scripts/deploy/**`
+- `scripts/infra/**`
+- `infra/azure/**`
+- `infra/identity/**`
+- `deploy/**`
+
 ## Bootstrap Toggle
 
 `reviewPolicy.codexReviewEnabled` controls whether `codex-review` is part of required checks.

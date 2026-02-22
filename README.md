@@ -81,6 +81,30 @@ pnpm db:migrate:status
 - Branch protection setup: `docs/branch-protection.md`
 - Merge policy (machine): `.github/policy/merge-policy.json`
 - CI enforcement workflow: `.github/workflows/merge-contract.yml`
+- Deploy workflow: `.github/workflows/deploy.yml`
+- Infra apply workflow: `.github/workflows/infra-apply.yml`
+- Identity workflows: `.github/workflows/identity-plan.yml`, `.github/workflows/identity-apply.yml`
+- Deploy runbook: `docs/runbooks/deploy-aca.md`
+- Infra/identity runbook: `docs/runbooks/infra-identity-iac.md`
+- Migration safety runbook: `docs/runbooks/migration-safety.md`
+
+## Production Deploy Control Plane
+
+`main` is treated as release-candidate input for deployment. The deploy pipeline:
+
+1. Builds and publishes SHA-tagged images to GHCR.
+2. Deploys candidate revisions in Azure Container Apps at 0% traffic.
+3. Runs migrations via an ACA Job inside the private VNet.
+4. Verifies candidate via API smoke and browser evidence.
+5. Promotes traffic automatically after gates pass, with rollback on failure.
+
+Infrastructure runtime values are environment-driven:
+
+- Store concrete Azure/Entra/resource naming values in GitHub Environment `production` vars/secrets.
+- Keep tracked files organization-neutral (no committed tenant IDs, subscription IDs, concrete app names, private DNS zones, or server FQDNs).
+- CI leak guard (`scripts/ci/no-org-infra-leak.mjs`) blocks commits with org-specific infra literals.
+- Identity workflows use environment-scoped OIDC trust (`repo:<org>/<repo>:environment:production`) with remote tfstate backend.
+- Bootstrap trust anchor is manual once (`AZURE_IDENTITY_CLIENT_ID` + tfstate vars), then identity/infra/deploy flows are workflow-driven.
 
 ## Source of Truth
 

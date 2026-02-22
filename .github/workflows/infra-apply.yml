@@ -54,6 +54,8 @@ jobs:
           POSTGRES_VERSION: ${{ vars.POSTGRES_VERSION }}
           POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
           POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
+          GHCR_USERNAME: ${{ vars.GHCR_USERNAME }}
+          GHCR_PASSWORD: ${{ secrets.GHCR_PASSWORD }}
           ENTRA_ISSUER: ${{ vars.ENTRA_ISSUER }}
           ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
           ENTRA_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
@@ -80,6 +82,8 @@ jobs:
             POSTGRES_VERSION
             POSTGRES_SKU_NAME
             POSTGRES_STORAGE_MB
+            GHCR_USERNAME
+            GHCR_PASSWORD
             ENTRA_ISSUER
             ENTRA_AUDIENCE
             ENTRA_JWKS_URI
@@ -131,15 +135,6 @@ jobs:
               exit 1
             fi
           done
-
-      - name: Sanitize invalid GHCR registry references
-        env:
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
-          ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
-          ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
-          GHCR_SERVER: ghcr.io
-        run: node scripts/infra/sanitize-ghcr-registries.mjs
 
       - name: Resolve release-candidate images
         id: images
@@ -201,6 +196,8 @@ jobs:
             --parameters postgresStorageMb="${{ vars.POSTGRES_STORAGE_MB }}" \
             --parameters postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
             --parameters databaseUrl="${{ secrets.DATABASE_URL }}" \
+            --parameters ghcrUsername="${{ vars.GHCR_USERNAME }}" \
+            --parameters ghcrPassword="${{ secrets.GHCR_PASSWORD }}" \
             --parameters webBearerToken="${{ secrets.WEB_BEARER_TOKEN }}" \
             --parameters apiImage="${{ steps.images.outputs.api_image }}" \
             --parameters webImage="${{ steps.images.outputs.web_image }}" \
@@ -233,6 +230,8 @@ jobs:
             --parameters postgresStorageMb="${{ vars.POSTGRES_STORAGE_MB }}" \
             --parameters postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
             --parameters databaseUrl="${{ secrets.DATABASE_URL }}" \
+            --parameters ghcrUsername="${{ vars.GHCR_USERNAME }}" \
+            --parameters ghcrPassword="${{ secrets.GHCR_PASSWORD }}" \
             --parameters webBearerToken="${{ secrets.WEB_BEARER_TOKEN }}" \
             --parameters apiImage="${{ steps.images.outputs.api_image }}" \
             --parameters webImage="${{ steps.images.outputs.web_image }}" \

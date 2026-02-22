@@ -74,6 +74,7 @@ Required GitHub environment variables for infra apply:
 - `ACA_API_APP_NAME`
 - `ACA_WEB_APP_NAME`
 - `ACA_MIGRATE_JOB_NAME`
+- `GHCR_USERNAME`
 - `POSTGRES_SERVER_NAME`
 - `POSTGRES_DATABASE_NAME`
 - `POSTGRES_ADMIN_USERNAME`
@@ -87,6 +88,7 @@ Required GitHub environment variables for infra apply:
 Required GitHub environment secrets for infra apply:
 
 - `AZURE_DEPLOY_CLIENT_ID`
+- `GHCR_PASSWORD` (PAT with `read:packages`)
 - `POSTGRES_ADMIN_PASSWORD`
 - `DATABASE_URL`
 - `WEB_BEARER_TOKEN` (optional)
@@ -106,11 +108,9 @@ Provider registration preflight (enforced in `.github/workflows/infra-apply.yml`
 
 Registry policy:
 
-- For public GHCR images, do not set explicit ACA registry credentials in Bicep.
-- Container Apps pulls images directly from `ghcr.io` via the image reference.
+- For private GHCR images, configure ACA registry credentials in Bicep (`server`, `username`, `passwordSecretRef`).
+- Keep `GHCR_USERNAME` in GitHub environment variables and `GHCR_PASSWORD` (PAT) in GitHub environment secrets.
 - Infra apply resolves image tags from current commit SHA (`ghcr.io/<owner>/compass-*:HEAD_SHA`) and waits for image availability before template validation/apply.
-- Infra apply runs `scripts/infra/sanitize-ghcr-registries.mjs` before validation to remove stale `ghcr.io` registry entries that have an empty `passwordSecretRef`.
-  This keeps deployments deterministic when older ACA resources were created with invalid registry metadata.
 
 ## Entra Identity (Terraform)
 

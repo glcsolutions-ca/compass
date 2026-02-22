@@ -32,6 +32,9 @@ param webBearerToken string = ''
 param apiImage string = 'SET_IN_GITHUB_ENV'
 param webImage string = 'SET_IN_GITHUB_ENV'
 param migrateImage string = 'SET_IN_GITHUB_ENV'
+param ghcrUsername string = 'SET_IN_GITHUB_ENV'
+@secure()
+param ghcrPassword string
 
 param authMode string = 'entra'
 param requiredScope string = 'time.read'
@@ -86,6 +89,8 @@ module api './modules/containerapp-api.bicep' = {
     containerAppName: apiAppName
     managedEnvironmentId: containerEnvironment.outputs.environmentId
     image: apiImage
+    registryUsername: ghcrUsername
+    registryPassword: ghcrPassword
     databaseUrl: databaseUrl
     authMode: authMode
     requiredScope: requiredScope
@@ -102,6 +107,8 @@ module web './modules/containerapp-web.bicep' = {
     containerAppName: webAppName
     managedEnvironmentId: containerEnvironment.outputs.environmentId
     image: webImage
+    registryUsername: ghcrUsername
+    registryPassword: ghcrPassword
     apiBaseUrl: api.outputs.latestRevisionFqdn != ''
       ? 'https://${api.outputs.latestRevisionFqdn}'
       : 'https://${apiAppName}'
@@ -116,6 +123,8 @@ module migrateJob './modules/containerapp-job-migrate.bicep' = {
     jobName: migrationJobName
     managedEnvironmentId: containerEnvironment.outputs.environmentId
     image: migrateImage
+    registryUsername: ghcrUsername
+    registryPassword: ghcrPassword
     databaseUrl: databaseUrl
   }
 }

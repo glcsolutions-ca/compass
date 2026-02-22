@@ -30,6 +30,7 @@ All concrete deploy values must be stored in the GitHub `production` environment
 - `ACA_API_APP_NAME=<container-app-api-name>`
 - `ACA_WEB_APP_NAME=<container-app-web-name>`
 - `ACA_MIGRATE_JOB_NAME=<container-app-job-name>`
+- `GHCR_USERNAME=<github-username-or-org>`
 - `ENTRA_ISSUER=<issuer-url>`
 - `ENTRA_JWKS_URI=<jwks-url>`
 - `ENTRA_AUDIENCE=<api-audience>`
@@ -39,17 +40,17 @@ All concrete deploy values must be stored in the GitHub `production` environment
 
 - `AZURE_DEPLOY_CLIENT_ID`
 - `AZURE_SMOKE_CLIENT_ID`
+- `GHCR_PASSWORD` (PAT with `read:packages`)
 - `DATABASE_URL`
 - `POSTGRES_ADMIN_PASSWORD`
 - `WEB_BEARER_TOKEN` (optional)
 
 ## GHCR Pull Policy
 
-- Public GHCR images are deployed without explicit registry credentials in ACA Bicep resources.
-- Images are referenced directly as `ghcr.io/<org>/<image>:<sha>`.
+- GHCR images are private in production.
+- ACA resources declare registry credentials explicitly via `configuration.registries` (`server`, `username`, `passwordSecretRef`).
+- GHCR PAT is injected as a secret and referenced through `passwordSecretRef` in Bicep.
 - `infra-apply` resolves API/Web/migrate images from the current commit SHA and waits until those tags are available in GHCR.
-- Before candidate rollout, deploy workflow runs `scripts/infra/sanitize-ghcr-registries.mjs` to remove stale `ghcr.io` registry entries with empty `passwordSecretRef` from existing apps/jobs.
-  This prevents `ContainerAppRegistriesPasswordSecretRefNotFound` failures caused by legacy config drift.
 
 ## Gate Sequence
 

@@ -32,6 +32,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Guard stale main SHA (early)
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --prune --depth=1 origin main
+          current_main_head="$(git rev-parse origin/main)"
+          if [ "$HEAD_SHA" != "$current_main_head" ]; then
+            echo "Refusing stale deploy candidate $HEAD_SHA; current origin/main is $current_main_head" >&2
+            exit 1
+          fi
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -96,6 +106,9 @@ jobs:
             exit 1
           fi
 
+      - name: Login to ACR
+        run: az acr login --name "$ACR_NAME" --only-show-errors
+
       - name: Build and push API image to ACR
         id: api_image
         run: |
@@ -103,7 +116,6 @@ jobs:
 
           api_image="$ACR_REGISTRY/compass-api:$HEAD_SHA"
 
-          az acr login --name "$ACR_NAME" --only-show-errors
           docker build -f apps/api/Dockerfile -t "$api_image" .
           docker push "$api_image"
 
@@ -119,7 +131,6 @@ jobs:
 
           web_image="$ACR_REGISTRY/compass-web:$HEAD_SHA"
 
-          az acr login --name "$ACR_NAME" --only-show-errors
           docker build -f apps/web/Dockerfile -t "$web_image" .
           docker push "$web_image"
 
@@ -151,6 +162,16 @@ jobs:
           MIGRATION_EXECUTION_NAME: ${{ steps.migration_start.outputs.migration_execution_name }}
           MIGRATION_TIMEOUT_SECONDS: 900
         run: node scripts/deploy/wait-migration-job.mjs
+
+      - name: Guard stale main SHA (pre-rollout)
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --prune --depth=1 origin main
+          current_main_head="$(git rev-parse origin/main)"
+          if [ "$HEAD_SHA" != "$current_main_head" ]; then
+            echo "Refusing stale deploy candidate $HEAD_SHA; current origin/main is $current_main_head" >&2
+            exit 1
+          fi
 
       - name: Deploy API via ACA deploy action
         uses: azure/container-apps-deploy-action@v1
@@ -201,49 +222,28 @@ jobs:
             converged="false"
 
             for attempt in {1..12}; do
-              mode=$(az containerapp show \
+              app_json=$(az containerapp show \
                 --resource-group "$AZURE_RESOURCE_GROUP" \
                 --name "$app" \
-                --query 'properties.configuration.activeRevisionsMode' \
-                --output tsv)
+                --output json)
 
+              revisions_json=$(az containerapp revision list \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --name "$app" \
+                --output json)
+
+              mode=$(jq -r '.properties.configuration.activeRevisionsMode // ""' <<<"$app_json")
               normalized_mode=$(echo "$mode" | tr '[:upper:]' '[:lower:]')
 
-              min_replicas=$(az containerapp show \
-                --resource-group "$AZURE_RESOURCE_GROUP" \
-                --name "$app" \
-                --query 'properties.template.scale.minReplicas' \
-                --output tsv)
+              min_replicas=$(jq -r '.properties.template.scale.minReplicas // 0' <<<"$app_json")
+              max_replicas=$(jq -r '.properties.template.scale.maxReplicas // 0' <<<"$app_json")
+              cpu=$(jq -r '.properties.template.containers[0].resources.cpu // ""' <<<"$app_json")
+              memory=$(jq -r '.properties.template.containers[0].resources.memory // ""' <<<"$app_json")
+              max_inactive_revisions=$(jq -r '.properties.configuration.maxInactiveRevisions // ""' <<<"$app_json")
+              latest_revision=$(jq -r '.properties.latestRevisionName // ""' <<<"$app_json")
 
-              max_replicas=$(az containerapp show \
-                --resource-group "$AZURE_RESOURCE_GROUP" \
-                --name "$app" \
-                --query 'properties.template.scale.maxReplicas' \
-                --output tsv)
-
-              cpu=$(az containerapp show \
-                --resource-group "$AZURE_RESOURCE_GROUP" \
-                --name "$app" \
-                --query 'properties.template.containers[0].resources.cpu' \
-                --output tsv)
-
-              memory=$(az containerapp show \
-                --resource-group "$AZURE_RESOURCE_GROUP" \
-                --name "$app" \
-                --query 'properties.template.containers[0].resources.memory' \
-                --output tsv)
-
-              max_inactive_revisions=$(az containerapp show \
-                --resource-group "$AZURE_RESOURCE_GROUP" \
-                --name "$app" \
-                --query 'properties.configuration.maxInactiveRevisions' \
-                --output tsv)
-
-              active_count=$(az containerapp revision list \
-                --resource-group "$AZURE_RESOURCE_GROUP" \
-                --name "$app" \
-                --query '[?properties.active==`true`]|length(@)' \
-                --output tsv)
+              active_count=$(jq '[.[] | select(.properties.active == true)] | length' <<<"$revisions_json")
+              active_revision=$(jq -r '[.[] | select(.properties.active == true)][0].name // ""' <<<"$revisions_json")
 
               if [ "$normalized_mode" != "single" ]; then
                 echo "$app is not in single revision mode (actual: $mode)" >&2
@@ -280,17 +280,17 @@ jobs:
                 exit 1
               fi
 
-              if [ "${active_count:-0}" = "1" ]; then
+              if [ "${active_count:-0}" = "1" ] && [ -n "$latest_revision" ] && [ "$active_revision" = "$latest_revision" ]; then
                 converged="true"
                 break
               fi
 
-              echo "$app active revision count is ${active_count:-0}; waiting for single-revision convergence (attempt $attempt/12)"
+              echo "$app active revision count=${active_count:-0}, latestRevision=$latest_revision, activeRevision=$active_revision; waiting for single-revision convergence (attempt $attempt/12)"
               sleep 10
             done
 
             if [ "$converged" != "true" ]; then
-              echo "$app did not converge to exactly one active revision within 120 seconds" >&2
+              echo "$app did not converge to latest revision as single active revision within 120 seconds" >&2
               exit 1
             fi
           done

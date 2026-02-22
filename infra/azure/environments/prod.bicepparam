@@ -31,6 +31,8 @@ param webBearerToken = ''
 param apiImage = 'SET_IN_GITHUB_ENV'
 param webImage = 'SET_IN_GITHUB_ENV'
 param migrateImage = 'SET_IN_GITHUB_ENV'
+param ghcrUsername = 'SET_IN_GITHUB_ENV'
+param ghcrPassword = 'SET_IN_GITHUB_ENV'
 
 param authMode = 'entra'
 param requiredScope = 'time.read'

@@ -137,6 +137,18 @@ jobs:
               --query '[?weight==`100`].revisionName | [0]' \
               --output tsv)"
 
+            if [ -z "$traffic_revision" ]; then
+              latest_weight_count="$(az containerapp ingress traffic show \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --name "$app_name" \
+                --query '[?weight==`100` && latestRevision==`true`] | length(@)' \
+                --output tsv)"
+
+              if [ "$latest_weight_count" = "1" ]; then
+                traffic_revision="$latest_revision"
+              fi
+            fi
+
             if [ -z "$latest_revision" ] || [ -z "$traffic_revision" ]; then
               echo "Failed to resolve revision state for $app_name" >&2
               exit 1

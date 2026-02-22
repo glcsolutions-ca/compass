@@ -2,11 +2,18 @@ import { SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
 import { ConsolidatedEmployeeViewSchema } from "@compass/contracts";
 import { buildApiApp } from "./app.js";
+import { InMemoryConsolidatedViewRepository } from "./features/consolidated-view/repository.js";
 
 const authConfig = {
   authMode: "development" as const,
   devJwtSecret: "dev-secret-change-me",
   requiredScope: "time.read",
+  databaseUrl: undefined,
+  dbPoolMax: 10,
+  dbIdleTimeoutMs: 10_000,
+  dbConnectionTimeoutMs: 2_000,
+  dbSslMode: "disable" as const,
+  dbSslRejectUnauthorized: true,
   host: "127.0.0.1",
   port: 3001
 };
@@ -31,6 +38,21 @@ describe("API", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().status).toBe("ok");
+
+    await app.close();
+  });
+
+  it("registers postgres plugin when databaseUrl is provided", async () => {
+    const app = buildApiApp({
+      config: {
+        ...authConfig,
+        databaseUrl: "postgres://compass:compass@127.0.0.1:5432/compass"
+      },
+      repository: new InMemoryConsolidatedViewRepository()
+    });
+
+    await app.ready();
+    expect(app.hasDecorator("pg")).toBe(true);
 
     await app.close();
   });

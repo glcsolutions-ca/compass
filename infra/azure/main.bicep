@@ -28,8 +28,6 @@ param postgresVersion string = '16'
 param postgresStorageMb int = 32768
 
 @secure()
-param databaseUrl string
-@secure()
 param webBearerToken string = ''
 
 param apiImage string = 'SET_IN_GITHUB_ENV'
@@ -95,6 +93,11 @@ module postgres './modules/postgres-flex.bicep' = {
     storageSizeMb: postgresStorageMb
   }
 }
+
+var encodedDbUser = uriComponent(postgresAdminUsername)
+var encodedDbPassword = uriComponent(postgresAdminPassword)
+var encodedDbName = uriComponent(postgresDatabaseName)
+var databaseUrl = 'postgres://${encodedDbUser}:${encodedDbPassword}@${postgres.outputs.fqdn}:5432/${encodedDbName}?sslmode=require'
 
 resource acrPullIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: acrPullIdentityName

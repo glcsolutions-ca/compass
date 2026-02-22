@@ -80,7 +80,6 @@ Required GitHub environment variables for infra apply:
 - `POSTGRES_VERSION`
 - `POSTGRES_SKU_NAME`
 - `POSTGRES_STORAGE_MB`
-- `GHCR_SERVER`
 - `ACA_API_IMAGE`
 - `ACA_WEB_IMAGE`
 - `ACA_MIGRATE_IMAGE`
@@ -110,8 +109,8 @@ Provider registration preflight (enforced in `.github/workflows/infra-apply.yml`
 
 Registry policy:
 
-- Default path is server-only GHCR config (`ghcr.io`) for public images.
-- If ACA image pull fails with GHCR auth/pull errors, restore PAT-based registry credentials path.
+- For public GHCR images, do not set explicit ACA registry credentials in Bicep.
+- Container Apps pulls images directly from `ghcr.io` via the image reference.
 
 ## Entra Identity (Terraform)
 

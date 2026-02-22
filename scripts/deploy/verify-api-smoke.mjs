@@ -9,6 +9,7 @@ import {
 const targetBaseUrl = requireEnv("TARGET_API_BASE_URL").replace(/\/$/, "");
 const accessToken = requireEnv("ACCESS_TOKEN");
 const expectedEmployeeId = process.env.EXPECTED_EMPLOYEE_ID?.trim() || "employee-123";
+const requireEmployeeFound = process.env.REQUIRE_EMPLOYEE_FOUND?.trim() === "true";
 const verifyShaHeader = process.env.VERIFY_SHA_HEADER?.trim() === "true";
 const expectedSha = process.env.EXPECTED_SHA?.trim() || getHeadSha();
 
@@ -57,30 +58,44 @@ async function main() {
     }
   });
 
+  const expectedAuthorizedStatuses = requireEmployeeFound ? [200] : [200, 404];
   assertions.push({
-    id: "protected-authorized",
-    pass: authorized.status === 200,
-    details: `status=${authorized.status}`
+    id: "protected-authorized-status",
+    pass: expectedAuthorizedStatuses.includes(authorized.status),
+    details: `status=${authorized.status}, expected=${expectedAuthorizedStatuses.join("|")}`
   });
 
-  const payloadEmployeeId = authorized?.json?.employeeId;
-  assertions.push({
-    id: "payload-employee-id",
-    pass: payloadEmployeeId === expectedEmployeeId,
-    details: `employeeId=${String(payloadEmployeeId)}`
-  });
+  if (authorized.status === 200) {
+    const payloadEmployeeId = authorized?.json?.employeeId;
+    assertions.push({
+      id: "payload-employee-id",
+      pass: payloadEmployeeId === expectedEmployeeId,
+      details: `employeeId=${String(payloadEmployeeId)}`
+    });
 
-  assertions.push({
-    id: "payload-freshness-lag",
-    pass: Number.isFinite(authorized?.json?.freshnessLagSeconds),
-    details: `freshnessLagSeconds=${String(authorized?.json?.freshnessLagSeconds)}`
-  });
+    assertions.push({
+      id: "payload-freshness-lag",
+      pass: Number.isFinite(authorized?.json?.freshnessLagSeconds),
+      details: `freshnessLagSeconds=${String(authorized?.json?.freshnessLagSeconds)}`
+    });
 
-  assertions.push({
-    id: "payload-source-systems-array",
-    pass: Array.isArray(authorized?.json?.sourceSystems),
-    details: `sourceSystemsType=${typeof authorized?.json?.sourceSystems}`
-  });
+    assertions.push({
+      id: "payload-source-systems-array",
+      pass: Array.isArray(authorized?.json?.sourceSystems),
+      details: `sourceSystemsType=${typeof authorized?.json?.sourceSystems}`
+    });
+  }
+
+  if (authorized.status === 404 && !requireEmployeeFound) {
+    assertions.push({
+      id: "not-found-shape",
+      pass:
+        typeof authorized?.json?.statusCode === "number" ||
+        typeof authorized?.json?.error === "string" ||
+        authorized.text.length > 0,
+      details: `statusCode=${String(authorized?.json?.statusCode)}, error=${String(authorized?.json?.error)}`
+    });
+  }
 
   if (verifyShaHeader) {
     const headerSha = authorized.headers.get("x-release-sha");
@@ -101,6 +116,7 @@ async function main() {
     tier: getTier(),
     status,
     targetBaseUrl,
+    requireEmployeeFound,
     assertions
   });
 

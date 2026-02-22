@@ -36,6 +36,7 @@ All concrete deploy values must be stored in the GitHub `production` environment
 - `ENTRA_JWKS_URI=<jwks-url>`
 - `ENTRA_AUDIENCE=<api-audience>`
 - `SMOKE_EXPECTED_ACCOUNT_IDENTITY=<employee-id>` (optional; default `employee-123`)
+- `SMOKE_REQUIRE_EMPLOYEE_FOUND=<true|false>` (optional; default `false`)
 
 ## Required GitHub Environment Secrets (`production`)
 
@@ -72,3 +73,10 @@ Artifacts are written under `.artifacts/deploy/<sha>/`:
 - `result.json`
 
 Browser evidence remains under `.artifacts/browser-evidence/<sha>/manifest.json`.
+
+`verify-api-smoke.mjs` behavior:
+
+- Always validates `/health` and auth protection behavior.
+- Uses `SMOKE_EXPECTED_ACCOUNT_IDENTITY` for authenticated request path.
+- If `SMOKE_REQUIRE_EMPLOYEE_FOUND=true`, requires `200` with payload assertions.
+- If unset/`false`, accepts `200` (with payload checks) or `404` (data-independent smoke).

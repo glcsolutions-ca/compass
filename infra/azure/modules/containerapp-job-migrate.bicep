@@ -2,16 +2,16 @@ param location string
 param jobName string
 param managedEnvironmentId string
 param image string
-param registryServer string = 'ghcr.io'
-param registryUsername string
-@secure()
-param registryPassword string
+param registryServer string
 @secure()
 param databaseUrl string
 
 resource migrateJob 'Microsoft.App/jobs@2023-05-01' = {
   name: jobName
   location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     environmentId: managedEnvironmentId
     configuration: {
@@ -25,15 +25,10 @@ resource migrateJob 'Microsoft.App/jobs@2023-05-01' = {
       registries: [
         {
           server: registryServer
-          username: registryUsername
-          passwordSecretRef: 'ghcr-password'
+          identity: 'system'
         }
       ]
       secrets: [
-        {
-          name: 'ghcr-password'
-          value: registryPassword
-        }
         {
           name: 'database-url'
           value: databaseUrl
@@ -76,3 +71,4 @@ resource migrateJob 'Microsoft.App/jobs@2023-05-01' = {
 
 output jobNameOutput string = migrateJob.name
 output jobId string = migrateJob.id
+output principalId string = migrateJob.identity.principalId

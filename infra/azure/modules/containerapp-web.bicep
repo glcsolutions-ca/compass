@@ -2,10 +2,7 @@ param location string
 param containerAppName string
 param managedEnvironmentId string
 param image string
-param registryServer string = 'ghcr.io'
-param registryUsername string
-@secure()
-param registryPassword string
+param registryServer string
 param apiBaseUrl string
 @secure()
 param bearerToken string = ''
@@ -13,6 +10,9 @@ param bearerToken string = ''
 resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   name: containerAppName
   location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     managedEnvironmentId: managedEnvironmentId
     configuration: {
@@ -26,15 +26,10 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       registries: [
         {
           server: registryServer
-          username: registryUsername
-          passwordSecretRef: 'ghcr-password'
+          identity: 'system'
         }
       ]
       secrets: [
-        {
-          name: 'ghcr-password'
-          value: registryPassword
-        }
         {
           name: 'web-bearer-token'
           value: bearerToken
@@ -81,3 +76,4 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
 output appName string = containerApp.name
 output latestRevisionName string = containerApp.properties.latestRevisionName
 output latestRevisionFqdn string = containerApp.properties.latestRevisionFqdn
+output principalId string = containerApp.identity.principalId

@@ -42,6 +42,8 @@ const SENSITIVE_ASSIGNMENT_KEYS = [
   "ACA_API_APP_NAME",
   "ACA_WEB_APP_NAME",
   "ACA_MIGRATE_JOB_NAME",
+  "ACR_NAME",
+  "ACR_LOGIN_SERVER",
   "POSTGRES_SERVER_NAME",
   "POSTGRES_DATABASE_NAME",
   "POSTGRES_ADMIN_USERNAME",
@@ -69,12 +71,10 @@ const SENSITIVE_BICEP_PARAMS = new Set([
   "apiAppName",
   "webAppName",
   "migrationJobName",
+  "acrName",
   "postgresServerName",
   "postgresDatabaseName",
   "postgresAdminUsername",
-  "ghcrServer",
-  "ghcrUsername",
-  "ghcrPassword",
   "databaseUrl",
   "postgresAdminPassword",
   "apiImage",
@@ -107,6 +107,11 @@ const FORBIDDEN_LINE_PATTERNS = [
     id: "private-dns-zone-name",
     regex: /\b[a-z0-9-]+\.postgres\.database\.azure\.com\b/i,
     reason: "Concrete private DNS zone name must not be committed"
+  },
+  {
+    id: "acr-login-server-name",
+    regex: /\b[a-z0-9]+\.azurecr\.io\b/i,
+    reason: "Concrete ACR login server must not be committed"
   }
 ];
 

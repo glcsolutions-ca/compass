@@ -9,7 +9,7 @@
   - `harness-smoke` (conditional)
   - `risk-policy-gate` (final required gate; check-run aggregation + browser manifest assertions)
 - `dependabot-auto-merge.yml`: metadata-only safe-lane auto-merge for Dependabot PRs (patch/minor only, no PR checkout)
-- `deploy.yml`: push-to-main release-candidate deployment gates (GitHub Environment `production`)
+- `deploy.yml`: push-to-main production deploy using ACR + Azure Container Apps deploy action (GitHub Environment `production`)
 - `infra-apply.yml`: Azure Bicep infra apply workflow for `infra/azure/**` (GitHub Environment `production`)
 - `identity-plan.yml`: Terraform identity plan workflow for `infra/identity/**` (GitHub Environment `production`)
 - `identity-apply.yml`: manual Terraform identity apply workflow (GitHub Environment `production`)

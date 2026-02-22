@@ -42,6 +42,7 @@ const SENSITIVE_ASSIGNMENT_KEYS = [
   "ACA_API_APP_NAME",
   "ACA_WEB_APP_NAME",
   "ACA_MIGRATE_JOB_NAME",
+  "ACR_PULL_IDENTITY_NAME",
   "ACR_NAME",
   "ACR_LOGIN_SERVER",
   "POSTGRES_SERVER_NAME",
@@ -71,6 +72,7 @@ const SENSITIVE_BICEP_PARAMS = new Set([
   "apiAppName",
   "webAppName",
   "migrationJobName",
+  "acrPullIdentityName",
   "acrName",
   "postgresServerName",
   "postgresDatabaseName",
@@ -144,7 +146,7 @@ function isPlaceholderValue(rawValue) {
   return (
     value === "SET_IN_GITHUB_ENV" ||
     value === "REPLACE_IN_WORKFLOW" ||
-    /^\$\{\{\s*(vars|secrets)\.[A-Za-z0-9_]+\s*\}\}$/.test(value) ||
+    /^\$\{\{\s*(vars|secrets|env)\.[A-Za-z0-9_]+\s*\}\}$/.test(value) ||
     /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/.test(value) ||
     /^\$[A-Za-z_][A-Za-z0-9_]*$/.test(value) ||
     /^<[^>]+>$/.test(value)
@@ -288,7 +290,16 @@ async function readTextIfSafe(filePath) {
     return null;
   }
 
-  const buffer = await readFile(filePath);
+  let buffer;
+  try {
+    buffer = await readFile(filePath);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+
   if (buffer.includes(0)) {
     return null;
   }

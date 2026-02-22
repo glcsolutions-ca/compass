@@ -5,6 +5,7 @@ RUN corepack enable
 
 WORKDIR /workspace
 COPY . .
+RUN mkdir -p /workspace/apps/web/public
 
 ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:3001
 ARG NEXT_PUBLIC_BEARER_TOKEN=

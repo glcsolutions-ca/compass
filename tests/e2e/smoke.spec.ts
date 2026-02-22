@@ -42,6 +42,7 @@ test("compass smoke flow", async ({ page }) => {
   const baseUrl = process.env.WEB_BASE_URL ?? "http://127.0.0.1:3000";
   const expectedEntrypoint = process.env.EXPECTED_ENTRYPOINT ?? "/";
   const expectedIdentity = process.env.EXPECTED_ACCOUNT_IDENTITY ?? "employee-123";
+  const browserSmokeBearerToken = process.env.BROWSER_SMOKE_BEARER_TOKEN?.trim() ?? "";
   const flowIds = parseRequiredFlowIds();
 
   const outputDir = path.join(".artifacts", "browser-evidence", headSha);
@@ -70,6 +71,16 @@ test("compass smoke flow", async ({ page }) => {
   }>;
 
   let hasFailedFlow = false;
+
+  if (browserSmokeBearerToken.length > 0) {
+    await page.route("**/api/v1/**", async (route) => {
+      const headers = {
+        ...route.request().headers(),
+        authorization: `Bearer ${browserSmokeBearerToken}`
+      };
+      await route.continue({ headers });
+    });
+  }
 
   for (const flowId of flowIds) {
     const screenshotPath = path.join(outputDir, `${flowId}.png`);

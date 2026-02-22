@@ -90,13 +90,11 @@ pnpm db:migrate:status
 
 ## Production Deploy Control Plane
 
-`main` is treated as release-candidate input for deployment. The deploy pipeline:
+`main` is deployed through a single ACR-first Azure Container Apps pipeline. The deploy workflow:
 
-1. Builds and publishes SHA-tagged images to GHCR.
-2. Deploys candidate revisions in Azure Container Apps at 0% traffic.
-3. Runs migrations via an ACA Job inside the private VNet.
-4. Verifies candidate via API smoke and browser evidence.
-5. Promotes traffic automatically after gates pass, with rollback on failure.
+1. Builds and deploys SHA-tagged API and Web images to ACR via `azure/container-apps-deploy-action`.
+2. Builds and pushes the migration image to ACR, then runs the ACA migration job inside the private VNet.
+3. Verifies production via API smoke and browser evidence.
 
 Infrastructure runtime values are environment-driven:
 

@@ -14,7 +14,7 @@ Use an expand/migrate/contract sequence.
 ## Separate Jobs
 
 - Backfills and data reshaping run as separate jobs
-- Large backfills should not block candidate promotion unless explicitly required
+- Large backfills should not block deployment unless explicitly required
 
 ## Deferred Contract Steps
 
@@ -31,5 +31,5 @@ Run contract-only changes after full traffic cutover and stability period.
 
 ## Recovery
 
-- First response: rollback application traffic to previous revisions
+- First response: redeploy the previous known-good image tag
 - Database disaster recovery: use Azure PostgreSQL backup/PITR procedures

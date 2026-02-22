@@ -3,6 +3,7 @@ param containerAppName string
 param managedEnvironmentId string
 param image string
 param registryServer string
+param registryIdentityResourceId string
 param apiBaseUrl string
 @secure()
 param bearerToken string = ''
@@ -11,7 +12,10 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   name: containerAppName
   location: location
   identity: {
-    type: 'SystemAssigned'
+    type: 'SystemAssigned,UserAssigned'
+    userAssignedIdentities: {
+      '${registryIdentityResourceId}': {}
+    }
   }
   properties: {
     managedEnvironmentId: managedEnvironmentId
@@ -26,7 +30,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       registries: [
         {
           server: registryServer
-          identity: 'system'
+          identity: registryIdentityResourceId
         }
       ]
       secrets: [

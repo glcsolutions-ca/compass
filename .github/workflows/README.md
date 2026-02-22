@@ -23,6 +23,8 @@
   - asserts post-deploy drift policy (`single` revision mode, `minReplicas=0`, `maxReplicas=1`, `cpu=0.25`, `memory=0.5Gi`, `maxInactiveRevisions<=2`, and active revision == latest revision)
 - `infra-apply.yml`: Azure Bicep infra apply workflow for `infra/azure/**` (GitHub Environment `production`)
   - provider registration preflight
+  - validates private Postgres DNS zone suffix (`*.postgres.database.azure.com`)
+  - validates Burstable Postgres SKU pairing (`POSTGRES_SKU_NAME` starts with `Standard_B`)
   - explicit ACR `authentication-as-arm` convergence check/enable
   - single shared runtime parameter payload for validate/create
   - image resolution precedence: `image_tag` input > currently deployed image > current SHA

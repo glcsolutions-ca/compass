@@ -106,6 +106,11 @@ Provider registration preflight (enforced in `.github/workflows/infra-apply.yml`
 - `Microsoft.DBforPostgreSQL`
 - `Microsoft.OperationalInsights`
 
+Infra preflight also fails closed on:
+
+- `AZURE_PRIVATE_DNS_ZONE_NAME` must end with `.postgres.database.azure.com`
+- if `POSTGRES_SKU_TIER=Burstable`, then `POSTGRES_SKU_NAME` must start with `Standard_B`
+
 Registry policy:
 
 - ACR is the only production container registry for ACA.

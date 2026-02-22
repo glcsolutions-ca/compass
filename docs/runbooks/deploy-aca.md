@@ -30,7 +30,7 @@ All concrete deploy values must be stored in the GitHub `production` environment
 - `ACA_API_APP_NAME=<container-app-api-name>`
 - `ACA_WEB_APP_NAME=<container-app-web-name>`
 - `ACA_MIGRATE_JOB_NAME=<container-app-job-name>`
-- `GHCR_USERNAME=<github-username-or-org>`
+- `GHCR_USERNAME=<github-user-login-that-owns-the-PAT>`
 - `ENTRA_ISSUER=<issuer-url>`
 - `ENTRA_JWKS_URI=<jwks-url>`
 - `ENTRA_AUDIENCE=<api-audience>`
@@ -40,7 +40,7 @@ All concrete deploy values must be stored in the GitHub `production` environment
 
 - `AZURE_DEPLOY_CLIENT_ID`
 - `AZURE_SMOKE_CLIENT_ID`
-- `GHCR_PASSWORD` (PAT with `read:packages`)
+- `GHCR_PASSWORD` (PAT with `read:packages` for the same GitHub user in `GHCR_USERNAME`)
 - `DATABASE_URL`
 - `POSTGRES_ADMIN_PASSWORD`
 - `WEB_BEARER_TOKEN` (optional)
@@ -49,6 +49,9 @@ All concrete deploy values must be stored in the GitHub `production` environment
 
 - GHCR images are private in production.
 - ACA resources declare registry credentials explicitly via `configuration.registries` (`server`, `username`, `passwordSecretRef`).
+- `GHCR_USERNAME` and `GHCR_PASSWORD` must be for the same GitHub account.
+- Use a dedicated machine-user PAT for production pulls; do not use a personal developer token.
+- If your org enforces SAML SSO, authorize the PAT for the org before rollout.
 - GHCR PAT is injected as a secret and referenced through `passwordSecretRef` in Bicep.
 - `infra-apply` resolves API/Web/migrate images from the current commit SHA and waits until those tags are available in GHCR.
 

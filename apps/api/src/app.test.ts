@@ -15,6 +15,7 @@ const authConfig = {
   dbConnectionTimeoutMs: 2_000,
   dbSslMode: "disable" as const,
   dbSslRejectUnauthorized: true,
+  logLevel: "silent" as const,
   host: "127.0.0.1",
   port: 3001
 };

@@ -7,6 +7,9 @@ const ApiConfigSchema = z
     nodeEnv: z.enum(["development", "test", "production"]).default("development"),
     port: z.number().int().positive().default(3001),
     host: z.string().min(1).default("0.0.0.0"),
+    logLevel: z
+      .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
+      .default("info"),
     databaseUrl: z.string().min(1).optional(),
     dbPoolMax: z.number().int().positive().default(10),
     dbIdleTimeoutMs: z.number().int().nonnegative().default(10_000),
@@ -59,6 +62,7 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     nodeEnv: env.NODE_ENV,
     port: env.API_PORT ? Number(env.API_PORT) : undefined,
     host: env.API_HOST,
+    logLevel: env.LOG_LEVEL,
     databaseUrl: env.DATABASE_URL,
     dbPoolMax: env.DB_POOL_MAX ? Number(env.DB_POOL_MAX) : undefined,
     dbIdleTimeoutMs: env.DB_IDLE_TIMEOUT_MS ? Number(env.DB_IDLE_TIMEOUT_MS) : undefined,

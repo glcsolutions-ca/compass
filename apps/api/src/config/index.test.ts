@@ -9,6 +9,7 @@ describe("loadApiConfig", () => {
     expect(config.databaseUrl).toBeUndefined();
     expect(config.port).toBe(3001);
     expect(config.host).toBe("0.0.0.0");
+    expect(config.logLevel).toBe("info");
     expect(config.dbPoolMax).toBe(10);
     expect(config.dbIdleTimeoutMs).toBe(10_000);
     expect(config.dbConnectionTimeoutMs).toBe(2_000);
@@ -24,7 +25,8 @@ describe("loadApiConfig", () => {
       DB_IDLE_TIMEOUT_MS: "15000",
       DB_CONNECTION_TIMEOUT_MS: "4000",
       DB_SSL_MODE: "require",
-      DB_SSL_REJECT_UNAUTHORIZED: "false"
+      DB_SSL_REJECT_UNAUTHORIZED: "false",
+      LOG_LEVEL: "warn"
     });
 
     expect(config.databaseUrl).toBe("postgres://compass:compass@localhost:5432/compass");
@@ -33,6 +35,7 @@ describe("loadApiConfig", () => {
     expect(config.dbConnectionTimeoutMs).toBe(4_000);
     expect(config.dbSslMode).toBe("require");
     expect(config.dbSslRejectUnauthorized).toBe(false);
+    expect(config.logLevel).toBe("warn");
   });
 
   it("rejects invalid DB_SSL_MODE", () => {

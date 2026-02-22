@@ -21,6 +21,30 @@ function getJwks(jwksUri: string) {
   return jwks;
 }
 
+export function buildAcceptedIssuers(configuredIssuer: string): string[] {
+  const issuer = configuredIssuer.trim();
+  if (!issuer) {
+    return [];
+  }
+
+  const normalized = issuer.replace(/\/+$/, "");
+  const issuers = new Set<string>([issuer]);
+
+  const v2IssuerMatch = normalized.match(
+    /^https:\/\/login\.microsoftonline\.com\/([^/]+)\/v2\.0$/i
+  );
+  if (v2IssuerMatch?.[1]) {
+    issuers.add(`https://sts.windows.net/${v2IssuerMatch[1]}/`);
+  }
+
+  const stsIssuerMatch = normalized.match(/^https:\/\/sts\.windows\.net\/([^/]+)$/i);
+  if (stsIssuerMatch?.[1]) {
+    issuers.add(`https://login.microsoftonline.com/${stsIssuerMatch[1]}/v2.0`);
+  }
+
+  return Array.from(issuers);
+}
+
 function parseScopes(payload: JWTPayload): string[] {
   if (typeof payload.scp === "string") {
     return payload.scp
@@ -86,8 +110,9 @@ export async function verifyAccessToken(
 ): Promise<Principal | null> {
   try {
     if (config.authMode === "entra") {
+      const acceptedIssuers = buildAcceptedIssuers(config.entraIssuer!);
       const verification = await jwtVerify(token, getJwks(config.entraJwksUri!), {
-        issuer: config.entraIssuer,
+        issuer: acceptedIssuers.length > 0 ? acceptedIssuers : config.entraIssuer,
         audience: config.entraAudience
       });
 

@@ -23,9 +23,9 @@ Branch protection requires only:
 ## Deterministic tiers
 
 - `t0`: low risk
-- `t1`: core backend/shared logic
+- `t1`: core backend/shared logic and dependency manifests/lockfiles (`package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`)
 - `t2`: UI/user flow changes
-- `t3`: high risk (`auth`, control plane, infra/deploy, migrations)
+- `t3`: high risk (`auth`, control-plane config like workflows/policy/dependabot, infra/deploy, migrations)
 
 If multiple tiers match, highest tier wins.
 

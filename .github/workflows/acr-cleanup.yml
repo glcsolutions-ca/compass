@@ -1,0 +1,122 @@
+name: ACR Cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      keep_tags:
+        description: Number of newest tags to keep per repository
+        required: false
+        default: "30"
+  schedule:
+    - cron: "0 3 * * 0"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  cleanup:
+    name: cleanup-acr-tags
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HEAD_SHA: ${{ github.sha }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      KEEP_TAGS_OVERRIDE: ${{ inputs.keep_tags }}
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Cleanup old ACR tags
+        run: |
+          set -euo pipefail
+
+          keep_tags="${KEEP_TAGS_OVERRIDE:-30}"
+          if ! [[ "$keep_tags" =~ ^[0-9]+$ ]] || [ "$keep_tags" -lt 1 ]; then
+            echo "keep_tags must be a positive integer (actual: $keep_tags)" >&2
+            exit 1
+          fi
+
+          repos=("compass-api" "compass-web")
+          cleanup_entries='[]'
+
+          for repo in "${repos[@]}"; do
+            tags_tsv="$(az acr repository show-tags \
+              --name "$ACR_NAME" \
+              --repository "$repo" \
+              --orderby time_desc \
+              --output tsv 2>/dev/null || true)"
+
+            if [ -z "$tags_tsv" ]; then
+              repo_entry="$(jq -n \
+                --arg repository "$repo" \
+                '{repository: $repository, totalTags: 0, keptCount: 0, deletedCount: 0, deletedTags: []}')"
+              cleanup_entries="$(jq -c --argjson entry "$repo_entry" '. + [$entry]' <<<"$cleanup_entries")"
+              continue
+            fi
+
+            mapfile -t tags <<<"$tags_tsv"
+            total_tags="${#tags[@]}"
+            kept_count="$keep_tags"
+            if [ "$total_tags" -lt "$keep_tags" ]; then
+              kept_count="$total_tags"
+            fi
+
+            deleted_tags=()
+            if [ "$total_tags" -gt "$keep_tags" ]; then
+              for tag in "${tags[@]:$keep_tags}"; do
+                az acr repository delete \
+                  --name "$ACR_NAME" \
+                  --image "$repo:$tag" \
+                  --yes \
+                  --only-show-errors \
+                  --output none
+                deleted_tags+=("$tag")
+              done
+            fi
+
+            if [ "${#deleted_tags[@]}" -gt 0 ]; then
+              deleted_tags_json="$(printf '%s\n' "${deleted_tags[@]}" | jq -R . | jq -s .)"
+            else
+              deleted_tags_json='[]'
+            fi
+
+            repo_entry="$(jq -n \
+              --arg repository "$repo" \
+              --argjson totalTags "$total_tags" \
+              --argjson keptCount "$kept_count" \
+              --argjson deletedCount "${#deleted_tags[@]}" \
+              --argjson deletedTags "$deleted_tags_json" \
+              '{repository: $repository, totalTags: $totalTags, keptCount: $keptCount, deletedCount: $deletedCount, deletedTags: $deletedTags}')"
+            cleanup_entries="$(jq -c --argjson entry "$repo_entry" '. + [$entry]' <<<"$cleanup_entries")"
+          done
+
+          mkdir -p ".artifacts/infra/$HEAD_SHA"
+          jq -n \
+            --arg schemaVersion "1" \
+            --arg generatedAt "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+            --arg headSha "$HEAD_SHA" \
+            --arg acrName "$ACR_NAME" \
+            --argjson keepTags "$keep_tags" \
+            --argjson repositories "$cleanup_entries" \
+            '{
+              schemaVersion: $schemaVersion,
+              generatedAt: $generatedAt,
+              headSha: $headSha,
+              acrName: $acrName,
+              keepTags: $keepTags,
+              repositories: $repositories
+            }' > ".artifacts/infra/$HEAD_SHA/acr-cleanup.json"
+
+      - name: Upload ACR cleanup artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: acr-cleanup-${{ env.HEAD_SHA }}
+          path: .artifacts/infra/${{ env.HEAD_SHA }}/acr-cleanup.json
+          if-no-files-found: warn

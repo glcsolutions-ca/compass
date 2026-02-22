@@ -64,6 +64,7 @@ Branch protection should require only `risk-policy-gate`.
 ## Deploy + IaC Checklist
 
 - [ ] `infra/identity/**` changes include updated `identity-plan` evidence and docs when behavior changes.
+- [ ] `production` environment includes `AZURE_IDENTITY_CLIENT_ID`, `IDENTITY_OWNER_OBJECT_IDS_JSON`, and `TFSTATE_*` vars before running identity workflows.
 - [ ] `infra/azure/**` changes include `infra-apply` validation and docs updates.
 - [ ] CAF naming (`type-workload-env-region-instance`) is preserved for Azure resource names.
 - [ ] Concrete production values are sourced from GitHub Environment `production` vars/secrets, not tracked files.

@@ -24,8 +24,6 @@ param postgresSkuName = 'Standard_D2s_v3'
 param postgresStorageMb = 32768
 
 param ghcrServer = 'SET_IN_GITHUB_ENV'
-param ghcrUsername = 'SET_IN_GITHUB_ENV'
-param ghcrPassword = 'SET_IN_GITHUB_ENV'
 param databaseUrl = 'SET_IN_GITHUB_ENV'
 param postgresAdminPassword = 'SET_IN_GITHUB_ENV'
 

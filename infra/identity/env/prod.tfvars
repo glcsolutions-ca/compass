@@ -1,7 +1,6 @@
 environment_name    = "prod"
 github_organization = "SET_IN_GITHUB_ENV"
 github_repository   = "SET_IN_GITHUB_ENV"
-github_main_branch_ref = "refs/heads/main"
 
 api_identifier_uri = "SET_IN_GITHUB_ENV"
 required_scope_name = "time.read"

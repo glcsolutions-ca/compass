@@ -39,11 +39,14 @@ All concrete deploy values must be stored in the GitHub `production` environment
 
 - `AZURE_DEPLOY_CLIENT_ID`
 - `AZURE_SMOKE_CLIENT_ID`
-- `GHCR_USERNAME`
-- `GHCR_PASSWORD`
 - `DATABASE_URL`
 - `POSTGRES_ADMIN_PASSWORD`
 - `WEB_BEARER_TOKEN` (optional)
+
+## GHCR Pull Policy
+
+- Default: server-only GHCR registry config for public images.
+- Fallback: if ACA revisions fail with GHCR auth/pull errors, restore PAT-based GHCR credentials path and redeploy.
 
 ## Gate Sequence
 

@@ -3,9 +3,6 @@ param jobName string
 param managedEnvironmentId string
 param image string
 param ghcrServer string
-param ghcrUsername string
-@secure()
-param ghcrPassword string
 @secure()
 param databaseUrl string
 
@@ -25,15 +22,9 @@ resource migrateJob 'Microsoft.App/jobs@2023-05-01' = {
       registries: [
         {
           server: ghcrServer
-          username: ghcrUsername
-          passwordSecretRef: 'ghcr-password'
         }
       ]
       secrets: [
-        {
-          name: 'ghcr-password'
-          value: ghcrPassword
-        }
         {
           name: 'database-url'
           value: databaseUrl

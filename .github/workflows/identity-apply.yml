@@ -15,6 +15,20 @@ jobs:
     timeout-minutes: 30
     env:
       HEAD_SHA: ${{ github.sha }}
+      ARM_USE_OIDC: "true"
+      ARM_USE_AZUREAD: "true"
+      ARM_CLIENT_ID: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+      TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+      TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
+      TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
+      GH_ORGANIZATION: ${{ vars.GH_ORGANIZATION }}
+      GH_REPOSITORY_NAME: ${{ vars.GH_REPOSITORY_NAME }}
+      ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
+      IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
+      GITHUB_ENVIRONMENT_NAME: production
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,15 +36,49 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+      - name: Validate required environment configuration
+        run: |
+          set -euo pipefail
+          required_values=(
+            ARM_CLIENT_ID
+            ARM_TENANT_ID
+            ARM_SUBSCRIPTION_ID
+            TFSTATE_RESOURCE_GROUP
+            TFSTATE_STORAGE_ACCOUNT
+            TFSTATE_CONTAINER
+            TFSTATE_KEY
+            GH_ORGANIZATION
+            GH_REPOSITORY_NAME
+            ENTRA_AUDIENCE
+            IDENTITY_OWNER_OBJECT_IDS_JSON
+          )
+          for name in "${required_values[@]}"; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required production environment value: ${name}" >&2
+              exit 1
+            fi
+          done
+
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          allow-no-subscriptions: true
 
       - name: Terraform init
-        run: terraform -chdir=infra/identity init -input=false
+        run: |
+          terraform -chdir=infra/identity init \
+            -input=false \
+            -backend-config="resource_group_name=${TFSTATE_RESOURCE_GROUP}" \
+            -backend-config="storage_account_name=${TFSTATE_STORAGE_ACCOUNT}" \
+            -backend-config="container_name=${TFSTATE_CONTAINER}" \
+            -backend-config="key=${TFSTATE_KEY}" \
+            -backend-config="use_oidc=true" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="tenant_id=${ARM_TENANT_ID}" \
+            -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}" \
+            -backend-config="client_id=${ARM_CLIENT_ID}"
 
       - name: Terraform apply
         run: |
@@ -38,10 +86,11 @@ jobs:
             -input=false \
             -auto-approve \
             -var-file=env/prod.tfvars \
-            -var "github_organization=${{ vars.GH_ORGANIZATION }}" \
-            -var "github_repository=${{ vars.GH_REPOSITORY_NAME }}" \
-            -var "github_main_branch_ref=${{ vars.GH_MAIN_BRANCH_REF }}" \
-            -var "api_identifier_uri=${{ vars.ENTRA_AUDIENCE }}"
+            -var "github_organization=${GH_ORGANIZATION}" \
+            -var "github_repository=${GH_REPOSITORY_NAME}" \
+            -var "github_environment_name=${GITHUB_ENVIRONMENT_NAME}" \
+            -var "api_identifier_uri=${ENTRA_AUDIENCE}" \
+            -var "owners=${IDENTITY_OWNER_OBJECT_IDS_JSON}"
 
       - name: Capture terraform outputs
         if: ${{ always() }}

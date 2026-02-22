@@ -95,6 +95,14 @@ Required GitHub environment secrets for infra apply:
 - `DATABASE_URL`
 - `WEB_BEARER_TOKEN` (optional)
 
+Provider registration preflight (enforced in `.github/workflows/infra-apply.yml`):
+
+- `Microsoft.App`
+- `Microsoft.ContainerService`
+- `Microsoft.Network`
+- `Microsoft.DBforPostgreSQL`
+- `Microsoft.OperationalInsights`
+
 Registry policy:
 
 - Default path is server-only GHCR config (`ghcr.io`) for public images.

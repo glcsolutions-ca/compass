@@ -121,6 +121,7 @@ jobs:
 
           providers=(
             "Microsoft.App"
+            "Microsoft.ContainerService"
             "Microsoft.Network"
             "Microsoft.DBforPostgreSQL"
             "Microsoft.OperationalInsights"

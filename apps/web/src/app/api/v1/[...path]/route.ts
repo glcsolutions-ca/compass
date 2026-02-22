@@ -1,6 +1,32 @@
 import type { NextRequest } from "next/server";
 
-const API_BASE_URL = process.env.API_BASE_URL ?? "http://localhost:3001";
+const DEFAULT_API_BASE_URL = "http://localhost:3001";
+const UPSTREAM_TIMEOUT_MS = 10_000;
+const HOP_BY_HOP_HEADERS = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade"
+]);
+const FORWARDED_REQUEST_HEADERS = new Set([
+  "accept",
+  "accept-language",
+  "authorization",
+  "content-type",
+  "if-match",
+  "if-none-match",
+  "if-modified-since",
+  "if-unmodified-since",
+  "traceparent",
+  "tracestate",
+  "baggage",
+  "x-correlation-id",
+  "x-request-id"
+]);
 
 interface RouteContext {
   params: Promise<{
@@ -8,19 +34,52 @@ interface RouteContext {
   }>;
 }
 
+function getApiBaseUrl() {
+  return (process.env.API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/+$/, "");
+}
+
 function toUpstreamUrl(requestUrl: string, pathSegments: string[] = []) {
   const incomingUrl = new URL(requestUrl);
-  const normalizedBaseUrl = API_BASE_URL.replace(/\/+$/, "");
+  const normalizedBaseUrl = getApiBaseUrl();
   const encodedPath = pathSegments.map((segment) => encodeURIComponent(segment)).join("/");
   const suffix = encodedPath.length > 0 ? `/${encodedPath}` : "";
   return `${normalizedBaseUrl}/api/v1${suffix}${incomingUrl.search}`;
 }
 
+function buildUpstreamRequestHeaders(requestHeaders: Headers) {
+  const headers = new Headers();
+
+  for (const [name, value] of requestHeaders.entries()) {
+    const normalizedName = name.toLowerCase();
+    if (!FORWARDED_REQUEST_HEADERS.has(normalizedName)) {
+      continue;
+    }
+    if (HOP_BY_HOP_HEADERS.has(normalizedName)) {
+      continue;
+    }
+    headers.set(name, value);
+  }
+
+  return headers;
+}
+
+function buildDownstreamResponseHeaders(upstreamHeaders: Headers) {
+  const headers = new Headers();
+
+  for (const [name, value] of upstreamHeaders.entries()) {
+    if (HOP_BY_HOP_HEADERS.has(name.toLowerCase())) {
+      continue;
+    }
+    headers.set(name, value);
+  }
+
+  return headers;
+}
+
 async function proxyRequest(request: NextRequest, context: RouteContext) {
   const { path } = await context.params;
   const upstreamUrl = toUpstreamUrl(request.url, path);
-  const headers = new Headers(request.headers);
-  headers.delete("host");
+  const headers = buildUpstreamRequestHeaders(request.headers);
 
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
   const body = hasBody ? await request.arrayBuffer() : undefined;
@@ -30,20 +89,28 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
       method: request.method,
       headers,
       body,
-      redirect: "manual"
+      redirect: "manual",
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      cache: "no-store"
     });
 
+    const responseHeaders = buildDownstreamResponseHeaders(upstreamResponse.headers);
     return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
-      headers: upstreamResponse.headers
+      headers: responseHeaders
     });
-  } catch (error) {
+  } catch {
     return Response.json(
       {
         error: "Upstream API request failed",
-        details: error instanceof Error ? error.message : String(error)
+        code: "UPSTREAM_UNAVAILABLE"
       },
-      { status: 502 }
+      {
+        status: 502,
+        headers: {
+          "cache-control": "no-store"
+        }
+      }
     );
   }
 }
@@ -69,5 +136,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 }
 
 export async function OPTIONS(request: NextRequest, context: RouteContext) {
+  return proxyRequest(request, context);
+}
+
+export async function HEAD(request: NextRequest, context: RouteContext) {
   return proxyRequest(request, context);
 }

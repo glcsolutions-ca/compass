@@ -6,7 +6,7 @@ on:
       keep_tags:
         description: Number of newest tags to keep per repository
         required: false
-        default: "30"
+        default: "15"
   schedule:
     - cron: "0 3 * * 0"
 
@@ -36,7 +36,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          keep_tags="${KEEP_TAGS_OVERRIDE:-30}"
+          keep_tags="${KEEP_TAGS_OVERRIDE:-15}"
           if ! [[ "$keep_tags" =~ ^[0-9]+$ ]] || [ "$keep_tags" -lt 1 ]; then
             echo "keep_tags must be a positive integer (actual: $keep_tags)" >&2
             exit 1

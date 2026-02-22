@@ -26,20 +26,25 @@ export default function HomeClient() {
     event.preventDefault();
     setState({ loading: true, error: null, payload: null });
 
-    const response = await client.GET("/api/v1/employees/{employeeId}/consolidated-view", {
-      params: {
-        path: {
-          employeeId
+    try {
+      const response = await client.GET("/api/v1/employees/{employeeId}/consolidated-view", {
+        params: {
+          path: {
+            employeeId
+          }
         }
+      });
+
+      if (response.error) {
+        setState({ loading: false, error: JSON.stringify(response.error), payload: null });
+        return;
       }
-    });
 
-    if (response.error) {
-      setState({ loading: false, error: JSON.stringify(response.error), payload: null });
-      return;
+      setState({ loading: false, error: null, payload: response.data ?? null });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setState({ loading: false, error: `Request failed: ${message}`, payload: null });
     }
-
-    setState({ loading: false, error: null, payload: response.data ?? null });
   }
 
   return (

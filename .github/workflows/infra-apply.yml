@@ -125,6 +125,21 @@ jobs:
             fi
           done
 
+          postgres_private_dns_domain="postgres.database.azure.com"
+          private_dns_suffix=".private.${postgres_private_dns_domain}"
+          private_dns_zone_normalized="$(echo "$AZURE_PRIVATE_DNS_ZONE_NAME" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$private_dns_zone_normalized" != *"$private_dns_suffix" ]]; then
+            echo "AZURE_PRIVATE_DNS_ZONE_NAME must end with the required private Postgres DNS suffix (actual: $AZURE_PRIVATE_DNS_ZONE_NAME)" >&2
+            exit 1
+          fi
+
+          postgres_sku_tier_normalized="$(echo "$POSTGRES_SKU_TIER" | tr '[:upper:]' '[:lower:]')"
+          postgres_sku_name_normalized="$(echo "$POSTGRES_SKU_NAME" | tr '[:upper:]' '[:lower:]')"
+          if [ "$postgres_sku_tier_normalized" = "burstable" ] && [[ ! "$postgres_sku_name_normalized" =~ ^standard_b ]]; then
+            echo "POSTGRES_SKU_NAME must start with Standard_B when POSTGRES_SKU_TIER=Burstable (actual: $POSTGRES_SKU_NAME)" >&2
+            exit 1
+          fi
+
           actual_subscription="$(az account show --query id -o tsv)"
           actual_tenant="$(az account show --query tenantId -o tsv)"
           if [ "$actual_subscription" != "$AZURE_SUBSCRIPTION_ID" ]; then

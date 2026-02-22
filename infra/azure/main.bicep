@@ -110,6 +110,9 @@ resource acrRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' existin
 resource acrPullIdentityRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(acrRegistry.id, acrPullIdentityName, 'AcrPull')
   scope: acrRegistry
+  dependsOn: [
+    acr
+  ]
   properties: {
     principalId: acrPullIdentity.properties.principalId
     principalType: 'ServicePrincipal'

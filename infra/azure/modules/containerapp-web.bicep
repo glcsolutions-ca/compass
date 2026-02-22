@@ -5,8 +5,6 @@ param image string
 param registryServer string
 param registryIdentityResourceId string
 param apiBaseUrl string
-@secure()
-param bearerToken string = ''
 
 resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   name: containerAppName
@@ -33,12 +31,6 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
           identity: registryIdentityResourceId
         }
       ]
-      secrets: [
-        {
-          name: 'web-bearer-token'
-          value: bearerToken
-        }
-      ]
     }
     template: {
       containers: [
@@ -54,14 +46,6 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
               name: 'NEXT_PUBLIC_API_BASE_URL'
               value: apiBaseUrl
             }
-            {
-              name: 'BEARER_TOKEN'
-              secretRef: 'web-bearer-token'
-            }
-            {
-              name: 'NEXT_PUBLIC_BEARER_TOKEN'
-              secretRef: 'web-bearer-token'
-            }
           ]
           resources: {
             cpu: json('0.25')
@@ -71,7 +55,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       ]
       scale: {
         minReplicas: 0
-        maxReplicas: 2
+        maxReplicas: 1
       }
     }
   }

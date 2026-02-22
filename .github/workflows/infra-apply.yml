@@ -164,6 +164,36 @@ jobs:
             fi
           done
 
+      - name: Ensure ACR ARM authentication is enabled
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+        run: |
+          set -euo pipefail
+
+          arm_auth_status="$(az acr config authentication-as-arm show \
+            --registry "$ACR_NAME" \
+            --query status \
+            --output tsv 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+
+          if [ "$arm_auth_status" != "enabled" ]; then
+            echo "Enabling authentication-as-arm for ACR $ACR_NAME (current: ${arm_auth_status:-unknown})"
+            az acr config authentication-as-arm update \
+              --registry "$ACR_NAME" \
+              --status enabled \
+              --only-show-errors \
+              --output none
+          fi
+
+          arm_auth_status="$(az acr config authentication-as-arm show \
+            --registry "$ACR_NAME" \
+            --query status \
+            --output tsv | tr '[:upper:]' '[:lower:]')"
+
+          if [ "$arm_auth_status" != "enabled" ]; then
+            echo "ACR authentication-as-arm is not enabled for $ACR_NAME (actual: $arm_auth_status)" >&2
+            exit 1
+          fi
+
       - name: Resolve deployment images
         id: images
         env:
@@ -241,7 +271,6 @@ jobs:
           ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
           ENTRA_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
-          WEB_BEARER_TOKEN: ${{ secrets.WEB_BEARER_TOKEN }}
           API_IMAGE: ${{ steps.images.outputs.api_image }}
           WEB_IMAGE: ${{ steps.images.outputs.web_image }}
           MIGRATE_IMAGE: ${{ steps.images.outputs.migrate_image }}
@@ -276,7 +305,6 @@ jobs:
             --arg postgresSkuTier "$POSTGRES_SKU_TIER" \
             --arg postgresStorageMb "$POSTGRES_STORAGE_MB" \
             --arg postgresAdminPassword "$POSTGRES_ADMIN_PASSWORD" \
-            --arg webBearerToken "${WEB_BEARER_TOKEN:-}" \
             --arg apiImage "$API_IMAGE" \
             --arg webImage "$WEB_IMAGE" \
             --arg migrateImage "$MIGRATE_IMAGE" \
@@ -308,7 +336,6 @@ jobs:
                 "postgresSkuTier": {"value": $postgresSkuTier},
                 "postgresStorageMb": {"value": ($postgresStorageMb | tonumber)},
                 "postgresAdminPassword": {"value": $postgresAdminPassword},
-                "webBearerToken": {"value": $webBearerToken},
                 "apiImage": {"value": $apiImage},
                 "webImage": {"value": $webImage},
                 "migrateImage": {"value": $migrateImage},

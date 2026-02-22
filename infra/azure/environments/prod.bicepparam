@@ -23,13 +23,11 @@ param postgresServerName = 'SET_IN_GITHUB_ENV'
 param postgresDatabaseName = 'SET_IN_GITHUB_ENV'
 param postgresAdminUsername = 'SET_IN_GITHUB_ENV'
 param postgresVersion = '16'
-param postgresSkuName = 'Standard_B2s'
+param postgresSkuName = 'Standard_B1ms'
 param postgresSkuTier = 'Burstable'
 param postgresStorageMb = 32768
 
 param postgresAdminPassword = 'SET_IN_GITHUB_ENV'
-
-param webBearerToken = ''
 
 param apiImage = 'SET_IN_GITHUB_ENV'
 param webImage = 'SET_IN_GITHUB_ENV'

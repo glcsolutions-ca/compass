@@ -19,21 +19,32 @@ function normalizeStatus(value) {
   return String(value || "unknown").toLowerCase();
 }
 
-async function listExecutions() {
-  const executions = await runJson("az", [
-    "containerapp",
-    "job",
-    "execution",
-    "list",
-    "--resource-group",
-    resourceGroup,
-    "--name",
-    jobName,
-    "--output",
-    "json"
-  ]);
+async function readExecution() {
+  try {
+    return await runJson("az", [
+      "containerapp",
+      "job",
+      "execution",
+      "show",
+      "--resource-group",
+      resourceGroup,
+      "--name",
+      jobName,
+      "--job-execution-name",
+      executionName,
+      "--output",
+      "json"
+    ]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const normalized = message.toLowerCase();
 
-  return Array.isArray(executions) ? executions : [];
+    if (normalized.includes("not found") || normalized.includes("could not be found")) {
+      return null;
+    }
+
+    throw error;
+  }
 }
 
 async function readFailureLogs() {
@@ -73,8 +84,7 @@ async function main() {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < timeoutSeconds * 1000) {
-    const executions = await listExecutions();
-    const execution = executions.find((item) => String(item?.name) === executionName);
+    const execution = await readExecution();
 
     if (!execution) {
       await sleep(5000);

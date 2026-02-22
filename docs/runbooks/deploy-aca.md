@@ -50,7 +50,8 @@ All concrete deploy values must be stored in the GitHub `production` environment
   - `minReplicas: 0`
   - `maxReplicas: 2`
 - API and Web run in `activeRevisionsMode: single`.
-- Deploy pipeline verifies latest revision is traffic-serving before migration/smoke gates continue.
+- In single-revision mode, ACA routes app traffic to the latest ready revision automatically.
+- Web app calls API through the stable app FQDN (`https://<api-app>.<aca-default-domain>`), not a revision FQDN.
 
 ## Registry + Runtime Auth Contract
 
@@ -66,13 +67,12 @@ All concrete deploy values must be stored in the GitHub `production` environment
 1. Azure OIDC login (deploy identity).
 2. API deploy via `azure/container-apps-deploy-action`.
 3. Web deploy via `azure/container-apps-deploy-action`.
-4. Guard check verifies latest API/Web revisions are traffic-serving.
-5. Build/push migration image to ACR.
-6. Update and execute ACA migration job (`start-migration-job.mjs`, `wait-migration-job.mjs`).
-7. Azure OIDC login (smoke identity), mint Entra access token.
-8. API smoke verification (`verify-api-smoke.mjs`) against production URL.
-9. Browser evidence against production Web URL, reusing the same Entra smoke token via Playwright request-header injection (`BROWSER_SMOKE_BEARER_TOKEN`).
-10. Publish deploy artifacts.
+4. Build/push migration image to ACR.
+5. Update and execute ACA migration job (`start-migration-job.mjs`, `wait-migration-job.mjs`).
+6. Azure OIDC login (smoke identity), mint Entra access token.
+7. API smoke verification (`verify-api-smoke.mjs`) against production URL.
+8. Browser evidence against production Web URL, reusing the same Entra smoke token via Playwright request-header injection (`BROWSER_SMOKE_BEARER_TOKEN`).
+9. Publish deploy artifacts.
 
 ## Rollback (Single Revision Mode)
 
@@ -93,6 +93,10 @@ Artifacts are written under `.artifacts/deploy/<sha>/`:
 - `result.json`
 
 Browser evidence remains under `.artifacts/browser-evidence/<sha>/manifest.json`.
+
+Browser evidence timeout policy:
+
+- `BROWSER_SMOKE_PAYLOAD_TIMEOUT_MS` defaults to `45000` in deploy workflow for scale-to-zero cold starts.
 
 `verify-api-smoke.mjs` behavior:
 

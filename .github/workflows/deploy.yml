@@ -118,52 +118,6 @@ jobs:
           resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
           disableTelemetry: true
 
-      - name: Verify latest revisions are traffic-serving
-        run: |
-          set -euo pipefail
-
-          verify_app() {
-            local app_name="$1"
-
-            latest_revision="$(az containerapp show \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --name "$app_name" \
-              --query properties.latestRevisionName \
-              --output tsv)"
-
-            traffic_revision="$(az containerapp ingress traffic show \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --name "$app_name" \
-              --query '[?weight==`100`].revisionName | [0]' \
-              --output tsv)"
-
-            if [ -z "$traffic_revision" ]; then
-              latest_weight_count="$(az containerapp ingress traffic show \
-                --resource-group "$AZURE_RESOURCE_GROUP" \
-                --name "$app_name" \
-                --query '[?weight==`100` && latestRevision==`true`] | length(@)' \
-                --output tsv)"
-
-              if [ "$latest_weight_count" = "1" ]; then
-                traffic_revision="$latest_revision"
-              fi
-            fi
-
-            if [ -z "$latest_revision" ] || [ -z "$traffic_revision" ]; then
-              echo "Failed to resolve revision state for $app_name" >&2
-              exit 1
-            fi
-
-            if [ "$latest_revision" != "$traffic_revision" ]; then
-              echo "Latest revision is not serving traffic for $app_name" >&2
-              echo "latest=$latest_revision traffic=$traffic_revision" >&2
-              exit 1
-            fi
-          }
-
-          verify_app "$ACA_API_APP_NAME"
-          verify_app "$ACA_WEB_APP_NAME"
-
       - name: Build and push migration image to ACR
         id: migration_image
         run: |
@@ -268,6 +222,7 @@ jobs:
           RISK_TIER: t3
           WEB_BASE_URL: ${{ steps.prod_urls.outputs.web_prod_url }}
           BROWSER_SMOKE_BEARER_TOKEN: ${{ steps.token.outputs.smoke_token }}
+          BROWSER_SMOKE_PAYLOAD_TIMEOUT_MS: "45000"
           EXPECTED_ENTRYPOINT: /
           EXPECTED_ACCOUNT_IDENTITY_RAW: ${{ vars.SMOKE_EXPECTED_ACCOUNT_IDENTITY }}
           REQUIRED_FLOW_IDS_JSON: '["compass-smoke"]'

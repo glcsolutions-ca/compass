@@ -11,7 +11,7 @@ resource migrateJob 'Microsoft.App/jobs@2023-05-01' = {
   name: jobName
   location: location
   identity: {
-    type: 'SystemAssigned,UserAssigned'
+    type: 'UserAssigned'
     userAssignedIdentities: {
       '${registryIdentityResourceId}': {}
     }
@@ -75,4 +75,3 @@ resource migrateJob 'Microsoft.App/jobs@2023-05-01' = {
 
 output jobNameOutput string = migrateJob.name
 output jobId string = migrateJob.id
-output principalId string = migrateJob.identity.principalId

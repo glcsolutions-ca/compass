@@ -2,7 +2,7 @@ environment_name    = "prod"
 github_organization = "SET_IN_GITHUB_ENV"
 github_repository   = "SET_IN_GITHUB_ENV"
 
-api_identifier_uri = "SET_IN_GITHUB_ENV"
+api_identifier_uri  = "SET_IN_GITHUB_ENV"
 required_scope_name = "time.read"
 
 # Populate these with actual IDs to establish explicit ownership for created app registrations.

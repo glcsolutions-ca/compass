@@ -80,9 +80,6 @@ Required GitHub environment variables for infra apply:
 - `POSTGRES_VERSION`
 - `POSTGRES_SKU_NAME`
 - `POSTGRES_STORAGE_MB`
-- `ACA_API_IMAGE`
-- `ACA_WEB_IMAGE`
-- `ACA_MIGRATE_IMAGE`
 - `ENTRA_ISSUER`
 - `ENTRA_AUDIENCE`
 - `ENTRA_JWKS_URI`
@@ -111,6 +108,7 @@ Registry policy:
 
 - For public GHCR images, do not set explicit ACA registry credentials in Bicep.
 - Container Apps pulls images directly from `ghcr.io` via the image reference.
+- Infra apply resolves image tags from current commit SHA (`ghcr.io/<owner>/compass-*:HEAD_SHA`) and waits for image availability before template validation/apply.
 
 ## Entra Identity (Terraform)
 

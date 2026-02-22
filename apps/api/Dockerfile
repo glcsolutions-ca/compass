@@ -9,7 +9,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @compass/contracts build
 RUN pnpm --filter @compass/api build
-RUN pnpm --filter @compass/api deploy --prod /opt/app
+RUN pnpm --filter @compass/api deploy --legacy --prod /opt/app
 
 FROM node:24-alpine AS runtime
 WORKDIR /app

@@ -225,6 +225,7 @@ jobs:
           PR_NUMBER: 0
           RISK_TIER: t3
           WEB_BASE_URL: ${{ steps.prod_urls.outputs.web_prod_url }}
+          BROWSER_SMOKE_BEARER_TOKEN: ${{ steps.token.outputs.smoke_token }}
           EXPECTED_ENTRYPOINT: /
           EXPECTED_ACCOUNT_IDENTITY_RAW: ${{ vars.SMOKE_EXPECTED_ACCOUNT_IDENTITY }}
           REQUIRED_FLOW_IDS_JSON: '["compass-smoke"]'

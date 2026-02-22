@@ -17,7 +17,7 @@ Branch protection requires only:
 - `risk-policy-gate`
 
 `risk-policy-gate` enforces all dynamic tier checks (`ci-pipeline`, `browser-evidence`, `harness-smoke`, `codex-review`) for the current head SHA.
-`codex-review` enforcement is controlled by `reviewPolicy.codexReviewEnabled` in `.github/policy/merge-policy.json`.
+`codex-review` runs only when required by policy (`reviewPolicy.codexReviewEnabled` and tier requirements).
 `risk-policy-gate` enforces required check-runs by result and validates browser evidence manifest assertions only when UI evidence is required.
 
 ## Deterministic tiers
@@ -33,17 +33,27 @@ If multiple tiers match, highest tier wins.
 ## Deterministic order
 
 1. `risk-policy-preflight` (includes docs-drift evaluation)
-2. `codex-review`
+2. `codex-review` (conditional)
 3. `ci-pipeline`
 4. `browser-evidence` (conditional)
 5. `harness-smoke` (conditional)
 6. `risk-policy-gate` (final fail-closed enforcement)
 
+## `ci-pipeline` Modes
+
+`ci-pipeline` keeps one stable check name, but runs one of two internal lanes:
+
+- `fast` mode for `t0`
+- `full` mode for `deps`, `t1`, `t2`, `t3`
+
+`fast` mode runs lightweight repo checks only.
+`full` mode runs Postgres-backed integration flow plus full pipeline checks.
+
 ## Bootstrap review mode
 
 During bootstrap, `reviewPolicy.codexReviewEnabled` may be `false`:
 
-- `codex-review` still runs and emits deterministic no-op artifacts.
+- `codex-review` is skipped (not required by gate).
 - `risk-policy-gate` does not require `codex-review` in required checks.
 
 When `codex-review` is enabled but `OPENAI_API_KEY` is missing, `codex-review` emits a deterministic
@@ -82,7 +92,8 @@ Workflow and local contract checks require Node `24` with minimum `24.8.0` (for 
 
 The following paths are treated as explicit control-plane surfaces and are elevated to high-risk:
 
-- `.github/workflows/**`
+- `.github/workflows/*.yml`
+- `.github/workflows/*.yaml`
 - `.github/policy/**`
 - `scripts/ci/**`
 - `scripts/deploy/**`
@@ -96,12 +107,14 @@ The following paths are treated as explicit control-plane surfaces and are eleva
 ```mermaid
 flowchart TD
   A["PR opened or synchronized"] --> B["risk-policy-preflight (+ docs-drift)"]
-  B --> D["codex-review"]
-  D --> E["ci-pipeline"]
-  D --> F{"browser-evidence required?"}
-  D --> G{"harness-smoke required?"}
+  B --> D{"codex-review required?"}
+  D -- Yes --> DR["codex-review"]
+  B --> E["ci-pipeline"]
+  B --> F{"browser-evidence required?"}
+  B --> G{"harness-smoke required?"}
   F -- Yes --> H["browser-evidence"]
   G -- Yes --> I["harness-smoke"]
+  DR --> J["risk-policy-gate"]
   E --> J["risk-policy-gate"]
   H --> J
   I --> J

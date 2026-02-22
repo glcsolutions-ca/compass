@@ -10,8 +10,10 @@
 - `merge-contract.yml`: deterministic merge-contract workflow with ordered checks:
   - `risk-policy-preflight` (includes `docs-drift` evaluation)
   - `no-org-infra` leak guard (fails on committed org-specific infra values)
-  - `codex-review` (fast no-op when policy does not require review)
-  - `ci-pipeline`
+  - `codex-review` (conditional; runs only when policy requires it)
+  - `ci-pipeline` (stable check name; internal mode varies by risk tier)
+    - `fast`: `t0` (lightweight repo checks)
+    - `full`: `deps`, `t1`, `t2`, `t3` (Postgres integration + full pipeline)
   - `browser-evidence` (conditional)
     - web smoke runs against Next standalone runtime with static/public assets copied into the standalone tree
   - `harness-smoke` (conditional)

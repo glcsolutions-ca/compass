@@ -125,11 +125,10 @@ jobs:
             fi
           done
 
-          postgres_private_dns_domain="postgres.database.azure.com"
-          private_dns_suffix=".private.${postgres_private_dns_domain}"
+          private_dns_suffix=".postgres.database.azure.com"
           private_dns_zone_normalized="$(echo "$AZURE_PRIVATE_DNS_ZONE_NAME" | tr '[:upper:]' '[:lower:]')"
           if [[ "$private_dns_zone_normalized" != *"$private_dns_suffix" ]]; then
-            echo "AZURE_PRIVATE_DNS_ZONE_NAME must end with the required private Postgres DNS suffix (actual: $AZURE_PRIVATE_DNS_ZONE_NAME)" >&2
+            echo "AZURE_PRIVATE_DNS_ZONE_NAME must end with the required Postgres DNS suffix (actual: $AZURE_PRIVATE_DNS_ZONE_NAME)" >&2
             exit 1
           fi
 

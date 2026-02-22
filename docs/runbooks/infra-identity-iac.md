@@ -110,6 +110,7 @@ Registry policy:
 
 - For private GHCR images, configure ACA registry credentials in Bicep (`server`, `username`, `passwordSecretRef`).
 - Keep `GHCR_USERNAME` in GitHub environment variables and `GHCR_PASSWORD` (PAT) in GitHub environment secrets.
+- `infra-apply` performs a GHCR login before SHA image availability checks (`docker manifest inspect`) so private tags can be resolved deterministically.
 - Infra apply resolves image tags from current commit SHA (`ghcr.io/<owner>/compass-*:HEAD_SHA`) and waits for image availability before template validation/apply.
 
 ## Entra Identity (Terraform)

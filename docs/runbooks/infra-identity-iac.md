@@ -9,6 +9,12 @@ This repository uses split control-plane IaC:
 
 Both paths are versioned and reviewed in PRs.
 
+## Why We Replay Infra/Deploy
+
+- Infra replay: run `infra-apply` again on the same SHA to prove idempotency (safe to rerun, no surprise drift).
+- Deploy replay: rerun deploy on the same SHA to prove determinism (same inputs, same result).
+- This is the fastest way to catch hidden state drift before it hurts production.
+
 ## Non-Commit Policy (Required)
 
 Do not commit organization-specific infra values to tracked files. This includes:

@@ -6,7 +6,7 @@ param privateDnsZoneId string
 param adminLogin string
 @secure()
 param adminPassword string
-param skuName string = 'Standard_B2s'
+param skuName string = 'Standard_B1ms'
 param skuTier string = 'Burstable'
 param postgresVersion string = '16'
 param storageSizeMb int = 32768

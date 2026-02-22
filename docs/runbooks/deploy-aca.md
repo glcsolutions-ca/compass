@@ -63,6 +63,24 @@ All concrete deploy values must be stored in the GitHub `production` environment
 8. Browser evidence against production Web URL, reusing the same Entra smoke token via Playwright request-header injection (`BROWSER_SMOKE_BEARER_TOKEN`).
 9. Publish deploy artifacts.
 
+## Manual Rollback Drill (Multiple Revisions Mode)
+
+Use this drill to validate operational rollback readiness without changing infra code:
+
+1. Identify latest and previous healthy revisions for API and Web:
+   - `az containerapp revision list --resource-group <rg> --name <api-app>`
+   - `az containerapp revision list --resource-group <rg> --name <web-app>`
+2. Shift 100% traffic to previous healthy revisions:
+   - `az containerapp ingress traffic set --resource-group <rg> --name <api-app> --revision-weight <prev-api-revision>=100`
+   - `az containerapp ingress traffic set --resource-group <rg> --name <web-app> --revision-weight <prev-web-revision>=100`
+3. Verify API and Web endpoints return healthy responses.
+4. Restore 100% traffic to current revisions:
+   - `az containerapp ingress traffic set --resource-group <rg> --name <api-app> --revision-weight <current-api-revision>=100`
+   - `az containerapp ingress traffic set --resource-group <rg> --name <web-app> --revision-weight <current-web-revision>=100`
+5. Re-verify endpoints and confirm traffic state with:
+   - `az containerapp ingress traffic show --resource-group <rg> --name <api-app>`
+   - `az containerapp ingress traffic show --resource-group <rg> --name <web-app>`
+
 ## Artifacts
 
 Artifacts are written under `.artifacts/deploy/<sha>/`:

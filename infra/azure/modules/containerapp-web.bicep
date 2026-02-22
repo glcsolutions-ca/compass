@@ -2,7 +2,6 @@ param location string
 param containerAppName string
 param managedEnvironmentId string
 param image string
-param ghcrServer string
 param apiBaseUrl string
 @secure()
 param bearerToken string = ''
@@ -20,11 +19,6 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
         allowInsecure: false
         transport: 'auto'
       }
-      registries: [
-        {
-          server: ghcrServer
-        }
-      ]
       secrets: [
         {
           name: 'web-bearer-token'

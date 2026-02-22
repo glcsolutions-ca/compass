@@ -152,9 +152,7 @@ module web './modules/containerapp-web.bicep' = {
     image: webImage
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
-    apiBaseUrl: api.outputs.latestRevisionFqdn != ''
-      ? 'https://${api.outputs.latestRevisionFqdn}'
-      : 'https://${apiAppName}.${containerEnvironment.outputs.defaultDomain}'
+    apiBaseUrl: 'https://${apiAppName}.${containerEnvironment.outputs.defaultDomain}'
     bearerToken: webBearerToken
   }
   dependsOn: [

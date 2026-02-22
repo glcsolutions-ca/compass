@@ -215,13 +215,6 @@ jobs:
           echo "web_image=$web_image" >> "$GITHUB_OUTPUT"
           echo "migrate_image=$migrate_image" >> "$GITHUB_OUTPUT"
 
-      - name: Build Bicep params JSON
-        run: |
-          mkdir -p ".artifacts/infra/$HEAD_SHA"
-          az bicep build-params \
-            --file infra/azure/environments/prod.bicepparam \
-            --outfile ".artifacts/infra/$HEAD_SHA/prod.parameters.json"
-
       - name: Build runtime parameter overrides
         env:
           AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
@@ -254,6 +247,7 @@ jobs:
           MIGRATE_IMAGE: ${{ steps.images.outputs.migrate_image }}
         run: |
           set -euo pipefail
+          mkdir -p ".artifacts/infra/$HEAD_SHA"
 
           if [ -z "${POSTGRES_ADMIN_PASSWORD:-}" ]; then
             echo "Missing required GitHub environment secret: POSTGRES_ADMIN_PASSWORD" >&2
@@ -330,7 +324,6 @@ jobs:
           az deployment group validate \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --template-file infra/azure/main.bicep \
-            --parameters @.artifacts/infra/$HEAD_SHA/prod.parameters.json \
             --parameters @.artifacts/infra/$HEAD_SHA/runtime.parameters.json
 
       - name: Apply Bicep template
@@ -338,42 +331,8 @@ jobs:
           az deployment group create \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --template-file infra/azure/main.bicep \
-            --parameters @.artifacts/infra/$HEAD_SHA/prod.parameters.json \
             --parameters @.artifacts/infra/$HEAD_SHA/runtime.parameters.json \
             --output json > .artifacts/infra/$HEAD_SHA/deployment.json
-
-      - name: Ensure Azure CLI containerapp extension
-        run: az extension add --name containerapp --upgrade --only-show-errors
-
-      - name: Deactivate zero-traffic active revisions
-        env:
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
-          ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
-        run: |
-          set -euo pipefail
-
-          for app in "$ACA_API_APP_NAME" "$ACA_WEB_APP_NAME"; do
-            mapfile -t revisions < <(az containerapp revision list \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --name "$app" \
-              --query "[?properties.active==\`true\` && properties.trafficWeight==\`0\`].name" \
-              --output tsv)
-
-            if [ "${#revisions[@]}" -eq 0 ]; then
-              echo "No zero-traffic active revisions to deactivate for $app"
-              continue
-            fi
-
-            for revision in "${revisions[@]}"; do
-              echo "Deactivating zero-traffic revision $revision for $app"
-              az containerapp revision deactivate \
-                --resource-group "$AZURE_RESOURCE_GROUP" \
-                --name "$app" \
-                --revision "$revision" \
-                --only-show-errors || true
-            done
-          done
 
       - name: Upload infra artifact
         if: ${{ always() }}
@@ -382,6 +341,5 @@ jobs:
           name: infra-apply-${{ env.HEAD_SHA }}
           path: |
             .artifacts/infra/${{ env.HEAD_SHA }}/deployment.json
-            .artifacts/infra/${{ env.HEAD_SHA }}/prod.parameters.json
             .artifacts/infra/${{ env.HEAD_SHA }}/runtime.parameters.json
           if-no-files-found: warn

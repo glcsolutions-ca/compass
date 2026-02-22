@@ -1,4 +1,4 @@
-name: Deploy Release Candidate
+name: Deploy to Azure Container Apps
 
 on:
   push:
@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
   id-token: write
 
 concurrency:
@@ -15,20 +14,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy_release_candidate:
-    name: deploy-release-candidate
+  deploy:
+    name: deploy-production
     environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       HEAD_SHA: ${{ github.sha }}
       RISK_TIER: t3
-      IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
+      ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+      ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -45,53 +47,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Gate 0 - current-head SHA guard
-        run: node scripts/deploy/head-sha-guard.mjs
-
-      - name: Login to GHCR
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-      - name: Gate 1 - Build and push release candidate images
-        id: images
-        run: |
-          api_image="$IMAGE_PREFIX/compass-api:$HEAD_SHA"
-          web_image="$IMAGE_PREFIX/compass-web:$HEAD_SHA"
-          migrate_image="$IMAGE_PREFIX/compass-migrate:$HEAD_SHA"
-
-          docker build -f apps/api/Dockerfile -t "$api_image" .
-          docker push "$api_image"
-
-          docker build -f apps/web/Dockerfile -t "$web_image" .
-          docker push "$web_image"
-
-          docker build -f deploy/Dockerfile.migrate -t "$migrate_image" .
-          docker push "$migrate_image"
-
-          api_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$api_image")
-          web_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$web_image")
-          migrate_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$migrate_image")
-
-          echo "api_image=$api_image" >> "$GITHUB_OUTPUT"
-          echo "web_image=$web_image" >> "$GITHUB_OUTPUT"
-          echo "migrate_image=$migrate_image" >> "$GITHUB_OUTPUT"
-          echo "api_digest=$api_digest" >> "$GITHUB_OUTPUT"
-          echo "web_digest=$web_digest" >> "$GITHUB_OUTPUT"
-          echo "migrate_digest=$migrate_digest" >> "$GITHUB_OUTPUT"
-
-      - name: Write candidate manifest artifact
-        env:
-          ARTIFACT_NAME: candidate-manifest
-          API_IMAGE: ${{ steps.images.outputs.api_image }}
-          WEB_IMAGE: ${{ steps.images.outputs.web_image }}
-          MIGRATE_IMAGE: ${{ steps.images.outputs.migrate_image }}
-          API_DIGEST: ${{ steps.images.outputs.api_digest }}
-          WEB_DIGEST: ${{ steps.images.outputs.web_digest }}
-          MIGRATE_DIGEST: ${{ steps.images.outputs.migrate_digest }}
-        run: |
-          artifact_json=$(node -e 'console.log(JSON.stringify({status:"pass",images:{api:{ref:process.env.API_IMAGE,digest:process.env.API_DIGEST},web:{ref:process.env.WEB_IMAGE,digest:process.env.WEB_DIGEST},migrate:{ref:process.env.MIGRATE_IMAGE,digest:process.env.MIGRATE_DIGEST}}}))' )
-          ARTIFACT_JSON="$artifact_json" node scripts/deploy/write-deploy-artifact.mjs
-
       - name: Azure login (deploy identity)
         uses: azure/login@v2
         with:
@@ -99,12 +54,10 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Gate 1.5 - Verify infra resources exist
-        env:
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
-          ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
-          ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+      - name: Ensure ACA CLI extension
+        run: az extension add --name containerapp --upgrade --only-show-errors
+
+      - name: Verify required resources exist
         run: |
           set -euo pipefail
 
@@ -143,32 +96,92 @@ jobs:
             exit 1
           fi
 
-      - name: Gate 2 - Deploy candidate revisions (0% traffic)
-        id: candidate
-        env:
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
-          ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
-          API_IMAGE: ${{ steps.images.outputs.api_image }}
-          WEB_IMAGE: ${{ steps.images.outputs.web_image }}
-          WEB_BEARER_TOKEN: ${{ secrets.WEB_BEARER_TOKEN }}
-        run: node scripts/deploy/candidate-deploy.mjs
+      - name: Deploy API via ACA deploy action
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          appSourcePath: ${{ github.workspace }}
+          dockerfilePath: apps/api/Dockerfile
+          imageToBuild: ${{ env.ACR_LOGIN_SERVER }}/compass-api:${{ env.HEAD_SHA }}
+          acrName: ${{ env.ACR_NAME }}
+          containerAppName: ${{ env.ACA_API_APP_NAME }}
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          disableTelemetry: true
 
-      - name: Gate 3 - Start migration job
+      - name: Deploy Web via ACA deploy action
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          appSourcePath: ${{ github.workspace }}
+          dockerfilePath: apps/web/Dockerfile
+          imageToBuild: ${{ env.ACR_LOGIN_SERVER }}/compass-web:${{ env.HEAD_SHA }}
+          acrName: ${{ env.ACR_NAME }}
+          containerAppName: ${{ env.ACA_WEB_APP_NAME }}
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          disableTelemetry: true
+
+      - name: Build and push migration image to ACR
+        id: migration_image
+        run: |
+          set -euo pipefail
+
+          migrate_image="$ACR_LOGIN_SERVER/compass-migrate:$HEAD_SHA"
+
+          az acr login --name "$ACR_NAME" --only-show-errors
+          docker build -f deploy/Dockerfile.migrate -t "$migrate_image" .
+          docker push "$migrate_image"
+
+          migrate_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$migrate_image" || true)
+
+          echo "migrate_image=$migrate_image" >> "$GITHUB_OUTPUT"
+          echo "migrate_digest=$migrate_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Update migration job image
+        run: |
+          az containerapp job update \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_MIGRATE_JOB_NAME" \
+            --image "${{ steps.migration_image.outputs.migrate_image }}" \
+            --output none
+
+      - name: Run migration job
         id: migration_start
         env:
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+          AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
+          ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
         run: node scripts/deploy/start-migration-job.mjs
 
-      - name: Gate 3 - Wait for migration completion
+      - name: Wait for migration completion
         id: migration_wait
         env:
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+          AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
+          ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
           MIGRATION_EXECUTION_NAME: ${{ steps.migration_start.outputs.migration_execution_name }}
           MIGRATION_TIMEOUT_SECONDS: 900
         run: node scripts/deploy/wait-migration-job.mjs
+
+      - name: Resolve production URLs
+        id: prod_urls
+        run: |
+          set -euo pipefail
+
+          api_fqdn=$(az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_API_APP_NAME" \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+
+          web_fqdn=$(az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_WEB_APP_NAME" \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+
+          if [ -z "$api_fqdn" ] || [ -z "$web_fqdn" ]; then
+            echo "Failed to resolve production ingress FQDNs." >&2
+            exit 1
+          fi
+
+          echo "api_prod_url=https://$api_fqdn" >> "$GITHUB_OUTPUT"
+          echo "web_prod_url=https://$web_fqdn" >> "$GITHUB_OUTPUT"
 
       - name: Azure login (smoke identity)
         uses: azure/login@v2
@@ -177,7 +190,7 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
 
-      - name: Gate 4 - Acquire Entra smoke token
+      - name: Acquire Entra smoke token
         id: token
         run: |
           audience="${{ vars.ENTRA_AUDIENCE }}"
@@ -191,9 +204,9 @@ jobs:
           echo "::add-mask::$smoke_token"
           echo "smoke_token=$smoke_token" >> "$GITHUB_OUTPUT"
 
-      - name: Gate 4 - API smoke verification against candidate
+      - name: API smoke verification
         env:
-          TARGET_API_BASE_URL: ${{ steps.candidate.outputs.api_candidate_url }}
+          TARGET_API_BASE_URL: ${{ steps.prod_urls.outputs.api_prod_url }}
           ACCESS_TOKEN: ${{ steps.token.outputs.smoke_token }}
           EXPECTED_EMPLOYEE_ID: ${{ vars.SMOKE_EXPECTED_ACCOUNT_IDENTITY }}
         run: node scripts/deploy/verify-api-smoke.mjs
@@ -201,12 +214,12 @@ jobs:
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Gate 4 - Browser evidence against candidate web URL
+      - name: Browser evidence
         env:
           HEAD_SHA: ${{ env.HEAD_SHA }}
           PR_NUMBER: 0
           RISK_TIER: t3
-          WEB_BASE_URL: ${{ steps.candidate.outputs.web_candidate_url }}
+          WEB_BASE_URL: ${{ steps.prod_urls.outputs.web_prod_url }}
           EXPECTED_ENTRYPOINT: /
           EXPECTED_ACCOUNT_IDENTITY_RAW: ${{ vars.SMOKE_EXPECTED_ACCOUNT_IDENTITY }}
           REQUIRED_FLOW_IDS_JSON: '["compass-smoke"]'
@@ -217,45 +230,37 @@ jobs:
           fi
           EXPECTED_ACCOUNT_IDENTITY="$expected_identity" pnpm ci:browser-evidence
 
-      - name: Gate 5 - re-run current-head SHA guard
-        run: node scripts/deploy/head-sha-guard.mjs
-
-      - name: Gate 5 - Promote candidate revisions
-        id: promote
-        env:
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
-          ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
-          API_CANDIDATE_REVISION: ${{ steps.candidate.outputs.api_candidate_revision }}
-          WEB_CANDIDATE_REVISION: ${{ steps.candidate.outputs.web_candidate_revision }}
-        run: node scripts/deploy/promote-traffic.mjs
-
-      - name: Gate 5.5 - Post-deploy API smoke on production URL
-        env:
-          TARGET_API_BASE_URL: ${{ steps.promote.outputs.api_prod_url }}
-          ACCESS_TOKEN: ${{ steps.token.outputs.smoke_token }}
-          EXPECTED_EMPLOYEE_ID: ${{ vars.SMOKE_EXPECTED_ACCOUNT_IDENTITY }}
-        run: node scripts/deploy/verify-api-smoke.mjs
-
-      - name: Gate 5.6 - Rollback traffic on post-promotion failure
-        if: ${{ failure() && steps.promote.outcome == 'success' }}
-        env:
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
-          ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
-          PREVIOUS_API_REVISION: ${{ steps.candidate.outputs.previous_api_revision }}
-          PREVIOUS_WEB_REVISION: ${{ steps.candidate.outputs.previous_web_revision }}
-        run: node scripts/deploy/rollback-traffic.mjs
-
-      - name: Gate 6 - Write final deploy result artifact
+      - name: Write final deploy result artifact
         if: ${{ always() }}
         env:
-          ARTIFACT_NAME: result
-          ARTIFACT_OUTPUT_KEY: deploy_result_path
           JOB_STATUS: ${{ job.status }}
+          API_IMAGE: ${{ env.ACR_LOGIN_SERVER }}/compass-api:${{ env.HEAD_SHA }}
+          WEB_IMAGE: ${{ env.ACR_LOGIN_SERVER }}/compass-web:${{ env.HEAD_SHA }}
+          MIGRATE_IMAGE: ${{ steps.migration_image.outputs.migrate_image }}
+          MIGRATE_DIGEST: ${{ steps.migration_image.outputs.migrate_digest }}
+          API_PROD_URL: ${{ steps.prod_urls.outputs.api_prod_url }}
+          WEB_PROD_URL: ${{ steps.prod_urls.outputs.web_prod_url }}
         run: |
-          artifact_json=$(node -e 'console.log(JSON.stringify({status:process.env.JOB_STATUS === "success" ? "pass" : "fail"}))')
-          ARTIFACT_JSON="$artifact_json" node scripts/deploy/write-deploy-artifact.mjs
+          mkdir -p ".artifacts/deploy/$HEAD_SHA"
+          cat > ".artifacts/deploy/$HEAD_SHA/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "tier": "$RISK_TIER",
+            "status": "${JOB_STATUS:-unknown}",
+            "images": {
+              "api": "$API_IMAGE",
+              "web": "$WEB_IMAGE",
+              "migrate": "$MIGRATE_IMAGE",
+              "migrateDigest": "$MIGRATE_DIGEST"
+            },
+            "urls": {
+              "api": "$API_PROD_URL",
+              "web": "$WEB_PROD_URL"
+            }
+          }
+          JSON
 
       - name: Upload deploy artifacts
         if: ${{ always() }}

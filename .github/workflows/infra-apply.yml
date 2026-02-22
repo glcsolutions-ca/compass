@@ -136,6 +136,10 @@ jobs:
             fi
           done
 
+      - name: Login to GHCR for image checks
+        run: |
+          echo "${{ secrets.GHCR_PASSWORD }}" | docker login ghcr.io -u "${{ vars.GHCR_USERNAME }}" --password-stdin
+
       - name: Resolve release-candidate images
         id: images
         run: |

@@ -8,19 +8,23 @@
     "dev": "tsx watch src/index.ts",
     "lint": "eslint . --ext .ts --max-warnings=0",
     "start": "node dist/index.js",
-    "test": "vitest run",
+    "test": "vitest run --exclude src/postgres.integration.test.ts",
+    "test:integration": "vitest run src/postgres.integration.test.ts",
     "typecheck": "tsc -p tsconfig.ref.json --noEmit"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",
+    "@fastify/postgres": "^6.0.2",
     "@compass/contracts": "workspace:*",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",
     "fastify-type-provider-zod": "^4.0.2",
     "jose": "^5.9.6",
+    "pg": "^8.16.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/pg": "^8.15.6",
     "tsx": "4.21.0",
     "vitest": "3.2.4"
   }

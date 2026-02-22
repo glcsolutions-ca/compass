@@ -123,6 +123,20 @@ jobs:
       - codex_review
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: compass
+          POSTGRES_USER: compass
+          POSTGRES_PASSWORD: compass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U compass -d compass"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     outputs:
       ci_pipeline_path: ${{ steps.write_result.outputs.ci_pipeline_path }}
     steps:
@@ -146,6 +160,26 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Wait for Postgres readiness
+        env:
+          DATABASE_URL: postgres://compass:compass@127.0.0.1:5432/compass
+        run: pnpm db:postgres:wait
+
+      - name: Apply database migrations
+        env:
+          DATABASE_URL: postgres://compass:compass@127.0.0.1:5432/compass
+        run: pnpm db:migrate:up
+
+      - name: Seed database
+        env:
+          DATABASE_URL: postgres://compass:compass@127.0.0.1:5432/compass
+        run: pnpm db:seed
+
+      - name: Run Postgres integration tests
+        env:
+          DATABASE_URL: postgres://compass:compass@127.0.0.1:5432/compass
+        run: pnpm --filter @compass/api test:integration
 
       - name: Run ci-pipeline
         id: run_pipeline

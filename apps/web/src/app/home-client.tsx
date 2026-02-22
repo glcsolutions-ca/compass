@@ -4,19 +4,13 @@ import { createApiClient } from "@compass/sdk";
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 
-interface HomeClientProps {
-  baseUrl: string;
-  defaultToken?: string;
-}
-
-export default function HomeClient({ baseUrl, defaultToken }: HomeClientProps) {
+export default function HomeClient() {
   const client = useMemo(
     () =>
       createApiClient({
-        baseUrl,
-        token: defaultToken
+        baseUrl: "/"
       }),
-    [baseUrl, defaultToken]
+    []
   );
 
   const [employeeId, setEmployeeId] = useState("employee-123");

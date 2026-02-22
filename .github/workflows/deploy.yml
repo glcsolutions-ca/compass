@@ -112,6 +112,22 @@ jobs:
           echo "api_image=$api_image" >> "$GITHUB_OUTPUT"
           echo "api_digest=$api_digest" >> "$GITHUB_OUTPUT"
 
+      - name: Build and push Web image to ACR
+        id: web_image
+        run: |
+          set -euo pipefail
+
+          web_image="$ACR_REGISTRY/compass-web:$HEAD_SHA"
+
+          az acr login --name "$ACR_NAME" --only-show-errors
+          docker build -f apps/web/Dockerfile -t "$web_image" .
+          docker push "$web_image"
+
+          web_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$web_image" || true)
+
+          echo "web_image=$web_image" >> "$GITHUB_OUTPUT"
+          echo "web_digest=$web_digest" >> "$GITHUB_OUTPUT"
+
       - name: Update migration job image
         run: |
           az containerapp job update \
@@ -147,10 +163,7 @@ jobs:
       - name: Deploy Web via ACA deploy action
         uses: azure/container-apps-deploy-action@v1
         with:
-          appSourcePath: ${{ github.workspace }}
-          dockerfilePath: apps/web/Dockerfile
-          imageToBuild: ${{ env.ACR_REGISTRY }}/compass-web:${{ env.HEAD_SHA }}
-          acrName: ${{ env.ACR_NAME }}
+          imageToDeploy: ${{ steps.web_image.outputs.web_image }}
           containerAppName: ${{ env.ACA_WEB_APP_NAME }}
           resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
           disableTelemetry: true
@@ -202,6 +215,30 @@ jobs:
                 --query 'properties.template.scale.minReplicas' \
                 --output tsv)
 
+              max_replicas=$(az containerapp show \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --name "$app" \
+                --query 'properties.template.scale.maxReplicas' \
+                --output tsv)
+
+              cpu=$(az containerapp show \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --name "$app" \
+                --query 'properties.template.containers[0].resources.cpu' \
+                --output tsv)
+
+              memory=$(az containerapp show \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --name "$app" \
+                --query 'properties.template.containers[0].resources.memory' \
+                --output tsv)
+
+              max_inactive_revisions=$(az containerapp show \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --name "$app" \
+                --query 'properties.configuration.maxInactiveRevisions' \
+                --output tsv)
+
               active_count=$(az containerapp revision list \
                 --resource-group "$AZURE_RESOURCE_GROUP" \
                 --name "$app" \
@@ -215,6 +252,31 @@ jobs:
 
               if [ "${min_replicas:-0}" != "0" ]; then
                 echo "$app minReplicas drifted (actual: ${min_replicas:-unset})" >&2
+                exit 1
+              fi
+
+              if [ "${max_replicas:-0}" != "1" ]; then
+                echo "$app maxReplicas drifted (actual: ${max_replicas:-unset})" >&2
+                exit 1
+              fi
+
+              if [ "${cpu:-unset}" != "0.25" ]; then
+                echo "$app cpu drifted (actual: ${cpu:-unset})" >&2
+                exit 1
+              fi
+
+              if [ "${memory:-unset}" != "0.5Gi" ]; then
+                echo "$app memory drifted (actual: ${memory:-unset})" >&2
+                exit 1
+              fi
+
+              if [ -n "${max_inactive_revisions:-}" ] && ! [[ "${max_inactive_revisions}" =~ ^[0-9]+$ ]]; then
+                echo "$app maxInactiveRevisions is not numeric (actual: ${max_inactive_revisions:-unset})" >&2
+                exit 1
+              fi
+
+              if [ -n "${max_inactive_revisions:-}" ] && [ "${max_inactive_revisions}" -gt 2 ]; then
+                echo "$app maxInactiveRevisions drifted (actual: ${max_inactive_revisions:-unset})" >&2
                 exit 1
               fi
 
@@ -288,7 +350,7 @@ jobs:
         env:
           JOB_STATUS: ${{ job.status }}
           API_IMAGE: ${{ steps.api_image.outputs.api_image }}
-          WEB_IMAGE: ${{ env.ACR_REGISTRY }}/compass-web:${{ env.HEAD_SHA }}
+          WEB_IMAGE: ${{ steps.web_image.outputs.web_image }}
           MIGRATE_IMAGE: ${{ steps.api_image.outputs.api_image }}
           MIGRATE_DIGEST: ${{ steps.api_image.outputs.api_digest }}
           API_PROD_URL: ${{ steps.prod_urls.outputs.api_prod_url }}

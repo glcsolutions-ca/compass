@@ -95,6 +95,7 @@ test("compass smoke flow", async ({ page }) => {
       details?: string;
     }>;
     let flowStatus: "passed" | "failed" = "passed";
+    let latestVisiblePreText = "";
 
     try {
       await page.goto(`${baseUrl}${expectedEntrypoint}`, { waitUntil: "networkidle" });
@@ -114,6 +115,7 @@ test("compass smoke flow", async ({ page }) => {
       const payloadLocator = page.locator("pre").first();
       await payloadLocator.waitFor({ state: "visible", timeout: payloadTimeoutMs });
       const payloadText = (await payloadLocator.textContent()) ?? "";
+      latestVisiblePreText = payloadText;
 
       const identityPass = payloadText.includes(expectedIdentity);
       flowAssertions.push({
@@ -122,13 +124,49 @@ test("compass smoke flow", async ({ page }) => {
         pass: identityPass,
         details: identityPass ? `Found ${expectedIdentity}` : payloadText.slice(0, 200)
       });
-
-      await page.screenshot({ path: screenshotPath, fullPage: true });
     } catch (error) {
       flowStatus = "failed";
       flowAssertions.push({
         id: `${flowId}:execution-error`,
         description: `[${flowId}] Playwright flow executed without runtime errors`,
+        pass: false,
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+
+    try {
+      const preBlocks = page.locator("pre");
+      const preCount = await preBlocks.count();
+      if (preCount > 0) {
+        const latestText = (await preBlocks.nth(preCount - 1).textContent())?.trim() ?? "";
+        if (latestText.length > 0) {
+          latestVisiblePreText = latestText;
+        }
+      }
+    } catch {
+      // Ignore artifact-only diagnostics failures.
+    }
+
+    if (flowStatus === "failed" && latestVisiblePreText.length > 0) {
+      flowAssertions.push({
+        id: `${flowId}:last-visible-pre`,
+        description: `[${flowId}] Last visible preformatted text captured for diagnostics`,
+        pass: false,
+        details: latestVisiblePreText.slice(0, 600)
+      });
+    }
+
+    try {
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      artifacts.push({
+        type: "screenshot",
+        path: screenshotPath,
+        createdAt: new Date().toISOString()
+      });
+    } catch (error) {
+      flowAssertions.push({
+        id: `${flowId}:screenshot-capture`,
+        description: `[${flowId}] Screenshot capture succeeded`,
         pass: false,
         details: error instanceof Error ? error.message : String(error)
       });
@@ -151,12 +189,6 @@ test("compass smoke flow", async ({ page }) => {
       status: flowStatus,
       startedAt,
       finishedAt
-    });
-
-    artifacts.push({
-      type: "screenshot",
-      path: screenshotPath,
-      createdAt: finishedAt
     });
 
     assertions.push(...flowAssertions);

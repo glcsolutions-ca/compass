@@ -7,7 +7,7 @@ param registryIdentityResourceId string
 @secure()
 param databaseUrl string
 
-resource migrateJob 'Microsoft.App/jobs@2023-05-01' = {
+resource migrateJob 'Microsoft.App/jobs@2024-03-01' = {
   name: jobName
   location: location
   identity: {

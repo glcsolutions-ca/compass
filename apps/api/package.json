@@ -20,6 +20,7 @@
     "fastify": "^5.2.1",
     "fastify-type-provider-zod": "^4.0.2",
     "jose": "^5.9.6",
+    "node-pg-migrate": "8.0.4",
     "pg": "^8.16.3",
     "zod": "^3.24.2"
   },

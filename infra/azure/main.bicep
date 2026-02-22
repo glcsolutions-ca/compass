@@ -30,7 +30,6 @@ param postgresStorageMb int = 32768
 
 param apiImage string = 'SET_IN_GITHUB_ENV'
 param webImage string = 'SET_IN_GITHUB_ENV'
-param migrateImage string = 'SET_IN_GITHUB_ENV'
 
 param authMode string = 'entra'
 param requiredScope string = 'time.read'
@@ -162,7 +161,7 @@ module migrateJob './modules/containerapp-job-migrate.bicep' = {
     location: location
     jobName: migrationJobName
     managedEnvironmentId: containerEnvironment.outputs.environmentId
-    image: migrateImage
+    image: apiImage
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
     databaseUrl: databaseUrl

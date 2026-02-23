@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { HealthResponseSchema } from "@compass/contracts";
+import { fixedClock } from "@compass/testkit";
 import { buildApiApp } from "./app.js";
 
 const testConfig = {
@@ -16,12 +18,17 @@ const testConfig = {
 
 describe("API", () => {
   it("returns health status", async () => {
-    const app = buildApiApp({ config: testConfig });
+    const now = fixedClock("2026-02-23T00:00:00.000Z");
+    const app = buildApiApp({ config: testConfig, now });
 
     const response = await app.inject({ method: "GET", url: "/health" });
+    const payload = HealthResponseSchema.parse(response.json());
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().status).toBe("ok");
+    expect(payload).toEqual({
+      status: "ok",
+      timestamp: "2026-02-23T00:00:00.000Z"
+    });
 
     await app.close();
   });

@@ -26,17 +26,30 @@
       "pnpm-workspace.yaml",
       "**/package.json"
     ],
-    "low": ["**"]
+    "low": [
+      "**"
+    ]
   },
   "mergePolicy": {
     "high": {
-      "requiredChecks": ["risk-policy-gate", "ci-pipeline", "harness-smoke", "codex-review"]
+      "requiredChecks": [
+        "risk-policy-gate",
+        "ci-pipeline",
+        "harness-smoke",
+        "codex-review"
+      ]
     },
     "normal": {
-      "requiredChecks": ["risk-policy-gate", "ci-pipeline"]
+      "requiredChecks": [
+        "risk-policy-gate",
+        "ci-pipeline"
+      ]
     },
     "low": {
-      "requiredChecks": ["risk-policy-gate", "ci-pipeline"]
+      "requiredChecks": [
+        "risk-policy-gate",
+        "ci-pipeline"
+      ]
     }
   },
   "docsDriftRules": {
@@ -74,11 +87,15 @@
     ]
   },
   "uiEvidenceRules": {
-    "paths": ["apps/web/**"],
-    "requiredFlowIds": ["compass-smoke"]
+    "paths": [
+      "apps/web/**"
+    ],
+    "requiredFlowIds": [
+      "compass-smoke"
+    ]
   },
   "reviewPolicy": {
-    "codexReviewEnabled": false
+    "codexReviewEnabled": true
   },
   "staleRules": {
     "requireHeadShaMatch": true,

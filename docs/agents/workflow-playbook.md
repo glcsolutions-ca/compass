@@ -32,12 +32,14 @@ pnpm ci:gate
    - `full` for `standard` and `high`
    - target: `low` PRs should not start Postgres containers
 5. `risk-policy-gate` blocks merge unless required evidence is complete and valid for both `headSha` and `testedSha`.
-6. Merge to `main` runs one release pipeline: `classify`, `checks`, `promote`, `report`.
-7. `classify` diffs `base_sha` (last successful production deployment SHA) to `head_sha`.
-8. `promote` is the only production-mutating job (`environment: production`, `concurrency: prod-main`).
-9. Stale guards run only before infra and before migration+deploy boundary.
-10. Runtime releases build once, promote digest refs, run migration+deploy atomically, then run smoke + browser evidence.
-11. Successful promotions are recorded in GitHub Deployments (`production`) and become the next `base_sha`.
+6. `merge-contract.yml` runs on `pull_request` and `merge_group` so queue execution uses the same gate.
+7. Merge queue converges `main`; direct admin bypass is not part of normal flow.
+8. Merge to `main` runs one release pipeline: `classify`, `checks`, `promote`, `report`.
+9. `classify` diffs `base_sha` (last successful production deployment SHA) to `head_sha`.
+10. `promote` is the only production-mutating job (`environment: production`, `concurrency: prod-main`).
+11. Stale guards run only before infra and before migration+deploy boundary.
+12. Runtime releases build once, promote digest refs, run migration+deploy atomically, then run smoke + browser evidence.
+13. Successful promotions are recorded in GitHub Deployments (`production`) and become the next `base_sha`.
 
 ## High-Risk Paths
 

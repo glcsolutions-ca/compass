@@ -68,6 +68,8 @@ jobs:
 
       - name: actionlint
         uses: rhysd/actionlint@v1.7.11
+        with:
+          args: .github/workflows/deploy.yml
 
   promote:
     name: promote
@@ -223,7 +225,7 @@ jobs:
               return 1
             fi
 
-            local repo_tag="${image#${ACR_REGISTRY}/}"
+            local repo_tag="${image#"$ACR_REGISTRY/"}"
             local repo="${repo_tag%%:*}"
             local digest
             digest="$(az acr repository show --name "$ACR_NAME" --image "$repo_tag" --query digest --output tsv)"
@@ -268,10 +270,12 @@ jobs:
             exit 1
           fi
 
-          echo "current_api_ref=$api_ref" >> "$GITHUB_OUTPUT"
-          echo "current_web_ref=$web_ref" >> "$GITHUB_OUTPUT"
-          echo "api_prod_url=https://$api_fqdn" >> "$GITHUB_OUTPUT"
-          echo "web_prod_url=https://$web_fqdn" >> "$GITHUB_OUTPUT"
+          {
+            echo "current_api_ref=$api_ref"
+            echo "current_web_ref=$web_ref"
+            echo "api_prod_url=https://$api_fqdn"
+            echo "web_prod_url=https://$web_fqdn"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Apply infra updates
         if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && (env.KIND == 'infra' || env.NEEDS_INFRA == 'true') }}
@@ -436,8 +440,10 @@ jobs:
           api_ref="$(docker inspect --format='{{index .RepoDigests 0}}' "$api_tag")"
           web_ref="$(docker inspect --format='{{index .RepoDigests 0}}' "$web_tag")"
 
-          echo "candidate_api_ref=$api_ref" >> "$GITHUB_OUTPUT"
-          echo "candidate_web_ref=$web_ref" >> "$GITHUB_OUTPUT"
+          {
+            echo "candidate_api_ref=$api_ref"
+            echo "candidate_web_ref=$web_ref"
+          } >> "$GITHUB_OUTPUT"
           echo "api_tag=$api_tag" >> "$GITHUB_OUTPUT"
           echo "web_tag=$web_tag" >> "$GITHUB_OUTPUT"
 
@@ -553,7 +559,7 @@ jobs:
           for app in "$ACA_API_APP_NAME" "$ACA_WEB_APP_NAME"; do
             converged="false"
 
-            for attempt in {1..12}; do
+            for _ in {1..12}; do
               app_json=$(az containerapp show \
                 --resource-group "$AZURE_RESOURCE_GROUP" \
                 --name "$app" \

@@ -20,7 +20,7 @@
   - `browser-evidence` (conditional)
   - `harness-smoke` (conditional)
   - `risk-policy-gate` (final required gate; validates required outcomes from `needs.*.result`)
-- `codex-review-trusted.yml`: manual trusted-context codex review for PR diffs (non-blocking to merge contract)
+- `codex-review-trusted.yml`: optional manual `workflow_dispatch` trusted-context codex review for PR diffs; non-blocking and outside the merge gate
 - `dependabot-auto-merge.yml`: safe-lane auto-merge for Dependabot PRs (patch/minor only) with required gate-context checks (`risk-policy-gate`, `ci-pipeline`) before enabling auto-merge
 - `deploy.yml`: mainline release orchestrator (`classify -> checks -> promote -> report`)
   - `promote` is the only job with `environment: production` and `concurrency: prod-main`

@@ -86,3 +86,5 @@ export function buildApiApp(options: BuildApiAppOptions = {}) {
 
   return app;
 }
+
+// ci-validation: normal-tier api-only

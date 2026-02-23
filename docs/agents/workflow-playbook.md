@@ -32,6 +32,7 @@ need focused local debugging of docs-drift behavior.
 4. `ci-pipeline` check name stays fixed, but mode is tier-driven:
    - `fast` for `t0`
    - `full` for `deps`, `t1`, `t2`, `t3`
+   - commit-stage target: `t0` PRs should not start Postgres service containers
 5. `risk-policy-gate` blocks merge unless current-head evidence is complete and valid.
 6. Merge to `main` creates a release candidate for that exact SHA.
 7. Deploy pipeline runs migration job, deploys API/Web, then runs smoke and browser evidence.

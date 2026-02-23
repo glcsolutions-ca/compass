@@ -41,7 +41,6 @@
     "contract:check": "pnpm contract:generate && git diff --exit-code -- packages/contracts/openapi/openapi.json packages/sdk/src/generated/schema.ts",
     "ci:preflight": "node scripts/ci/preflight.mjs",
     "ci:docs-drift": "node scripts/ci/docs-drift.mjs",
-    "ci:codex-review": "node scripts/ci/codex-review.mjs",
     "ci:pipeline": "pnpm check && pnpm build",
     "ci:browser-evidence": "playwright test tests/e2e/smoke.spec.ts --config tests/e2e/playwright.config.ts --reporter=line --workers=1",
     "ci:harness-smoke": "tsx tests/harness/smoke.ts",

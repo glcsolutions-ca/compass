@@ -9,7 +9,7 @@
 ## `codex-review-trusted` Failure
 
 - Cause: trusted review workflow failed to fetch PR diff data or review output failed validation.
-- Fix: rerun `codex-review-trusted.yml` with the PR number; verify trusted workflow secrets/config are present.
+- Fix: rerun `codex-review-trusted.yml` with the PR number only when you want supplemental trusted feedback; it is manual and non-blocking. Verify trusted workflow secrets/config are present.
 
 ## `risk-policy-gate` Failure
 

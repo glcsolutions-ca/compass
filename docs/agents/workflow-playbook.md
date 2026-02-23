@@ -47,3 +47,5 @@ When tier resolves to `high`, expect additional required evidence:
 
 - `harness-smoke`
 - `actionlint` when workflow files changed
+
+Trusted Codex review remains available through manual `codex-review-trusted.yml` runs and does not block merges.

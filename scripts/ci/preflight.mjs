@@ -33,7 +33,7 @@ async function main() {
   const harnessSmokeRequired = requiredChecks.includes("harness-smoke");
   const codexReviewRequired = requiredChecks.includes("codex-review");
   const codexReviewEnabled = policy.reviewPolicy.codexReviewEnabled;
-  const ciMode = tier === "t0" ? "fast" : "full";
+  const ciMode = tier === "low" ? "fast" : "full";
 
   const preflightPath = path.join(".artifacts", "merge", headSha, "preflight.json");
   const prNumber = await getPrNumberFromEvent();

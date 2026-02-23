@@ -86,6 +86,42 @@ jobs:
           CHANGED_FILES_JSON: ${{ steps.preflight.outputs.changed_files_json }}
         run: node scripts/ci/docs-drift.mjs
 
+      - name: Lint changed workflow files
+        if: ${{ steps.preflight.outcome == 'success' }}
+        env:
+          CHANGED_FILES_JSON: ${{ steps.preflight.outputs.changed_files_json }}
+          RISK_TIER: ${{ steps.preflight.outputs.tier }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t workflow_files < <(
+            node <<'NODE'
+          const changedFiles = JSON.parse(process.env.CHANGED_FILES_JSON || "[]");
+          const workflows = [...new Set(changedFiles.filter((filePath) => /^\\.github\\/workflows\\/.*\\.(yml|yaml)$/.test(filePath)))];
+          for (const workflow of workflows) {
+            console.log(workflow);
+          }
+          NODE
+          )
+
+          if [ "${#workflow_files[@]}" -eq 0 ] && [ "$RISK_TIER" = "t3" ]; then
+            shopt -s nullglob
+            workflow_files=(.github/workflows/*.yml .github/workflows/*.yaml)
+            shopt -u nullglob
+          fi
+
+          if [ "${#workflow_files[@]}" -eq 0 ]; then
+            echo "No workflow files to lint."
+            exit 0
+          fi
+
+          docker run --rm \
+            -v "$PWD:/work" \
+            -w /work \
+            rhysd/actionlint:1.7.11 \
+            -shellcheck= \
+            -color "${workflow_files[@]}"
+
       - name: Upload docs-drift artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4

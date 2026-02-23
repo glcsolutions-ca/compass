@@ -75,6 +75,7 @@ async function main() {
   const needsMigrations = kind === "runtime" && touchesMigration;
 
   await appendGithubOutput({
+    base_sha: baseSha,
     kind,
     rollout: String(rollout),
     needs_infra: String(needsInfra),

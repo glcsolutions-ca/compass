@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1",
+  "scanRoots": ["apps", "packages", "tests"],
+  "layers": {
+    "commitStage": [
+      "apps/*/src/**/*.test.ts",
+      "apps/*/src/**/*.test.tsx",
+      "packages/*/src/**/*.test.ts",
+      "packages/*/src/**/*.test.tsx"
+    ],
+    "integration": [
+      "apps/*/test/integration/**/*.test.ts",
+      "apps/*/test/integration/**/*.test.tsx"
+    ],
+    "e2e": ["tests/e2e/**/*.spec.ts", "tests/e2e/**/*.spec.tsx"],
+    "smoke": ["tests/smoke/**/*.ts", "tests/smoke/**/*.tsx"]
+  },
+  "imports": {
+    "playwrightModules": ["@playwright/test"],
+    "dbModules": ["pg", "@prisma/client", "mysql2", "mongodb", "redis", "ioredis", "better-sqlite3"]
+  },
+  "paths": {
+    "quarantine": "tests/policy/test-quarantine.json"
+  },
+  "docs": {
+    "principles": "tests/README.md#principles",
+    "directoryConventions": "tests/README.md#directory-conventions",
+    "flakePolicy": "tests/README.md#flake-policy",
+    "integrationLayer": "tests/README.md#4-integration-tests-some-high-value"
+  },
+  "rules": {
+    "TC001": { "enabled": true },
+    "TC010": { "enabled": true },
+    "TC011": { "enabled": true },
+    "TC020": { "enabled": true }
+  }
+}

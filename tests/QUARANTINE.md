@@ -1,18 +1,9 @@
-# Quarantine
+# Moved
 
-Use quarantine only for short-lived flaky tests.
+Quarantine policy and schema moved to:
 
-Source of truth: `tests/quarantine.json`
+- `tests/policy/README.md`
 
-Each entry must include:
+Source-of-truth data file:
 
-- `id` (or `file` + optional `line`)
-- `owner`
-- `reason`
-- `expiresOn` (`YYYY-MM-DD`)
-
-Rules:
-
-- `test.skip`/`describe.skip` is rejected unless a matching quarantine entry exists.
-- Expired entries fail CI.
-- Remove quarantine as soon as the test is fixed.
+- `tests/policy/test-quarantine.json`

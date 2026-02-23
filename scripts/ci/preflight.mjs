@@ -12,19 +12,15 @@ import {
   resolveRiskTier,
   writeJsonFile
 } from "./utils.mjs";
-
-async function resolveShas() {
-  const headSha = process.env.GITHUB_HEAD_SHA?.trim() || (await getCurrentSha());
-  const baseSha = process.env.GITHUB_BASE_SHA?.trim() || (await getParentSha(headSha));
-  const testedSha = process.env.GITHUB_TESTED_SHA?.trim() || (await getCurrentSha());
-
-  return { baseSha, headSha, testedSha };
-}
+import { resolvePreflightShas } from "./preflight-lib.mjs";
 
 async function main() {
   const policyPath =
     process.env.MERGE_POLICY_PATH ?? path.join(".github", "policy", "merge-policy.json");
-  const { baseSha, headSha, testedSha } = await resolveShas();
+  const { baseSha, headSha, testedSha } = await resolvePreflightShas({
+    getCurrentSha,
+    getParentSha
+  });
 
   const policy = await loadMergePolicy(policyPath);
   const changedFiles = await getChangedFiles(baseSha, headSha);

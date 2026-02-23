@@ -1,4 +1,5 @@
 import path from "node:path";
+import { evaluateRequiredCheckResults } from "./gate-lib.mjs";
 import {
   appendGithubOutput,
   fileExists,
@@ -65,31 +66,6 @@ function parseCheckResults() {
   }
 
   return checkResults;
-}
-
-function validateRequiredResults(
-  { checkResults, browserRequired, harnessRequired, docsDriftBlocking, docsDriftStatus },
-  reasons
-) {
-  if (checkResults.preflight !== "success") {
-    reasons.push(`preflight result is ${checkResults.preflight}`);
-  }
-
-  if (checkResults["ci-pipeline"] !== "success") {
-    reasons.push(`ci-pipeline result is ${checkResults["ci-pipeline"]}`);
-  }
-
-  if (browserRequired && checkResults["browser-evidence"] !== "success") {
-    reasons.push(`browser-evidence required but result is ${checkResults["browser-evidence"]}`);
-  }
-
-  if (harnessRequired && checkResults["harness-smoke"] !== "success") {
-    reasons.push(`harness-smoke required but result is ${checkResults["harness-smoke"]}`);
-  }
-
-  if (docsDriftBlocking && docsDriftStatus !== "pass") {
-    reasons.push(`docs-drift blocking is true but docs_drift_status is ${docsDriftStatus}`);
-  }
 }
 
 function validateRequiredFlowAssertions(flowId, assertions, reasons) {
@@ -216,18 +192,13 @@ async function main() {
   const docsDriftStatus = (process.env.DOCS_DRIFT_STATUS?.trim() || "unknown").toLowerCase();
 
   const checkResults = parseCheckResults();
-  const reasons = [];
-
-  validateRequiredResults(
-    {
-      checkResults,
-      browserRequired,
-      harnessRequired,
-      docsDriftBlocking,
-      docsDriftStatus
-    },
-    reasons
-  );
+  const reasons = evaluateRequiredCheckResults({
+    checkResults,
+    browserRequired,
+    harnessRequired,
+    docsDriftBlocking,
+    docsDriftStatus
+  });
 
   try {
     await validateBrowserEvidence({

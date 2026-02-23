@@ -45,7 +45,7 @@
     "ci:browser-evidence": "playwright test tests/e2e/smoke.spec.ts --config tests/e2e/playwright.config.ts --reporter=line --workers=1",
     "ci:harness-smoke": "tsx tests/harness/smoke.ts",
     "ci:gate": "node scripts/ci/gate.mjs",
-    "test:merge-contract": "vitest run scripts/ci/utils.test.mjs"
+    "test:merge-contract": "vitest run scripts/ci/utils.test.mjs scripts/ci/preflight-lib.test.mjs scripts/ci/gate-lib.test.mjs"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

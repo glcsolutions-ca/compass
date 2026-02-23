@@ -20,7 +20,7 @@
     "build": "tsc -p tsconfig.build.json",
     "generate": "tsx src/generate-openapi.ts",
     "lint": "eslint . --ext .ts --max-warnings=0",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --config vitest.config.mts --passWithNoTests",
     "typecheck": "tsc -p tsconfig.ref.json --noEmit"
   },
   "dependencies": {

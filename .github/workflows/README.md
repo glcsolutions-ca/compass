@@ -24,7 +24,7 @@ Use these local checks to reduce format-only and policy drift failures in CI:
 
 - `merge-contract.yml`: deterministic PR gate with dependency-based parallel checks:
   - triggers on `pull_request` and `merge_group`
-  - `risk-policy-preflight` (includes `docs-drift` evaluation)
+  - `risk-policy-preflight` (includes `testing-contract` + `docs-drift` evaluation before dependency install)
   - `actionlint` on changed workflow files only
   - `ci-pipeline` (single stable CI check name; `fast` runs `pnpm test`, `full` runs DB setup + `pnpm test:full` + `pnpm build`)
   - `browser-evidence` (conditional)

@@ -49,7 +49,10 @@ pnpm dev
 - Contributor workflow: `CONTRIBUTING.md`
 - Agent guide: `AGENTS.md`
 - Docs index: `docs/README.md`
-- Testing philosophy: `docs/testing.md`
+- Testing philosophy: `tests/README.md`
+- Testing enforcement: `tests/GUARDRAILS.md`
+- Testing quarantine: `tests/QUARANTINE.md`
+- Testing troubleshooting: `tests/TROUBLESHOOTING.md`
 - Merge policy (human): `docs/merge-policy.md`
 - Branch protection: `docs/branch-protection.md`
 - Machine policy: `.github/policy/merge-policy.json`

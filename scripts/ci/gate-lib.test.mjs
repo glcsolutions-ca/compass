@@ -30,10 +30,7 @@ describe("evaluateRequiredCheckResults", () => {
       })
     );
 
-    expect(reasons).toEqual([
-      "preflight result is failure",
-      "ci-pipeline result is cancelled"
-    ]);
+    expect(reasons).toEqual(["preflight result is failure", "ci-pipeline result is cancelled"]);
   });
 
   it("enforces browser and harness checks only when required", () => {
@@ -63,9 +60,7 @@ describe("evaluateRequiredCheckResults", () => {
         docsDriftStatus: "fail"
       })
     );
-    expect(blockingReasons).toEqual([
-      "docs-drift blocking is true but docs_drift_status is fail"
-    ]);
+    expect(blockingReasons).toEqual(["docs-drift blocking is true but docs_drift_status is fail"]);
 
     const advisoryReasons = evaluateRequiredCheckResults(
       makeBaseInput({

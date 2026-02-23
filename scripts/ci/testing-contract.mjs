@@ -3,113 +3,28 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import {
+  DEFAULT_TEST_POLICY_PATH,
+  REQUIRED_TEST_RULE_IDS,
+  assertTestingPolicyShape,
+  loadTestPolicy,
+  loadTestPolicyObject
+} from "./test-policy.mjs";
 import { appendGithubStepSummary, getCurrentSha, writeJsonFile } from "./utils.mjs";
 
 const execFileAsync = promisify(execFile);
 
-export const DEFAULT_TEST_POLICY_PATH = path.join("tests", "policy", "test-policy.json");
 export const DEPRECATED_QUARANTINE_PATH = path.join("tests", "quarantine.json");
-
-export const REQUIRED_TEST_RULE_IDS = ["TC001", "TC010", "TC011", "TC020"];
-export const REQUIRED_TEST_LAYER_KEYS = ["commitStage", "integration", "e2e", "smoke"];
-export const REQUIRED_TEST_DOC_KEYS = [
-  "principles",
-  "directoryConventions",
-  "flakePolicy",
-  "integrationLayer"
-];
+export {
+  DEFAULT_TEST_POLICY_PATH,
+  REQUIRED_TEST_RULE_IDS,
+  assertTestingPolicyShape,
+  loadTestPolicy as loadTestingPolicy,
+  loadTestPolicyObject as loadTestingPolicyObject
+};
 
 const ONLY_PATTERN = /\b(?:it|test|describe)\.only\s*\(/;
 const SKIP_PATTERN = /\b(?:it|test|describe)\.skip\s*\(/;
-
-function assertObject(value, name) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${name} must be an object`);
-  }
-}
-
-function assertString(value, name) {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`${name} must be a non-empty string`);
-  }
-
-  return value.trim();
-}
-
-function assertStringArray(value, name) {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error(`${name} must be a non-empty array`);
-  }
-
-  for (let index = 0; index < value.length; index += 1) {
-    if (typeof value[index] !== "string" || value[index].trim().length === 0) {
-      throw new Error(`${name}[${index}] must be a non-empty string`);
-    }
-  }
-}
-
-export function assertTestingPolicyShape(policy) {
-  assertObject(policy, "Test policy");
-
-  if (policy.schemaVersion !== "1") {
-    throw new Error('test policy schemaVersion must be "1"');
-  }
-
-  assertStringArray(policy.scanRoots, "test policy scanRoots");
-
-  assertObject(policy.layers, "test policy layers");
-  for (const layerKey of REQUIRED_TEST_LAYER_KEYS) {
-    assertStringArray(policy.layers[layerKey], `test policy layers.${layerKey}`);
-  }
-
-  assertObject(policy.imports, "test policy imports");
-  assertStringArray(policy.imports.playwrightModules, "test policy imports.playwrightModules");
-  assertStringArray(policy.imports.dbModules, "test policy imports.dbModules");
-
-  assertObject(policy.paths, "test policy paths");
-  assertString(policy.paths.quarantine, "test policy paths.quarantine");
-
-  assertObject(policy.docs, "test policy docs");
-  for (const docKey of REQUIRED_TEST_DOC_KEYS) {
-    const link = assertString(policy.docs[docKey], `test policy docs.${docKey}`);
-    if (!link.startsWith("tests/README.md#")) {
-      throw new Error(`test policy docs.${docKey} must reference tests/README.md#...`);
-    }
-  }
-
-  assertObject(policy.rules, "test policy rules");
-  for (const ruleId of REQUIRED_TEST_RULE_IDS) {
-    assertObject(policy.rules[ruleId], `test policy rules.${ruleId}`);
-    if (typeof policy.rules[ruleId].enabled !== "boolean") {
-      throw new Error(`test policy rules.${ruleId}.enabled must be a boolean`);
-    }
-  }
-}
-
-export function loadTestingPolicyObject(policy) {
-  assertTestingPolicyShape(policy);
-  return policy;
-}
-
-export async function loadTestingPolicy(policyPath = DEFAULT_TEST_POLICY_PATH) {
-  let raw;
-  try {
-    raw = await readFile(policyPath, "utf8");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Unable to read test policy at ${policyPath}: ${message}`);
-  }
-
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Test policy at ${policyPath} must be valid JSON: ${message}`);
-  }
-
-  return loadTestingPolicyObject(parsed);
-}
 
 export function normalizePath(filePath) {
   return filePath.replaceAll("\\", "/");
@@ -470,7 +385,7 @@ export async function runTestingContract(options = {}) {
   const policyPath =
     options.policyPath ?? process.env.TEST_POLICY_PATH?.trim() ?? DEFAULT_TEST_POLICY_PATH;
 
-  const policy = await loadTestingPolicy(policyPath);
+  const policy = await loadTestPolicy(policyPath);
   const layerGlobs = resolveLayerGlobs(policy);
   const quarantinePath = normalizePath(policy.paths.quarantine);
 

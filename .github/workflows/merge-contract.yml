@@ -24,6 +24,8 @@ jobs:
     name: risk-policy-preflight
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      TEST_POLICY_PATH: tests/policy/test-policy.json
     outputs:
       preflight_path: ${{ steps.preflight.outputs.preflight_path }}
       base_sha: ${{ steps.preflight.outputs.base_sha }}
@@ -73,7 +75,6 @@ jobs:
         env:
           HEAD_SHA: ${{ steps.preflight.outputs.head_sha }}
           TESTED_SHA: ${{ steps.preflight.outputs.tested_sha }}
-          TEST_POLICY_PATH: tests/policy/test-policy.json
         run: node scripts/ci/testing-contract.mjs
 
       - name: Upload testing-contract artifact
@@ -148,6 +149,8 @@ jobs:
       - preflight
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    env:
+      TEST_POLICY_PATH: tests/policy/test-policy.json
     outputs:
       ci_pipeline_path: ${{ steps.write_result.outputs.ci_pipeline_path }}
     steps:

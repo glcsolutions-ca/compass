@@ -55,13 +55,15 @@ Output:
 
 ## Policy schema summary (`test-policy.json`)
 
-- `schemaVersion`: currently `"1"`
+- `schemaVersion`: currently `"2"`
 - `scanRoots`: tracked roots scanned for test files
 - `layers`: glob groups for `commitStage`, `integration`, `e2e`, `smoke`
 - `imports`: module lists used by `TC020` checks
 - `paths.quarantine`: quarantine file path
 - `docs`: links used in contract violation output
 - `rules`: enable flags for `TC001`, `TC010`, `TC011`, `TC020`
+- `runtime`: guardrail mode config for commit-stage/integration test setup
+- `lint`: commit-stage lint toggles and module restrictions
 
 ## Test layer mapping
 
@@ -124,4 +126,4 @@ Rules:
 2. Update `tests/policy/test-quarantine.json` when skip metadata changes.
 3. Update docs when behavior changes (`tests/README.md` and this file).
 4. Run `pnpm ci:testing-contract` and `pnpm test`.
-5. Keep `scripts/ci/testing-contract.test.mjs` aligned with policy validation rules.
+5. Keep `scripts/ci/test-policy.test.mjs` and `scripts/ci/testing-contract.test.mjs` aligned with policy validation rules.

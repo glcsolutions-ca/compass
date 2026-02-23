@@ -11,18 +11,16 @@ import {
 const policy = loadMergePolicyObject({
   version: "1",
   riskTierRules: {
-    t3: ["apps/api/src/features/auth/**", ".github/workflows/**", ".github/dependabot.yml"],
-    t2: ["apps/web/**"],
-    t1: ["apps/api/**", "packages/**"],
-    deps: ["package.json", "pnpm-lock.yaml", "**/package.json"],
-    t0: ["**"]
+    high: ["apps/api/src/features/auth/**", ".github/workflows/**", ".github/dependabot.yml"],
+    normal: ["apps/web/**", "apps/api/**", "packages/**", "package.json", "pnpm-lock.yaml"],
+    low: ["**"]
   },
   mergePolicy: {
-    t3: { requiredChecks: ["risk-policy-gate", "ci-pipeline", "harness-smoke", "codex-review"] },
-    t2: { requiredChecks: ["risk-policy-gate", "ci-pipeline", "browser-evidence"] },
-    t1: { requiredChecks: ["risk-policy-gate", "ci-pipeline"] },
-    deps: { requiredChecks: ["risk-policy-gate", "ci-pipeline"] },
-    t0: { requiredChecks: ["risk-policy-gate", "ci-pipeline"] }
+    high: {
+      requiredChecks: ["risk-policy-gate", "ci-pipeline", "harness-smoke", "codex-review"]
+    },
+    normal: { requiredChecks: ["risk-policy-gate", "ci-pipeline"] },
+    low: { requiredChecks: ["risk-policy-gate", "ci-pipeline"] }
   },
   docsDriftRules: {
     blockingPaths: [".github/workflows/**", "scripts/ci/**"],
@@ -43,34 +41,34 @@ const policy = loadMergePolicyObject({
 });
 
 describe("risk tier resolution", () => {
-  it("chooses t3 before lower tiers", () => {
+  it("chooses high before lower tiers", () => {
     const tier = resolveRiskTier(policy, ["apps/api/src/features/auth/auth-middleware.ts"]);
-    expect(tier).toBe("t3");
+    expect(tier).toBe("high");
   });
 
-  it("treats dependabot control-plane config as t3", () => {
+  it("treats dependabot control-plane config as high", () => {
     const tier = resolveRiskTier(policy, [".github/dependabot.yml"]);
-    expect(tier).toBe("t3");
+    expect(tier).toBe("high");
   });
 
-  it("chooses t2 for web paths", () => {
+  it("chooses normal for web paths", () => {
     const tier = resolveRiskTier(policy, ["apps/web/src/app/page.tsx"]);
-    expect(tier).toBe("t2");
+    expect(tier).toBe("normal");
   });
 
-  it("falls back to t0 for docs-only changes", () => {
+  it("falls back to low for docs-only changes", () => {
     const tier = resolveRiskTier(policy, ["README.md"]);
-    expect(tier).toBe("t0");
+    expect(tier).toBe("low");
   });
 
-  it("classifies dependency manifest updates as deps-only changes", () => {
+  it("classifies dependency manifest updates as normal changes", () => {
     const tier = resolveRiskTier(policy, ["pnpm-lock.yaml"]);
-    expect(tier).toBe("deps");
+    expect(tier).toBe("normal");
   });
 
-  it("keeps mixed deps and code updates in a higher tier", () => {
+  it("keeps mixed deps and code updates in normal tier", () => {
     const tier = resolveRiskTier(policy, ["apps/api/src/index.ts", "pnpm-lock.yaml"]);
-    expect(tier).toBe("t1");
+    expect(tier).toBe("normal");
   });
 });
 
@@ -78,13 +76,13 @@ describe("required checks", () => {
   it("adds browser-evidence when UI trigger paths change", () => {
     expect(requiresBrowserEvidence(policy, ["apps/web/src/app/page.tsx"])).toBe(true);
 
-    const checks = computeRequiredChecks(policy, "t3", ["apps/web/src/app/page.tsx"]);
+    const checks = computeRequiredChecks(policy, "high", ["apps/web/src/app/page.tsx"]);
     expect(checks).toContain("browser-evidence");
     expect(checks).not.toContain("codex-review");
   });
 
   it("excludes codex-review when policy disables it", () => {
-    const checks = computeRequiredChecks(policy, "t3", ["scripts/ci/gate.mjs"]);
+    const checks = computeRequiredChecks(policy, "high", ["scripts/ci/gate.mjs"]);
     expect(checks).not.toContain("codex-review");
   });
 
@@ -96,14 +94,19 @@ describe("required checks", () => {
       }
     });
 
-    const checks = computeRequiredChecks(enabledPolicy, "t3", ["scripts/ci/gate.mjs"]);
+    const checks = computeRequiredChecks(enabledPolicy, "high", ["scripts/ci/gate.mjs"]);
     expect(checks).toContain("codex-review");
   });
 });
 
 describe("docs drift", () => {
-  it("blocks control-plane changes without docs updates", () => {
+  it("does not block control-plane changes outside docs-critical paths", () => {
     const result = evaluateDocsDrift(policy, [".github/workflows/merge-contract.yml"]);
+    expect(result.shouldBlock).toBe(false);
+  });
+
+  it("blocks docs-critical changes without docs updates", () => {
+    const result = evaluateDocsDrift(policy, ["packages/contracts/openapi/schema.ts"]);
     expect(result.shouldBlock).toBe(true);
   });
 

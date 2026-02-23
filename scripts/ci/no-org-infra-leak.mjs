@@ -306,7 +306,7 @@ async function readTextIfSafe(filePath) {
 
 async function main() {
   const headSha = process.env.HEAD_SHA?.trim() || (await getCurrentSha());
-  const tier = process.env.RISK_TIER?.trim() || "t0";
+  const tier = process.env.RISK_TIER?.trim() || "low";
   const files = await getTrackedFiles();
 
   const findings = [];

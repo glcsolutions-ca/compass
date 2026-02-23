@@ -12,7 +12,7 @@ async function main() {
   const policyPath =
     process.env.MERGE_POLICY_PATH ?? path.join(".github", "policy", "merge-policy.json");
   const headSha = requireEnv("HEAD_SHA");
-  const tier = process.env.RISK_TIER?.trim() || "t0";
+  const tier = process.env.RISK_TIER?.trim() || "low";
 
   const changedFiles = parseJsonEnv("CHANGED_FILES_JSON", []);
   if (!Array.isArray(changedFiles)) {
@@ -41,9 +41,7 @@ async function main() {
   });
 
   if (drift.shouldBlock) {
-    console.error(
-      "Docs drift blocking: control-plane/docs-critical paths changed without docTargets updates."
-    );
+    console.error("Docs drift blocking: docs-critical paths changed without docTargets updates.");
     process.exit(1);
   }
 

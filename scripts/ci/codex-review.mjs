@@ -161,7 +161,7 @@ async function main() {
     return;
   }
 
-  if (tier !== "t3") {
+  if (tier !== "high") {
     await writeNoOpReport(
       reviewPath,
       headSha,
@@ -181,7 +181,7 @@ async function main() {
     properties: {
       schemaVersion: { type: "string", const: "1" },
       headSha: { type: "string", minLength: 7 },
-      tier: { type: "string", const: "t3" },
+      tier: { type: "string", const: "high" },
       overall: { type: "string", enum: ["pass", "fail"] },
       summary: { type: "string", minLength: 1 },
       findings: {
@@ -229,15 +229,14 @@ async function main() {
 
   try {
     if (!process.env.OPENAI_API_KEY) {
-      await writeNoOpReport(
-        reviewPath,
-        headSha,
-        tier,
-        `codex-review no-op: OPENAI_API_KEY missing; tier=${tier}; sha=${headSha}`,
-        "missing-api-key"
-      );
-      console.info("codex-review no-op (missing OPENAI_API_KEY)");
-      return;
+      const message = `codex-review required but OPENAI_API_KEY is missing; tier=${tier}; sha=${headSha}`;
+      await writeFailureReport(reviewPath, headSha, tier, message);
+      await appendGithubOutput({
+        review_path: reviewPath,
+        review_mode: "full",
+        review_overall: "fail"
+      });
+      throw new Error(message);
     }
 
     await runCommand("npx", [

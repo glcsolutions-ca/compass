@@ -73,6 +73,7 @@ jobs:
         env:
           HEAD_SHA: ${{ steps.preflight.outputs.head_sha }}
           TESTED_SHA: ${{ steps.preflight.outputs.tested_sha }}
+          TEST_POLICY_PATH: tests/policy/test-policy.json
         run: node scripts/ci/testing-contract.mjs
 
       - name: Upload testing-contract artifact

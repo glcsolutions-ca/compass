@@ -9,6 +9,8 @@ export default defineConfig({
   reporter: "line",
   use: {
     headless: true,
-    baseURL: process.env.WEB_BASE_URL ?? "http://127.0.0.1:3000"
+    baseURL: process.env.WEB_BASE_URL ?? "http://127.0.0.1:3000",
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure"
   }
 });

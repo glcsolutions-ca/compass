@@ -30,6 +30,7 @@ async function main() {
 
   const browserRequired = requiredChecks.includes("browser-evidence");
   const harnessRequired = requiredChecks.includes("harness-smoke");
+  const migrationImageRequired = requiredChecks.includes("migration-image-smoke");
   const docsDriftBlocking = docsDrift.shouldBlock;
   const ciMode = tier === "low" ? "fast" : "full";
 
@@ -50,6 +51,7 @@ async function main() {
     ciMode,
     browserRequired,
     harnessRequired,
+    migrationImageRequired,
     docsDriftBlocking,
     requiredFlowIds: policy.uiEvidenceRules.requiredFlowIds
   };
@@ -68,6 +70,7 @@ async function main() {
     required_flow_ids_json: JSON.stringify(policy.uiEvidenceRules.requiredFlowIds),
     browser_required: String(browserRequired),
     harness_required: String(harnessRequired),
+    migration_image_required: String(migrationImageRequired),
     docs_drift_blocking: String(docsDriftBlocking)
   });
 
@@ -82,6 +85,7 @@ async function main() {
       `- CI mode: \`${ciMode}\``,
       `- Browser evidence required: \`${browserRequired}\``,
       `- Harness smoke required: \`${harnessRequired}\``,
+      `- Migration image smoke required: \`${migrationImageRequired}\``,
       `- Docs drift blocking: \`${docsDriftBlocking}\``
     ].join("\n")
   );

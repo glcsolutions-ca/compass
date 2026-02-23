@@ -9,6 +9,7 @@
   "scripts": {
     "build": "turbo run build",
     "check": "pnpm check:format && pnpm check:lint && pnpm check:typecheck && pnpm check:test && pnpm check:contract",
+    "check:quick": "pnpm check:format && pnpm check:lint && pnpm check:typecheck && pnpm test:merge-contract",
     "check:format": "pnpm format:check",
     "check:lint": "pnpm lint",
     "check:typecheck": "pnpm typecheck:refs && pnpm typecheck",
@@ -44,7 +45,8 @@
     "ci:browser-evidence": "playwright test tests/e2e/smoke.spec.ts --config tests/e2e/playwright.config.ts --reporter=line --workers=1",
     "ci:harness-smoke": "tsx tests/system/smoke.ts",
     "ci:gate": "node scripts/ci/gate.mjs",
-    "test:merge-contract": "vitest run scripts/ci/utils.test.mjs scripts/ci/preflight-lib.test.mjs scripts/ci/gate-lib.test.mjs"
+    "test:merge-contract": "vitest run scripts/ci/utils.test.mjs scripts/ci/preflight-lib.test.mjs scripts/ci/gate-lib.test.mjs",
+    "hooks:install": "git config core.hooksPath .githooks"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

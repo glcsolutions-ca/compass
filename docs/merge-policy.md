@@ -26,7 +26,7 @@ Branch protection requires only:
 
 - `risk-policy-gate`
 
-`risk-policy-gate` enforces all dynamic checks (`ci-pipeline`, `browser-evidence`, `harness-smoke`) for the tested merge result on both PR and merge queue runs.
+`risk-policy-gate` enforces all dynamic checks (`ci-pipeline`, `browser-evidence`, `harness-smoke`, `migration-image-smoke`) for the tested merge result on both PR and merge queue runs.
 
 ## Mainline Convergence Rules
 
@@ -51,15 +51,16 @@ The merge workflow is dependency-driven, not serialized:
   - `ci-pipeline` (always)
   - `browser-evidence` (when UI evidence required)
   - `harness-smoke` (when high-risk)
+  - `migration-image-smoke` (when high-risk migration/runtime paths changed)
 - `risk-policy-gate` is final and verifies `needs.*.result` against required flags.
 
 ## Tier Matrix
 
-| Tier       | CI mode | Required checks                                                                |
-| ---------- | ------- | ------------------------------------------------------------------------------ |
-| `low`      | `fast`  | `risk-policy-gate`, `ci-pipeline`                                              |
-| `standard` | `full`  | `risk-policy-gate`, `ci-pipeline` (+ `browser-evidence` when UI paths changed) |
-| `high`     | `full`  | `risk-policy-gate`, `ci-pipeline`, `harness-smoke`                             |
+| Tier       | CI mode | Required checks                                                                                           |
+| ---------- | ------- | --------------------------------------------------------------------------------------------------------- |
+| `low`      | `fast`  | `risk-policy-gate`, `ci-pipeline`                                                                         |
+| `standard` | `full`  | `risk-policy-gate`, `ci-pipeline` (+ `browser-evidence` when UI paths changed)                            |
+| `high`     | `full`  | `risk-policy-gate`, `ci-pipeline`, `harness-smoke`, `migration-image-smoke` (when migration paths change) |
 
 ## Codex review policy
 
@@ -78,6 +79,7 @@ Codex review is trusted-context only and is not part of the PR blocking merge co
 Result artifact path:
 
 - `.artifacts/docs-drift/<testedSha>/result.json`
+- Includes `reasonCodes`, `reasons`, `blockingPathsChanged`, `docsCriticalPathsChanged`, `touchedDocTargets`, and `expectedDocTargets` for direct remediation.
 
 ## Stale evidence and gate semantics
 
@@ -87,8 +89,10 @@ Result artifact path:
 - `ci-pipeline` must succeed.
 - `browser-evidence` is required only when `browser_required=true`.
 - `harness-smoke` is required only when `harness_required=true`.
+- `migration-image-smoke` is required only when `migration_image_required=true`.
 - If `docs_drift_blocking=true`, `docs_drift_status` must be `pass`.
 - For `browser-evidence`, the gate validates manifest assertions including `headSha`, `testedSha`, `tier`, required flow IDs, entrypoint, and expected identity.
+- Gate artifacts include normalized `reasonCodes` and structured `reasonDetails` in addition to human-readable `reasons`.
 
 ## Runtime baseline
 

@@ -46,6 +46,19 @@ Run contract-only changes after full traffic cutover and stability period.
 - Deploy workflow is serialized by `concurrency` in `.github/workflows/deploy.yml`
 - Migration execution is single-run via ACA Job manual trigger config (`parallelism=1`, `replicaCompletionCount=1`)
 
+## Diagnostics Contract
+
+- Deploy migration artifacts are emitted at `.artifacts/deploy/<sha>/migration.json` with:
+  - `reasonCode`/`reason` on failures
+  - `executionStatus` and `executionSummary`
+  - `statusTimeline` and elapsed timing fields
+  - `logs` + `logsSource` for operator triage
+- API smoke artifacts are emitted at `.artifacts/deploy/<sha>/api-smoke.json` with:
+  - `reasonCode`/`reason`
+  - assertion IDs and failed-assertion detail
+  - bounded authorized-retry timeline for auth propagation windows
+  - response status/text snippets for `health`, unauthorized, and authorized calls
+
 ## Recovery
 
 - First response: redeploy the previous known-good image tag

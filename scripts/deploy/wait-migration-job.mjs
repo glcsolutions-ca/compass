@@ -14,6 +14,7 @@ const jobName = requireEnv("ACA_MIGRATE_JOB_NAME");
 const executionName = requireEnv("MIGRATION_EXECUTION_NAME");
 const timeoutSeconds = Number(process.env.MIGRATION_TIMEOUT_SECONDS ?? 900);
 const migrationContainerName = process.env.MIGRATION_CONTAINER_NAME?.trim() || "migrate";
+const pollIntervalMs = 5000;
 
 function normalizeStatus(value) {
   return String(value || "unknown").toLowerCase();
@@ -80,34 +81,134 @@ async function readFailureLogs() {
   }
 }
 
+function summarizeExecution(execution) {
+  return {
+    status: normalizeStatus(execution?.properties?.status || execution?.status),
+    startTime:
+      execution?.properties?.startTime ||
+      execution?.properties?.startedTime ||
+      execution?.startTime ||
+      null,
+    endTime:
+      execution?.properties?.endTime ||
+      execution?.properties?.finishedTime ||
+      execution?.endTime ||
+      null
+  };
+}
+
+async function writeAndPublish(payload) {
+  const artifactPath = await writeDeployArtifact("migration", payload);
+  await appendGithubOutput({
+    migration_path: artifactPath,
+    migration_status: payload.executionStatus || payload.status
+  });
+  return artifactPath;
+}
+
+async function failMigration({
+  reasonCode,
+  reason,
+  startedAt,
+  statusTimeline,
+  executionStatus,
+  executionSummary,
+  logs,
+  logsSource
+}) {
+  await writeAndPublish({
+    schemaVersion: "2",
+    generatedAt: new Date().toISOString(),
+    headSha: getHeadSha(),
+    tier: getTier(),
+    status: "fail",
+    reasonCode,
+    reason,
+    jobName,
+    executionName,
+    executionStatus,
+    executionSummary,
+    timeoutSeconds,
+    pollIntervalMs,
+    elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
+    statusTimeline,
+    logs: logs ?? "",
+    logsSource: logsSource ?? "none"
+  });
+
+  throw new Error(
+    `Migration execution ${executionName} failed: ${reasonCode} (${executionStatus})`
+  );
+}
+
 async function main() {
   const startedAt = Date.now();
+  const statusTimeline = [];
+  let lastObservedStatus = "";
+  let latestExecutionSummary = null;
 
   while (Date.now() - startedAt < timeoutSeconds * 1000) {
-    const execution = await readExecution();
+    let execution = null;
+    try {
+      execution = await readExecution();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await failMigration({
+        reasonCode: "MIGRATION_EXECUTION_QUERY_ERROR",
+        reason: message,
+        startedAt,
+        statusTimeline,
+        executionStatus: "query-error",
+        executionSummary: latestExecutionSummary,
+        logs: message,
+        logsSource: "query-error"
+      });
+      return;
+    }
 
     if (!execution) {
-      await sleep(5000);
+      if (lastObservedStatus !== "not-found") {
+        statusTimeline.push({
+          at: new Date().toISOString(),
+          status: "not-found",
+          detail: "execution not yet visible"
+        });
+        lastObservedStatus = "not-found";
+      }
+      await sleep(pollIntervalMs);
       continue;
     }
 
     const status = normalizeStatus(execution?.properties?.status || execution?.status);
+    latestExecutionSummary = summarizeExecution(execution);
+    if (status !== lastObservedStatus) {
+      statusTimeline.push({
+        at: new Date().toISOString(),
+        status,
+        detail: "execution status changed"
+      });
+      lastObservedStatus = status;
+    }
 
     if (["succeeded", "completed", "success"].includes(status)) {
-      const artifactPath = await writeDeployArtifact("migration", {
-        schemaVersion: "1",
+      await writeAndPublish({
+        schemaVersion: "2",
         generatedAt: new Date().toISOString(),
         headSha: getHeadSha(),
         tier: getTier(),
         status: "pass",
+        reasonCode: "",
+        reason: "",
         jobName,
         executionName,
-        executionStatus: status
-      });
-
-      await appendGithubOutput({
-        migration_path: artifactPath,
-        migration_status: status
+        executionStatus: status,
+        executionSummary: latestExecutionSummary,
+        timeoutSeconds,
+        pollIntervalMs,
+        elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
+        statusTimeline,
+        logs: "",
+        logsSource: "none"
       });
 
       console.info(`Migration execution ${executionName} succeeded (${status})`);
@@ -116,47 +217,33 @@ async function main() {
 
     if (["failed", "failure", "cancelled", "canceled", "error"].includes(status)) {
       const logResult = await readFailureLogs();
-      const artifactPath = await writeDeployArtifact("migration", {
-        schemaVersion: "1",
-        generatedAt: new Date().toISOString(),
-        headSha: getHeadSha(),
-        tier: getTier(),
-        status: "fail",
-        jobName,
-        executionName,
+      await failMigration({
+        reasonCode: "MIGRATION_EXECUTION_FAILED",
+        reason: `execution reached terminal failure state (${status})`,
+        startedAt,
+        statusTimeline,
         executionStatus: status,
+        executionSummary: latestExecutionSummary,
         logs: logResult.logs,
         logsSource: logResult.source
       });
-
-      await appendGithubOutput({
-        migration_path: artifactPath,
-        migration_status: status
-      });
-
-      throw new Error(`Migration execution ${executionName} failed (${status})`);
+      return;
     }
 
-    await sleep(5000);
+    await sleep(pollIntervalMs);
   }
 
-  const artifactPath = await writeDeployArtifact("migration", {
-    schemaVersion: "1",
-    generatedAt: new Date().toISOString(),
-    headSha: getHeadSha(),
-    tier: getTier(),
-    status: "fail",
-    jobName,
-    executionName,
-    executionStatus: "timeout"
+  const timeoutLogs = await readFailureLogs();
+  await failMigration({
+    reasonCode: "MIGRATION_EXECUTION_TIMEOUT",
+    reason: `timed out after ${timeoutSeconds} seconds`,
+    startedAt,
+    statusTimeline,
+    executionStatus: "timeout",
+    executionSummary: latestExecutionSummary,
+    logs: timeoutLogs.logs,
+    logsSource: timeoutLogs.source
   });
-
-  await appendGithubOutput({
-    migration_path: artifactPath,
-    migration_status: "timeout"
-  });
-
-  throw new Error(`Timed out waiting for migration execution ${executionName}`);
 }
 
 void main();

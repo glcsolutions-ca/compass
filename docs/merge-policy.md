@@ -10,6 +10,8 @@ Every PR to `main` must be ship-safe:
 2. Required evidence is computed from the risk tier.
 3. Merge is allowed only when required evidence is present and successful for the tested merge result.
 
+`merge-contract.yml` runs for both `pull_request` and `merge_group` so the same gate contract applies before merge and in queue execution.
+
 ## Source of truth precedence
 
 When this doc and implementation differ, implementation wins:
@@ -24,7 +26,13 @@ Branch protection requires only:
 
 - `risk-policy-gate`
 
-`risk-policy-gate` enforces all dynamic checks (`ci-pipeline`, `browser-evidence`, `harness-smoke`) for the tested merge result.
+`risk-policy-gate` enforces all dynamic checks (`ci-pipeline`, `browser-evidence`, `harness-smoke`) for the tested merge result on both PR and merge queue runs.
+
+## Mainline Convergence Rules
+
+- `main` converges through merge queue.
+- Admin bypass is disabled for normal flow.
+- `main` remains PR-only with strict required-check enforcement.
 
 ## Deterministic tiers
 

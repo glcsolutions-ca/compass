@@ -67,6 +67,26 @@ jobs:
           path: ${{ steps.preflight.outputs.preflight_path }}
           if-no-files-found: warn
 
+      - name: Run testing contract
+        id: testing_contract
+        continue-on-error: true
+        env:
+          HEAD_SHA: ${{ steps.preflight.outputs.head_sha }}
+          TESTED_SHA: ${{ steps.preflight.outputs.tested_sha }}
+        run: node scripts/ci/testing-contract.mjs
+
+      - name: Upload testing-contract artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: testing-contract-${{ steps.preflight.outputs.tested_sha }}
+          path: .artifacts/testing-contract/${{ steps.preflight.outputs.tested_sha }}/result.json
+          if-no-files-found: warn
+
+      - name: Fail on testing-contract violations
+        if: ${{ steps.testing_contract.outcome != 'success' }}
+        run: exit 1
+
       - name: Evaluate docs drift
         id: docs_drift
         env:

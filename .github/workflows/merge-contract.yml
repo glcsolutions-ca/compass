@@ -85,8 +85,16 @@ jobs:
 
           mapfile -t workflow_files < <(
             node <<'NODE'
+          const fs = require("node:fs");
           const changedFiles = JSON.parse(process.env.CHANGED_FILES_JSON || "[]");
-          const workflows = [...new Set(changedFiles.filter((filePath) => /^\.github\/workflows\/.*\.(yml|yaml)$/.test(filePath)))];
+          const workflows = [
+            ...new Set(
+              changedFiles.filter(
+                (filePath) =>
+                  /^\.github\/workflows\/.*\.(yml|yaml)$/.test(filePath) && fs.existsSync(filePath)
+              )
+            )
+          ];
           for (const workflow of workflows) {
             console.log(workflow);
           }

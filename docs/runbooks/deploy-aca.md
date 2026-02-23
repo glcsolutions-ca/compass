@@ -2,22 +2,22 @@
 
 ## Purpose
 
-Deploy every commit on `main` to Azure Container Apps using the standard ACR-backed GitHub Actions flow:
+Run a deterministic release pipeline on `main` that converges production to the latest head SHA:
 
 - `azure/container-apps-deploy-action` for API and Web
-- private ACR images tagged by commit SHA
+- private ACR images promoted by immutable digest refs
 - managed-identity image pulls (`AcrPull`) at runtime
 - migration execution through ACA Job inside the VNet using the API image
 - post-deploy API smoke and browser evidence
 
 ## Deploy Cycle (Plain-English)
 
-1. Build API/Web images for the current commit SHA.
-2. Run DB migrations with ACA Job (same API image).
-3. Deploy API, then Web.
-4. Run API smoke and browser evidence.
-5. Publish artifacts tied to that SHA.
-6. If any gate fails, release is blocked.
+1. `classify` decides `checks`, `infra`, or `runtime`.
+2. `checks` validates control-plane/docs changes with no production mutation.
+3. `promote` handles all production mutations under `environment: production`.
+4. Runtime changes build once, promote digests, run migration, then deploy API/Web.
+5. Infra changes apply Bicep and optionally roll active revisions.
+6. Smoke evidence and artifacts are written for every promoted candidate.
 
 ## Non-Commit Rule
 
@@ -26,10 +26,13 @@ All concrete deploy values must be stored in the GitHub `production` environment
 
 ## Workflow
 
-- Workflow file: `.github/workflows/deploy.yml`
-- Trigger: `push` to `main`
-- Concurrency: serialized (`deploy-main`)
-- GitHub environment: `production`
+- Main workflow file: `.github/workflows/deploy.yml`
+- Main workflow name: `Release Candidate (main)`
+- Trigger: `push` to `main`, `workflow_dispatch`
+- Job model: `classify -> checks -> promote -> report`
+- Concurrency: serialized only on `promote` (`prod-main`)
+- GitHub environment: `production` only on `promote`
+- Infra helper workflow: `.github/workflows/infra-apply.yml` (`workflow_call` + manual dispatch, no push trigger)
 
 ## Required GitHub Environment Variables (`production`)
 
@@ -91,19 +94,34 @@ All concrete deploy values must be stored in the GitHub `production` environment
 
 ## Deploy Sequence
 
-1. Azure OIDC login (deploy identity).
-2. Guard stale SHA candidate against current `origin/main` head.
-3. Build/push API image to ACR.
-4. Build/push Web image to ACR.
-5. Update and execute ACA migration job (`start-migration-job.mjs`, `wait-migration-job.mjs`) using the API image.
-6. Re-check stale SHA before rollout actions.
-7. API deploy via `azure/container-apps-deploy-action` using the same API image.
-8. Web deploy via `azure/container-apps-deploy-action` using the prebuilt Web image.
-9. Azure OIDC login (smoke identity), mint Entra access token.
-10. API smoke verification (`verify-api-smoke.mjs`) against production URL.
-11. Browser evidence against production Web URL, reusing the same Entra smoke token via Playwright request-header injection (`BROWSER_SMOKE_BEARER_TOKEN`).
-12. Drift assertions verify `activeRevisionsMode=single`, `minReplicas=0`, `maxReplicas=1`, `cpu=0.25`, `memory=0.5Gi`, `maxInactiveRevisions<=2`, and that the latest revision is the single active revision per app.
-13. Publish deploy artifacts.
+1. `classify` computes:
+   - `kind=checks|infra|runtime`
+   - `rollout`
+   - `needs_infra`
+   - `needs_migrations`
+2. For `checks`:
+   - run factory checks only (`format`, merge-contract unit tests, no-org-infra, actionlint)
+   - do not log into Azure and do not mutate production
+3. For `infra` or `runtime`, `promote` starts and performs stale-head guard before any mutation.
+4. For `infra`:
+   - resolve current API/Web digest refs
+   - apply infra with those refs
+   - optionally restart active revisions when `rollout=true`
+   - run smoke verification
+5. For `runtime`:
+   - optionally apply infra first using current digest refs when `needs_infra=true`
+   - build and push API/Web once
+   - resolve candidate digest refs (`repo@sha256`)
+   - stale-head guard before entering migration+deploy boundary
+   - run migration job and then complete API/Web deploy as one atomic boundary (no stale abort in between)
+   - run smoke and browser evidence
+6. `report` writes release summary artifacts.
+
+## Latest-Head Semantics
+
+- Production converges to the latest `main` head.
+- Pending runs may be superseded by newer commits due to GitHub concurrency behavior.
+- Stale runs are skipped before irreversible mutation boundaries.
 
 ## ACR Tag Retention
 
@@ -123,10 +141,16 @@ With single revision mode, rollback is image-based, not traffic-split based:
 
 ## Artifacts
 
-Artifacts are written under `.artifacts/deploy/<sha>/`:
+Release summary artifacts are written under `.artifacts/release/<sha>/`:
+
+- `manifest.json` (current refs + candidate refs + kind)
+- `result.json` (final status and stale-guard outcomes)
+
+Deploy artifacts remain under `.artifacts/deploy/<sha>/`:
 
 - `migration-start.json`
 - `migration.json`
+- `candidate-manifest.json`
 - `api-smoke.json`
 - `result.json`
 

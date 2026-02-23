@@ -34,9 +34,15 @@ need focused local debugging of docs-drift behavior.
    - `full` for `deps`, `t1`, `t2`, `t3`
    - commit-stage target: `t0` PRs should not start Postgres service containers
 5. `risk-policy-gate` blocks merge unless current-head evidence is complete and valid.
-6. Merge to `main` creates a release candidate for that exact SHA.
-7. Deploy pipeline runs migration job, deploys API/Web, then runs smoke and browser evidence.
-8. Any failed gate blocks release; rerun only after a fix commit.
+6. Merge to `main` runs one release pipeline with four jobs: `classify`, `checks`, `promote`, `report`.
+7. `classify` sets release kind:
+   - `checks`: docs/control-plane only
+   - `infra`: infra-only
+   - `runtime`: app/runtime changes
+8. `checks` does factory validation only and never touches production.
+9. `promote` is the only production-mutating job (`environment: production`, `concurrency: prod-main`).
+10. Runtime releases build once, promote digest refs, run migration+deploy atomically, then run smoke + browser evidence.
+11. Any failed gate blocks release; rerun only after a fix commit.
 
 ## High-Risk Paths
 

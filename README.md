@@ -49,6 +49,9 @@ pnpm dev
 - Contributor workflow: `CONTRIBUTING.md`
 - Agent guide: `AGENTS.md`
 - Docs index: `docs/README.md`
+- App index: `apps/README.md`
+- Package index: `packages/README.md`
+- Script index: `scripts/README.md`
 - Testing philosophy: `tests/README.md`
 - Testing policy and enforcement (layers 1-3): `tests/policy/README.md`
 - Merge policy (human): `docs/merge-policy.md`

@@ -207,6 +207,8 @@ If you’re fixing a bug:
 
 ## References (concepts, not doctrine)
 
+- E2E suite README: `tests/e2e/README.md`
+- System smoke README: `tests/system/README.md`
 - Test pyramid: https://martinfowler.com/articles/practical-test-pyramid.html
 - Continuous Delivery / deployment pipeline concepts: https://continuousdelivery.com/implementing/patterns/
 - “Wide not long” pipeline guidance: https://continuousdelivery.com/2010/09/deployment-pipeline-anti-patterns/

@@ -135,10 +135,47 @@ jobs:
           path: .artifacts/review/${{ needs.preflight.outputs.head_sha }}
           if-no-files-found: warn
 
-  ci_pipeline:
-    name: ci-pipeline
+  ci_pipeline_fast:
+    name: ci-pipeline-fast
     needs:
       - preflight
+    if: ${{ needs.preflight.outputs.ci_mode == 'fast' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run fast ci-pipeline
+        run: |
+          pnpm check:format
+          pnpm check:lint
+          pnpm check:typecheck
+          pnpm test:merge-contract
+
+  ci_pipeline_full:
+    name: ci-pipeline-full
+    needs:
+      - preflight
+    if: ${{ needs.preflight.outputs.ci_mode == 'full' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -155,10 +192,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
-    outputs:
-      ci_pipeline_path: ${{ steps.write_result.outputs.ci_pipeline_path }}
-    env:
-      CI_MODE: ${{ needs.preflight.outputs.ci_mode }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -182,45 +215,71 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Wait for Postgres readiness
-        if: ${{ env.CI_MODE == 'full' }}
         env:
           DATABASE_URL: postgres://compass:compass@127.0.0.1:5432/compass
         run: pnpm db:postgres:wait
 
       - name: Apply database migrations
-        if: ${{ env.CI_MODE == 'full' }}
         env:
           DATABASE_URL: postgres://compass:compass@127.0.0.1:5432/compass
         run: pnpm db:migrate:up
 
       - name: Seed database
-        if: ${{ env.CI_MODE == 'full' }}
         env:
           DATABASE_URL: postgres://compass:compass@127.0.0.1:5432/compass
         run: pnpm db:seed
 
       - name: Run Postgres integration tests
-        if: ${{ env.CI_MODE == 'full' }}
         env:
           DATABASE_URL: postgres://compass:compass@127.0.0.1:5432/compass
         run: pnpm --filter @compass/api test:integration
 
       - name: Run full ci-pipeline
-        id: run_pipeline_full
-        if: ${{ env.CI_MODE == 'full' }}
         env:
           HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
           RISK_TIER: ${{ needs.preflight.outputs.tier }}
         run: pnpm ci:pipeline
 
-      - name: Run fast ci-pipeline
-        id: run_pipeline_fast
-        if: ${{ env.CI_MODE == 'fast' }}
+  ci_pipeline:
+    name: ci-pipeline
+    if: ${{ always() }}
+    needs:
+      - preflight
+      - ci_pipeline_fast
+      - ci_pipeline_full
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      ci_pipeline_path: ${{ steps.write_result.outputs.ci_pipeline_path }}
+    steps:
+      - name: Evaluate ci-pipeline lane outcomes
+        id: lane
+        env:
+          CI_MODE: ${{ needs.preflight.outputs.ci_mode }}
+          FAST_RESULT: ${{ needs.ci_pipeline_fast.result }}
+          FULL_RESULT: ${{ needs.ci_pipeline_full.result }}
         run: |
-          pnpm check:format
-          pnpm check:lint
-          pnpm check:typecheck
-          pnpm test:merge-contract
+          set -euo pipefail
+
+          lane="$CI_MODE"
+          status="pass"
+          reason=""
+
+          if [ "$CI_MODE" = "fast" ]; then
+            if [ "$FAST_RESULT" != "success" ] || [ "$FULL_RESULT" != "skipped" ]; then
+              status="fail"
+              reason="Expected fast lane success and full lane skipped; got fast=$FAST_RESULT full=$FULL_RESULT"
+            fi
+          else
+            if [ "$FULL_RESULT" != "success" ] || [ "$FAST_RESULT" != "skipped" ]; then
+              status="fail"
+              reason="Expected full lane success and fast lane skipped; got fast=$FAST_RESULT full=$FULL_RESULT"
+            fi
+          fi
+
+          echo "lane=$lane" >> "$GITHUB_OUTPUT"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
 
       - name: Write ci-pipeline artifact
         if: ${{ always() }}
@@ -228,20 +287,12 @@ jobs:
         env:
           HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
           RISK_TIER: ${{ needs.preflight.outputs.tier }}
-          CI_MODE: ${{ env.CI_MODE }}
-          PIPELINE_FULL_OUTCOME: ${{ steps.run_pipeline_full.outcome }}
-          PIPELINE_FAST_OUTCOME: ${{ steps.run_pipeline_fast.outcome }}
+          CI_MODE: ${{ needs.preflight.outputs.ci_mode }}
+          CI_LANE: ${{ steps.lane.outputs.lane }}
+          CI_STATUS: ${{ steps.lane.outputs.status }}
+          CI_REASON: ${{ steps.lane.outputs.reason }}
         run: |
-          pipeline_outcome="$PIPELINE_FULL_OUTCOME"
-          if [ "$CI_MODE" = "fast" ]; then
-            pipeline_outcome="$PIPELINE_FAST_OUTCOME"
-          fi
-
           mkdir -p .artifacts/ci-pipeline/$HEAD_SHA
-          status="fail"
-          if [ "$pipeline_outcome" = "success" ]; then
-            status="pass"
-          fi
           cat > .artifacts/ci-pipeline/$HEAD_SHA/result.json <<JSON
           {
             "schemaVersion": "1",
@@ -249,7 +300,9 @@ jobs:
             "headSha": "$HEAD_SHA",
             "tier": "$RISK_TIER",
             "mode": "$CI_MODE",
-            "status": "$status"
+            "lane": "$CI_LANE",
+            "status": "$CI_STATUS",
+            "reason": "$CI_REASON"
           }
           JSON
           echo "ci_pipeline_path=.artifacts/ci-pipeline/$HEAD_SHA/result.json" >> "$GITHUB_OUTPUT"
@@ -261,6 +314,14 @@ jobs:
           name: ci-pipeline-${{ needs.preflight.outputs.head_sha }}
           path: .artifacts/ci-pipeline/${{ needs.preflight.outputs.head_sha }}/result.json
           if-no-files-found: warn
+
+      - name: Fail on ci-pipeline lane mismatch
+        if: ${{ steps.lane.outputs.status != 'pass' }}
+        env:
+          CI_REASON: ${{ steps.lane.outputs.reason }}
+        run: |
+          echo "${CI_REASON:-ci-pipeline lane evaluation failed}" >&2
+          exit 1
 
   browser_evidence:
     name: browser-evidence
@@ -491,11 +552,7 @@ jobs:
           RISK_TIER: ${{ needs.preflight.outputs.tier }}
           REQUIRED_CHECKS_JSON: ${{ needs.preflight.outputs.required_checks_json }}
           REQUIRED_FLOW_IDS_JSON: ${{ needs.preflight.outputs.required_flow_ids_json }}
-          CHECK_PREFLIGHT_RESULT: ${{ needs.preflight.result }}
-          CHECK_CODEX_REVIEW_RESULT: ${{ needs.codex_review.result }}
-          CHECK_CI_PIPELINE_RESULT: ${{ needs.ci_pipeline.result }}
-          CHECK_BROWSER_EVIDENCE_RESULT: ${{ needs.browser_evidence.result }}
-          CHECK_HARNESS_SMOKE_RESULT: ${{ needs.harness_smoke.result }}
+          CHECK_RESULTS_JSON: ${{ format('{{"preflight":"{0}","codex-review":"{1}","ci-pipeline":"{2}","browser-evidence":"{3}","harness-smoke":"{4}"}}', needs.preflight.result, needs.codex_review.result, needs.ci_pipeline.result, needs.browser_evidence.result, needs.harness_smoke.result) }}
           BROWSER_EVIDENCE_MANIFEST_PATH: ${{ needs.browser_evidence.outputs.browser_manifest_path }}
           EXPECTED_ENTRYPOINT: /
           EXPECTED_ACCOUNT_IDENTITY: employee-123

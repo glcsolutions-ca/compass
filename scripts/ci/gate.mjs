@@ -35,14 +35,29 @@ function parseRequiredFlowIds() {
   return parseStringArray("REQUIRED_FLOW_IDS_JSON", raw);
 }
 
-function collectCheckResults() {
-  return {
-    preflight: process.env.CHECK_PREFLIGHT_RESULT ?? "unknown",
-    "codex-review": process.env.CHECK_CODEX_REVIEW_RESULT ?? "unknown",
-    "ci-pipeline": process.env.CHECK_CI_PIPELINE_RESULT ?? "unknown",
-    "browser-evidence": process.env.CHECK_BROWSER_EVIDENCE_RESULT ?? "unknown",
-    "harness-smoke": process.env.CHECK_HARNESS_SMOKE_RESULT ?? "unknown"
-  };
+function parseCheckResults() {
+  const raw = requireEnv("CHECK_RESULTS_JSON");
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("CHECK_RESULTS_JSON must be a JSON object");
+  }
+
+  const expectedChecks = [
+    "preflight",
+    "codex-review",
+    "ci-pipeline",
+    "browser-evidence",
+    "harness-smoke"
+  ];
+
+  const checkResults = {};
+  for (const checkName of expectedChecks) {
+    const value = parsed[checkName];
+    checkResults[checkName] =
+      typeof value === "string" && value.trim().length > 0 ? value : "unknown";
+  }
+
+  return checkResults;
 }
 
 function validateRequiredCheckResults(requiredChecks, checkResults, reasons) {
@@ -50,20 +65,13 @@ function validateRequiredCheckResults(requiredChecks, checkResults, reasons) {
     reasons.push(`preflight result is ${checkResults.preflight}`);
   }
 
-  const checkToJobResult = {
-    "ci-pipeline": checkResults["ci-pipeline"],
-    "browser-evidence": checkResults["browser-evidence"],
-    "harness-smoke": checkResults["harness-smoke"],
-    "codex-review": checkResults["codex-review"]
-  };
-
   for (const checkName of requiredChecks) {
     if (checkName === "risk-policy-gate") {
       continue;
     }
 
-    const result = checkToJobResult[checkName];
-    if (!result) {
+    const result = checkResults[checkName];
+    if (typeof result !== "string" || result.length === 0) {
       reasons.push(`No job result mapping found for required check ${checkName}`);
       continue;
     }
@@ -186,7 +194,7 @@ async function main() {
   const requiredChecks = parseRequiredChecks();
   const requiredFlowIds = parseRequiredFlowIds();
 
-  const checkResults = collectCheckResults();
+  const checkResults = parseCheckResults();
   const reasons = [];
 
   validateRequiredCheckResults(requiredChecks, checkResults, reasons);

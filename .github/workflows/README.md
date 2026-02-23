@@ -11,13 +11,13 @@
   - `risk-policy-preflight` (includes `docs-drift` evaluation)
   - `no-org-infra` leak guard (fails on committed org-specific infra values)
   - `codex-review` (conditional; runs only when policy requires it)
-  - `ci-pipeline` (stable check name; internal mode varies by risk tier)
-    - `fast`: `t0` (lightweight repo checks)
-    - `full`: `deps`, `t1`, `t2`, `t3` (Postgres integration + full pipeline)
+  - `ci-pipeline-fast` (conditional lane for `t0`; lightweight repo checks, no Postgres service)
+  - `ci-pipeline-full` (conditional lane for `deps`, `t1`, `t2`, `t3`; Postgres integration + full pipeline)
+  - `ci-pipeline` (stable required check; validates lane selection and emits the ci artifact)
   - `browser-evidence` (conditional)
     - web smoke runs against Next standalone runtime with static/public assets copied into the standalone tree
   - `harness-smoke` (conditional)
-  - `risk-policy-gate` (final required gate; check-run aggregation + browser manifest assertions)
+  - `risk-policy-gate` (final required gate; policy-driven check aggregation + browser manifest assertions)
 - `dependabot-auto-merge.yml`: metadata-only safe-lane auto-merge for Dependabot PRs (patch/minor only, no PR checkout)
 - `deploy.yml`: push-to-main production deploy using ACR + Azure Container Apps deploy action (GitHub Environment `production`)
   - rejects stale deploy candidates when `${GITHUB_SHA}` is no longer current `origin/main`

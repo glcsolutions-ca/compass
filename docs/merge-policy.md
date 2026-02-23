@@ -8,7 +8,15 @@ Every PR to `main` must be ship-safe:
 
 1. Risk tier is computed from changed paths.
 2. Required evidence is computed from the risk tier.
-3. Merge is allowed only when evidence is present, successful, and matches the current head SHA.
+3. Merge is allowed only when required evidence is present and successful for the tested merge result.
+
+## Source of truth precedence
+
+When this doc and implementation differ, implementation wins:
+
+- Policy truth: `.github/policy/merge-policy.json`
+- Enforcement truth: `.github/workflows/merge-contract.yml` and `scripts/ci/gate.mjs`
+- This doc is explanatory and must be kept aligned with those files.
 
 ## Single required branch-protection check
 
@@ -16,12 +24,12 @@ Branch protection requires only:
 
 - `risk-policy-gate`
 
-`risk-policy-gate` enforces all dynamic checks (`ci-pipeline`, `browser-evidence`, `harness-smoke`, `codex-review`) for the current head SHA.
+`risk-policy-gate` enforces all dynamic checks (`ci-pipeline`, `browser-evidence`, `harness-smoke`) for the tested merge result.
 
 ## Deterministic tiers
 
 - `low`: docs and low-risk changes
-- `normal`: standard runtime and dependency changes
+- `standard`: standard runtime and dependency changes
 - `high`: control-plane, infra, migration, and auth-sensitive surfaces
 
 If multiple tiers match, highest tier wins.
@@ -35,24 +43,22 @@ The merge workflow is dependency-driven, not serialized:
   - `ci-pipeline` (always)
   - `browser-evidence` (when UI evidence required)
   - `harness-smoke` (when high-risk)
-  - `codex-review` (when enabled + required)
-- `risk-policy-gate` is final and verifies `needs.*.result` against required checks.
+- `risk-policy-gate` is final and verifies `needs.*.result` against required flags.
 
 ## Tier Matrix
 
-| Tier     | CI mode | Required checks                                                                   |
-| -------- | ------- | --------------------------------------------------------------------------------- |
-| `low`    | `fast`  | `risk-policy-gate`, `ci-pipeline`                                                 |
-| `normal` | `full`  | `risk-policy-gate`, `ci-pipeline` (+ `browser-evidence` when UI paths changed)    |
-| `high`   | `full`  | `risk-policy-gate`, `ci-pipeline`, `harness-smoke`, `codex-review` (when enabled) |
+| Tier       | CI mode | Required checks                                                                |
+| ---------- | ------- | ------------------------------------------------------------------------------ |
+| `low`      | `fast`  | `risk-policy-gate`, `ci-pipeline`                                              |
+| `standard` | `full`  | `risk-policy-gate`, `ci-pipeline` (+ `browser-evidence` when UI paths changed) |
+| `high`     | `full`  | `risk-policy-gate`, `ci-pipeline`, `harness-smoke`                             |
 
 ## Codex review policy
 
-`reviewPolicy.codexReviewEnabled` controls whether `codex-review` is required.
+Codex review is trusted-context only and is not part of the PR blocking merge contract.
 
-- `false`: `codex-review` is excluded from required checks.
-- `true`: required high-risk changes must pass `codex-review`.
-- If required and `OPENAI_API_KEY` is missing, `codex-review` fails hard.
+- PR merge gate does not execute secret-backed codex review.
+- Trusted codex review runs via `codex-review-trusted.yml` (manual `workflow_dispatch`).
 
 ## Docs drift
 
@@ -63,14 +69,18 @@ The merge workflow is dependency-driven, not serialized:
 
 Result artifact path:
 
-- `.artifacts/docs-drift/<headSha>/result.json`
+- `.artifacts/docs-drift/<testedSha>/result.json`
 
-## Stale evidence rules
+## Stale evidence and gate semantics
 
-Evidence is valid only when:
+`risk-policy-gate` makes merge decisions from required job outcomes (`needs.*.result`) plus targeted artifact validation.
 
-- `headSha` matches current PR head SHA
-- `tier` matches preflight-computed tier for that head SHA
+- `preflight` must succeed.
+- `ci-pipeline` must succeed.
+- `browser-evidence` is required only when `browser_required=true`.
+- `harness-smoke` is required only when `harness_required=true`.
+- If `docs_drift_blocking=true`, `docs_drift_status` must be `pass`.
+- For `browser-evidence`, the gate validates manifest assertions including `headSha`, `testedSha`, `tier`, required flow IDs, entrypoint, and expected identity.
 
 ## Runtime baseline
 
@@ -81,14 +91,16 @@ Control-plane scripts use Node's built-in `path.posix.matchesGlob` for determini
 
 ## Control-plane high-risk paths
 
-- `.github/workflows/*.yml`
-- `.github/workflows/*.yaml`
+`riskTierRules.high` in `.github/policy/merge-policy.json` is authoritative.
+
+Non-exhaustive examples:
+
+- `.github/workflows/*.yml`, `.github/workflows/*.yaml`, `.github/dependabot.yml`
 - `.github/policy/**`
-- `scripts/ci/**`
-- `scripts/deploy/**`
-- `scripts/infra/**`
-- `infra/azure/**`
-- `infra/identity/**`
+- `scripts/ci/**`, `scripts/deploy/**`, `scripts/infra/**`
+- `apps/api/src/features/auth/**`
+- `infra/**`, `infra/azure/**`, `infra/identity/**`
+- `migrations/**`
 - `deploy/**`
 
 ## Flow
@@ -99,16 +111,13 @@ flowchart TD
   B --> C["ci-pipeline"]
   B --> D{"browser evidence required?"}
   B --> E{"harness required?"}
-  B --> F{"codex-review required?"}
   D -- Yes --> G["browser-evidence"]
   E -- Yes --> H["harness-smoke"]
-  F -- Yes --> I["codex-review"]
   B --> J["risk-policy-gate"]
   C --> J
   G --> J
   H --> J
-  I --> J
-  J --> K{"required checks satisfied for current head SHA?"}
+  J --> K{"required checks satisfied for tested merge result?"}
   K -- No --> X["fail closed"]
   K -- Yes --> M["merge eligible"]
 ```

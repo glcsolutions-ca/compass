@@ -6,15 +6,15 @@
 - Where it appears: `risk-policy-preflight`.
 - Fix: update required docs (`docs/merge-policy.md`, `.github/workflows/README.md`, or matching targets in policy).
 
-## `codex-review` Failure
+## `codex-review-trusted` Failure
 
-- Cause: actionable findings, report integrity failure, or missing `OPENAI_API_KEY` when review is required.
-- Fix: address findings and rerun on current head SHA; if required review is enabled, ensure `OPENAI_API_KEY` is configured.
+- Cause: trusted review workflow failed to fetch PR diff data or review output failed validation.
+- Fix: rerun `codex-review-trusted.yml` with the PR number; verify trusted workflow secrets/config are present.
 
 ## `risk-policy-gate` Failure
 
-- Cause: required check results did not succeed for current head SHA/tier, or browser-evidence assertions failed.
-- Fix: rerun failed required checks on latest commit; for UI-required PRs verify manifest flow status, entrypoint, identity, and assertions.
+- Cause: required `needs.*.result` outcomes did not succeed, docs-drift was blocking, or browser-evidence assertions failed.
+- Fix: rerun failed required checks on latest commit; for UI-required PRs verify manifest flow status, entrypoint, identity, and assertions for current `headSha` and `testedSha`.
 
 ## Stale Evidence After Push
 

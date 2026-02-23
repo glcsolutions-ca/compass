@@ -5,14 +5,13 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export const TIER_ORDER = ["high", "normal", "low"];
+export const TIER_ORDER = ["high", "standard", "low"];
 export const KNOWN_CHECKS = [
   "risk-policy-gate",
   "preflight",
   "ci-pipeline",
   "browser-evidence",
-  "harness-smoke",
-  "codex-review"
+  "harness-smoke"
 ];
 
 export const KNOWN_CHECK_SET = new Set(KNOWN_CHECKS);
@@ -210,10 +209,6 @@ export function computeRequiredChecks(policy, tier, changedFiles) {
 
   if (requiresBrowserEvidence(policy, changedFiles)) {
     checks.add("browser-evidence");
-  }
-
-  if (!policy.reviewPolicy.codexReviewEnabled) {
-    checks.delete("codex-review");
   }
 
   return KNOWN_CHECKS.filter((name) => checks.has(name));

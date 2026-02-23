@@ -123,11 +123,17 @@ Registry policy:
 - API/Web/Job resources use a shared user-assigned managed identity for image pulls.
 - `AcrPull` role assignment is applied at ACR scope for the shared pull identity.
 - `infra-apply` explicitly checks/enables ACR `authentication-as-arm`.
-- `infra-apply` derives the ACR login server from `ACR_NAME` and resolves image references from current deployed image or `image_tag` override.
+- `infra-apply` derives the ACR login server from `ACR_NAME`, resolves image references from current deployed image or `image_tag` override, and fails closed when refs cannot be resolved in ACR.
+- `workflow_call` image refs are normalized to digest form and validated in ACR before Bicep apply starts.
 - Migration job image is pinned to the API image (single-image release artifact pattern).
 - ACR storage lifecycle is controlled by `.github/workflows/acr-cleanup.yml` (scheduled/manual tag pruning).
 - Decision and feasibility rationale is captured in `docs/adr/TDR-002-production-container-registry-strategy.md`.
 - Cost baseline for planning: ACR Basic registry unit is approximately `$0.1666/day` plus storage at approximately `$0.10/GB-month` (commercial regions).
+
+Infra apply retry behavior:
+
+- Bicep apply retries once (20s backoff) only for recognized transient ARM/ACA provisioning failures.
+- Terminal failures emit explicit stderr diagnostics and attempt logs in `.artifacts/infra/<sha>/deployment.stderr.log` and `.artifacts/infra/<sha>/deployment-attempts.log`.
 
 Database policy:
 

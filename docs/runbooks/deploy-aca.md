@@ -179,3 +179,9 @@ Browser evidence timeout policy:
 - Uses `SMOKE_EXPECTED_ACCOUNT_IDENTITY` for authenticated request path.
 - If `SMOKE_REQUIRE_EMPLOYEE_FOUND=true`, requires `200` with payload assertions.
 - If unset/`false`, accepts `200` (with payload checks) or `404` (data-independent smoke).
+- Authorized smoke requests use bounded retry (`AUTHORIZED_RETRY_ATTEMPTS`, `AUTHORIZED_RETRY_DELAY_MS`) to handle short Entra token propagation windows.
+
+Deploy diagnostics contract:
+
+- `migration.json` includes `reasonCode`, `reason`, `executionSummary`, `statusTimeline`, elapsed timing, and `logsSource`.
+- `api-smoke.json` includes `reasonCode`, `reason`, authorized retry timeline, response snippets, and assertion IDs.

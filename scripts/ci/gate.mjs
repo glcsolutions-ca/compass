@@ -49,6 +49,10 @@ function parseRequiredFlowIds() {
   return parseStringArray("REQUIRED_FLOW_IDS_JSON", raw);
 }
 
+function appendReason(reasons, code, message) {
+  reasons.push({ code, message });
+}
+
 function parseCheckResults() {
   const raw = requireEnv("CHECK_RESULTS_JSON");
   const parsed = JSON.parse(raw);
@@ -56,7 +60,13 @@ function parseCheckResults() {
     throw new Error("CHECK_RESULTS_JSON must be a JSON object");
   }
 
-  const expectedChecks = ["preflight", "ci-pipeline", "browser-evidence", "harness-smoke"];
+  const expectedChecks = [
+    "preflight",
+    "ci-pipeline",
+    "browser-evidence",
+    "harness-smoke",
+    "migration-image-smoke"
+  ];
 
   const checkResults = {};
   for (const checkName of expectedChecks) {
@@ -74,13 +84,19 @@ function validateRequiredFlowAssertions(flowId, assertions, reasons) {
   );
 
   if (flowAssertions.length === 0) {
-    reasons.push(`browser-evidence missing assertions for required flow ${flowId}`);
+    appendReason(
+      reasons,
+      "BROWSER_EVIDENCE_REQUIRED_FLOW_ASSERTIONS_MISSING",
+      `browser-evidence missing assertions for required flow ${flowId}`
+    );
     return;
   }
 
   const failed = flowAssertions.filter((assertion) => assertion.pass !== true);
   for (const assertion of failed) {
-    reasons.push(
+    appendReason(
+      reasons,
+      "BROWSER_EVIDENCE_ASSERTION_FAILED",
       `browser-evidence assertion failed for ${flowId}: ${assertion.id}${
         assertion.details ? ` (${assertion.details})` : ""
       }`
@@ -106,18 +122,30 @@ async function validateBrowserEvidence({
   }
 
   if (requiredFlowIds.length === 0) {
-    reasons.push("browser-evidence is required but REQUIRED_FLOW_IDS_JSON is empty");
+    appendReason(
+      reasons,
+      "BROWSER_EVIDENCE_REQUIRED_FLOWS_EMPTY",
+      "browser-evidence is required but REQUIRED_FLOW_IDS_JSON is empty"
+    );
     return;
   }
 
   const browserManifestPath = process.env.BROWSER_EVIDENCE_MANIFEST_PATH?.trim() ?? "";
   if (browserManifestPath.length === 0) {
-    reasons.push("browser-evidence manifest path is missing");
+    appendReason(
+      reasons,
+      "BROWSER_EVIDENCE_MANIFEST_PATH_MISSING",
+      "browser-evidence manifest path is missing"
+    );
     return;
   }
 
   if (!(await fileExists(browserManifestPath))) {
-    reasons.push(`browser-evidence artifact is missing at ${browserManifestPath}`);
+    appendReason(
+      reasons,
+      "BROWSER_EVIDENCE_ARTIFACT_MISSING",
+      `browser-evidence artifact is missing at ${browserManifestPath}`
+    );
     return;
   }
 
@@ -126,28 +154,44 @@ async function validateBrowserEvidence({
   const expectedAccountIdentity = process.env.EXPECTED_ACCOUNT_IDENTITY?.trim() || "";
 
   if (browserManifest.headSha !== headSha) {
-    reasons.push(
+    appendReason(
+      reasons,
+      "BROWSER_EVIDENCE_HEAD_SHA_MISMATCH",
       `browser-evidence headSha mismatch: expected ${headSha}, got ${browserManifest.headSha}`
     );
   }
 
   if (browserManifest.testedSha !== testedSha) {
-    reasons.push(
+    appendReason(
+      reasons,
+      "BROWSER_EVIDENCE_TESTED_SHA_MISMATCH",
       `browser-evidence testedSha mismatch: expected ${testedSha}, got ${browserManifest.testedSha}`
     );
   }
 
   if (browserManifest.tier !== tier) {
-    reasons.push(`browser-evidence tier mismatch: expected ${tier}, got ${browserManifest.tier}`);
+    appendReason(
+      reasons,
+      "BROWSER_EVIDENCE_TIER_MISMATCH",
+      `browser-evidence tier mismatch: expected ${tier}, got ${browserManifest.tier}`
+    );
   }
 
   if (!Array.isArray(browserManifest.flows)) {
-    reasons.push("browser-evidence manifest flows must be an array");
+    appendReason(
+      reasons,
+      "BROWSER_EVIDENCE_MANIFEST_FLOWS_INVALID",
+      "browser-evidence manifest flows must be an array"
+    );
     return;
   }
 
   if (!Array.isArray(browserManifest.assertions)) {
-    reasons.push("browser-evidence manifest assertions must be an array");
+    appendReason(
+      reasons,
+      "BROWSER_EVIDENCE_MANIFEST_ASSERTIONS_INVALID",
+      "browser-evidence manifest assertions must be an array"
+    );
     return;
   }
 
@@ -155,24 +199,34 @@ async function validateBrowserEvidence({
     const flow = browserManifest.flows.find((value) => value?.id === flowId);
 
     if (!flow) {
-      reasons.push(`browser-evidence missing required flow: ${flowId}`);
+      appendReason(
+        reasons,
+        "BROWSER_EVIDENCE_REQUIRED_FLOW_MISSING",
+        `browser-evidence missing required flow: ${flowId}`
+      );
       continue;
     }
 
     if (flow.status !== "passed") {
-      reasons.push(
+      appendReason(
+        reasons,
+        "BROWSER_EVIDENCE_REQUIRED_FLOW_NOT_PASSED",
         `browser-evidence required flow is not passed: ${flowId} (status=${flow.status})`
       );
     }
 
     if (flow.entrypoint !== expectedEntrypoint) {
-      reasons.push(
+      appendReason(
+        reasons,
+        "BROWSER_EVIDENCE_ENTRYPOINT_MISMATCH",
         `browser-evidence flow ${flowId} entrypoint mismatch: expected ${expectedEntrypoint}, got ${flow.entrypoint}`
       );
     }
 
     if (expectedAccountIdentity.length > 0 && flow.accountIdentity !== expectedAccountIdentity) {
-      reasons.push(
+      appendReason(
+        reasons,
+        "BROWSER_EVIDENCE_IDENTITY_MISMATCH",
         `browser-evidence flow ${flowId} identity mismatch: expected ${expectedAccountIdentity}, got ${flow.accountIdentity}`
       );
     }
@@ -188,6 +242,7 @@ async function main() {
   const requiredFlowIds = parseRequiredFlowIds();
   const browserRequired = parseBooleanEnv("BROWSER_REQUIRED", false);
   const harnessRequired = parseBooleanEnv("HARNESS_REQUIRED", false);
+  const migrationImageRequired = parseBooleanEnv("MIGRATION_IMAGE_REQUIRED", false);
   const docsDriftBlocking = parseBooleanEnv("DOCS_DRIFT_BLOCKING", false);
   const docsDriftStatus = (process.env.DOCS_DRIFT_STATUS?.trim() || "unknown").toLowerCase();
 
@@ -196,6 +251,7 @@ async function main() {
     checkResults,
     browserRequired,
     harnessRequired,
+    migrationImageRequired,
     docsDriftBlocking,
     docsDriftStatus
   });
@@ -211,7 +267,11 @@ async function main() {
       reasons
     });
   } catch (error) {
-    reasons.push(error instanceof Error ? error.message : String(error));
+    appendReason(
+      reasons,
+      "BROWSER_EVIDENCE_VALIDATION_ERROR",
+      error instanceof Error ? error.message : String(error)
+    );
   }
 
   const gatePath = path.join(".artifacts", "risk-policy-gate", testedSha, "result.json");
@@ -223,12 +283,15 @@ async function main() {
     tier,
     browserRequired,
     harnessRequired,
+    migrationImageRequired,
     docsDriftBlocking,
     docsDriftStatus,
     requiredFlowIds,
     checkResults,
     pass: reasons.length === 0,
-    reasons
+    reasonCodes: reasons.map((reason) => reason.code),
+    reasonDetails: reasons,
+    reasons: reasons.map((reason) => reason.message)
   };
 
   await writeJsonFile(gatePath, gatePayload);
@@ -237,7 +300,7 @@ async function main() {
   if (reasons.length > 0) {
     console.error("risk-policy-gate blocking reasons:");
     for (const reason of reasons) {
-      console.error(`- ${reason}`);
+      console.error(`- [${reason.code}] ${reason.message}`);
     }
     process.exit(1);
   }

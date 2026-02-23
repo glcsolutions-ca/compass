@@ -37,6 +37,7 @@ jobs:
       required_flow_ids_json: ${{ steps.preflight.outputs.required_flow_ids_json }}
       browser_required: ${{ steps.preflight.outputs.browser_required }}
       harness_required: ${{ steps.preflight.outputs.harness_required }}
+      migration_image_required: ${{ steps.preflight.outputs.migration_image_required }}
       docs_drift_blocking: ${{ steps.preflight.outputs.docs_drift_blocking }}
       docs_drift_path: ${{ steps.docs_drift.outputs.docs_drift_path }}
       docs_drift_status: ${{ steps.docs_drift.outputs.docs_drift_status }}
@@ -415,6 +416,122 @@ jobs:
           path: .artifacts/harness-smoke/${{ needs.preflight.outputs.tested_sha }}/result.json
           if-no-files-found: warn
 
+  migration_image_smoke:
+    name: migration-image-smoke
+    needs:
+      - preflight
+    if: ${{ needs.preflight.outputs.migration_image_required == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      migration_image_smoke_path: ${{ steps.write_result.outputs.migration_image_smoke_path }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run migration-image-smoke
+        id: run_smoke
+        continue-on-error: true
+        env:
+          TESTED_SHA: ${{ needs.preflight.outputs.tested_sha }}
+          HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+          RISK_TIER: ${{ needs.preflight.outputs.tier }}
+        run: |
+          set -euo pipefail
+          artifact_dir=".artifacts/migration-image-smoke/$TESTED_SHA"
+          mkdir -p "$artifact_dir"
+          log_path="$artifact_dir/run.log"
+          network_name="migration-image-smoke-net"
+          postgres_name="migration-image-smoke-postgres"
+
+          {
+            docker network create "$network_name"
+
+            docker run -d \
+              --name "$postgres_name" \
+              --network "$network_name" \
+              -e POSTGRES_DB=compass \
+              -e POSTGRES_USER=compass \
+              -e POSTGRES_PASSWORD=compass \
+              postgres:16-alpine
+
+            for i in $(seq 1 90); do
+              if docker exec "$postgres_name" pg_isready -U compass -d compass >/dev/null 2>&1; then
+                break
+              fi
+
+              if [ "$i" -eq 90 ]; then
+                echo "Timed out waiting for postgres in migration-image-smoke job" >&2
+                exit 1
+              fi
+
+              sleep 1
+            done
+
+            docker build -f apps/api/Dockerfile -t "compass-api-migration-smoke:$TESTED_SHA" .
+
+            docker run --rm \
+              --network "$network_name" \
+              -e DATABASE_URL="postgres://compass:compass@$postgres_name:5432/compass" \
+              "compass-api-migration-smoke:$TESTED_SHA" \
+              node db/scripts/migrate.mjs up
+          } 2>&1 | tee "$log_path"
+
+      - name: Write migration-image-smoke artifact
+        if: ${{ always() }}
+        id: write_result
+        env:
+          TESTED_SHA: ${{ needs.preflight.outputs.tested_sha }}
+          HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+          RISK_TIER: ${{ needs.preflight.outputs.tier }}
+          SMOKE_OUTCOME: ${{ steps.run_smoke.outcome }}
+        run: |
+          set -euo pipefail
+          artifact_dir=".artifacts/migration-image-smoke/$TESTED_SHA"
+          mkdir -p "$artifact_dir"
+
+          status="pass"
+          reason_code=""
+          if [ "$SMOKE_OUTCOME" != "success" ]; then
+            status="fail"
+            reason_code="MIGRATION_IMAGE_SMOKE_FAILED"
+          fi
+
+          cat > "$artifact_dir/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "testedSha": "$TESTED_SHA",
+            "tier": "$RISK_TIER",
+            "status": "$status",
+            "reasonCode": "$reason_code",
+            "logPath": "$artifact_dir/run.log"
+          }
+          JSON
+
+          echo "migration_image_smoke_path=$artifact_dir/result.json" >> "$GITHUB_OUTPUT"
+
+      - name: Stop migration-image-smoke services
+        if: ${{ always() }}
+        run: |
+          docker rm -f migration-image-smoke-postgres >/dev/null 2>&1 || true
+          docker network rm migration-image-smoke-net >/dev/null 2>&1 || true
+
+      - name: Upload migration-image-smoke artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-image-smoke-${{ needs.preflight.outputs.tested_sha }}
+          path: .artifacts/migration-image-smoke/${{ needs.preflight.outputs.tested_sha }}
+          if-no-files-found: warn
+
+      - name: Fail when migration-image-smoke fails
+        if: ${{ steps.run_smoke.outcome != 'success' }}
+        run: exit 1
+
   risk_policy_gate:
     name: risk-policy-gate
     if: ${{ always() }}
@@ -423,6 +540,7 @@ jobs:
       - ci_pipeline
       - browser_evidence
       - harness_smoke
+      - migration_image_smoke
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -450,10 +568,11 @@ jobs:
           RISK_TIER: ${{ needs.preflight.outputs.tier }}
           BROWSER_REQUIRED: ${{ needs.preflight.outputs.browser_required }}
           HARNESS_REQUIRED: ${{ needs.preflight.outputs.harness_required }}
+          MIGRATION_IMAGE_REQUIRED: ${{ needs.preflight.outputs.migration_image_required }}
           DOCS_DRIFT_BLOCKING: ${{ needs.preflight.outputs.docs_drift_blocking }}
           DOCS_DRIFT_STATUS: ${{ needs.preflight.outputs.docs_drift_status }}
           REQUIRED_FLOW_IDS_JSON: ${{ needs.preflight.outputs.required_flow_ids_json }}
-          CHECK_RESULTS_JSON: ${{ format('{{"preflight":"{0}","ci-pipeline":"{1}","browser-evidence":"{2}","harness-smoke":"{3}"}}', needs.preflight.result, needs.ci_pipeline.result, needs.browser_evidence.result, needs.harness_smoke.result) }}
+          CHECK_RESULTS_JSON: ${{ format('{{"preflight":"{0}","ci-pipeline":"{1}","browser-evidence":"{2}","harness-smoke":"{3}","migration-image-smoke":"{4}"}}', needs.preflight.result, needs.ci_pipeline.result, needs.browser_evidence.result, needs.harness_smoke.result, needs.migration_image_smoke.result) }}
           BROWSER_EVIDENCE_MANIFEST_PATH: ${{ needs.browser_evidence.outputs.browser_manifest_path }}
           EXPECTED_ENTRYPOINT: ${{ env.EXPECTED_ENTRYPOINT }}
           EXPECTED_ACCOUNT_IDENTITY: ${{ env.EXPECTED_ACCOUNT_IDENTITY }}

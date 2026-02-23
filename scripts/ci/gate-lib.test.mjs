@@ -11,6 +11,7 @@ function makeBaseInput(overrides = {}) {
     },
     browserRequired: false,
     harnessRequired: false,
+    migrationImageRequired: false,
     docsDriftBlocking: false,
     docsDriftStatus: "pass",
     ...overrides
@@ -30,7 +31,10 @@ describe("evaluateRequiredCheckResults", () => {
       })
     );
 
-    expect(reasons).toEqual(["preflight result is failure", "ci-pipeline result is cancelled"]);
+    expect(reasons).toEqual([
+      { code: "CHECK_PREFLIGHT_NOT_SUCCESS", message: "preflight result is failure" },
+      { code: "CHECK_CI_PIPELINE_NOT_SUCCESS", message: "ci-pipeline result is cancelled" }
+    ]);
   });
 
   it("enforces browser and harness checks only when required", () => {
@@ -48,8 +52,36 @@ describe("evaluateRequiredCheckResults", () => {
     );
 
     expect(reasons).toEqual([
-      "browser-evidence required but result is skipped",
-      "harness-smoke required but result is failure"
+      {
+        code: "CHECK_BROWSER_EVIDENCE_REQUIRED_NOT_SUCCESS",
+        message: "browser-evidence required but result is skipped"
+      },
+      {
+        code: "CHECK_HARNESS_SMOKE_REQUIRED_NOT_SUCCESS",
+        message: "harness-smoke required but result is failure"
+      }
+    ]);
+  });
+
+  it("enforces migration-image-smoke only when required", () => {
+    const reasons = evaluateRequiredCheckResults(
+      makeBaseInput({
+        migrationImageRequired: true,
+        checkResults: {
+          preflight: "success",
+          "ci-pipeline": "success",
+          "browser-evidence": "skipped",
+          "harness-smoke": "skipped",
+          "migration-image-smoke": "failure"
+        }
+      })
+    );
+
+    expect(reasons).toEqual([
+      {
+        code: "CHECK_MIGRATION_IMAGE_SMOKE_REQUIRED_NOT_SUCCESS",
+        message: "migration-image-smoke required but result is failure"
+      }
     ]);
   });
 
@@ -60,7 +92,12 @@ describe("evaluateRequiredCheckResults", () => {
         docsDriftStatus: "fail"
       })
     );
-    expect(blockingReasons).toEqual(["docs-drift blocking is true but docs_drift_status is fail"]);
+    expect(blockingReasons).toEqual([
+      {
+        code: "DOCS_DRIFT_BLOCKING_NOT_PASS",
+        message: "docs-drift blocking is true but docs_drift_status is fail"
+      }
+    ]);
 
     const advisoryReasons = evaluateRequiredCheckResults(
       makeBaseInput({

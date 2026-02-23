@@ -11,10 +11,12 @@ export const KNOWN_CHECKS = [
   "preflight",
   "ci-pipeline",
   "browser-evidence",
-  "harness-smoke"
+  "harness-smoke",
+  "migration-image-smoke"
 ];
 
 export const KNOWN_CHECK_SET = new Set(KNOWN_CHECKS);
+export const MIGRATION_IMAGE_SMOKE_PATHS = ["db/migrations/**", "db/scripts/**"];
 
 export function requireEnv(name) {
   const value = process.env[name];
@@ -211,15 +213,27 @@ export function computeRequiredChecks(policy, tier, changedFiles) {
     checks.add("browser-evidence");
   }
 
+  if (!requiresMigrationImageSmoke(tier, changedFiles)) {
+    checks.delete("migration-image-smoke");
+  }
+
   return KNOWN_CHECKS.filter((name) => checks.has(name));
 }
 
+export function requiresMigrationImageSmoke(tier, changedFiles) {
+  if (tier !== "high") {
+    return false;
+  }
+
+  return changedFiles.some((filePath) => matchesAnyPattern(filePath, MIGRATION_IMAGE_SMOKE_PATHS));
+}
+
 export function evaluateDocsDrift(policy, changedFiles) {
-  const touchesBlockingPaths = changedFiles.some((filePath) =>
+  const blockingPathsChanged = changedFiles.filter((filePath) =>
     matchesAnyPattern(filePath, policy.docsDriftRules.blockingPaths)
   );
 
-  const touchesDocsCriticalPaths = changedFiles.some((filePath) =>
+  const docsCriticalPathsChanged = changedFiles.filter((filePath) =>
     matchesAnyPattern(filePath, policy.docsDriftRules.docsCriticalPaths)
   );
 
@@ -227,14 +241,29 @@ export function evaluateDocsDrift(policy, changedFiles) {
     matchesAnyPattern(filePath, policy.docsDriftRules.docTargets)
   );
 
+  const expectedDocTargets = [...policy.docsDriftRules.docTargets];
+  const touchesBlockingPaths = blockingPathsChanged.length > 0;
+  const touchesDocsCriticalPaths = docsCriticalPathsChanged.length > 0;
+
   const docsUpdated = touchedDocTargets.length > 0;
   const shouldBlock = touchesDocsCriticalPaths && !docsUpdated;
+  const reasonCodes = [];
+
+  if (shouldBlock) {
+    reasonCodes.push("DOCS_DRIFT_BLOCKING_DOC_TARGET_MISSING");
+  } else if (touchesBlockingPaths && !docsUpdated) {
+    reasonCodes.push("DOCS_DRIFT_ADVISORY_DOC_TARGET_MISSING");
+  }
 
   return {
     touchesBlockingPaths,
     touchesDocsCriticalPaths,
+    blockingPathsChanged,
+    docsCriticalPathsChanged,
     docsUpdated,
     touchedDocTargets,
+    expectedDocTargets,
+    reasonCodes,
     shouldBlock
   };
 }

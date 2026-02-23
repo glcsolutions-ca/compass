@@ -21,13 +21,13 @@ This directory is the machine source of truth for merge control.
 - `infra/identity/**`
 - `deploy/**`
 
-## Bootstrap Toggle
+## Review Toggle
 
 `reviewPolicy.codexReviewEnabled` controls whether `codex-review` is part of required checks.
 
-- `false`: `codex-review` stays wired but writes deterministic no-op artifacts.
-- `true`: policy-required tiers enforce full blocking `codex-review`.
-- If enabled but `OPENAI_API_KEY` is missing, `codex-review` writes deterministic bootstrap no-op artifacts.
+- `false`: `codex-review` is not required.
+- `true`: required high-risk changes enforce blocking `codex-review`.
+- If enabled and required but `OPENAI_API_KEY` is missing, `codex-review` fails hard.
 
 To enable full review enforcement:
 

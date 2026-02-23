@@ -10,18 +10,15 @@
 6. `runtime` runs migration+deploy atomically using digest refs.
 7. `report` publishes unified release artifacts.
 
-- `merge-contract.yml`: deterministic merge-contract workflow with ordered checks:
+- `merge-contract.yml`: deterministic PR gate with dependency-based parallel checks:
   - `risk-policy-preflight` (includes `docs-drift` evaluation)
-  - `actionlint` on changed workflow files (falls back to all workflows for `t3` control-plane changes)
-  - `no-org-infra` leak guard (fails on committed org-specific infra values)
-  - `codex-review` (conditional; runs only when policy requires it)
-  - `ci-pipeline-fast` (conditional lane for `t0`; lightweight repo checks, no Postgres service)
-  - `ci-pipeline-full` (conditional lane for `deps`, `t1`, `t2`, `t3`; Postgres integration + full pipeline)
-  - `ci-pipeline` (stable required check; validates lane selection and emits the ci artifact)
+  - `actionlint` on changed workflow files only
+  - `no-org-infra` leak guard
+  - `ci-pipeline` (single stable CI check name; `fast` for `low`, `full` for `normal/high`)
   - `browser-evidence` (conditional)
-    - web smoke runs against Next standalone runtime with static/public assets copied into the standalone tree
   - `harness-smoke` (conditional)
-  - `risk-policy-gate` (final required gate; policy-driven check aggregation + browser manifest assertions)
+  - `codex-review` (conditional; when enabled and required)
+  - `risk-policy-gate` (final required gate; validates required checks from `needs.*.result`)
 - `dependabot-auto-merge.yml`: safe-lane auto-merge for Dependabot PRs (patch/minor only) with required gate-context checks (`risk-policy-gate`, `ci-pipeline`) before enabling auto-merge
 - `deploy.yml`: mainline release orchestrator (`classify -> checks -> promote -> report`)
   - `promote` is the only job with `environment: production` and `concurrency: prod-main`

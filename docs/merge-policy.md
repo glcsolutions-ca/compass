@@ -16,73 +16,54 @@ Branch protection requires only:
 
 - `risk-policy-gate`
 
-`risk-policy-gate` enforces all dynamic tier checks (`ci-pipeline`, `browser-evidence`, `harness-smoke`, `codex-review`) for the current head SHA.
-`codex-review` runs only when required by policy (`reviewPolicy.codexReviewEnabled` and tier requirements).
-`risk-policy-gate` enforces required check-runs by result and validates browser evidence manifest assertions only when UI evidence is required.
+`risk-policy-gate` enforces all dynamic checks (`ci-pipeline`, `browser-evidence`, `harness-smoke`, `codex-review`) for the current head SHA.
 
 ## Deterministic tiers
 
-- `t0`: low risk
-- `deps`: dependency manifests/lockfiles only (`package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`)
-- `t1`: core backend/shared logic
-- `t2`: UI/user flow changes
-- `t3`: high risk (`auth`, control-plane config like workflows/policy/dependabot, deploy scripts, infra, migrations)
+- `low`: docs and low-risk changes
+- `normal`: standard runtime and dependency changes
+- `high`: control-plane, infra, migration, and auth-sensitive surfaces
 
 If multiple tiers match, highest tier wins.
 
-## Deterministic order
+## Dependency model (wide pipeline)
 
-1. `risk-policy-preflight` (includes docs-drift evaluation)
-   - includes workflow lint (`actionlint`) when workflow/control-plane changes are detected
-2. `codex-review` (conditional)
-3. `ci-pipeline-fast` or `ci-pipeline-full` (selected by tier)
-4. `ci-pipeline` (aggregates lane result into one stable required check)
-5. `browser-evidence` (conditional)
-6. `harness-smoke` (conditional)
-7. `risk-policy-gate` (final fail-closed enforcement)
+The merge workflow is dependency-driven, not serialized:
+
+- `risk-policy-preflight` runs first.
+- Then conditional checks run in parallel from preflight outputs:
+  - `ci-pipeline` (always)
+  - `browser-evidence` (when UI evidence required)
+  - `harness-smoke` (when high-risk)
+  - `codex-review` (when enabled + required)
+- `risk-policy-gate` is final and verifies `needs.*.result` against required checks.
 
 ## Tier Matrix
 
-| Tier   | Mode   | Required checks                                                                   |
-| ------ | ------ | --------------------------------------------------------------------------------- |
-| `t0`   | `fast` | `risk-policy-gate`, `ci-pipeline`                                                 |
-| `deps` | `full` | `risk-policy-gate`, `ci-pipeline`                                                 |
-| `t1`   | `full` | `risk-policy-gate`, `ci-pipeline`                                                 |
-| `t2`   | `full` | `risk-policy-gate`, `ci-pipeline`, `browser-evidence`                             |
-| `t3`   | `full` | `risk-policy-gate`, `ci-pipeline`, `harness-smoke`, `codex-review` (when enabled) |
+| Tier     | CI mode | Required checks                                                                   |
+| -------- | ------- | --------------------------------------------------------------------------------- |
+| `low`    | `fast`  | `risk-policy-gate`, `ci-pipeline`                                                 |
+| `normal` | `full`  | `risk-policy-gate`, `ci-pipeline` (+ `browser-evidence` when UI paths changed)    |
+| `high`   | `full`  | `risk-policy-gate`, `ci-pipeline`, `harness-smoke`, `codex-review` (when enabled) |
 
-`ci-pipeline` remains the only required CI check name for branch protection. Internally:
+## Codex review policy
 
-- `ci-pipeline-fast` runs lightweight repo checks only.
-- `ci-pipeline-full` runs Postgres-backed integration flow plus full pipeline checks.
-- `ci-pipeline` validates that the correct lane ran and succeeded for the current `ci_mode`.
+`reviewPolicy.codexReviewEnabled` controls whether `codex-review` is required.
 
-## Bootstrap review mode
-
-During bootstrap, `reviewPolicy.codexReviewEnabled` may be `false`:
-
-- `codex-review` is skipped (not required by gate).
-- `risk-policy-gate` does not require `codex-review` in required checks.
-
-When `codex-review` is enabled but `OPENAI_API_KEY` is missing, `codex-review` emits a deterministic
-bootstrap no-op artifact instead of failing.
-
-When ready, enable blocking review by:
-
-1. Adding repository secret `OPENAI_API_KEY`.
-2. Setting `reviewPolicy.codexReviewEnabled` to `true`.
+- `false`: `codex-review` is excluded from required checks.
+- `true`: required high-risk changes must pass `codex-review`.
+- If required and `OPENAI_API_KEY` is missing, `codex-review` fails hard.
 
 ## Docs drift
 
-`docs-drift` is always evaluated and blocking when either condition is true and docs were not updated:
+`docs-drift` is always evaluated.
 
-- Changes match `docsDriftRules.blockingPaths`
-- Changes match `docsDriftRules.docsCriticalPaths`
+- Blocking: `docsDriftRules.docsCriticalPaths` changed without matching docs target updates.
+- Advisory/visible only: `docsDriftRules.blockingPaths` without docs updates.
 
-Accepted docs updates are defined in `docsDriftRules.docTargets`.
+Result artifact path:
 
-`docs-drift` runs as part of `risk-policy-preflight` and still emits a standalone
-artifact at `.artifacts/docs-drift/<headSha>/result.json`.
+- `.artifacts/docs-drift/<headSha>/result.json`
 
 ## Stale evidence rules
 
@@ -93,12 +74,12 @@ Evidence is valid only when:
 
 ## Runtime baseline
 
-Control-plane scripts (`preflight`, `docs-drift`, `codex-review`, `gate`, deploy scripts) rely on Node core APIs only.
-Workflow and local contract checks require Node `24` with minimum `24.8.0` (for `path.posix.matchesGlob`), sourced from `.nvmrc`.
+Control-plane scripts use a pinned glob matcher (`minimatch`) for stable pattern behavior.
 
-## Control-Plane Paths
+- Node baseline: `22.x` (`.nvmrc`)
+- Engine contract: `>=22 <23`
 
-The following paths are treated as explicit control-plane surfaces and are elevated to high-risk:
+## Control-plane high-risk paths
 
 - `.github/workflows/*.yml`
 - `.github/workflows/*.yaml`
@@ -115,22 +96,19 @@ The following paths are treated as explicit control-plane surfaces and are eleva
 ```mermaid
 flowchart TD
   A["PR opened or synchronized"] --> B["risk-policy-preflight (+ docs-drift)"]
-  B --> D{"codex-review required?"}
-  D -- Yes --> DR["codex-review"]
-  B --> E{"ci_mode"}
-  E -- fast --> EF["ci-pipeline-fast"]
-  E -- full --> EL["ci-pipeline-full"]
-  EF --> EA["ci-pipeline (aggregator)"]
-  EL --> EA["ci-pipeline (aggregator)"]
-  B --> F{"browser-evidence required?"}
-  B --> G{"harness-smoke required?"}
-  F -- Yes --> H["browser-evidence"]
-  G -- Yes --> I["harness-smoke"]
-  DR --> J["risk-policy-gate"]
-  EA --> J["risk-policy-gate"]
+  B --> C["ci-pipeline"]
+  B --> D{"browser evidence required?"}
+  B --> E{"harness required?"}
+  B --> F{"codex-review required?"}
+  D -- Yes --> G["browser-evidence"]
+  E -- Yes --> H["harness-smoke"]
+  F -- Yes --> I["codex-review"]
+  B --> J["risk-policy-gate"]
+  C --> J
+  G --> J
   H --> J
   I --> J
-  J --> K{"all required checks valid for current head SHA?"}
+  J --> K{"required checks satisfied for current head SHA?"}
   K -- No --> X["fail closed"]
   K -- Yes --> M["merge eligible"]
 ```

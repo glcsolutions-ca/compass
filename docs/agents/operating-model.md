@@ -14,11 +14,9 @@ Compass uses a deterministic merge contract.
 - `SHA`: unique commit fingerprint. We tag images and artifacts with it for exact traceability.
 - `Replay`: rerun infra/deploy on the same SHA to prove repeatability.
 
-## Canonical Check Order
+## Canonical Check Dependencies
 
-1. `risk-policy-preflight` (includes `docs-drift`)
-2. `codex-review`
-3. `ci-pipeline`
-4. `browser-evidence` (conditional)
-5. `harness-smoke` (conditional)
-6. `risk-policy-gate`
+1. `risk-policy-preflight` runs first (includes `docs-drift`).
+2. `ci-pipeline` always runs from preflight outputs (`fast` for `low`, `full` for `normal/high`).
+3. `browser-evidence`, `harness-smoke`, and `codex-review` run conditionally in parallel.
+4. `risk-policy-gate` is final and validates required `needs.*.result` outcomes.

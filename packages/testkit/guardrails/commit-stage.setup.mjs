@@ -1,7 +1,4 @@
 import { installTestGuardrails } from "./install.mjs";
+import { loadRuntimeModePolicy } from "./policy.mjs";
 
-installTestGuardrails({
-  mode: "commit-stage",
-  allowPostgres: false,
-  blockChildProcess: true
-});
+installTestGuardrails(loadRuntimeModePolicy("commitStage"));

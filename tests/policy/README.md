@@ -17,7 +17,7 @@ Testing philosophy lives in `tests/README.md`. This folder defines how that phil
 
 ## Files
 
-- `tests/policy/test-policy.json`: machine-readable policy contract for `scripts/ci/testing-contract.mjs`.
+- `tests/policy/test-policy.json`: machine-readable policy contract for layers 1-3.
 - `tests/policy/test-quarantine.json`: temporary skip metadata used by `TC011`.
 - `tests/policy/README.md`: policy, quarantine, and troubleshooting guidance.
 
@@ -46,12 +46,17 @@ Output:
 - Commit-stage (`pnpm test`): loopback-only network, Postgres blocked
 - Integration (`pnpm test:integration`): Postgres allowed, external network blocked by default
 
+Runtime mode settings are loaded from `tests/policy/test-policy.json` through
+`packages/testkit/guardrails/policy.mjs`.
+
 ### Layer 3: Lint hygiene
 
 - No `*.only`
 - No ad-hoc sleeps
 - No unseeded randomness (`Math.random`)
 - No DB client imports in commit-stage test globs
+
+Commit-stage lint globs and import restrictions are derived from `tests/policy/test-policy.json`.
 
 ## Policy schema summary (`test-policy.json`)
 
@@ -64,6 +69,7 @@ Output:
 - `rules`: enable flags for `TC001`, `TC010`, `TC011`, `TC020`
 - `runtime`: guardrail mode config for commit-stage/integration test setup
 - `lint`: commit-stage lint toggles and module restrictions
+- `lint.commitStageGlobs` must exactly match `layers.commitStage` (drift is rejected)
 
 ## Test layer mapping
 
@@ -126,4 +132,4 @@ Rules:
 2. Update `tests/policy/test-quarantine.json` when skip metadata changes.
 3. Update docs when behavior changes (`tests/README.md` and this file).
 4. Run `pnpm ci:testing-contract` and `pnpm test`.
-5. Keep `scripts/ci/test-policy.test.mjs` and `scripts/ci/testing-contract.test.mjs` aligned with policy validation rules.
+5. Keep `scripts/ci/test-policy.test.mjs`, `scripts/ci/testing-contract.test.mjs`, and `scripts/ci/eslint-policy.test.mjs` aligned with policy validation rules.

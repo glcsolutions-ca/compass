@@ -1,18 +1,22 @@
 name: Infra Apply
 
 on:
+  workflow_call:
+    inputs:
+      api_image_ref:
+        description: Digest image ref for API app (repo@sha256:...)
+        required: true
+        type: string
+      web_image_ref:
+        description: Digest image ref for Web app (repo@sha256:...)
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       image_tag:
-        description: Optional image tag for API/Web images (when set, always used)
+        description: Optional image tag for API/Web rollback convenience
         required: false
         type: string
-  push:
-    branches:
-      - main
-    paths:
-      - infra/azure/**
-      - .github/workflows/infra-apply.yml
 
 permissions:
   contents: read
@@ -26,29 +30,9 @@ jobs:
     timeout-minutes: 30
     env:
       HEAD_SHA: ${{ github.sha }}
-      TARGET_IMAGE_TAG: ${{ inputs.image_tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Resolve image tag
-        run: |
-          set -euo pipefail
-          image_tag="${TARGET_IMAGE_TAG:-}"
-          from_input=false
-          if [ -n "$image_tag" ]; then
-            from_input=true
-          else
-            image_tag="$HEAD_SHA"
-          fi
-
-          if ! [[ "$image_tag" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
-            echo "Invalid image tag: $image_tag" >&2
-            exit 1
-          fi
-
-          echo "RESOLVED_IMAGE_TAG=$image_tag" >> "$GITHUB_ENV"
-          echo "IMAGE_TAG_FROM_INPUT=$from_input" >> "$GITHUB_ENV"
 
       - name: Azure login (OIDC)
         uses: azure/login@v2
@@ -208,9 +192,13 @@ jobs:
             exit 1
           fi
 
-      - name: Resolve deployment images
+      - name: Resolve deployment image refs
         id: images
         env:
+          EVENT_NAME: ${{ github.event_name }}
+          TARGET_IMAGE_TAG: ${{ inputs.image_tag }}
+          WORKFLOW_API_IMAGE_REF: ${{ inputs.api_image_ref }}
+          WORKFLOW_WEB_IMAGE_REF: ${{ inputs.web_image_ref }}
           ACR_NAME: ${{ vars.ACR_NAME }}
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
           ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
@@ -220,32 +208,76 @@ jobs:
 
           acr_registry="${ACR_NAME}.azurecr.io"
 
-          if [ "${IMAGE_TAG_FROM_INPUT:-false}" = "true" ]; then
-            api_image="${acr_registry}/compass-api:${RESOLVED_IMAGE_TAG}"
-            web_image="${acr_registry}/compass-web:${RESOLVED_IMAGE_TAG}"
+          normalize_image_ref() {
+            local image="$1"
+            if [[ "$image" == *@sha256:* ]]; then
+              echo "$image"
+              return
+            fi
+
+            if [[ "$image" != "$acr_registry/"* ]]; then
+              echo "Image is not in expected ACR registry: $image" >&2
+              return 1
+            fi
+
+            local repo_tag="${image#${acr_registry}/}"
+            local repo="${repo_tag%%:*}"
+            local digest
+            digest="$(az acr repository show --name "$ACR_NAME" --image "$repo_tag" --query digest --output tsv)"
+
+            if [ -z "$digest" ]; then
+              echo "Failed to resolve digest for $image" >&2
+              return 1
+            fi
+
+            echo "$acr_registry/$repo@$digest"
+          }
+
+          resolve_from_tag() {
+            local repo="$1"
+            local tag="$2"
+            local digest
+            digest="$(az acr repository show --name "$ACR_NAME" --image "$repo:$tag" --query digest --output tsv)"
+            if [ -z "$digest" ]; then
+              echo "Failed to resolve digest for $repo:$tag" >&2
+              return 1
+            fi
+            echo "$acr_registry/$repo@$digest"
+          }
+
+          if [ "$EVENT_NAME" = "workflow_call" ]; then
+            if [ -z "${WORKFLOW_API_IMAGE_REF:-}" ] || [ -z "${WORKFLOW_WEB_IMAGE_REF:-}" ]; then
+              echo "workflow_call requires api_image_ref and web_image_ref" >&2
+              exit 1
+            fi
+            api_image_ref="$(normalize_image_ref "$WORKFLOW_API_IMAGE_REF")"
+            web_image_ref="$(normalize_image_ref "$WORKFLOW_WEB_IMAGE_REF")"
+          elif [ -n "${TARGET_IMAGE_TAG:-}" ]; then
+            if ! [[ "$TARGET_IMAGE_TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
+              echo "Invalid image tag: $TARGET_IMAGE_TAG" >&2
+              exit 1
+            fi
+            api_image_ref="$(resolve_from_tag "compass-api" "$TARGET_IMAGE_TAG")"
+            web_image_ref="$(resolve_from_tag "compass-web" "$TARGET_IMAGE_TAG")"
           else
             api_image="$(az containerapp show \
               --resource-group "$AZURE_RESOURCE_GROUP" \
               --name "$ACA_API_APP_NAME" \
               --query 'properties.template.containers[0].image' \
-              --output tsv 2>/dev/null || true)"
+              --output tsv)"
 
             web_image="$(az containerapp show \
               --resource-group "$AZURE_RESOURCE_GROUP" \
               --name "$ACA_WEB_APP_NAME" \
               --query 'properties.template.containers[0].image' \
-              --output tsv 2>/dev/null || true)"
+              --output tsv)"
 
-            if [ -z "$api_image" ]; then
-              api_image="${acr_registry}/compass-api:${RESOLVED_IMAGE_TAG}"
-            fi
-            if [ -z "$web_image" ]; then
-              web_image="${acr_registry}/compass-web:${RESOLVED_IMAGE_TAG}"
-            fi
+            api_image_ref="$(normalize_image_ref "$api_image")"
+            web_image_ref="$(normalize_image_ref "$web_image")"
           fi
 
-          echo "api_image=$api_image" >> "$GITHUB_OUTPUT"
-          echo "web_image=$web_image" >> "$GITHUB_OUTPUT"
+          echo "api_image_ref=$api_image_ref" >> "$GITHUB_OUTPUT"
+          echo "web_image_ref=$web_image_ref" >> "$GITHUB_OUTPUT"
 
       - name: Build runtime parameter overrides
         env:
@@ -273,8 +305,8 @@ jobs:
           ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
           ENTRA_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
-          API_IMAGE: ${{ steps.images.outputs.api_image }}
-          WEB_IMAGE: ${{ steps.images.outputs.web_image }}
+          API_IMAGE_REF: ${{ steps.images.outputs.api_image_ref }}
+          WEB_IMAGE_REF: ${{ steps.images.outputs.web_image_ref }}
         run: |
           set -euo pipefail
           mkdir -p ".artifacts/infra/$HEAD_SHA"
@@ -306,8 +338,8 @@ jobs:
             --arg postgresSkuTier "$POSTGRES_SKU_TIER" \
             --arg postgresStorageMb "$POSTGRES_STORAGE_MB" \
             --arg postgresAdminPassword "$POSTGRES_ADMIN_PASSWORD" \
-            --arg apiImage "$API_IMAGE" \
-            --arg webImage "$WEB_IMAGE" \
+            --arg apiImage "$API_IMAGE_REF" \
+            --arg webImage "$WEB_IMAGE_REF" \
             --arg entraIssuer "$ENTRA_ISSUER" \
             --arg entraAudience "$ENTRA_AUDIENCE" \
             --arg entraJwksUri "$ENTRA_JWKS_URI" \

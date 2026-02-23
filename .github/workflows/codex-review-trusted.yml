@@ -1,0 +1,45 @@
+name: Codex Review Trusted
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to review
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  codex_review_trusted:
+    name: codex-review-trusted
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout trusted base
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Run trusted codex review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/ci/codex-review-trusted.mjs
+
+      - name: Upload trusted review artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-review-trusted-pr-${{ inputs.pr_number }}
+          path: .artifacts/review-trusted/pr-${{ inputs.pr_number }}
+          if-no-files-found: warn

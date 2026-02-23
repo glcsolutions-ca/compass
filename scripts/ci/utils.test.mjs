@@ -12,14 +12,12 @@ const policy = loadMergePolicyObject({
   version: "1",
   riskTierRules: {
     high: ["apps/api/src/features/auth/**", ".github/workflows/**", ".github/dependabot.yml"],
-    normal: ["apps/web/**", "apps/api/**", "packages/**", "package.json", "pnpm-lock.yaml"],
+    standard: ["apps/web/**", "apps/api/**", "packages/**", "package.json", "pnpm-lock.yaml"],
     low: ["**"]
   },
   mergePolicy: {
-    high: {
-      requiredChecks: ["risk-policy-gate", "ci-pipeline", "harness-smoke", "codex-review"]
-    },
-    normal: { requiredChecks: ["risk-policy-gate", "ci-pipeline"] },
+    high: { requiredChecks: ["risk-policy-gate", "ci-pipeline", "harness-smoke"] },
+    standard: { requiredChecks: ["risk-policy-gate", "ci-pipeline"] },
     low: { requiredChecks: ["risk-policy-gate", "ci-pipeline"] }
   },
   docsDriftRules: {
@@ -51,9 +49,9 @@ describe("risk tier resolution", () => {
     expect(tier).toBe("high");
   });
 
-  it("chooses normal for web paths", () => {
+  it("chooses standard for web paths", () => {
     const tier = resolveRiskTier(policy, ["apps/web/src/app/page.tsx"]);
-    expect(tier).toBe("normal");
+    expect(tier).toBe("standard");
   });
 
   it("falls back to low for docs-only changes", () => {
@@ -61,14 +59,14 @@ describe("risk tier resolution", () => {
     expect(tier).toBe("low");
   });
 
-  it("classifies dependency manifest updates as normal changes", () => {
+  it("classifies dependency manifest updates as standard changes", () => {
     const tier = resolveRiskTier(policy, ["pnpm-lock.yaml"]);
-    expect(tier).toBe("normal");
+    expect(tier).toBe("standard");
   });
 
-  it("keeps mixed deps and code updates in normal tier", () => {
+  it("keeps mixed deps and code updates in standard tier", () => {
     const tier = resolveRiskTier(policy, ["apps/api/src/index.ts", "pnpm-lock.yaml"]);
-    expect(tier).toBe("normal");
+    expect(tier).toBe("standard");
   });
 });
 
@@ -78,24 +76,12 @@ describe("required checks", () => {
 
     const checks = computeRequiredChecks(policy, "high", ["apps/web/src/app/page.tsx"]);
     expect(checks).toContain("browser-evidence");
-    expect(checks).not.toContain("codex-review");
+    expect(checks).toContain("harness-smoke");
   });
 
-  it("excludes codex-review when policy disables it", () => {
-    const checks = computeRequiredChecks(policy, "high", ["scripts/ci/gate.mjs"]);
-    expect(checks).not.toContain("codex-review");
-  });
-
-  it("includes codex-review when policy enables it", () => {
-    const enabledPolicy = loadMergePolicyObject({
-      ...policy,
-      reviewPolicy: {
-        codexReviewEnabled: true
-      }
-    });
-
-    const checks = computeRequiredChecks(enabledPolicy, "high", ["scripts/ci/gate.mjs"]);
-    expect(checks).toContain("codex-review");
+  it("keeps standard tier checks minimal", () => {
+    const checks = computeRequiredChecks(policy, "standard", ["apps/api/src/index.ts"]);
+    expect(checks).toEqual(["risk-policy-gate", "ci-pipeline"]);
   });
 });
 

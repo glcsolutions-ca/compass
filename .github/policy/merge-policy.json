@@ -16,7 +16,7 @@
       "migrations/**",
       "deploy/**"
     ],
-    "normal": [
+    "standard": [
       "apps/web/**",
       "apps/api/**",
       "apps/worker/**",
@@ -30,9 +30,9 @@
   },
   "mergePolicy": {
     "high": {
-      "requiredChecks": ["risk-policy-gate", "ci-pipeline", "harness-smoke", "codex-review"]
+      "requiredChecks": ["risk-policy-gate", "ci-pipeline", "harness-smoke"]
     },
-    "normal": {
+    "standard": {
       "requiredChecks": ["risk-policy-gate", "ci-pipeline"]
     },
     "low": {

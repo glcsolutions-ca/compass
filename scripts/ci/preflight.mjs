@@ -3,6 +3,7 @@ import {
   appendGithubOutput,
   appendGithubStepSummary,
   computeRequiredChecks,
+  evaluateDocsDrift,
   getChangedFiles,
   getCurrentSha,
   getParentSha,
@@ -15,27 +16,28 @@ import {
 async function resolveShas() {
   const headSha = process.env.GITHUB_HEAD_SHA?.trim() || (await getCurrentSha());
   const baseSha = process.env.GITHUB_BASE_SHA?.trim() || (await getParentSha(headSha));
+  const testedSha = process.env.GITHUB_TESTED_SHA?.trim() || (await getCurrentSha());
 
-  return { baseSha, headSha };
+  return { baseSha, headSha, testedSha };
 }
 
 async function main() {
   const policyPath =
     process.env.MERGE_POLICY_PATH ?? path.join(".github", "policy", "merge-policy.json");
-  const { baseSha, headSha } = await resolveShas();
+  const { baseSha, headSha, testedSha } = await resolveShas();
 
   const policy = await loadMergePolicy(policyPath);
   const changedFiles = await getChangedFiles(baseSha, headSha);
   const tier = resolveRiskTier(policy, changedFiles);
   const requiredChecks = computeRequiredChecks(policy, tier, changedFiles);
+  const docsDrift = evaluateDocsDrift(policy, changedFiles);
 
-  const browserEvidenceRequired = requiredChecks.includes("browser-evidence");
-  const harnessSmokeRequired = requiredChecks.includes("harness-smoke");
-  const codexReviewRequired = requiredChecks.includes("codex-review");
-  const codexReviewEnabled = policy.reviewPolicy.codexReviewEnabled;
+  const browserRequired = requiredChecks.includes("browser-evidence");
+  const harnessRequired = requiredChecks.includes("harness-smoke");
+  const docsDriftBlocking = docsDrift.shouldBlock;
   const ciMode = tier === "low" ? "fast" : "full";
 
-  const preflightPath = path.join(".artifacts", "merge", headSha, "preflight.json");
+  const preflightPath = path.join(".artifacts", "merge", testedSha, "preflight.json");
   const prNumber = await getPrNumberFromEvent();
 
   const payload = {
@@ -44,15 +46,15 @@ async function main() {
     policyPath,
     baseSha,
     headSha,
+    testedSha,
     prNumber,
     changedFiles,
     tier,
     requiredChecks,
     ciMode,
-    browserEvidenceRequired,
-    harnessSmokeRequired,
-    codexReviewRequired,
-    codexReviewEnabled,
+    browserRequired,
+    harnessRequired,
+    docsDriftBlocking,
     requiredFlowIds: policy.uiEvidenceRules.requiredFlowIds
   };
 
@@ -62,16 +64,15 @@ async function main() {
     preflight_path: preflightPath,
     base_sha: baseSha,
     head_sha: headSha,
+    tested_sha: testedSha,
     pr_number: prNumber ? String(prNumber) : "",
     tier,
-    required_checks_json: JSON.stringify(requiredChecks),
     ci_mode: ciMode,
     changed_files_json: JSON.stringify(changedFiles),
     required_flow_ids_json: JSON.stringify(policy.uiEvidenceRules.requiredFlowIds),
-    browser_evidence_required: String(browserEvidenceRequired),
-    harness_smoke_required: String(harnessSmokeRequired),
-    codex_review_required: String(codexReviewRequired),
-    codex_review_enabled: String(codexReviewEnabled)
+    browser_required: String(browserRequired),
+    harness_required: String(harnessRequired),
+    docs_drift_blocking: String(docsDriftBlocking)
   });
 
   await appendGithubStepSummary(
@@ -79,13 +80,13 @@ async function main() {
       "## Preflight",
       `- Base SHA: \`${baseSha}\``,
       `- Head SHA: \`${headSha}\``,
+      `- Tested SHA: \`${testedSha}\``,
       `- Tier: \`${tier}\``,
       `- Changed files: ${changedFiles.length}`,
       `- CI mode: \`${ciMode}\``,
-      `- Required checks: ${requiredChecks.map((name) => `\`${name}\``).join(", ")}`,
-      `- Browser evidence required: \`${browserEvidenceRequired}\``,
-      `- Harness smoke required: \`${harnessSmokeRequired}\``,
-      `- Codex review enabled: \`${codexReviewEnabled}\``
+      `- Browser evidence required: \`${browserRequired}\``,
+      `- Harness smoke required: \`${harnessRequired}\``,
+      `- Docs drift blocking: \`${docsDriftBlocking}\``
     ].join("\n")
   );
 

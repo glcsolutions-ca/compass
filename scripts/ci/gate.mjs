@@ -7,6 +7,23 @@ import {
   writeJsonFile
 } from "./utils.mjs";
 
+function parseBooleanEnv(name, fallback = false) {
+  const raw = process.env[name];
+  if (!raw || raw.trim().length === 0) {
+    return fallback;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "true") {
+    return true;
+  }
+  if (normalized === "false") {
+    return false;
+  }
+
+  throw new Error(`${name} must be 'true' or 'false'`);
+}
+
 function parseStringArray(name, raw) {
   const parsed = JSON.parse(raw);
   if (!Array.isArray(parsed)) {
@@ -20,10 +37,6 @@ function parseStringArray(name, raw) {
   }
 
   return parsed.map((value) => value.trim());
-}
-
-function parseRequiredChecks() {
-  return parseStringArray("REQUIRED_CHECKS_JSON", requireEnv("REQUIRED_CHECKS_JSON"));
 }
 
 function parseRequiredFlowIds() {
@@ -42,13 +55,7 @@ function parseCheckResults() {
     throw new Error("CHECK_RESULTS_JSON must be a JSON object");
   }
 
-  const expectedChecks = [
-    "preflight",
-    "codex-review",
-    "ci-pipeline",
-    "browser-evidence",
-    "harness-smoke"
-  ];
+  const expectedChecks = ["preflight", "ci-pipeline", "browser-evidence", "harness-smoke"];
 
   const checkResults = {};
   for (const checkName of expectedChecks) {
@@ -60,25 +67,28 @@ function parseCheckResults() {
   return checkResults;
 }
 
-function validateRequiredCheckResults(requiredChecks, checkResults, reasons) {
+function validateRequiredResults(
+  { checkResults, browserRequired, harnessRequired, docsDriftBlocking, docsDriftStatus },
+  reasons
+) {
   if (checkResults.preflight !== "success") {
     reasons.push(`preflight result is ${checkResults.preflight}`);
   }
 
-  for (const checkName of requiredChecks) {
-    if (checkName === "risk-policy-gate") {
-      continue;
-    }
+  if (checkResults["ci-pipeline"] !== "success") {
+    reasons.push(`ci-pipeline result is ${checkResults["ci-pipeline"]}`);
+  }
 
-    const result = checkResults[checkName];
-    if (typeof result !== "string" || result.length === 0) {
-      reasons.push(`No job result mapping found for required check ${checkName}`);
-      continue;
-    }
+  if (browserRequired && checkResults["browser-evidence"] !== "success") {
+    reasons.push(`browser-evidence required but result is ${checkResults["browser-evidence"]}`);
+  }
 
-    if (result !== "success") {
-      reasons.push(`Required check ${checkName} did not succeed (result=${result})`);
-    }
+  if (harnessRequired && checkResults["harness-smoke"] !== "success") {
+    reasons.push(`harness-smoke required but result is ${checkResults["harness-smoke"]}`);
+  }
+
+  if (docsDriftBlocking && docsDriftStatus !== "pass") {
+    reasons.push(`docs-drift blocking is true but docs_drift_status is ${docsDriftStatus}`);
   }
 }
 
@@ -103,14 +113,15 @@ function validateRequiredFlowAssertions(flowId, assertions, reasons) {
 }
 
 async function validateBrowserEvidence({
-  requiredChecks,
+  browserRequired,
   requiredFlowIds,
   checkResults,
   headSha,
+  testedSha,
   tier,
   reasons
 }) {
-  if (!requiredChecks.includes("browser-evidence")) {
+  if (!browserRequired) {
     return;
   }
 
@@ -141,6 +152,12 @@ async function validateBrowserEvidence({
   if (browserManifest.headSha !== headSha) {
     reasons.push(
       `browser-evidence headSha mismatch: expected ${headSha}, got ${browserManifest.headSha}`
+    );
+  }
+
+  if (browserManifest.testedSha !== testedSha) {
+    reasons.push(
+      `browser-evidence testedSha mismatch: expected ${testedSha}, got ${browserManifest.testedSha}`
     );
   }
 
@@ -190,21 +207,35 @@ async function validateBrowserEvidence({
 
 async function main() {
   const headSha = requireEnv("HEAD_SHA");
+  const testedSha = process.env.TESTED_SHA?.trim() || headSha;
   const tier = requireEnv("RISK_TIER");
-  const requiredChecks = parseRequiredChecks();
   const requiredFlowIds = parseRequiredFlowIds();
+  const browserRequired = parseBooleanEnv("BROWSER_REQUIRED", false);
+  const harnessRequired = parseBooleanEnv("HARNESS_REQUIRED", false);
+  const docsDriftBlocking = parseBooleanEnv("DOCS_DRIFT_BLOCKING", false);
+  const docsDriftStatus = (process.env.DOCS_DRIFT_STATUS?.trim() || "unknown").toLowerCase();
 
   const checkResults = parseCheckResults();
   const reasons = [];
 
-  validateRequiredCheckResults(requiredChecks, checkResults, reasons);
+  validateRequiredResults(
+    {
+      checkResults,
+      browserRequired,
+      harnessRequired,
+      docsDriftBlocking,
+      docsDriftStatus
+    },
+    reasons
+  );
 
   try {
     await validateBrowserEvidence({
-      requiredChecks,
+      browserRequired,
       requiredFlowIds,
       checkResults,
       headSha,
+      testedSha,
       tier,
       reasons
     });
@@ -212,13 +243,17 @@ async function main() {
     reasons.push(error instanceof Error ? error.message : String(error));
   }
 
-  const gatePath = path.join(".artifacts", "risk-policy-gate", headSha, "result.json");
+  const gatePath = path.join(".artifacts", "risk-policy-gate", testedSha, "result.json");
   const gatePayload = {
     schemaVersion: "1",
     generatedAt: new Date().toISOString(),
     headSha,
+    testedSha,
     tier,
-    requiredChecks,
+    browserRequired,
+    harnessRequired,
+    docsDriftBlocking,
+    docsDriftStatus,
     requiredFlowIds,
     checkResults,
     pass: reasons.length === 0,
@@ -236,7 +271,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.info(`risk-policy-gate passed for ${headSha}`);
+  console.info(`risk-policy-gate passed for head=${headSha} tested=${testedSha}`);
 }
 
 void main();

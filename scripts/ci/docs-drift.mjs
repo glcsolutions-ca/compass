@@ -12,6 +12,7 @@ async function main() {
   const policyPath =
     process.env.MERGE_POLICY_PATH ?? path.join(".github", "policy", "merge-policy.json");
   const headSha = requireEnv("HEAD_SHA");
+  const testedSha = process.env.TESTED_SHA?.trim() || headSha;
   const tier = process.env.RISK_TIER?.trim() || "low";
 
   const changedFiles = parseJsonEnv("CHANGED_FILES_JSON", []);
@@ -23,11 +24,12 @@ async function main() {
   const drift = evaluateDocsDrift(policy, changedFiles);
   const status = drift.shouldBlock ? "fail" : "pass";
 
-  const resultPath = path.join(".artifacts", "docs-drift", headSha, "result.json");
+  const resultPath = path.join(".artifacts", "docs-drift", testedSha, "result.json");
   const payload = {
     schemaVersion: "1",
     generatedAt: new Date().toISOString(),
     headSha,
+    testedSha,
     tier,
     status,
     ...drift
@@ -37,7 +39,8 @@ async function main() {
 
   await appendGithubOutput({
     docs_drift_path: resultPath,
-    docs_drift_status: status
+    docs_drift_status: status,
+    docs_drift_blocking: String(drift.shouldBlock)
   });
 
   if (drift.shouldBlock) {

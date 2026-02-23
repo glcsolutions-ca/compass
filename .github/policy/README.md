@@ -6,7 +6,7 @@ This directory is the machine source of truth for merge control.
 - Enforced by workflow: `.github/workflows/merge-contract.yml`
 - Final required branch-protection check: `risk-policy-gate`
 
-`risk-policy-gate` enforces tier-specific evidence, docs-drift, and stale SHA rules for the current PR head.
+`risk-policy-gate` enforces tier-specific evidence, docs-drift, and stale SHA rules for the tested merge result.
 
 ## Control-Plane Coverage
 
@@ -21,15 +21,9 @@ This directory is the machine source of truth for merge control.
 - `infra/identity/**`
 - `deploy/**`
 
-## Review Toggle
+## Trusted Review
 
-`reviewPolicy.codexReviewEnabled` controls whether `codex-review` is part of required checks.
+Secret-backed Codex review is not part of the blocking PR merge contract.
 
-- `false`: `codex-review` is not required.
-- `true`: required high-risk changes enforce blocking `codex-review`.
-- If enabled and required but `OPENAI_API_KEY` is missing, `codex-review` fails hard.
-
-To enable full review enforcement:
-
-1. Add repo secret `OPENAI_API_KEY`.
-2. Set `reviewPolicy.codexReviewEnabled` to `true` in `.github/policy/merge-policy.json`.
+- Use `.github/workflows/codex-review-trusted.yml` with manual `workflow_dispatch` for trusted-context review.
+- Treat trusted review findings as advisory unless an explicit policy gate is added later.

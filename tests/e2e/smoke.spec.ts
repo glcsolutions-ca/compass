@@ -37,7 +37,8 @@ function parseRequiredFlowIds() {
 
 test("compass smoke flow", async ({ page }) => {
   const headSha = process.env.HEAD_SHA ?? "local";
-  const tier = process.env.RISK_TIER ?? "t2";
+  const testedSha = process.env.TESTED_SHA ?? headSha;
+  const tier = process.env.RISK_TIER ?? "standard";
   const prNumber = Number(process.env.PR_NUMBER ?? "0");
   const baseUrl = process.env.WEB_BASE_URL ?? "http://127.0.0.1:3000";
   const expectedEntrypoint = process.env.EXPECTED_ENTRYPOINT ?? "/";
@@ -48,7 +49,7 @@ test("compass smoke flow", async ({ page }) => {
     Number.isFinite(payloadTimeoutMsRaw) && payloadTimeoutMsRaw > 0 ? payloadTimeoutMsRaw : 45_000;
   const flowIds = parseRequiredFlowIds();
 
-  const outputDir = path.join(".artifacts", "browser-evidence", headSha);
+  const outputDir = path.join(".artifacts", "browser-evidence", testedSha);
   await mkdir(outputDir, { recursive: true });
 
   const manifestPath = path.join(outputDir, "manifest.json");
@@ -197,6 +198,7 @@ test("compass smoke flow", async ({ page }) => {
   const manifest = {
     schemaVersion: "1",
     headSha,
+    testedSha,
     tier,
     prNumber,
     generatedAt: new Date().toISOString(),

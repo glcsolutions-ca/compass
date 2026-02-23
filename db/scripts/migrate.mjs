@@ -7,12 +7,12 @@ const require = createRequire(import.meta.url);
 const cliPath = require.resolve("node-pg-migrate/bin/node-pg-migrate");
 const command = process.argv[2];
 const extraArgs = process.argv.slice(3);
-const migrationsDir = path.resolve("migrations");
+const migrationsDir = path.resolve("db/migrations");
 const databaseUrl = resolveDatabaseUrl();
 const supportedCommands = new Set(["create", "up", "down", "redo"]);
 
 if (!command || !supportedCommands.has(command)) {
-  console.error("Usage: node scripts/db/migrate.mjs <create|up|down|redo> [args]");
+  console.error("Usage: node db/scripts/migrate.mjs <create|up|down|redo> [args]");
   process.exit(1);
 }
 

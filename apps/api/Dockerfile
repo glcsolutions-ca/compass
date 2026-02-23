@@ -18,8 +18,8 @@ ENV API_HOST=0.0.0.0
 ENV API_PORT=3001
 
 COPY --from=build /opt/app/ ./
-COPY --from=build /workspace/migrations ./migrations
-COPY --from=build /workspace/scripts/db ./scripts/db
+COPY --from=build /workspace/db/migrations ./db/migrations
+COPY --from=build /workspace/db/scripts ./db/scripts
 
 EXPOSE 3001
 CMD ["node", "dist/index.js"]

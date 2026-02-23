@@ -12,7 +12,7 @@ Do not run migrations at API startup or in init containers.
 
 - API and migration share the same container image.
 - API runtime command: `node dist/index.js`
-- Migration job command: `node scripts/db/migrate.mjs up`
+- Migration job command: `node db/scripts/migrate.mjs up`
 - This keeps one immutable release artifact per commit while preserving separate execution roles.
 
 ## Migration File Format

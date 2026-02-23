@@ -7,7 +7,7 @@
 3. Merge to `main` runs `deploy.yml` as the single release orchestrator.
 4. `deploy.yml` classifies each change as `checks`, `infra`, or `runtime`.
 5. `checks` changes run factory checks only (no production mutation).
-6. `infra` and `runtime` changes run `promote` (the only production-mutating job).
+6. `infra` and `runtime` changes run `promote` (the main production-mutating job).
 7. `runtime` runs migration+deploy atomically using digest refs.
 8. `report` publishes unified release artifacts.
 
@@ -34,7 +34,7 @@ Use these local checks to reduce format-only and policy drift failures in CI:
 - `codex-review-trusted.yml`: optional manual `workflow_dispatch` trusted-context codex review for PR diffs; non-blocking and outside the merge gate
 - `dependabot-auto-merge.yml`: safe-lane auto-merge for Dependabot PRs (patch/minor only) with required gate-context checks (`risk-policy-gate`, `ci-pipeline`) before enabling auto-merge
 - `deploy.yml`: mainline release orchestrator (`classify -> checks -> promote -> report`)
-  - `promote` is the only job with `environment: production` and `concurrency: prod-main`
+  - `promote` uses `environment: production` and the shared production mutation lock (`concurrency: production-mutation`)
   - classification base uses the last successful production deployment SHA (bootstrap fallback if none exists)
   - stale candidates are skipped at exactly two irreversible boundaries (pre-infra and pre-migration/deploy)
   - runtime promotion uses digest refs only (`repo@sha256`), not tags
@@ -45,6 +45,7 @@ Use these local checks to reduce format-only and policy drift failures in CI:
   - infra apply retries once for recognized transient ARM/ACA provisioning errors, then fails with terminal diagnostics
   - records successful production promotions in GitHub Deployments for deterministic base-SHA tracing
 - `infra-apply.yml`: Azure Bicep infra apply workflow (`workflow_call` + manual dispatch; no push trigger)
+  - shares the same production mutation lock as `deploy.yml` (`concurrency: production-mutation`, `cancel-in-progress: false`)
   - provider registration preflight
   - validates private Postgres DNS zone suffix (`*.postgres.database.azure.com`)
   - validates Burstable Postgres SKU pairing (`POSTGRES_SKU_NAME` starts with `Standard_B`)

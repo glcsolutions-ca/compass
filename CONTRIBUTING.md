@@ -19,9 +19,18 @@ pnpm dev
 Before opening a PR:
 
 ```bash
-pnpm check
+pnpm test
 pnpm build
 ```
+
+Testing commands:
+
+- `pnpm test` - commit-stage checks (static + unit/component + contract)
+- `pnpm test:full` - commit-stage + integration tests
+- `pnpm test:unit` - workspace unit/component tests + CI policy helper tests
+- `pnpm test:integration` - integration tests only
+- `pnpm test:e2e` - Playwright smoke flow only
+- `pnpm check` - alias to `pnpm test` (transitional)
 
 Useful DB commands:
 

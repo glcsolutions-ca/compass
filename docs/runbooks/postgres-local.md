@@ -42,4 +42,4 @@ pnpm db:migrate:down -- 1
 
 ## CI Behavior
 
-`ci-pipeline` provisions PostgreSQL as a service, applies migrations, runs `pnpm db:seed`, and then executes `pnpm --filter @compass/api test:integration` before the normal pipeline command.
+`ci-pipeline` in `full` mode provisions PostgreSQL as a service, applies migrations, runs `pnpm db:seed`, then executes `pnpm test:full` and `pnpm build`.

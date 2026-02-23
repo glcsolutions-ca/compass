@@ -6,7 +6,7 @@
 2. Run required local checks:
 
 ```bash
-pnpm check
+pnpm test
 pnpm build
 ```
 
@@ -28,8 +28,8 @@ pnpm ci:gate
 2. CI computes tier from changed paths.
 3. CI runs required checks in parallel after preflight.
 4. `ci-pipeline` check name is fixed; mode is tier-driven:
-   - `fast` for `low`
-   - `full` for `standard` and `high`
+   - `fast` for `low` (`pnpm test`)
+   - `full` for `standard` and `high` (`pnpm test:full` + `pnpm build`)
    - target: `low` PRs should not start Postgres containers
 5. `risk-policy-gate` blocks merge unless required evidence is complete and valid for both `headSha` and `testedSha`.
 6. `merge-contract.yml` runs on `pull_request` and `merge_group` so queue execution uses the same gate.

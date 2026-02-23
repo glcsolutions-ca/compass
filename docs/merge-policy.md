@@ -63,7 +63,7 @@ The merge workflow is dependency-driven, not serialized:
 
 ## Codex review policy
 
-Codex review is trusted-context only and is not part of the PR blocking merge contract.
+Codex review is trusted-context only and is not part of the PR blocking merge contract. There is no local `ci:codex-review` path.
 
 - PR merge gate does not execute secret-backed codex review.
 - Trusted codex review runs via `codex-review-trusted.yml` (manual `workflow_dispatch`).

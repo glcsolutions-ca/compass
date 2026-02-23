@@ -95,7 +95,7 @@ jobs:
       BASE_SHA: ${{ needs.classify.outputs.base_sha }}
       BASE_SOURCE: ${{ needs.classify.outputs.base_source }}
       BASE_DEPLOYMENT_ID: ${{ needs.classify.outputs.base_deployment_id }}
-      RISK_TIER: t3
+      RISK_TIER: high
       KIND: ${{ needs.classify.outputs.kind }}
       ROLLOUT: ${{ needs.classify.outputs.rollout }}
       NEEDS_INFRA: ${{ needs.classify.outputs.needs_infra }}
@@ -689,7 +689,7 @@ jobs:
         env:
           HEAD_SHA: ${{ env.HEAD_SHA }}
           PR_NUMBER: 0
-          RISK_TIER: t3
+          RISK_TIER: high
           WEB_BASE_URL: ${{ steps.current_state.outputs.web_prod_url }}
           BROWSER_SMOKE_BEARER_TOKEN: ${{ steps.token.outputs.smoke_token }}
           BROWSER_SMOKE_PAYLOAD_TIMEOUT_MS: "45000"

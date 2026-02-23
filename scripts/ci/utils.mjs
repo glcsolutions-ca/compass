@@ -2,7 +2,6 @@ import { execFile } from "node:child_process";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { minimatch } from "minimatch";
 
 const execFileAsync = promisify(execFile);
 
@@ -57,7 +56,7 @@ export async function getChangedFiles(baseSha, headSha) {
 
 export function matchesAnyPattern(filePath, patterns) {
   const normalizedPath = filePath.replaceAll("\\", "/");
-  return patterns.some((pattern) => minimatch(normalizedPath, pattern));
+  return patterns.some((pattern) => path.posix.matchesGlob(normalizedPath, pattern));
 }
 
 export async function readJsonFile(filePath) {

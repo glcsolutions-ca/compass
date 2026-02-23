@@ -4,7 +4,7 @@ import { Client } from "pg";
 import { resolveDatabaseUrl } from "./constants.mjs";
 
 async function main() {
-  const seedPath = path.resolve("db/postgres/seed/001_consolidated_employee_views.sql");
+  const seedPath = path.resolve("db/seeds/001_consolidated_employee_views.sql");
   const sql = await readFile(seedPath, "utf8");
   const client = new Client({
     connectionString: resolveDatabaseUrl()

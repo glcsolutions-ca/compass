@@ -4,7 +4,7 @@ import { Client } from "pg";
 import { resolveDatabaseUrl } from "./constants.mjs";
 
 async function listMigrationFiles() {
-  const migrationsDir = path.resolve("migrations");
+  const migrationsDir = path.resolve("db/migrations");
   const entries = await readdir(migrationsDir, { withFileTypes: true });
 
   return entries

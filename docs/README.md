@@ -14,8 +14,10 @@ General documentation and architecture records live here.
 
 ## Architecture Records
 
-- `brand-architecture.md`
-- `TDR-001-initial-stack-baseline.md`
+- `architecture/README.md`
+- `architecture/brand-architecture.md`
+- `adr/README.md`
+- `adr/TDR-001-initial-stack-baseline.md`
 
 ## Runbooks
 

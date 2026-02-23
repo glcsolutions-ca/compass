@@ -31,12 +31,12 @@ Use `pnpm clean` when needed.
 
 - starts Docker PostgreSQL
 - waits until the DB is ready
-- applies migrations from `migrations/`
+- applies migrations from `db/migrations/`
 - seeds local demo data
 
 The API uses PostgreSQL when `DATABASE_URL` is set in `apps/api/.env` (see `apps/api/.env.example`).
 Use `pnpm db:postgres:down` to stop PostgreSQL.
-Use `pnpm db:postgres:reset` to drop local volumes and rebuild the DB from migrations + seed data.
+Use `pnpm db:postgres:reset` to drop local volumes and rebuild the DB from `db/migrations/` + seed data.
 
 ## Migration Workflow
 

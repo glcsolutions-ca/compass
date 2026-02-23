@@ -74,7 +74,7 @@ Evidence is valid only when:
 
 ## Runtime baseline
 
-Control-plane scripts use a pinned glob matcher (`minimatch`) for stable pattern behavior.
+Control-plane scripts use Node's built-in `path.posix.matchesGlob` for deterministic pattern behavior.
 
 - Node baseline: `22.x` (`.nvmrc`)
 - Engine contract: `>=22 <23`

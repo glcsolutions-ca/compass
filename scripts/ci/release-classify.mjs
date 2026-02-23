@@ -1,4 +1,4 @@
-import { minimatch } from "minimatch";
+import path from "node:path";
 import { appendGithubOutput, getChangedFiles, getCurrentSha, getParentSha } from "./utils.mjs";
 
 const RUNTIME_PATTERNS = [
@@ -38,7 +38,7 @@ const MIGRATION_PATTERNS = ["migrations/**", "scripts/db/**"];
 
 function matchesAny(filePath, patterns) {
   const normalized = filePath.replaceAll("\\", "/");
-  return patterns.some((pattern) => minimatch(normalized, pattern));
+  return patterns.some((pattern) => path.posix.matchesGlob(normalized, pattern));
 }
 
 function allMatch(files, patterns) {

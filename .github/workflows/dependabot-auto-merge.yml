@@ -8,6 +8,7 @@ on:
       - synchronize
 
 permissions:
+  checks: read
   contents: write
   pull-requests: write
 
@@ -56,7 +57,31 @@ jobs:
           echo "safe=true" >> "$GITHUB_OUTPUT"
 
       - name: Enable auto-merge
+        id: gate_contexts
         if: ${{ steps.safe_lane.outputs.safe == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          checks_json="$(gh pr checks --repo "$REPOSITORY" "$PR_NUMBER" --json name,state)"
+          has_risk_policy_gate="$(jq -r 'map(select(.name=="risk-policy-gate")) | length' <<<"$checks_json")"
+          has_ci_pipeline="$(jq -r 'map(select(.name=="ci-pipeline")) | length' <<<"$checks_json")"
+
+          if [ "$has_risk_policy_gate" -lt 1 ] || [ "$has_ci_pipeline" -lt 1 ]; then
+            echo "gate_contexts_ok=false" >> "$GITHUB_OUTPUT"
+            echo "Required gate contexts are missing for PR #$PR_NUMBER. Auto-merge will not be enabled."
+            echo "Found checks:"
+            jq -r '.[].name' <<<"$checks_json"
+            exit 0
+          fi
+
+          echo "gate_contexts_ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Enable auto-merge
+        if: ${{ steps.safe_lane.outputs.safe == 'true' && steps.gate_contexts.outputs.gate_contexts_ok == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}

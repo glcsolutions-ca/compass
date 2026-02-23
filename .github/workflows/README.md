@@ -41,6 +41,7 @@ Use these local checks to reduce format-only and policy drift failures in CI:
   - migration+deploy is one atomic boundary (no stale abort between migration and deploy)
   - runs API smoke and browser evidence against baseline health/openapi and UI flow checks
   - enforces drift policy (`single` mode, `minReplicas=0`, `maxReplicas=1`, `cpu=0.25`, `memory=0.5Gi`, `maxInactiveRevisions<=2`, active revision == latest revision)
+  - validates managed certificate contract before infra apply; custom domains require explicit `ACA_API_MANAGED_CERTIFICATE_NAME` / `ACA_WEB_MANAGED_CERTIFICATE_NAME`
   - infra apply retries once for recognized transient ARM/ACA provisioning errors, then fails with terminal diagnostics
   - records successful production promotions in GitHub Deployments for deterministic base-SHA tracing
 - `infra-apply.yml`: Azure Bicep infra apply workflow (`workflow_call` + manual dispatch; no push trigger)
@@ -48,6 +49,7 @@ Use these local checks to reduce format-only and policy drift failures in CI:
   - validates private Postgres DNS zone suffix (`*.postgres.database.azure.com`)
   - validates Burstable Postgres SKU pairing (`POSTGRES_SKU_NAME` starts with `Standard_B`)
   - optional custom domain wiring via GitHub environment vars (`ACA_API_CUSTOM_DOMAIN`, `ACA_WEB_CUSTOM_DOMAIN`, `ACA_CUSTOM_DOMAIN_VALIDATION_METHOD`)
+  - validates managed certificate contract and fails fast on missing/mismatched explicit cert names for custom domains
   - explicit ACR `authentication-as-arm` convergence check/enable
   - validates supplied workflow-call image refs exist in ACR before apply
   - retries once for recognized transient ARM/ACA provisioning failures

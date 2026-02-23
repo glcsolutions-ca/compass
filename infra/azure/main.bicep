@@ -32,6 +32,8 @@ param apiImage string = 'SET_IN_GITHUB_ENV'
 param webImage string = 'SET_IN_GITHUB_ENV'
 param apiCustomDomain string = ''
 param webCustomDomain string = ''
+param apiManagedCertificateName string = ''
+param webManagedCertificateName string = ''
 @allowed([
   'CNAME'
   'HTTP'
@@ -76,7 +78,7 @@ resource managedEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' exist
 
 resource apiManagedCertificate 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(apiCustomDomain)) {
   parent: managedEnvironment
-  name: 'api-${uniqueString(environmentName, apiCustomDomain)}'
+  name: apiManagedCertificateName
   location: location
   dependsOn: [
     containerEnvironment
@@ -89,7 +91,7 @@ resource apiManagedCertificate 'Microsoft.App/managedEnvironments/managedCertifi
 
 resource webManagedCertificate 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(webCustomDomain)) {
   parent: managedEnvironment
-  name: 'web-${uniqueString(environmentName, webCustomDomain)}'
+  name: webManagedCertificateName
   location: location
   dependsOn: [
     containerEnvironment

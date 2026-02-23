@@ -111,6 +111,8 @@ jobs:
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
       ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
       ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
+      ACA_API_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_API_MANAGED_CERTIFICATE_NAME }}
+      ACA_WEB_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_WEB_MANAGED_CERTIFICATE_NAME }}
       ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
       ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
       ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
@@ -332,6 +334,11 @@ jobs:
             echo "web_prod_url=$web_prod_url"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Validate managed certificate contract
+        id: managed_certificate_contract
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && (env.KIND == 'infra' || env.NEEDS_INFRA == 'true') }}
+        run: node scripts/deploy/assert-managed-certificate-contract.mjs
+
       - name: Apply infra updates
         if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && (env.KIND == 'infra' || env.NEEDS_INFRA == 'true') }}
         env:
@@ -340,6 +347,8 @@ jobs:
           WEB_IMAGE: ${{ steps.current_state.outputs.current_web_ref }}
           ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
           ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
+          ACA_API_MANAGED_CERTIFICATE_NAME: ${{ steps.managed_certificate_contract.outputs.api_managed_certificate_name }}
+          ACA_WEB_MANAGED_CERTIFICATE_NAME: ${{ steps.managed_certificate_contract.outputs.web_managed_certificate_name }}
           ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
         run: |
           set -euo pipefail
@@ -397,6 +406,8 @@ jobs:
             --arg webAppName "$ACA_WEB_APP_NAME" \
             --arg apiCustomDomain "${ACA_API_CUSTOM_DOMAIN:-}" \
             --arg webCustomDomain "${ACA_WEB_CUSTOM_DOMAIN:-}" \
+            --arg apiManagedCertificateName "${ACA_API_MANAGED_CERTIFICATE_NAME:-}" \
+            --arg webManagedCertificateName "${ACA_WEB_MANAGED_CERTIFICATE_NAME:-}" \
             --arg customDomainValidationMethod "$custom_domain_validation_method" \
             --arg migrationJobName "$ACA_MIGRATE_JOB_NAME" \
             --arg acrPullIdentityName "$ACR_PULL_IDENTITY_NAME" \
@@ -427,6 +438,8 @@ jobs:
                 "webAppName": {"value": $webAppName},
                 "apiCustomDomain": {"value": $apiCustomDomain},
                 "webCustomDomain": {"value": $webCustomDomain},
+                "apiManagedCertificateName": {"value": $apiManagedCertificateName},
+                "webManagedCertificateName": {"value": $webManagedCertificateName},
                 "customDomainValidationMethod": {"value": $customDomainValidationMethod},
                 "migrationJobName": {"value": $migrationJobName},
                 "acrPullIdentityName": {"value": $acrPullIdentityName},

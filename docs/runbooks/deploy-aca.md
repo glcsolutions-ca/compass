@@ -48,6 +48,8 @@ Optional custom domain variables (leave unset to keep default ACA hostnames):
 
 - `ACA_API_CUSTOM_DOMAIN=<api-subdomain>`
 - `ACA_WEB_CUSTOM_DOMAIN=<web-subdomain>`
+- `ACA_API_MANAGED_CERTIFICATE_NAME=<managed-cert-name-for-api-domain>` (required when `ACA_API_CUSTOM_DOMAIN` is set)
+- `ACA_WEB_MANAGED_CERTIFICATE_NAME=<managed-cert-name-for-web-domain>` (required when `ACA_WEB_CUSTOM_DOMAIN` is set)
 - `ACA_CUSTOM_DOMAIN_VALIDATION_METHOD=<CNAME|HTTP|TXT>` (optional; default `CNAME`)
 
 ## Required GitHub Environment Secrets (`production`)
@@ -160,8 +162,25 @@ Do not commit concrete domain values; store them in GitHub `production` environm
 1. Set these GitHub `production` environment vars:
    - `ACA_API_CUSTOM_DOMAIN`
    - `ACA_WEB_CUSTOM_DOMAIN`
+   - `ACA_API_MANAGED_CERTIFICATE_NAME`
+   - `ACA_WEB_MANAGED_CERTIFICATE_NAME`
    - optionally `ACA_CUSTOM_DOMAIN_VALIDATION_METHOD` (default `CNAME`)
-2. Generate exact DNS records from live ACA state:
+2. If certs already exist, list them and copy the existing names into:
+   - `ACA_API_MANAGED_CERTIFICATE_NAME`
+   - `ACA_WEB_MANAGED_CERTIFICATE_NAME`
+
+   ```bash
+   az containerapp env certificate list \
+     --resource-group "<resource-group>" \
+     --name "<aca-environment-name>" \
+     --managed-certificates-only \
+     --query "[].{name:name,subjectName:properties.subjectName}" \
+     --output table
+   ```
+
+   Migration note: when a cert already exists for a subject, reuse that certificate name. Do not mint a second name for the same domain in the same ACA environment.
+
+3. Generate exact DNS records from live ACA state:
 
    ```bash
    AZURE_RESOURCE_GROUP="<resource-group>" \
@@ -172,12 +191,12 @@ Do not commit concrete domain values; store them in GitHub `production` environm
    pnpm deploy:custom-domain:dns
    ```
 
-3. Add the printed records at your DNS provider:
+4. Add the printed records at your DNS provider:
    - `CNAME <custom-domain> -> <aca-ingress-fqdn>`
    - `TXT asuid.<custom-domain> -> <customDomainVerificationId>`
-4. Wait for DNS propagation.
-5. Run `.github/workflows/infra-apply.yml` (or the main deploy workflow) to create managed certs and bind both hostnames.
-6. Verify bindings:
+5. Wait for DNS propagation.
+6. Run `.github/workflows/infra-apply.yml` (or the main deploy workflow) to create managed certs and bind both hostnames.
+7. Verify bindings:
 
    ```bash
    az containerapp hostname list --resource-group "<resource-group>" --name "<api-app-name>" --output table

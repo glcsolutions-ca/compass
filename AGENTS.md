@@ -78,7 +78,8 @@ compass/
 
 ## Default expectations for any PR
 
-- Clear intent (title + description).
+- PR title format: `<type>(<scope>): <summary>` using `feat|fix|docs|refactor|test|ci|chore`; lowercase, imperative, max 72 chars, no trailing period.
+- PR description sections: `## Summary`, `## Testing`, `## Risk`.
 - Evidence: tests/CI green, and required artifacts when applicable.
 - No production secrets used in untrusted PR execution paths.
 - If behavior changes: update/add docs in `docs/` and/or add a check to prevent drift.

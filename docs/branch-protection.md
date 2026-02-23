@@ -12,6 +12,7 @@ Those are tier-conditional and enforced by `risk-policy-gate` using `.github/pol
 
 - Enforce admins (`main` has no admin bypass in normal flow).
 - Require merge queue on `main`.
+- Require `.github/workflows/merge-contract.yml` to run on `pull_request` and `merge_group`.
 - Require PR-only integration into `main` (no direct pushes).
 - Keep force-push and deletion blocked.
 - Keep strict status checks enabled.

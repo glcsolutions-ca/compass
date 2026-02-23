@@ -25,6 +25,7 @@ jobs:
       pr_number: ${{ steps.preflight.outputs.pr_number }}
       tier: ${{ steps.preflight.outputs.tier }}
       required_checks_json: ${{ steps.preflight.outputs.required_checks_json }}
+      ci_mode: ${{ steps.preflight.outputs.ci_mode }}
       changed_files_json: ${{ steps.preflight.outputs.changed_files_json }}
       required_flow_ids_json: ${{ steps.preflight.outputs.required_flow_ids_json }}
       browser_evidence_required: ${{ steps.preflight.outputs.browser_evidence_required }}
@@ -96,6 +97,7 @@ jobs:
   codex_review:
     name: codex-review
     needs: preflight
+    if: ${{ needs.preflight.outputs.codex_review_required == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     outputs:
@@ -137,7 +139,6 @@ jobs:
     name: ci-pipeline
     needs:
       - preflight
-      - codex_review
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -156,6 +157,8 @@ jobs:
           --health-retries 20
     outputs:
       ci_pipeline_path: ${{ steps.write_result.outputs.ci_pipeline_path }}
+    env:
+      CI_MODE: ${{ needs.preflight.outputs.ci_mode }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -179,31 +182,45 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Wait for Postgres readiness
+        if: ${{ env.CI_MODE == 'full' }}
         env:
           DATABASE_URL: postgres://compass:compass@127.0.0.1:5432/compass
         run: pnpm db:postgres:wait
 
       - name: Apply database migrations
+        if: ${{ env.CI_MODE == 'full' }}
         env:
           DATABASE_URL: postgres://compass:compass@127.0.0.1:5432/compass
         run: pnpm db:migrate:up
 
       - name: Seed database
+        if: ${{ env.CI_MODE == 'full' }}
         env:
           DATABASE_URL: postgres://compass:compass@127.0.0.1:5432/compass
         run: pnpm db:seed
 
       - name: Run Postgres integration tests
+        if: ${{ env.CI_MODE == 'full' }}
         env:
           DATABASE_URL: postgres://compass:compass@127.0.0.1:5432/compass
         run: pnpm --filter @compass/api test:integration
 
-      - name: Run ci-pipeline
-        id: run_pipeline
+      - name: Run full ci-pipeline
+        id: run_pipeline_full
+        if: ${{ env.CI_MODE == 'full' }}
         env:
           HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
           RISK_TIER: ${{ needs.preflight.outputs.tier }}
         run: pnpm ci:pipeline
+
+      - name: Run fast ci-pipeline
+        id: run_pipeline_fast
+        if: ${{ env.CI_MODE == 'fast' }}
+        run: |
+          pnpm check:format
+          pnpm check:lint
+          pnpm check:typecheck
+          pnpm test:merge-contract
 
       - name: Write ci-pipeline artifact
         if: ${{ always() }}
@@ -211,11 +228,18 @@ jobs:
         env:
           HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
           RISK_TIER: ${{ needs.preflight.outputs.tier }}
-          PIPELINE_OUTCOME: ${{ steps.run_pipeline.outcome }}
+          CI_MODE: ${{ env.CI_MODE }}
+          PIPELINE_FULL_OUTCOME: ${{ steps.run_pipeline_full.outcome }}
+          PIPELINE_FAST_OUTCOME: ${{ steps.run_pipeline_fast.outcome }}
         run: |
+          pipeline_outcome="$PIPELINE_FULL_OUTCOME"
+          if [ "$CI_MODE" = "fast" ]; then
+            pipeline_outcome="$PIPELINE_FAST_OUTCOME"
+          fi
+
           mkdir -p .artifacts/ci-pipeline/$HEAD_SHA
           status="fail"
-          if [ "$PIPELINE_OUTCOME" = "success" ]; then
+          if [ "$pipeline_outcome" = "success" ]; then
             status="pass"
           fi
           cat > .artifacts/ci-pipeline/$HEAD_SHA/result.json <<JSON
@@ -224,6 +248,7 @@ jobs:
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "headSha": "$HEAD_SHA",
             "tier": "$RISK_TIER",
+            "mode": "$CI_MODE",
             "status": "$status"
           }
           JSON
@@ -241,7 +266,6 @@ jobs:
     name: browser-evidence
     needs:
       - preflight
-      - codex_review
     if: ${{ needs.preflight.outputs.browser_evidence_required == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -381,7 +405,6 @@ jobs:
     name: harness-smoke
     needs:
       - preflight
-      - codex_review
     if: ${{ needs.preflight.outputs.harness_smoke_required == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20

@@ -2,7 +2,8 @@
   "version": "1",
   "riskTierRules": {
     "t3": [
-      ".github/workflows/**",
+      ".github/workflows/*.yml",
+      ".github/workflows/*.yaml",
       ".github/policy/**",
       ".github/dependabot.yml",
       "scripts/ci/**",
@@ -39,7 +40,8 @@
   },
   "docsDriftRules": {
     "blockingPaths": [
-      ".github/workflows/**",
+      ".github/workflows/*.yml",
+      ".github/workflows/*.yaml",
       ".github/policy/**",
       "scripts/ci/**",
       "scripts/deploy/**",

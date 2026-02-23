@@ -3,14 +3,16 @@
 ## Release Cycle (Plain-English)
 
 1. PR runs `merge-contract.yml` and must pass `risk-policy-gate`.
-2. Merge to `main` runs `deploy.yml` as the single release orchestrator.
-3. `deploy.yml` classifies each change as `checks`, `infra`, or `runtime`.
-4. `checks` changes run factory checks only (no production mutation).
-5. `infra` and `runtime` changes run `promote` (the only production-mutating job).
-6. `runtime` runs migration+deploy atomically using digest refs.
-7. `report` publishes unified release artifacts.
+2. Merge queue runs the same gate on `merge_group` before integration to `main`.
+3. Merge to `main` runs `deploy.yml` as the single release orchestrator.
+4. `deploy.yml` classifies each change as `checks`, `infra`, or `runtime`.
+5. `checks` changes run factory checks only (no production mutation).
+6. `infra` and `runtime` changes run `promote` (the only production-mutating job).
+7. `runtime` runs migration+deploy atomically using digest refs.
+8. `report` publishes unified release artifacts.
 
 - `merge-contract.yml`: deterministic PR gate with dependency-based parallel checks:
+  - triggers on `pull_request` and `merge_group`
   - `risk-policy-preflight` (includes `docs-drift` evaluation)
   - `actionlint` on changed workflow files only
   - `no-org-infra` leak guard

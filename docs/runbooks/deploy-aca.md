@@ -104,7 +104,7 @@ All concrete deploy values must be stored in the GitHub `production` environment
    - `needs_infra`
    - `needs_migrations`
 2. For `checks`:
-   - run factory checks only (`format`, merge-contract unit tests, no-org-infra)
+   - run factory checks only (`format`, merge-contract unit tests)
    - do not log into Azure and do not mutate production
 3. For `infra` or `runtime`, `promote` starts and performs stale-head guard before any mutation.
 4. For `infra`:

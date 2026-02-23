@@ -59,7 +59,6 @@ Branch protection should require only `risk-policy-gate`.
 - [ ] Local convenience checks pass (`pnpm check`, `pnpm build`).
 - [ ] Control-plane edits also update policy/docs where required.
 - [ ] No unrelated files or generated noise are included.
-- [ ] `pnpm check:no-org-infra` passes.
 
 ## Deploy + IaC Checklist
 

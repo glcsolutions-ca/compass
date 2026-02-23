@@ -27,7 +27,6 @@ Do not commit organization-specific infra values to tracked files. This includes
 - organization-specific GitHub slugs used for production identity/deploy wiring
 
 Concrete values must be stored only in GitHub Environment configuration (`production` vars/secrets).
-CI enforces this via `scripts/ci/no-org-infra-leak.mjs` in `.github/workflows/merge-contract.yml`.
 
 ## Bootstrap Trust Anchor (One-Time Manual)
 

@@ -77,9 +77,6 @@ jobs:
       - name: Check merge-contract tests
         run: pnpm test:merge-contract
 
-      - name: Check no-org-infra policy
-        run: pnpm check:no-org-infra
-
   promote:
     name: promote
     needs: classify

@@ -421,6 +421,7 @@ jobs:
 
       - name: Apply Bicep template
         env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
           ARM_DEPLOYMENT_NAME: main-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail

@@ -2,6 +2,90 @@ import js from "@eslint/js";
 import nextPlugin from "@next/eslint-plugin-next";
 import eslintConfigPrettier from "eslint-config-prettier";
 import tseslint from "typescript-eslint";
+import { loadTestPolicySync } from "./scripts/ci/test-policy.mjs";
+
+const testPolicy = loadTestPolicySync(process.env.TEST_POLICY_PATH?.trim() || undefined);
+const lintPolicy = testPolicy.lint;
+const commitStageGlobs = lintPolicy.commitStageGlobs;
+
+function createFocusedTestSelectors() {
+  return [
+    {
+      selector: "CallExpression[callee.object.name='it'][callee.property.name='only']",
+      message: "Focused tests (it.only) are forbidden. Remove .only before commit."
+    },
+    {
+      selector: "CallExpression[callee.object.name='test'][callee.property.name='only']",
+      message: "Focused tests (test.only) are forbidden. Remove .only before commit."
+    },
+    {
+      selector: "CallExpression[callee.object.name='describe'][callee.property.name='only']",
+      message: "Focused tests (describe.only) are forbidden. Remove .only before commit."
+    }
+  ];
+}
+
+function dbImportMessage(moduleName) {
+  if (moduleName === "pg") {
+    return "Commit-stage tests must not import pg directly. Move DB coverage to integration tests.";
+  }
+
+  if (moduleName === "@prisma/client") {
+    return "Commit-stage tests must not import prisma clients directly. Move DB coverage to integration tests.";
+  }
+
+  return "Commit-stage tests must not import DB clients directly. Move DB coverage to integration tests.";
+}
+
+const focusedTestSelectors = lintPolicy.focusedTests ? createFocusedTestSelectors() : [];
+const commitStageSyntaxSelectors = [];
+
+if (lintPolicy.disallowMathRandom) {
+  commitStageSyntaxSelectors.push({
+    selector: "CallExpression[callee.object.name='Math'][callee.property.name='random']",
+    message: "Commit-stage tests must be deterministic. Avoid Math.random() or inject a seeded RNG."
+  });
+}
+
+if (lintPolicy.disallowRawSetTimeout) {
+  commitStageSyntaxSelectors.push({
+    selector: "CallExpression[callee.name='setTimeout']",
+    message:
+      "Raw setTimeout in commit-stage tests is disallowed. Poll a readiness condition or use testkit helpers."
+  });
+  commitStageSyntaxSelectors.push({
+    selector: "CallExpression[callee.object.name='globalThis'][callee.property.name='setTimeout']",
+    message:
+      "Raw setTimeout in commit-stage tests is disallowed. Poll a readiness condition or use testkit helpers."
+  });
+}
+
+if (lintPolicy.focusedTests) {
+  commitStageSyntaxSelectors.push(...createFocusedTestSelectors());
+}
+
+const commitStageRestrictedImportPaths = [];
+if (lintPolicy.disallowDbImports) {
+  commitStageRestrictedImportPaths.push(
+    ...lintPolicy.dbModules.map((moduleName) => ({
+      name: moduleName,
+      message: dbImportMessage(moduleName)
+    }))
+  );
+}
+
+if (lintPolicy.disallowChildProcessImports) {
+  commitStageRestrictedImportPaths.push(
+    {
+      name: "child_process",
+      message: "Commit-stage tests must run in-process. Avoid child_process usage in this layer."
+    },
+    {
+      name: "node:child_process",
+      message: "Commit-stage tests must run in-process. Avoid child_process usage in this layer."
+    }
+  );
+}
 
 export default tseslint.config(
   {
@@ -67,110 +151,28 @@ export default tseslint.config(
     rules: {
       "@typescript-eslint/no-unsafe-assignment": "off",
       "@typescript-eslint/no-unsafe-member-access": "off",
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector: "CallExpression[callee.object.name='it'][callee.property.name='only']",
-          message: "Focused tests (it.only) are forbidden. Remove .only before commit."
-        },
-        {
-          selector: "CallExpression[callee.object.name='test'][callee.property.name='only']",
-          message: "Focused tests (test.only) are forbidden. Remove .only before commit."
-        },
-        {
-          selector: "CallExpression[callee.object.name='describe'][callee.property.name='only']",
-          message: "Focused tests (describe.only) are forbidden. Remove .only before commit."
-        }
-      ]
+      ...(focusedTestSelectors.length > 0
+        ? {
+            "no-restricted-syntax": ["error", ...focusedTestSelectors]
+          }
+        : {})
     }
   },
   {
-    files: [
-      "apps/*/src/**/*.test.ts",
-      "apps/*/src/**/*.test.tsx",
-      "packages/*/src/**/*.test.ts",
-      "packages/*/src/**/*.test.tsx"
-    ],
+    files: commitStageGlobs,
     rules: {
       "no-restricted-imports": [
         "error",
         {
           patterns: ["@/*", "@compass/*/src/*", "@compass/*/dist/*"],
-          paths: [
-            {
-              name: "pg",
-              message:
-                "Commit-stage tests must not import pg directly. Move DB coverage to integration tests."
-            },
-            {
-              name: "@prisma/client",
-              message:
-                "Commit-stage tests must not import prisma clients directly. Move DB coverage to integration tests."
-            },
-            {
-              name: "mysql2",
-              message:
-                "Commit-stage tests must not import DB clients directly. Move DB coverage to integration tests."
-            },
-            {
-              name: "mongodb",
-              message:
-                "Commit-stage tests must not import DB clients directly. Move DB coverage to integration tests."
-            },
-            {
-              name: "redis",
-              message:
-                "Commit-stage tests must not import DB/queue clients directly. Mock the boundary or use integration tests."
-            },
-            {
-              name: "ioredis",
-              message:
-                "Commit-stage tests must not import DB/queue clients directly. Mock the boundary or use integration tests."
-            },
-            {
-              name: "child_process",
-              message:
-                "Commit-stage tests must run in-process. Avoid child_process usage in this layer."
-            },
-            {
-              name: "node:child_process",
-              message:
-                "Commit-stage tests must run in-process. Avoid child_process usage in this layer."
-            }
-          ]
+          paths: commitStageRestrictedImportPaths
         }
       ],
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector: "CallExpression[callee.object.name='Math'][callee.property.name='random']",
-          message:
-            "Commit-stage tests must be deterministic. Avoid Math.random() or inject a seeded RNG."
-        },
-        {
-          selector: "CallExpression[callee.name='setTimeout']",
-          message:
-            "Raw setTimeout in commit-stage tests is disallowed. Poll a readiness condition or use testkit helpers."
-        },
-        {
-          selector:
-            "CallExpression[callee.object.name='globalThis'][callee.property.name='setTimeout']",
-          message:
-            "Raw setTimeout in commit-stage tests is disallowed. Poll a readiness condition or use testkit helpers."
-        },
-        {
-          selector: "CallExpression[callee.object.name='it'][callee.property.name='only']",
-          message: "Focused tests (it.only) are forbidden. Remove .only before commit."
-        },
-        {
-          selector: "CallExpression[callee.object.name='test'][callee.property.name='only']",
-          message: "Focused tests (test.only) are forbidden. Remove .only before commit."
-        },
-        {
-          selector: "CallExpression[callee.object.name='describe'][callee.property.name='only']",
-          message: "Focused tests (describe.only) are forbidden. Remove .only before commit."
-        }
-      ]
+      ...(commitStageSyntaxSelectors.length > 0
+        ? {
+            "no-restricted-syntax": ["error", ...commitStageSyntaxSelectors]
+          }
+        : {})
     }
   },
   {

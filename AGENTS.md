@@ -86,4 +86,4 @@ compass/
 ## References
 
 - Testing philosophy: `tests/README.md`
-- Testing policy and enforcement: `tests/policy/README.md`
+- Testing policy and enforcement (layers 1-3): `tests/policy/README.md`

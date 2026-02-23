@@ -62,7 +62,7 @@ The API uses PostgreSQL when `DATABASE_URL` is set in `apps/api/.env` (see `apps
 - Contributor map: `README.md`
 - Agent and repo conventions: `AGENTS.md`
 - Testing philosophy: `tests/README.md`
-- Testing policy and enforcement: `tests/policy/README.md`
+- Testing policy and enforcement (layers 1-3): `tests/policy/README.md`
 - Human merge policy: `docs/merge-policy.md`
 - Machine merge policy: `.github/policy/merge-policy.json`
 - Merge workflow: `.github/workflows/merge-contract.yml`

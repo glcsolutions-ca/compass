@@ -50,7 +50,7 @@ pnpm dev
 - Agent guide: `AGENTS.md`
 - Docs index: `docs/README.md`
 - Testing philosophy: `tests/README.md`
-- Testing policy and enforcement: `tests/policy/README.md`
+- Testing policy and enforcement (layers 1-3): `tests/policy/README.md`
 - Merge policy (human): `docs/merge-policy.md`
 - Branch protection: `docs/branch-protection.md`
 - Machine policy: `.github/policy/merge-policy.json`

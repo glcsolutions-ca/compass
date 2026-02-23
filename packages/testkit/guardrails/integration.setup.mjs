@@ -1,7 +1,4 @@
 import { installTestGuardrails } from "./install.mjs";
+import { loadRuntimeModePolicy } from "./policy.mjs";
 
-installTestGuardrails({
-  mode: "integration",
-  allowPostgres: true,
-  blockChildProcess: false
-});
+installTestGuardrails(loadRuntimeModePolicy("integration"));

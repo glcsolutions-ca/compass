@@ -22,7 +22,13 @@ General documentation and architecture records live here.
 
 ## Runbooks
 
+- `runbooks/README.md`
 - `runbooks/postgres-local.md`
 - `runbooks/deploy-aca.md`
-- `runbooks/infra-identity-iac.md`
 - `runbooks/migration-safety.md`
+
+## Infrastructure Docs
+
+- `../infra/README.md`
+- `../infra/azure/README.md`
+- `../infra/identity/README.md`

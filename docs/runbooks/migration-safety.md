@@ -43,7 +43,7 @@ Run contract-only changes after full traffic cutover and stability period.
 
 ## Concurrency Controls
 
-- Deploy workflow is serialized by `concurrency` in `.github/workflows/deploy.yml`
+- Production mutation is serialized by a shared `concurrency` lock (`production-mutation`) across `.github/workflows/deploy.yml` (`promote`) and `.github/workflows/infra-apply.yml` (`bicep_apply`)
 - Migration execution is single-run via ACA Job manual trigger config (`parallelism=1`, `replicaCompletionCount=1`)
 
 ## Diagnostics Contract

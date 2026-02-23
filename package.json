@@ -52,7 +52,7 @@
     "ci:browser-evidence": "playwright test tests/e2e/smoke.spec.ts --config tests/e2e/playwright.config.ts --reporter=line --workers=1",
     "ci:harness-smoke": "tsx tests/system/smoke.ts",
     "ci:gate": "node scripts/ci/gate.mjs",
-    "test:merge-contract": "vitest run scripts/ci/utils.test.mjs scripts/ci/preflight-lib.test.mjs scripts/ci/gate-lib.test.mjs scripts/ci/test-policy.test.mjs scripts/ci/testing-contract.test.mjs scripts/ci/eslint-policy.test.mjs scripts/deploy/managed-certificate-contract.test.mjs",
+    "test:merge-contract": "vitest run scripts/ci/utils.test.mjs scripts/ci/preflight-lib.test.mjs scripts/ci/gate-lib.test.mjs scripts/ci/test-policy.test.mjs scripts/ci/testing-contract.test.mjs scripts/ci/eslint-policy.test.mjs scripts/ci/workflow-concurrency-contract.test.mjs scripts/deploy/managed-certificate-contract.test.mjs scripts/deploy/apply-bicep-template.test.mjs",
     "hooks:install": "git config core.hooksPath .githooks"
   },
   "lint-staged": {

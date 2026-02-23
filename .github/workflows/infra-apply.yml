@@ -28,6 +28,9 @@ jobs:
     environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    concurrency:
+      group: production-mutation
+      cancel-in-progress: false
     env:
       HEAD_SHA: ${{ github.sha }}
     steps:
@@ -416,53 +419,17 @@ jobs:
               }
             }' > ".artifacts/infra/$HEAD_SHA/runtime.parameters.json"
 
-      - name: Validate Bicep template
-        run: |
-          az bicep version
-          az deployment group validate \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --template-file infra/azure/main.bicep \
-            --parameters @.artifacts/infra/$HEAD_SHA/runtime.parameters.json
-
       - name: Apply Bicep template
+        env:
+          ARM_DEPLOYMENT_NAME: main-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
 
-          mkdir -p ".artifacts/infra/$HEAD_SHA"
-          stderr_path=".artifacts/infra/$HEAD_SHA/deployment.stderr.log"
-          attempts_path=".artifacts/infra/$HEAD_SHA/deployment-attempts.log"
-          : > "$attempts_path"
+          export ARM_TEMPLATE_FILE="infra/azure/main.bicep"
+          export ARM_PARAMETERS_FILE=".artifacts/infra/$HEAD_SHA/runtime.parameters.json"
+          export ARM_ARTIFACT_DIR=".artifacts/infra/$HEAD_SHA"
 
-          transient_pattern='(OperationExpired|GatewayTimeout|TooManyRequests|ResourceNotReady|another operation is in progress|OperationInProgress|retryable|temporar|timeout|timed out)'
-
-          run_apply() {
-            az deployment group create \
-              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-              --template-file infra/azure/main.bicep \
-              --parameters @.artifacts/infra/$HEAD_SHA/runtime.parameters.json \
-              --output json > .artifacts/infra/$HEAD_SHA/deployment.json 2> "$stderr_path"
-          }
-
-          for attempt in 1 2; do
-            echo "attempt=$attempt startedAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$attempts_path"
-
-            if run_apply; then
-              echo "attempt=$attempt status=success finishedAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$attempts_path"
-              exit 0
-            fi
-
-            if [ "$attempt" -eq 1 ] && grep -Eiq "$transient_pattern" "$stderr_path"; then
-              echo "attempt=$attempt status=retry transient=true finishedAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$attempts_path"
-              echo "Transient infra apply failure detected; retrying once in 20 seconds..."
-              sleep 20
-              continue
-            fi
-
-            echo "attempt=$attempt status=failed transient=false finishedAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$attempts_path"
-            echo "Infra apply failed with terminal diagnostics:" >&2
-            cat "$stderr_path" >&2
-            exit 1
-          done
+          node scripts/deploy/apply-bicep-template.mjs
 
       - name: Upload infra artifact
         if: ${{ always() }}
@@ -471,5 +438,8 @@ jobs:
           name: infra-apply-${{ env.HEAD_SHA }}
           path: |
             .artifacts/infra/${{ env.HEAD_SHA }}/deployment.json
+            .artifacts/infra/${{ env.HEAD_SHA }}/deployment-metadata.json
+            .artifacts/infra/${{ env.HEAD_SHA }}/deployment-attempts.log
+            .artifacts/infra/${{ env.HEAD_SHA }}/deployment.stderr.log
             .artifacts/infra/${{ env.HEAD_SHA }}/runtime.parameters.json
           if-no-files-found: warn

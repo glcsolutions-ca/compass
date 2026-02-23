@@ -9,12 +9,16 @@ on:
 permissions:
   contents: read
   id-token: write
+  deployments: write
 
 jobs:
   classify:
     name: classify
     runs-on: ubuntu-latest
     outputs:
+      base_sha: ${{ steps.classify.outputs.base_sha }}
+      base_source: ${{ steps.resolve_base.outputs.base_source }}
+      base_deployment_id: ${{ steps.resolve_base.outputs.base_deployment_id }}
       kind: ${{ steps.classify.outputs.kind }}
       rollout: ${{ steps.classify.outputs.rollout }}
       needs_infra: ${{ steps.classify.outputs.needs_infra }}
@@ -26,15 +30,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Resolve base SHA from production deployment record
+        id: resolve_base
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.sha }}
+          TARGET_ENVIRONMENT: production
+          FALLBACK_BASE_SHA: ${{ github.event.before }}
+        run: node scripts/deploy/get-last-prod-deployment-sha.mjs
+
       - name: Classify release kind
         id: classify
         env:
-          BASE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ steps.resolve_base.outputs.base_sha }}
           HEAD_SHA: ${{ github.sha }}
         run: node scripts/ci/release-classify.mjs
 
-  validate:
-    name: validate
+  checks:
+    name: checks
     needs: classify
     if: ${{ needs.classify.outputs.kind == 'checks' }}
     runs-on: ubuntu-latest
@@ -78,6 +92,9 @@ jobs:
       cancel-in-progress: false
     env:
       HEAD_SHA: ${{ github.sha }}
+      BASE_SHA: ${{ needs.classify.outputs.base_sha }}
+      BASE_SOURCE: ${{ needs.classify.outputs.base_source }}
+      BASE_DEPLOYMENT_ID: ${{ needs.classify.outputs.base_deployment_id }}
       RISK_TIER: t3
       KIND: ${{ needs.classify.outputs.kind }}
       ROLLOUT: ${{ needs.classify.outputs.rollout }}
@@ -117,6 +134,7 @@ jobs:
       candidate_web_ref: ${{ steps.candidate_refs.outputs.candidate_web_ref }}
       api_prod_url: ${{ steps.current_state.outputs.api_prod_url }}
       web_prod_url: ${{ steps.current_state.outputs.web_prod_url }}
+      new_deployment_id: ${{ steps.record_production_deployment.outputs.deployment_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -467,7 +485,10 @@ jobs:
           {
             "schemaVersion": "1",
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "baseSha": "$BASE_SHA",
             "headSha": "$HEAD_SHA",
+            "baseSource": "$BASE_SOURCE",
+            "baseDeploymentId": "${BASE_DEPLOYMENT_ID:-}",
             "kind": "$KIND",
             "current": {
               "api": "${{ steps.current_state.outputs.current_api_ref }}",
@@ -682,6 +703,21 @@ jobs:
           fi
           EXPECTED_ACCOUNT_IDENTITY="$expected_identity" pnpm ci:browser-evidence
 
+      - name: Record successful production deployment
+        id: record_production_deployment
+        if: ${{ success() && steps.stale_preinfra.outputs.is_stale != 'true' && (env.KIND == 'infra' || (env.KIND == 'runtime' && steps.stale_preboundary.outputs.is_stale != 'true')) }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TARGET_ENVIRONMENT: production
+          HEAD_SHA: ${{ env.HEAD_SHA }}
+          DEPLOY_LOG_URL: ${{ format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          DEPLOY_ENVIRONMENT_URL: ${{ steps.current_state.outputs.web_prod_url }}
+          CANDIDATE_API_REF: ${{ steps.candidate_refs.outputs.candidate_api_ref }}
+          CANDIDATE_WEB_REF: ${{ steps.candidate_refs.outputs.candidate_web_ref }}
+          KIND: ${{ env.KIND }}
+        run: node scripts/deploy/record-production-deployment.mjs
+
       - name: Write final deploy result artifact
         if: ${{ always() }}
         env:
@@ -692,7 +728,11 @@ jobs:
           {
             "schemaVersion": "1",
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "baseSha": "$BASE_SHA",
             "headSha": "$HEAD_SHA",
+            "baseSource": "$BASE_SOURCE",
+            "baseDeploymentId": "${BASE_DEPLOYMENT_ID:-}",
+            "newDeploymentId": "${{ steps.record_production_deployment.outputs.deployment_id || '' }}",
             "tier": "$RISK_TIER",
             "kind": "$KIND",
             "stale": {
@@ -750,7 +790,7 @@ jobs:
     name: report
     needs:
       - classify
-      - validate
+      - checks
       - promote
     if: ${{ always() }}
     runs-on: ubuntu-latest
@@ -758,14 +798,18 @@ jobs:
       - name: Write release summary
         env:
           HEAD_SHA: ${{ github.sha }}
+          BASE_SHA: ${{ needs.classify.outputs.base_sha }}
+          BASE_SOURCE: ${{ needs.classify.outputs.base_source }}
+          BASE_DEPLOYMENT_ID: ${{ needs.classify.outputs.base_deployment_id }}
           KIND: ${{ needs.classify.outputs.kind }}
           ROLLOUT: ${{ needs.classify.outputs.rollout }}
           NEEDS_INFRA: ${{ needs.classify.outputs.needs_infra }}
           NEEDS_MIGRATIONS: ${{ needs.classify.outputs.needs_migrations }}
-          CHECKS_RESULT: ${{ needs.validate.result }}
+          CHECKS_RESULT: ${{ needs.checks.result }}
           PROMOTE_RESULT: ${{ needs.promote.result }}
           STALE_PREINFRA: ${{ needs.promote.outputs.stale_preinfra }}
           STALE_PREBOUNDARY: ${{ needs.promote.outputs.stale_preboundary }}
+          NEW_DEPLOYMENT_ID: ${{ needs.promote.outputs.new_deployment_id }}
           CURRENT_API_REF: ${{ needs.promote.outputs.current_api_ref }}
           CURRENT_WEB_REF: ${{ needs.promote.outputs.current_web_ref }}
           CANDIDATE_API_REF: ${{ needs.promote.outputs.candidate_api_ref }}
@@ -778,7 +822,11 @@ jobs:
           {
             "schemaVersion": "1",
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "baseSha": "$BASE_SHA",
             "headSha": "$HEAD_SHA",
+            "baseSource": "$BASE_SOURCE",
+            "baseDeploymentId": "${BASE_DEPLOYMENT_ID:-}",
+            "newDeploymentId": "${NEW_DEPLOYMENT_ID:-}",
             "kind": "$KIND",
             "rollout": "$ROLLOUT",
             "needsInfra": "$NEEDS_INFRA",

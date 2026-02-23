@@ -23,3 +23,7 @@ Those are tier-conditional and enforced by `risk-policy-gate` using `.github/pol
 - Tier-specific required checks remain policy-driven.
 - Stale SHA/tier evidence is rejected centrally.
 - The same required gate context is used for PR and merge queue runs.
+
+## Verification Runbook
+
+- `docs/runbooks/github-governance-verification.md`

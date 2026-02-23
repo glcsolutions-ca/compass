@@ -198,3 +198,5 @@ output postgresServerResourceId string = postgres.outputs.serverId
 output postgresServerName string = postgres.outputs.serverNameOutput
 output postgresFqdn string = postgres.outputs.fqdn
 output postgresDatabaseName string = postgres.outputs.databaseNameOutput
+
+// docs-drift validation marker (non-merge test)

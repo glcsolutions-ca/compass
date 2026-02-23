@@ -5,6 +5,8 @@ param image string
 param registryServer string
 param registryIdentityResourceId string
 param apiBaseUrl string
+param customDomainName string = ''
+param customDomainCertificateId string = ''
 
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: containerAppName
@@ -25,6 +27,15 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         targetPort: 3000
         allowInsecure: false
         transport: 'auto'
+        customDomains: empty(customDomainName) || empty(customDomainCertificateId)
+          ? []
+          : [
+              {
+                name: customDomainName
+                bindingType: 'SniEnabled'
+                certificateId: customDomainCertificateId
+              }
+            ]
       }
       registries: [
         {

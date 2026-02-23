@@ -3,9 +3,12 @@
 ## Release Cycle (Plain-English)
 
 1. PR runs `merge-contract.yml` and must pass `risk-policy-gate`.
-2. Merge to `main` runs `deploy.yml` for that exact SHA.
-3. Deploy runs migration job first, then API/Web deploy, then smoke + browser evidence.
-4. Infra changes run through `infra-apply.yml`; identity changes run through `identity-plan.yml` and `identity-apply.yml`.
+2. Merge to `main` runs `deploy.yml` as the single release orchestrator.
+3. `deploy.yml` classifies each change as `checks`, `infra`, or `runtime`.
+4. `checks` changes run factory checks only (no production mutation).
+5. `infra` and `runtime` changes run `promote` (the only production-mutating job).
+6. `runtime` runs migration+deploy atomically using digest refs.
+7. `report` publishes unified release artifacts.
 
 - `merge-contract.yml`: deterministic merge-contract workflow with ordered checks:
   - `risk-policy-preflight` (includes `docs-drift` evaluation)
@@ -19,24 +22,20 @@
   - `harness-smoke` (conditional)
   - `risk-policy-gate` (final required gate; policy-driven check aggregation + browser manifest assertions)
 - `dependabot-auto-merge.yml`: metadata-only safe-lane auto-merge for Dependabot PRs (patch/minor only, no PR checkout)
-- `deploy.yml`: push-to-main production deploy using ACR + Azure Container Apps deploy action (GitHub Environment `production`)
-  - rejects stale deploy candidates when `${GITHUB_SHA}` is no longer current `origin/main`
-  - migration job runs before API/Web rollout (expand-first gate)
-  - API image is shared by runtime and migration command path (single-image pattern)
-  - API and Web images are both built/pushed explicitly, then deployed by image reference (`imageToDeploy`)
-  - derives ACR login server from `ACR_NAME`
-  - runs subscription-scoped drift assertions before switching to subscription-less smoke identity
-  - normalizes CLI mode output (`Single`/`single`) before drift-policy comparison
-  - allows bounded convergence time for active revision count after deploy (up to 120s)
+- `deploy.yml`: mainline release orchestrator (`classify -> checks -> promote -> report`)
+  - `promote` is the only job with `environment: production` and `concurrency: prod-main`
+  - stale candidates are skipped before irreversible boundaries
+  - runtime promotion uses digest refs only (`repo@sha256`), not tags
+  - migration+deploy is one atomic boundary (no stale abort between migration and deploy)
   - runs API smoke and browser evidence with test-time token injection (`BROWSER_SMOKE_BEARER_TOKEN`)
-  - asserts post-deploy drift policy (`single` revision mode, `minReplicas=0`, `maxReplicas=1`, `cpu=0.25`, `memory=0.5Gi`, `maxInactiveRevisions<=2`, and active revision == latest revision)
-- `infra-apply.yml`: Azure Bicep infra apply workflow for `infra/azure/**` (GitHub Environment `production`)
+  - enforces drift policy (`single` mode, `minReplicas=0`, `maxReplicas=1`, `cpu=0.25`, `memory=0.5Gi`, `maxInactiveRevisions<=2`, active revision == latest revision)
+- `infra-apply.yml`: Azure Bicep infra apply workflow (`workflow_call` + manual dispatch; no push trigger)
   - provider registration preflight
   - validates private Postgres DNS zone suffix (`*.postgres.database.azure.com`)
   - validates Burstable Postgres SKU pairing (`POSTGRES_SKU_NAME` starts with `Standard_B`)
   - explicit ACR `authentication-as-arm` convergence check/enable
   - single shared runtime parameter payload for validate/create
-  - image resolution precedence: `image_tag` input > currently deployed image > current SHA
+  - workflow-call contract requires explicit image refs (`api_image_ref`, `web_image_ref`)
 - `acr-cleanup.yml`: scheduled/manual ACR tag cleanup for cost control
   - keeps newest 15 tags by default per repository (`compass-api`, `compass-web`)
   - emits machine-readable artifact under `.artifacts/infra/<sha>/acr-cleanup.json`

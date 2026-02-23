@@ -29,6 +29,7 @@
     "db:postgres:logs": "docker compose -f db/postgres/docker-compose.yml logs -f postgres",
     "deploy:migrate:start": "node scripts/deploy/start-migration-job.mjs",
     "deploy:migrate:wait": "node scripts/deploy/wait-migration-job.mjs",
+    "deploy:custom-domain:dns": "node scripts/deploy/custom-domain-dns.mjs",
     "deploy:smoke": "node scripts/deploy/verify-api-smoke.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

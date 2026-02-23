@@ -109,6 +109,9 @@ jobs:
       AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+      ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
+      ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
+      ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
       ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
       ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
       ACR_SKU: ${{ vars.ACR_SKU }}
@@ -298,11 +301,35 @@ jobs:
             exit 1
           fi
 
+          api_prod_url="https://$api_fqdn"
+          if [ -n "${ACA_API_CUSTOM_DOMAIN:-}" ]; then
+            api_custom_domain_bound_count="$(az containerapp hostname list \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$ACA_API_APP_NAME" \
+              --query "[?name=='${ACA_API_CUSTOM_DOMAIN}' && bindingType=='SniEnabled'] | length(@)" \
+              --output tsv)"
+            if [ "$api_custom_domain_bound_count" = "1" ]; then
+              api_prod_url="https://${ACA_API_CUSTOM_DOMAIN}"
+            fi
+          fi
+
+          web_prod_url="https://$web_fqdn"
+          if [ -n "${ACA_WEB_CUSTOM_DOMAIN:-}" ]; then
+            web_custom_domain_bound_count="$(az containerapp hostname list \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$ACA_WEB_APP_NAME" \
+              --query "[?name=='${ACA_WEB_CUSTOM_DOMAIN}' && bindingType=='SniEnabled'] | length(@)" \
+              --output tsv)"
+            if [ "$web_custom_domain_bound_count" = "1" ]; then
+              web_prod_url="https://${ACA_WEB_CUSTOM_DOMAIN}"
+            fi
+          fi
+
           {
             echo "current_api_ref=$api_ref"
             echo "current_web_ref=$web_ref"
-            echo "api_prod_url=https://$api_fqdn"
-            echo "web_prod_url=https://$web_fqdn"
+            echo "api_prod_url=$api_prod_url"
+            echo "web_prod_url=$web_prod_url"
           } >> "$GITHUB_OUTPUT"
 
       - name: Apply infra updates
@@ -311,6 +338,9 @@ jobs:
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
           API_IMAGE: ${{ steps.current_state.outputs.current_api_ref }}
           WEB_IMAGE: ${{ steps.current_state.outputs.current_web_ref }}
+          ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
+          ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
+          ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
         run: |
           set -euo pipefail
           mkdir -p ".artifacts/infra/$HEAD_SHA"
@@ -319,6 +349,15 @@ jobs:
             echo "Missing required GitHub environment secret: POSTGRES_ADMIN_PASSWORD" >&2
             exit 1
           fi
+
+          custom_domain_validation_method="$(echo "${ACA_CUSTOM_DOMAIN_VALIDATION_METHOD:-CNAME}" | tr '[:lower:]' '[:upper:]')"
+          case "$custom_domain_validation_method" in
+            CNAME|HTTP|TXT) ;;
+            *)
+              echo "ACA_CUSTOM_DOMAIN_VALIDATION_METHOD must be one of CNAME, HTTP, TXT (actual: ${ACA_CUSTOM_DOMAIN_VALIDATION_METHOD:-<empty>})" >&2
+              exit 1
+              ;;
+          esac
 
           providers=(
             "Microsoft.App"
@@ -356,6 +395,9 @@ jobs:
             --arg logAnalyticsWorkspaceName "$AZURE_LOG_ANALYTICS_WORKSPACE_NAME" \
             --arg apiAppName "$ACA_API_APP_NAME" \
             --arg webAppName "$ACA_WEB_APP_NAME" \
+            --arg apiCustomDomain "${ACA_API_CUSTOM_DOMAIN:-}" \
+            --arg webCustomDomain "${ACA_WEB_CUSTOM_DOMAIN:-}" \
+            --arg customDomainValidationMethod "$custom_domain_validation_method" \
             --arg migrationJobName "$ACA_MIGRATE_JOB_NAME" \
             --arg acrPullIdentityName "$ACR_PULL_IDENTITY_NAME" \
             --arg acrName "$ACR_NAME" \
@@ -383,6 +425,9 @@ jobs:
                 "logAnalyticsWorkspaceName": {"value": $logAnalyticsWorkspaceName},
                 "apiAppName": {"value": $apiAppName},
                 "webAppName": {"value": $webAppName},
+                "apiCustomDomain": {"value": $apiCustomDomain},
+                "webCustomDomain": {"value": $webCustomDomain},
+                "customDomainValidationMethod": {"value": $customDomainValidationMethod},
                 "migrationJobName": {"value": $migrationJobName},
                 "acrPullIdentityName": {"value": $acrPullIdentityName},
                 "acrName": {"value": $acrName},

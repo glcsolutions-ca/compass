@@ -55,6 +55,9 @@ jobs:
           AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
           ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
           ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+          ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
+          ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
+          ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
           ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
           ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
           ACR_NAME: ${{ vars.ACR_NAME }}
@@ -116,6 +119,15 @@ jobs:
             echo "POSTGRES_SKU_NAME must start with Standard_B when POSTGRES_SKU_TIER=Burstable (actual: $POSTGRES_SKU_NAME)" >&2
             exit 1
           fi
+
+          custom_domain_validation_method="$(echo "${ACA_CUSTOM_DOMAIN_VALIDATION_METHOD:-CNAME}" | tr '[:lower:]' '[:upper:]')"
+          case "$custom_domain_validation_method" in
+            CNAME|HTTP|TXT) ;;
+            *)
+              echo "ACA_CUSTOM_DOMAIN_VALIDATION_METHOD must be one of CNAME, HTTP, TXT (actual: ${ACA_CUSTOM_DOMAIN_VALIDATION_METHOD:-<empty>})" >&2
+              exit 1
+              ;;
+          esac
 
           actual_subscription="$(az account show --query id -o tsv)"
           actual_tenant="$(az account show --query tenantId -o tsv)"
@@ -297,6 +309,9 @@ jobs:
           AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
           ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
           ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+          ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
+          ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
+          ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
           ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
           ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
           ACR_NAME: ${{ vars.ACR_NAME }}
@@ -320,6 +335,8 @@ jobs:
             exit 1
           fi
 
+          custom_domain_validation_method="$(echo "${ACA_CUSTOM_DOMAIN_VALIDATION_METHOD:-CNAME}" | tr '[:lower:]' '[:upper:]')"
+
           jq -n \
             --arg location "$AZURE_LOCATION" \
             --arg vnetName "$AZURE_VNET_NAME" \
@@ -330,6 +347,9 @@ jobs:
             --arg logAnalyticsWorkspaceName "$AZURE_LOG_ANALYTICS_WORKSPACE_NAME" \
             --arg apiAppName "$ACA_API_APP_NAME" \
             --arg webAppName "$ACA_WEB_APP_NAME" \
+            --arg apiCustomDomain "${ACA_API_CUSTOM_DOMAIN:-}" \
+            --arg webCustomDomain "${ACA_WEB_CUSTOM_DOMAIN:-}" \
+            --arg customDomainValidationMethod "$custom_domain_validation_method" \
             --arg migrationJobName "$ACA_MIGRATE_JOB_NAME" \
             --arg acrPullIdentityName "$ACR_PULL_IDENTITY_NAME" \
             --arg acrName "$ACR_NAME" \
@@ -357,6 +377,9 @@ jobs:
                 "logAnalyticsWorkspaceName": {"value": $logAnalyticsWorkspaceName},
                 "apiAppName": {"value": $apiAppName},
                 "webAppName": {"value": $webAppName},
+                "apiCustomDomain": {"value": $apiCustomDomain},
+                "webCustomDomain": {"value": $webCustomDomain},
+                "customDomainValidationMethod": {"value": $customDomainValidationMethod},
                 "migrationJobName": {"value": $migrationJobName},
                 "acrPullIdentityName": {"value": $acrPullIdentityName},
                 "acrName": {"value": $acrName},

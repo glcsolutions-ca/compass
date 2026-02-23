@@ -7,6 +7,8 @@ param registryIdentityResourceId string
 @secure()
 param databaseUrl string
 param logLevel string = 'warn'
+param customDomainName string = ''
+param customDomainCertificateId string = ''
 
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: containerAppName
@@ -27,6 +29,15 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         targetPort: 3001
         allowInsecure: false
         transport: 'auto'
+        customDomains: empty(customDomainName) || empty(customDomainCertificateId)
+          ? []
+          : [
+              {
+                name: customDomainName
+                bindingType: 'SniEnabled'
+                certificateId: customDomainCertificateId
+              }
+            ]
       }
       registries: [
         {

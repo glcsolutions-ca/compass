@@ -82,3 +82,7 @@ compass/
 - Evidence: tests/CI green, and required artifacts when applicable.
 - No production secrets used in untrusted PR execution paths.
 - If behavior changes: update/add docs in `docs/` and/or add a check to prevent drift.
+
+## References
+
+- Testing philosophy: `docs/testing.md`

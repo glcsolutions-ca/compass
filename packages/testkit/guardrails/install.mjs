@@ -66,7 +66,7 @@ function createViolationError({ code, attempted, why, fixes, docPath }) {
   return error;
 }
 
-function enforceTarget(target, policy) {
+export function enforceNetworkTarget(target, policy) {
   if (target.socketPath) {
     return;
   }
@@ -74,7 +74,7 @@ function enforceTarget(target, policy) {
   const host = normalizeHost(target.host);
   const port = toPort(target.port);
 
-  if (!isLoopbackHost(host)) {
+  if (policy.allowLoopbackOnly && !isLoopbackHost(host)) {
     const docPath =
       policy.mode === "integration"
         ? "tests/README.md#isolation-rules"
@@ -92,11 +92,16 @@ function enforceTarget(target, policy) {
     });
   }
 
-  if (!policy.allowPostgres && port === 5432) {
+  if (port && Array.isArray(policy.blockedPorts) && policy.blockedPorts.includes(port)) {
+    const why =
+      port === 5432
+        ? "Commit-stage tests must be hermetic and cannot use real Postgres."
+        : `This test mode blocks network port ${port}.`;
+
     throw createViolationError({
       code: "DB001",
-      attempted: `${target.source} -> ${host}:5432`,
-      why: "Commit-stage tests must be hermetic and cannot use real Postgres.",
+      attempted: `${target.source} -> ${host}:${port}`,
+      why,
       fixes: [
         "Mock DB boundaries in commit-stage tests.",
         "Move DB wiring tests to apps/**/test/integration/**/*.test.ts and run pnpm test:integration."
@@ -191,31 +196,49 @@ function parseSocketTarget(args, source) {
   };
 }
 
-function installNetworkGuards(policy) {
+function captureOriginals() {
+  return {
+    fetch: typeof globalThis.fetch === "function" ? globalThis.fetch : null,
+    socketConnect: net.Socket.prototype.connect,
+    tlsSocketConnect:
+      typeof tls.TLSSocket?.prototype?.connect === "function"
+        ? tls.TLSSocket.prototype.connect
+        : null,
+    childProcess: {
+      exec: childProcess.exec,
+      execSync: childProcess.execSync,
+      execFile: childProcess.execFile,
+      execFileSync: childProcess.execFileSync,
+      spawn: childProcess.spawn,
+      spawnSync: childProcess.spawnSync,
+      fork: childProcess.fork
+    }
+  };
+}
+
+function installNetworkGuards(policy, originals) {
   const originalFetch =
-    typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null;
+    typeof originals.fetch === "function" ? originals.fetch.bind(globalThis) : null;
   if (originalFetch) {
     globalThis.fetch = async (input, init) => {
       const target = parseFetchTarget(input);
       if (target) {
-        enforceTarget(target, policy);
+        enforceNetworkTarget(target, policy);
       }
 
       return originalFetch(input, init);
     };
   }
 
-  const originalSocketConnect = net.Socket.prototype.connect;
   net.Socket.prototype.connect = function guardedSocketConnect(...args) {
-    enforceTarget(parseSocketTarget(args, "net.Socket.connect"), policy);
-    return originalSocketConnect.apply(this, args);
+    enforceNetworkTarget(parseSocketTarget(args, "net.Socket.connect"), policy);
+    return originals.socketConnect.apply(this, args);
   };
 
-  const tlsSocketConnect = tls.TLSSocket?.prototype?.connect;
-  if (typeof tlsSocketConnect === "function") {
+  if (typeof originals.tlsSocketConnect === "function") {
     tls.TLSSocket.prototype.connect = function guardedTlsSocketConnect(...args) {
-      enforceTarget(parseSocketTarget(args, "tls.TLSSocket.connect"), policy);
-      return tlsSocketConnect.apply(this, args);
+      enforceNetworkTarget(parseSocketTarget(args, "tls.TLSSocket.connect"), policy);
+      return originals.tlsSocketConnect.apply(this, args);
     };
   }
 }
@@ -243,25 +266,67 @@ function installProcessGuards() {
   childProcess.fork = () => blocked("child_process.fork");
 }
 
+function restoreOriginals(originals) {
+  if (!originals) {
+    return;
+  }
+
+  if (originals.fetch) {
+    globalThis.fetch = originals.fetch;
+  }
+
+  if (originals.socketConnect) {
+    net.Socket.prototype.connect = originals.socketConnect;
+  }
+
+  if (originals.tlsSocketConnect) {
+    tls.TLSSocket.prototype.connect = originals.tlsSocketConnect;
+  }
+
+  childProcess.exec = originals.childProcess.exec;
+  childProcess.execSync = originals.childProcess.execSync;
+  childProcess.execFile = originals.childProcess.execFile;
+  childProcess.execFileSync = originals.childProcess.execFileSync;
+  childProcess.spawn = originals.childProcess.spawn;
+  childProcess.spawnSync = originals.childProcess.spawnSync;
+  childProcess.fork = originals.childProcess.fork;
+}
+
 export function installTestGuardrails(policy) {
-  const globalState = globalThis[STATE_KEY] ?? { installed: new Set() };
+  const globalState = globalThis[STATE_KEY] ?? { installed: new Set(), originals: null };
   globalThis[STATE_KEY] = globalState;
+
+  if (!globalState.originals) {
+    globalState.originals = captureOriginals();
+  }
 
   const policyKey = JSON.stringify({
     mode: policy.mode,
+    allowLoopbackOnly: policy.allowLoopbackOnly,
     allowPostgres: policy.allowPostgres,
-    blockChildProcess: policy.blockChildProcess
+    blockChildProcess: policy.blockChildProcess,
+    blockedPorts: policy.blockedPorts
   });
 
   if (globalState.installed.has(policyKey)) {
     return;
   }
 
-  installNetworkGuards(policy);
+  installNetworkGuards(policy, globalState.originals);
 
   if (policy.blockChildProcess) {
     installProcessGuards();
   }
 
   globalState.installed.add(policyKey);
+}
+
+export function resetTestGuardrailsForTests() {
+  const globalState = globalThis[STATE_KEY];
+  if (!globalState) {
+    return;
+  }
+
+  restoreOriginals(globalState.originals);
+  globalState.installed.clear();
 }

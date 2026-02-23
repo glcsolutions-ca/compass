@@ -128,4 +128,12 @@ describe("assertTestingPolicyShape", () => {
     policy.schemaVersion = "1";
     expect(() => assertTestingPolicyShape(policy)).toThrow('test policy schemaVersion must be "2"');
   });
+
+  it("fails when lint commit-stage globs diverge from layer globs", () => {
+    const policy = createValidPolicy();
+    policy.lint.commitStageGlobs = ["apps/*/src/**/*.test.ts"];
+    expect(() => assertTestingPolicyShape(policy)).toThrow(
+      "test policy lint.commitStageGlobs must exactly match test policy layers.commitStage to prevent drift. Update tests/policy/test-policy.json."
+    );
+  });
 });

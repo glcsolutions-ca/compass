@@ -1,8 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const DEFAULT_TEST_POLICY_PATH = path.join("tests", "policy", "test-policy.json");
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 export const REQUIRED_TEST_RULE_IDS = ["TC001", "TC010", "TC011", "TC020"];
 export const REQUIRED_TEST_LAYER_KEYS = ["commitStage", "integration", "e2e", "smoke"];
@@ -55,6 +57,22 @@ function assertPortArray(value, name) {
     const port = value[index];
     if (!Number.isInteger(port) || port <= 0 || port > 65535) {
       throw new Error(`${name}[${index}] must be a valid port number`);
+    }
+  }
+}
+
+function assertStringArraysEqual(actual, expected, name) {
+  if (actual.length !== expected.length) {
+    throw new Error(
+      `${name} must exactly match test policy layers.commitStage to prevent drift. Update tests/policy/test-policy.json.`
+    );
+  }
+
+  for (let index = 0; index < actual.length; index += 1) {
+    if (actual[index] !== expected[index]) {
+      throw new Error(
+        `${name} must exactly match test policy layers.commitStage to prevent drift. Update tests/policy/test-policy.json.`
+      );
     }
   }
 }
@@ -147,6 +165,11 @@ export function assertTestingPolicyShape(policy) {
     "test policy lint.disallowChildProcessImports"
   );
   assertStringArray(policy.lint.dbModules, "test policy lint.dbModules");
+  assertStringArraysEqual(
+    policy.lint.commitStageGlobs,
+    policy.layers.commitStage,
+    "test policy lint.commitStageGlobs"
+  );
 }
 
 export function loadTestPolicyObject(policy) {
@@ -154,13 +177,22 @@ export function loadTestPolicyObject(policy) {
   return policy;
 }
 
+export function resolveTestPolicyPath(policyPath = DEFAULT_TEST_POLICY_PATH) {
+  if (path.isAbsolute(policyPath)) {
+    return policyPath;
+  }
+
+  return path.resolve(REPO_ROOT, policyPath);
+}
+
 export async function loadTestPolicy(policyPath = DEFAULT_TEST_POLICY_PATH) {
+  const resolvedPolicyPath = resolveTestPolicyPath(policyPath);
   let raw;
   try {
-    raw = await readFile(policyPath, "utf8");
+    raw = await readFile(resolvedPolicyPath, "utf8");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Unable to read test policy at ${policyPath}: ${message}`);
+    throw new Error(`Unable to read test policy at ${resolvedPolicyPath}: ${message}`);
   }
 
   let parsed;
@@ -168,19 +200,20 @@ export async function loadTestPolicy(policyPath = DEFAULT_TEST_POLICY_PATH) {
     parsed = JSON.parse(raw);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Test policy at ${policyPath} must be valid JSON: ${message}`);
+    throw new Error(`Test policy at ${resolvedPolicyPath} must be valid JSON: ${message}`);
   }
 
   return loadTestPolicyObject(parsed);
 }
 
 export function loadTestPolicySync(policyPath = DEFAULT_TEST_POLICY_PATH) {
+  const resolvedPolicyPath = resolveTestPolicyPath(policyPath);
   let raw;
   try {
-    raw = readFileSync(policyPath, "utf8");
+    raw = readFileSync(resolvedPolicyPath, "utf8");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Unable to read test policy at ${policyPath}: ${message}`);
+    throw new Error(`Unable to read test policy at ${resolvedPolicyPath}: ${message}`);
   }
 
   let parsed;
@@ -188,7 +221,7 @@ export function loadTestPolicySync(policyPath = DEFAULT_TEST_POLICY_PATH) {
     parsed = JSON.parse(raw);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Test policy at ${policyPath} must be valid JSON: ${message}`);
+    throw new Error(`Test policy at ${resolvedPolicyPath} must be valid JSON: ${message}`);
   }
 
   return loadTestPolicyObject(parsed);

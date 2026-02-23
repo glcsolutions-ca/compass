@@ -1,71 +1,59 @@
 # Contributing
 
-This repo treats CI as the source of truth for merge safety.
-
-## Start Here
-
-- Human policy: `docs/merge-policy.md`
-- Machine policy: `.github/policy/merge-policy.json`
-- CI workflow: `.github/workflows/merge-contract.yml`
-- Deploy workflow: `.github/workflows/deploy.yml`
-- Infra/Identity workflows: `.github/workflows/infra-apply.yml`, `.github/workflows/identity-plan.yml`, `.github/workflows/identity-apply.yml`
+Keep changes small, testable, and easy to review. `main` stays releasable through PRs and CI gates.
 
 ## Prerequisites
 
-- Node.js `24.x` (`.nvmrc`; enforced range `>=24.8.0 <25`)
-- `pnpm` (`packageManager` pinned in `package.json`)
+- Node.js `22.x` (from `.nvmrc`, enforced by `engines`)
+- `pnpm` `10.30.1` (from `packageManager`)
+- Docker (only for local Postgres)
 
-## Local Workflow (Convenience)
+## Local workflow
 
 ```bash
 pnpm install
-pnpm db:postgres:up
+pnpm db:postgres:up   # optional for API/data work
 pnpm dev
+```
+
+Before opening a PR:
+
+```bash
 pnpm check
 pnpm build
 ```
 
-Use `pnpm clean` when needed.
+Useful DB commands:
 
-`pnpm db:postgres:up` runs the standard local DB flow:
+- `pnpm db:postgres:down` - stop local Postgres
+- `pnpm db:postgres:reset` - rebuild local Postgres from migrations + seed
+- `pnpm db:migrate:create -- <name>` - create a migration
+- `pnpm db:migrate:status` - show migration status
 
-- starts Docker PostgreSQL
-- waits until the DB is ready
-- applies migrations from `db/migrations/`
-- seeds local demo data
-
+`pnpm db:postgres:up` starts Docker PostgreSQL, waits for readiness, applies migrations from `migrations/`, and seeds local data.
 The API uses PostgreSQL when `DATABASE_URL` is set in `apps/api/.env` (see `apps/api/.env.example`).
-Use `pnpm db:postgres:down` to stop PostgreSQL.
-Use `pnpm db:postgres:reset` to drop local volumes and rebuild the DB from `db/migrations/` + seed data.
 
-## Migration Workflow
+## Pull request standard
 
-```bash
-pnpm db:migrate:create -- <migration_name>
-pnpm db:migrate:up
-pnpm db:migrate:status
-pnpm db:migrate:down -- 1
-```
+- No direct pushes to `main`.
+- Title: `<type>(<scope>): <summary>`
+- Types: `feat`, `fix`, `docs`, `refactor`, `test`, `ci`, `chore`
+- Rules: lowercase, imperative, max 72 chars, no trailing period
+- Description sections: `## Summary`, `## Testing`, `## Risk`
 
-## CI Merge Contract
+## Quality and safety checks
 
-CI runs deterministic ordered checks and fails closed at `risk-policy-gate`.
-Branch protection should require only `risk-policy-gate`.
+- CI is the merge source of truth; `risk-policy-gate` is required.
+- Keep one intent per PR and avoid unrelated file changes.
+- For behavior changes, update docs in `docs/` and/or policy checks.
+- Treat `migrations/`, `infra/`, `auth`, and deploy workflows as high risk: keep rollout and rollback explicit.
 
-`codex-review` enforcement is controlled by `reviewPolicy.codexReviewEnabled` in `.github/policy/merge-policy.json`.
+## References
 
-## PR Checklist
-
-- [ ] Local convenience checks pass (`pnpm check`, `pnpm build`).
-- [ ] Control-plane edits also update policy/docs where required.
-- [ ] No unrelated files or generated noise are included.
-
-## Deploy + IaC Checklist
-
-- [ ] `infra/identity/**` changes include updated `identity-plan` evidence and docs when behavior changes.
-- [ ] `production` environment includes `AZURE_IDENTITY_CLIENT_ID`, `IDENTITY_OWNER_OBJECT_IDS_JSON`, and `TFSTATE_*` vars before running identity workflows.
-- [ ] `infra/azure/**` changes include `infra-apply` validation and docs updates.
-- [ ] CAF naming (`type-workload-env-region-instance`) is preserved for Azure resource names.
-- [ ] Concrete production values are sourced from GitHub Environment `production` vars/secrets, not tracked files.
-- [ ] `scripts/deploy/**` or workflow changes preserve machine-verifiable artifacts under `.artifacts/deploy/<sha>/`.
-- [ ] Deploy gates remain SHA-bound and rollback-capable.
+- Contributor map: `README.md`
+- Agent and repo conventions: `AGENTS.md`
+- Human merge policy: `docs/merge-policy.md`
+- Machine merge policy: `.github/policy/merge-policy.json`
+- Merge workflow: `.github/workflows/merge-contract.yml`
+- Deploy workflow: `.github/workflows/deploy.yml`
+- Infra and identity workflows: `.github/workflows/infra-apply.yml`, `.github/workflows/identity-plan.yml`, `.github/workflows/identity-apply.yml`

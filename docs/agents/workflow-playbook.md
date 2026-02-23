@@ -29,14 +29,18 @@ need focused local debugging of docs-drift behavior.
 1. Open PR from a short-lived branch.
 2. CI calculates risk tier from changed paths.
 3. CI runs only the checks required for that tier.
-4. `risk-policy-gate` blocks merge unless current-head evidence is complete and valid.
-5. Merge to `main` creates a release candidate for that exact SHA.
-6. Deploy pipeline runs migration job, deploys API/Web, then runs smoke and browser evidence.
-7. Any failed gate blocks release; rerun only after a fix commit.
+4. `ci-pipeline` check name stays fixed, but mode is tier-driven:
+   - `fast` for `t0`
+   - `full` for `deps`, `t1`, `t2`, `t3`
+5. `risk-policy-gate` blocks merge unless current-head evidence is complete and valid.
+6. Merge to `main` creates a release candidate for that exact SHA.
+7. Deploy pipeline runs migration job, deploys API/Web, then runs smoke and browser evidence.
+8. Any failed gate blocks release; rerun only after a fix commit.
 
 ## High-Risk Paths
 
 If a change resolves to higher tiers by policy, expect additional required evidence:
 
 - `browser-evidence` for UI paths
-- `harness-smoke` and full `codex-review` for high risk (`t3`)
+- `harness-smoke` for high risk (`t3`)
+- `codex-review` for high risk (`t3`) when `reviewPolicy.codexReviewEnabled=true`

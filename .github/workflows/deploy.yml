@@ -1,39 +1,46 @@
-name: Deploy to Azure Container Apps
+name: Release Candidate (main)
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
   id-token: write
 
-concurrency:
-  group: deploy-main
-  cancel-in-progress: false
-
 jobs:
-  deploy:
-    name: deploy-production
-    environment: production
+  classify:
+    name: classify
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      HEAD_SHA: ${{ github.sha }}
-      RISK_TIER: t3
-      ACR_NAME: ${{ vars.ACR_NAME }}
-      ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
-      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-      ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
-      ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
-      ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+    outputs:
+      kind: ${{ steps.classify.outputs.kind }}
+      rollout: ${{ steps.classify.outputs.rollout }}
+      needs_infra: ${{ steps.classify.outputs.needs_infra }}
+      needs_migrations: ${{ steps.classify.outputs.needs_migrations }}
+      changed_files_json: ${{ steps.classify.outputs.changed_files_json }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Guard stale main SHA (early)
-        run: node scripts/deploy/assert-current-main-sha.mjs
+      - name: Classify release kind
+        id: classify
+        env:
+          BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: node scripts/ci/release-classify.mjs
+
+  validate:
+    name: validate
+    needs: classify
+    if: ${{ needs.classify.outputs.kind == 'checks' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -50,7 +57,104 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check format
+        run: pnpm check:format
+
+      - name: Check merge-contract tests
+        run: pnpm test:merge-contract
+
+      - name: Check no-org-infra policy
+        run: pnpm check:no-org-infra
+
+      - name: actionlint
+        uses: rhysd/actionlint@v1
+
+  promote:
+    name: promote
+    needs: classify
+    if: ${{ needs.classify.outputs.kind != 'checks' }}
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 60
+    concurrency:
+      group: prod-main
+      cancel-in-progress: false
+    env:
+      HEAD_SHA: ${{ github.sha }}
+      RISK_TIER: t3
+      KIND: ${{ needs.classify.outputs.kind }}
+      ROLLOUT: ${{ needs.classify.outputs.rollout }}
+      NEEDS_INFRA: ${{ needs.classify.outputs.needs_infra }}
+      NEEDS_MIGRATIONS: ${{ needs.classify.outputs.needs_migrations }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_VNET_NAME: ${{ vars.AZURE_VNET_NAME }}
+      AZURE_ACA_SUBNET_NAME: ${{ vars.AZURE_ACA_SUBNET_NAME }}
+      AZURE_POSTGRES_SUBNET_NAME: ${{ vars.AZURE_POSTGRES_SUBNET_NAME }}
+      AZURE_PRIVATE_DNS_ZONE_NAME: ${{ vars.AZURE_PRIVATE_DNS_ZONE_NAME }}
+      ACA_ENVIRONMENT_NAME: ${{ vars.ACA_ENVIRONMENT_NAME }}
+      AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
+      ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
+      ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+      ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+      ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
+      ACR_SKU: ${{ vars.ACR_SKU }}
+      POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
+      POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
+      POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
+      POSTGRES_VERSION: ${{ vars.POSTGRES_VERSION }}
+      POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
+      POSTGRES_SKU_TIER: ${{ vars.POSTGRES_SKU_TIER }}
+      POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
+      ENTRA_ISSUER: ${{ vars.ENTRA_ISSUER }}
+      ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
+      ENTRA_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
+    outputs:
+      stale_preinfra: ${{ steps.stale_preinfra.outputs.is_stale || 'false' }}
+      stale_preboundary: ${{ steps.stale_preboundary.outputs.is_stale || 'false' }}
+      current_api_ref: ${{ steps.current_state.outputs.current_api_ref }}
+      current_web_ref: ${{ steps.current_state.outputs.current_web_ref }}
+      candidate_api_ref: ${{ steps.candidate_refs.outputs.candidate_api_ref }}
+      candidate_web_ref: ${{ steps.candidate_refs.outputs.candidate_web_ref }}
+      api_prod_url: ${{ steps.current_state.outputs.api_prod_url }}
+      web_prod_url: ${{ steps.current_state.outputs.web_prod_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Stale guard before infra boundary
+        id: stale_preinfra
+        run: |
+          set +e
+          node scripts/deploy/assert-current-main-sha.mjs
+          code=$?
+          if [ "$code" -eq 0 ]; then
+            echo "is_stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_stale=true" >> "$GITHUB_OUTPUT"
+            echo "Stale candidate before infra boundary; skipping promotion steps."
+          fi
+          exit 0
+
       - name: Azure login (deploy identity)
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
@@ -58,9 +162,11 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Ensure Azure CLI extensions
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' }}
         run: az extension add --name containerapp --upgrade --only-show-errors
 
       - name: Verify required resources exist
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' }}
         run: |
           set -euo pipefail
 
@@ -95,53 +201,317 @@ jobs:
             for item in "${missing[@]}"; do
               printf ' - %s\n' "$item" >&2
             done
-            echo "Run .github/workflows/infra-apply.yml on main, then rerun deploy." >&2
+            echo "Run .github/workflows/infra-apply.yml, then rerun release." >&2
             exit 1
           fi
 
+      - name: Resolve current refs and production URLs
+        id: current_state
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' }}
+        run: |
+          set -euo pipefail
+
+          normalize_image_ref() {
+            local image="$1"
+            if [[ "$image" == *@sha256:* ]]; then
+              echo "$image"
+              return
+            fi
+
+            if [[ "$image" != "$ACR_REGISTRY/"* ]]; then
+              echo "Image is not in expected ACR registry: $image" >&2
+              return 1
+            fi
+
+            local repo_tag="${image#${ACR_REGISTRY}/}"
+            local repo="${repo_tag%%:*}"
+            local digest
+            digest="$(az acr repository show --name "$ACR_NAME" --image "$repo_tag" --query digest --output tsv)"
+
+            if [ -z "$digest" ]; then
+              echo "Failed to resolve digest for $image" >&2
+              return 1
+            fi
+
+            echo "$ACR_REGISTRY/$repo@$digest"
+          }
+
+          api_image="$(az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_API_APP_NAME" \
+            --query 'properties.template.containers[0].image' \
+            --output tsv)"
+
+          web_image="$(az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_WEB_APP_NAME" \
+            --query 'properties.template.containers[0].image' \
+            --output tsv)"
+
+          api_ref="$(normalize_image_ref "$api_image")"
+          web_ref="$(normalize_image_ref "$web_image")"
+
+          api_fqdn="$(az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_API_APP_NAME" \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)"
+
+          web_fqdn="$(az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_WEB_APP_NAME" \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)"
+
+          if [ -z "$api_fqdn" ] || [ -z "$web_fqdn" ]; then
+            echo "Failed to resolve production ingress FQDNs." >&2
+            exit 1
+          fi
+
+          echo "current_api_ref=$api_ref" >> "$GITHUB_OUTPUT"
+          echo "current_web_ref=$web_ref" >> "$GITHUB_OUTPUT"
+          echo "api_prod_url=https://$api_fqdn" >> "$GITHUB_OUTPUT"
+          echo "web_prod_url=https://$web_fqdn" >> "$GITHUB_OUTPUT"
+
+      - name: Apply infra updates
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && (env.KIND == 'infra' || env.NEEDS_INFRA == 'true') }}
+        env:
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          API_IMAGE: ${{ steps.current_state.outputs.current_api_ref }}
+          WEB_IMAGE: ${{ steps.current_state.outputs.current_web_ref }}
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/infra/$HEAD_SHA"
+
+          if [ -z "${POSTGRES_ADMIN_PASSWORD:-}" ]; then
+            echo "Missing required GitHub environment secret: POSTGRES_ADMIN_PASSWORD" >&2
+            exit 1
+          fi
+
+          providers=(
+            "Microsoft.App"
+            "Microsoft.ContainerService"
+            "Microsoft.Network"
+            "Microsoft.DBforPostgreSQL"
+            "Microsoft.OperationalInsights"
+          )
+          for namespace in "${providers[@]}"; do
+            state="$(az provider show --namespace "$namespace" --query registrationState -o tsv)"
+            if [ "$state" != "Registered" ]; then
+              az provider register --namespace "$namespace" --wait
+            fi
+          done
+
+          arm_auth_status="$(az acr config authentication-as-arm show \
+            --registry "$ACR_NAME" \
+            --query status \
+            --output tsv 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+          if [ "$arm_auth_status" != "enabled" ]; then
+            az acr config authentication-as-arm update \
+              --registry "$ACR_NAME" \
+              --status enabled \
+              --only-show-errors \
+              --output none
+          fi
+
+          jq -n \
+            --arg location "$AZURE_LOCATION" \
+            --arg vnetName "$AZURE_VNET_NAME" \
+            --arg acaSubnetName "$AZURE_ACA_SUBNET_NAME" \
+            --arg postgresSubnetName "$AZURE_POSTGRES_SUBNET_NAME" \
+            --arg privateDnsZoneName "$AZURE_PRIVATE_DNS_ZONE_NAME" \
+            --arg environmentName "$ACA_ENVIRONMENT_NAME" \
+            --arg logAnalyticsWorkspaceName "$AZURE_LOG_ANALYTICS_WORKSPACE_NAME" \
+            --arg apiAppName "$ACA_API_APP_NAME" \
+            --arg webAppName "$ACA_WEB_APP_NAME" \
+            --arg migrationJobName "$ACA_MIGRATE_JOB_NAME" \
+            --arg acrPullIdentityName "$ACR_PULL_IDENTITY_NAME" \
+            --arg acrName "$ACR_NAME" \
+            --arg acrSku "$ACR_SKU" \
+            --arg postgresServerName "$POSTGRES_SERVER_NAME" \
+            --arg postgresDatabaseName "$POSTGRES_DATABASE_NAME" \
+            --arg postgresAdminUsername "$POSTGRES_ADMIN_USERNAME" \
+            --arg postgresVersion "$POSTGRES_VERSION" \
+            --arg postgresSkuName "$POSTGRES_SKU_NAME" \
+            --arg postgresSkuTier "$POSTGRES_SKU_TIER" \
+            --arg postgresStorageMb "$POSTGRES_STORAGE_MB" \
+            --arg postgresAdminPassword "$POSTGRES_ADMIN_PASSWORD" \
+            --arg apiImage "$API_IMAGE" \
+            --arg webImage "$WEB_IMAGE" \
+            --arg entraIssuer "$ENTRA_ISSUER" \
+            --arg entraAudience "$ENTRA_AUDIENCE" \
+            --arg entraJwksUri "$ENTRA_JWKS_URI" \
+            '{
+              "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+              "contentVersion": "1.0.0.0",
+              "parameters": {
+                "location": {"value": $location},
+                "vnetName": {"value": $vnetName},
+                "acaSubnetName": {"value": $acaSubnetName},
+                "postgresSubnetName": {"value": $postgresSubnetName},
+                "privateDnsZoneName": {"value": $privateDnsZoneName},
+                "environmentName": {"value": $environmentName},
+                "logAnalyticsWorkspaceName": {"value": $logAnalyticsWorkspaceName},
+                "apiAppName": {"value": $apiAppName},
+                "webAppName": {"value": $webAppName},
+                "migrationJobName": {"value": $migrationJobName},
+                "acrPullIdentityName": {"value": $acrPullIdentityName},
+                "acrName": {"value": $acrName},
+                "acrSku": {"value": $acrSku},
+                "postgresServerName": {"value": $postgresServerName},
+                "postgresDatabaseName": {"value": $postgresDatabaseName},
+                "postgresAdminUsername": {"value": $postgresAdminUsername},
+                "postgresVersion": {"value": $postgresVersion},
+                "postgresSkuName": {"value": $postgresSkuName},
+                "postgresSkuTier": {"value": $postgresSkuTier},
+                "postgresStorageMb": {"value": ($postgresStorageMb | tonumber)},
+                "postgresAdminPassword": {"value": $postgresAdminPassword},
+                "apiImage": {"value": $apiImage},
+                "webImage": {"value": $webImage},
+                "entraIssuer": {"value": $entraIssuer},
+                "entraAudience": {"value": $entraAudience},
+                "entraJwksUri": {"value": $entraJwksUri}
+              }
+            }' > ".artifacts/infra/$HEAD_SHA/runtime.parameters.json"
+
+          az deployment group validate \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --template-file infra/azure/main.bicep \
+            --parameters @".artifacts/infra/$HEAD_SHA/runtime.parameters.json"
+
+          az deployment group create \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --template-file infra/azure/main.bicep \
+            --parameters @".artifacts/infra/$HEAD_SHA/runtime.parameters.json" \
+            --output json > ".artifacts/infra/$HEAD_SHA/deployment.json"
+
+      - name: Roll active revisions after infra apply
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && env.KIND == 'infra' && env.ROLLOUT == 'true' }}
+        run: |
+          set -euo pipefail
+
+          restart_active_revision() {
+            local app="$1"
+            local revision
+            revision="$(az containerapp revision list \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$app" \
+              --query "[?properties.active==\`true\`]|[0].name" \
+              --output tsv)"
+
+            if [ -z "$revision" ]; then
+              echo "No active revision found for $app" >&2
+              return 1
+            fi
+
+            az containerapp revision restart \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$app" \
+              --revision "$revision" \
+              --output none
+          }
+
+          restart_active_revision "$ACA_API_APP_NAME"
+          restart_active_revision "$ACA_WEB_APP_NAME"
+
       - name: Login to ACR
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && env.KIND == 'runtime' }}
         run: az acr login --name "$ACR_NAME" --only-show-errors
 
-      - name: Build and push API image to ACR
-        id: api_image
+      - name: Build and push runtime images
+        id: runtime_images
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && env.KIND == 'runtime' }}
         run: |
           set -euo pipefail
 
-          api_image="$ACR_REGISTRY/compass-api:$HEAD_SHA"
+          api_tag="$ACR_REGISTRY/compass-api:$HEAD_SHA"
+          web_tag="$ACR_REGISTRY/compass-web:$HEAD_SHA"
 
-          docker build -f apps/api/Dockerfile -t "$api_image" .
-          docker push "$api_image"
+          docker build -f apps/api/Dockerfile -t "$api_tag" .
+          docker push "$api_tag"
 
-          api_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$api_image" || true)
+          docker build -f apps/web/Dockerfile -t "$web_tag" .
+          docker push "$web_tag"
 
-          echo "api_image=$api_image" >> "$GITHUB_OUTPUT"
-          echo "api_digest=$api_digest" >> "$GITHUB_OUTPUT"
+          api_ref="$(docker inspect --format='{{index .RepoDigests 0}}' "$api_tag")"
+          web_ref="$(docker inspect --format='{{index .RepoDigests 0}}' "$web_tag")"
 
-      - name: Build and push Web image to ACR
-        id: web_image
+          echo "candidate_api_ref=$api_ref" >> "$GITHUB_OUTPUT"
+          echo "candidate_web_ref=$web_ref" >> "$GITHUB_OUTPUT"
+          echo "api_tag=$api_tag" >> "$GITHUB_OUTPUT"
+          echo "web_tag=$web_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve candidate refs
+        id: candidate_refs
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' }}
         run: |
           set -euo pipefail
 
-          web_image="$ACR_REGISTRY/compass-web:$HEAD_SHA"
+          if [ "$KIND" = "runtime" ]; then
+            api_ref='${{ steps.runtime_images.outputs.candidate_api_ref }}'
+            web_ref='${{ steps.runtime_images.outputs.candidate_web_ref }}'
+          else
+            api_ref='${{ steps.current_state.outputs.current_api_ref }}'
+            web_ref='${{ steps.current_state.outputs.current_web_ref }}'
+          fi
 
-          docker build -f apps/web/Dockerfile -t "$web_image" .
-          docker push "$web_image"
+          echo "candidate_api_ref=$api_ref" >> "$GITHUB_OUTPUT"
+          echo "candidate_web_ref=$web_ref" >> "$GITHUB_OUTPUT"
 
-          web_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$web_image" || true)
+      - name: Write candidate manifest artifact
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' }}
+        run: |
+          mkdir -p ".artifacts/deploy/$HEAD_SHA" ".artifacts/release/$HEAD_SHA"
+          cat > ".artifacts/deploy/$HEAD_SHA/candidate-manifest.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "kind": "$KIND",
+            "current": {
+              "api": "${{ steps.current_state.outputs.current_api_ref }}",
+              "web": "${{ steps.current_state.outputs.current_web_ref }}"
+            },
+            "candidate": {
+              "api": "${{ steps.candidate_refs.outputs.candidate_api_ref }}",
+              "web": "${{ steps.candidate_refs.outputs.candidate_web_ref }}"
+            }
+          }
+          JSON
+          cp ".artifacts/deploy/$HEAD_SHA/candidate-manifest.json" ".artifacts/release/$HEAD_SHA/manifest.json"
 
-          echo "web_image=$web_image" >> "$GITHUB_OUTPUT"
-          echo "web_digest=$web_digest" >> "$GITHUB_OUTPUT"
+      - name: Stale guard before migration+deploy boundary
+        id: stale_preboundary
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' }}
+        run: |
+          if [ "$KIND" != "runtime" ]; then
+            echo "is_stale=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          set +e
+          node scripts/deploy/assert-current-main-sha.mjs
+          code=$?
+          if [ "$code" -eq 0 ]; then
+            echo "is_stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_stale=true" >> "$GITHUB_OUTPUT"
+            echo "Stale candidate before migration+deploy boundary; skipping runtime promotion."
+          fi
+          exit 0
 
       - name: Update migration job image
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && env.KIND == 'runtime' && steps.stale_preboundary.outputs.is_stale != 'true' }}
         run: |
           az containerapp job update \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "$ACA_MIGRATE_JOB_NAME" \
-            --image "${{ steps.api_image.outputs.api_image }}" \
+            --image "${{ steps.candidate_refs.outputs.candidate_api_ref }}" \
             --output none
 
       - name: Run migration job
         id: migration_start
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && env.KIND == 'runtime' && env.NEEDS_MIGRATIONS == 'true' && steps.stale_preboundary.outputs.is_stale != 'true' }}
         env:
           AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
           ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
@@ -149,6 +519,7 @@ jobs:
 
       - name: Wait for migration completion
         id: migration_wait
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && env.KIND == 'runtime' && env.NEEDS_MIGRATIONS == 'true' && steps.stale_preboundary.outputs.is_stale != 'true' }}
         env:
           AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
           ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
@@ -156,51 +527,26 @@ jobs:
           MIGRATION_TIMEOUT_SECONDS: 900
         run: node scripts/deploy/wait-migration-job.mjs
 
-      - name: Guard stale main SHA (pre-rollout)
-        run: node scripts/deploy/assert-current-main-sha.mjs
-
       - name: Deploy API via ACA deploy action
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && env.KIND == 'runtime' && steps.stale_preboundary.outputs.is_stale != 'true' }}
         uses: azure/container-apps-deploy-action@v1
         with:
-          imageToDeploy: ${{ steps.api_image.outputs.api_image }}
+          imageToDeploy: ${{ steps.candidate_refs.outputs.candidate_api_ref }}
           containerAppName: ${{ env.ACA_API_APP_NAME }}
           resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
           disableTelemetry: true
 
       - name: Deploy Web via ACA deploy action
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && env.KIND == 'runtime' && steps.stale_preboundary.outputs.is_stale != 'true' }}
         uses: azure/container-apps-deploy-action@v1
         with:
-          imageToDeploy: ${{ steps.web_image.outputs.web_image }}
+          imageToDeploy: ${{ steps.candidate_refs.outputs.candidate_web_ref }}
           containerAppName: ${{ env.ACA_WEB_APP_NAME }}
           resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
           disableTelemetry: true
 
-      - name: Resolve production URLs
-        id: prod_urls
-        run: |
-          set -euo pipefail
-
-          api_fqdn=$(az containerapp show \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$ACA_API_APP_NAME" \
-            --query properties.configuration.ingress.fqdn \
-            --output tsv)
-
-          web_fqdn=$(az containerapp show \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$ACA_WEB_APP_NAME" \
-            --query properties.configuration.ingress.fqdn \
-            --output tsv)
-
-          if [ -z "$api_fqdn" ] || [ -z "$web_fqdn" ]; then
-            echo "Failed to resolve production ingress FQDNs." >&2
-            exit 1
-          fi
-
-          echo "api_prod_url=https://$api_fqdn" >> "$GITHUB_OUTPUT"
-          echo "web_prod_url=https://$web_fqdn" >> "$GITHUB_OUTPUT"
-
       - name: Assert single-revision and scale drift policy
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && (env.KIND == 'infra' || (env.KIND == 'runtime' && steps.stale_preboundary.outputs.is_stale != 'true')) }}
         run: |
           set -euo pipefail
 
@@ -271,7 +617,6 @@ jobs:
                 break
               fi
 
-              echo "$app active revision count=${active_count:-0}, latestRevision=$latest_revision, activeRevision=$active_revision; waiting for single-revision convergence (attempt $attempt/12)"
               sleep 10
             done
 
@@ -282,6 +627,7 @@ jobs:
           done
 
       - name: Azure login (smoke identity)
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && (env.KIND == 'infra' || (env.KIND == 'runtime' && steps.stale_preboundary.outputs.is_stale != 'true')) }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_SMOKE_CLIENT_ID }}
@@ -290,6 +636,7 @@ jobs:
 
       - name: Acquire Entra smoke token
         id: token
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && (env.KIND == 'infra' || (env.KIND == 'runtime' && steps.stale_preboundary.outputs.is_stale != 'true')) }}
         run: |
           audience="${{ vars.ENTRA_AUDIENCE }}"
           if [[ "$audience" == */.default ]]; then
@@ -303,22 +650,25 @@ jobs:
           echo "smoke_token=$smoke_token" >> "$GITHUB_OUTPUT"
 
       - name: API smoke verification
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && (env.KIND == 'infra' || (env.KIND == 'runtime' && steps.stale_preboundary.outputs.is_stale != 'true')) }}
         env:
-          TARGET_API_BASE_URL: ${{ steps.prod_urls.outputs.api_prod_url }}
+          TARGET_API_BASE_URL: ${{ steps.current_state.outputs.api_prod_url }}
           ACCESS_TOKEN: ${{ steps.token.outputs.smoke_token }}
           EXPECTED_EMPLOYEE_ID: ${{ vars.SMOKE_EXPECTED_ACCOUNT_IDENTITY }}
           REQUIRE_EMPLOYEE_FOUND: ${{ vars.SMOKE_REQUIRE_EMPLOYEE_FOUND }}
         run: node scripts/deploy/verify-api-smoke.mjs
 
       - name: Install Playwright browser
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && (env.KIND == 'infra' || (env.KIND == 'runtime' && steps.stale_preboundary.outputs.is_stale != 'true')) }}
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Browser evidence
+        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && (env.KIND == 'infra' || (env.KIND == 'runtime' && steps.stale_preboundary.outputs.is_stale != 'true')) }}
         env:
           HEAD_SHA: ${{ env.HEAD_SHA }}
           PR_NUMBER: 0
           RISK_TIER: t3
-          WEB_BASE_URL: ${{ steps.prod_urls.outputs.web_prod_url }}
+          WEB_BASE_URL: ${{ steps.current_state.outputs.web_prod_url }}
           BROWSER_SMOKE_BEARER_TOKEN: ${{ steps.token.outputs.smoke_token }}
           BROWSER_SMOKE_PAYLOAD_TIMEOUT_MS: "45000"
           EXPECTED_ENTRYPOINT: /
@@ -335,33 +685,33 @@ jobs:
         if: ${{ always() }}
         env:
           JOB_STATUS: ${{ job.status }}
-          API_IMAGE: ${{ steps.api_image.outputs.api_image }}
-          WEB_IMAGE: ${{ steps.web_image.outputs.web_image }}
-          MIGRATE_IMAGE: ${{ steps.api_image.outputs.api_image }}
-          MIGRATE_DIGEST: ${{ steps.api_image.outputs.api_digest }}
-          API_PROD_URL: ${{ steps.prod_urls.outputs.api_prod_url }}
-          WEB_PROD_URL: ${{ steps.prod_urls.outputs.web_prod_url }}
         run: |
-          mkdir -p ".artifacts/deploy/$HEAD_SHA"
+          mkdir -p ".artifacts/deploy/$HEAD_SHA" ".artifacts/release/$HEAD_SHA"
           cat > ".artifacts/deploy/$HEAD_SHA/result.json" <<JSON
           {
             "schemaVersion": "1",
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "headSha": "$HEAD_SHA",
             "tier": "$RISK_TIER",
+            "kind": "$KIND",
+            "stale": {
+              "beforeInfra": "${{ steps.stale_preinfra.outputs.is_stale || 'false' }}",
+              "beforeBoundary": "${{ steps.stale_preboundary.outputs.is_stale || 'false' }}"
+            },
             "status": "${JOB_STATUS:-unknown}",
             "images": {
-              "api": "$API_IMAGE",
-              "web": "$WEB_IMAGE",
-              "migrate": "$MIGRATE_IMAGE",
-              "migrateDigest": "$MIGRATE_DIGEST"
+              "currentApi": "${{ steps.current_state.outputs.current_api_ref }}",
+              "currentWeb": "${{ steps.current_state.outputs.current_web_ref }}",
+              "candidateApi": "${{ steps.candidate_refs.outputs.candidate_api_ref }}",
+              "candidateWeb": "${{ steps.candidate_refs.outputs.candidate_web_ref }}"
             },
             "urls": {
-              "api": "$API_PROD_URL",
-              "web": "$WEB_PROD_URL"
+              "api": "${{ steps.current_state.outputs.api_prod_url }}",
+              "web": "${{ steps.current_state.outputs.web_prod_url }}"
             }
           }
           JSON
+          cp ".artifacts/deploy/$HEAD_SHA/result.json" ".artifacts/release/$HEAD_SHA/result.json"
 
       - name: Upload deploy artifacts
         if: ${{ always() }}
@@ -377,4 +727,83 @@ jobs:
         with:
           name: browser-evidence-${{ env.HEAD_SHA }}
           path: .artifacts/browser-evidence/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
+
+      - name: Upload infra artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-apply-${{ env.HEAD_SHA }}
+          path: .artifacts/infra/${{ env.HEAD_SHA }}
+          if-no-files-found: ignore
+
+      - name: Upload release artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ env.HEAD_SHA }}
+          path: .artifacts/release/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
+
+  report:
+    name: report
+    needs:
+      - classify
+      - validate
+      - promote
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write release summary
+        env:
+          HEAD_SHA: ${{ github.sha }}
+          KIND: ${{ needs.classify.outputs.kind }}
+          ROLLOUT: ${{ needs.classify.outputs.rollout }}
+          NEEDS_INFRA: ${{ needs.classify.outputs.needs_infra }}
+          NEEDS_MIGRATIONS: ${{ needs.classify.outputs.needs_migrations }}
+          CHECKS_RESULT: ${{ needs.validate.result }}
+          PROMOTE_RESULT: ${{ needs.promote.result }}
+          STALE_PREINFRA: ${{ needs.promote.outputs.stale_preinfra }}
+          STALE_PREBOUNDARY: ${{ needs.promote.outputs.stale_preboundary }}
+          CURRENT_API_REF: ${{ needs.promote.outputs.current_api_ref }}
+          CURRENT_WEB_REF: ${{ needs.promote.outputs.current_web_ref }}
+          CANDIDATE_API_REF: ${{ needs.promote.outputs.candidate_api_ref }}
+          CANDIDATE_WEB_REF: ${{ needs.promote.outputs.candidate_web_ref }}
+          API_PROD_URL: ${{ needs.promote.outputs.api_prod_url }}
+          WEB_PROD_URL: ${{ needs.promote.outputs.web_prod_url }}
+        run: |
+          mkdir -p ".artifacts/release/$HEAD_SHA"
+          cat > ".artifacts/release/$HEAD_SHA/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "kind": "$KIND",
+            "rollout": "$ROLLOUT",
+            "needsInfra": "$NEEDS_INFRA",
+            "needsMigrations": "$NEEDS_MIGRATIONS",
+            "checksResult": "${CHECKS_RESULT:-skipped}",
+            "promoteResult": "${PROMOTE_RESULT:-skipped}",
+            "stale": {
+              "beforeInfra": "${STALE_PREINFRA:-false}",
+              "beforeBoundary": "${STALE_PREBOUNDARY:-false}"
+            },
+            "refs": {
+              "currentApi": "${CURRENT_API_REF:-}",
+              "currentWeb": "${CURRENT_WEB_REF:-}",
+              "candidateApi": "${CANDIDATE_API_REF:-}",
+              "candidateWeb": "${CANDIDATE_WEB_REF:-}"
+            },
+            "urls": {
+              "api": "${API_PROD_URL:-}",
+              "web": "${WEB_PROD_URL:-}"
+            }
+          }
+          JSON
+
+      - name: Upload release summary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-summary-${{ github.sha }}
+          path: .artifacts/release/${{ github.sha }}/result.json
           if-no-files-found: warn

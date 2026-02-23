@@ -85,4 +85,7 @@ compass/
 
 ## References
 
-- Testing philosophy: `docs/testing.md`
+- Testing philosophy: `tests/README.md`
+- Testing enforcement: `tests/GUARDRAILS.md`
+- Testing quarantine: `tests/QUARANTINE.md`
+- Testing troubleshooting: `tests/TROUBLESHOOTING.md`

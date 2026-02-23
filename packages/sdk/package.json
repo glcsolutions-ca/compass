@@ -15,7 +15,7 @@
     "build": "tsc -p tsconfig.build.json",
     "generate": "openapi-typescript ../contracts/openapi/openapi.json --output src/generated/schema.ts",
     "lint": "eslint . --ext .ts --max-warnings=0",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --config vitest.config.mts --passWithNoTests",
     "typecheck": "tsc -p tsconfig.ref.json --noEmit"
   },
   "dependencies": {

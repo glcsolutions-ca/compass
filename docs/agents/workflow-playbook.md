@@ -36,7 +36,7 @@ pnpm ci:gate
 7. Merge queue converges `main`; direct admin bypass is not part of normal flow.
 8. Merge to `main` runs one release pipeline: `classify`, `checks`, `promote`, `report`.
 9. `classify` diffs `base_sha` (last successful production deployment SHA) to `head_sha`.
-10. `promote` is the only production-mutating job (`environment: production`, `concurrency: prod-main`).
+10. Production mutation uses a shared lock (`concurrency: production-mutation`) across `deploy.yml` (`promote`) and `infra-apply.yml` (`bicep_apply`), both in `environment: production`.
 11. Stale guards run only before infra and before migration+deploy boundary.
 12. Runtime releases build once, promote digest refs, run migration+deploy atomically, then run smoke + browser evidence.
 13. Successful promotions are recorded in GitHub Deployments (`production`) and become the next `base_sha`.

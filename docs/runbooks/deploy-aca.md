@@ -30,8 +30,8 @@ All concrete deploy values must be stored in the GitHub `production` environment
 - Main workflow name: `Release Candidate (main)`
 - Trigger: `push` to `main`, `workflow_dispatch`
 - Job model: `classify -> checks -> promote -> report`
-- Concurrency: serialized only on `promote` (`prod-main`)
-- GitHub environment: `production` only on `promote`
+- Concurrency: production mutation is serialized across `deploy.yml` (`promote`) and `infra-apply.yml` (`bicep_apply`) via shared lock `production-mutation` (`cancel-in-progress: false`)
+- GitHub environment: `production` is used by `promote` and `infra-apply`
 - Infra helper workflow: `.github/workflows/infra-apply.yml` (`workflow_call` + manual dispatch, no push trigger)
 
 ## Required GitHub Environment Variables (`production`)
@@ -128,7 +128,7 @@ Optional custom domain variables (leave unset to keep default ACA hostnames):
 ## Latest-Head Semantics
 
 - Production converges to the latest `main` head.
-- Pending runs may be superseded by newer commits due to GitHub concurrency behavior.
+- Shared lock queue behavior is native GitHub concurrency: one running + one pending; newer pending runs supersede older pending runs for the same lock.
 - Stale runs are skipped before irreversible mutation boundaries.
 - Classification diff is `base_sha..head_sha`, so skipped pending commits are still included by the next head run.
 

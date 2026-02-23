@@ -85,7 +85,7 @@ jobs:
     environment: production
     timeout-minutes: 60
     concurrency:
-      group: prod-main
+      group: production-mutation
       cancel-in-progress: false
     env:
       HEAD_SHA: ${{ github.sha }}
@@ -350,6 +350,7 @@ jobs:
           ACA_API_MANAGED_CERTIFICATE_NAME: ${{ steps.managed_certificate_contract.outputs.api_managed_certificate_name }}
           ACA_WEB_MANAGED_CERTIFICATE_NAME: ${{ steps.managed_certificate_contract.outputs.web_managed_certificate_name }}
           ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
+          ARM_DEPLOYMENT_NAME: main-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
           mkdir -p ".artifacts/infra/$HEAD_SHA"
@@ -458,45 +459,11 @@ jobs:
               }
             }' > ".artifacts/infra/$HEAD_SHA/runtime.parameters.json"
 
-          az deployment group validate \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --template-file infra/azure/main.bicep \
-            --parameters @".artifacts/infra/$HEAD_SHA/runtime.parameters.json"
+          export ARM_TEMPLATE_FILE="infra/azure/main.bicep"
+          export ARM_PARAMETERS_FILE=".artifacts/infra/$HEAD_SHA/runtime.parameters.json"
+          export ARM_ARTIFACT_DIR=".artifacts/infra/$HEAD_SHA"
 
-          stderr_path=".artifacts/infra/$HEAD_SHA/deployment.stderr.log"
-          attempts_path=".artifacts/infra/$HEAD_SHA/deployment-attempts.log"
-          : > "$attempts_path"
-
-          transient_pattern='(OperationExpired|GatewayTimeout|TooManyRequests|ResourceNotReady|another operation is in progress|OperationInProgress|retryable|temporar|timeout|timed out)'
-
-          run_apply() {
-            az deployment group create \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --template-file infra/azure/main.bicep \
-              --parameters @".artifacts/infra/$HEAD_SHA/runtime.parameters.json" \
-              --output json > ".artifacts/infra/$HEAD_SHA/deployment.json" 2> "$stderr_path"
-          }
-
-          for attempt in 1 2; do
-            echo "attempt=$attempt startedAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$attempts_path"
-
-            if run_apply; then
-              echo "attempt=$attempt status=success finishedAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$attempts_path"
-              break
-            fi
-
-            if [ "$attempt" -eq 1 ] && grep -Eiq "$transient_pattern" "$stderr_path"; then
-              echo "attempt=$attempt status=retry transient=true finishedAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$attempts_path"
-              echo "Transient infra apply failure detected; retrying once in 20 seconds..."
-              sleep 20
-              continue
-            fi
-
-            echo "attempt=$attempt status=failed transient=false finishedAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$attempts_path"
-            echo "Infra apply failed with terminal diagnostics:" >&2
-            cat "$stderr_path" >&2
-            exit 1
-          done
+          node scripts/deploy/apply-bicep-template.mjs
 
       - name: Roll active revisions after infra apply
         if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && env.KIND == 'infra' && env.ROLLOUT == 'true' }}

@@ -34,20 +34,27 @@ If multiple tiers match, highest tier wins.
 
 1. `risk-policy-preflight` (includes docs-drift evaluation)
 2. `codex-review` (conditional)
-3. `ci-pipeline`
-4. `browser-evidence` (conditional)
-5. `harness-smoke` (conditional)
-6. `risk-policy-gate` (final fail-closed enforcement)
+3. `ci-pipeline-fast` or `ci-pipeline-full` (selected by tier)
+4. `ci-pipeline` (aggregates lane result into one stable required check)
+5. `browser-evidence` (conditional)
+6. `harness-smoke` (conditional)
+7. `risk-policy-gate` (final fail-closed enforcement)
 
-## `ci-pipeline` Modes
+## Tier Matrix
 
-`ci-pipeline` keeps one stable check name, but runs one of two internal lanes:
+| Tier   | Mode   | Required checks                                                                   |
+| ------ | ------ | --------------------------------------------------------------------------------- |
+| `t0`   | `fast` | `risk-policy-gate`, `ci-pipeline`                                                 |
+| `deps` | `full` | `risk-policy-gate`, `ci-pipeline`                                                 |
+| `t1`   | `full` | `risk-policy-gate`, `ci-pipeline`                                                 |
+| `t2`   | `full` | `risk-policy-gate`, `ci-pipeline`, `browser-evidence`                             |
+| `t3`   | `full` | `risk-policy-gate`, `ci-pipeline`, `harness-smoke`, `codex-review` (when enabled) |
 
-- `fast` mode for `t0`
-- `full` mode for `deps`, `t1`, `t2`, `t3`
+`ci-pipeline` remains the only required CI check name for branch protection. Internally:
 
-`fast` mode runs lightweight repo checks only.
-`full` mode runs Postgres-backed integration flow plus full pipeline checks.
+- `ci-pipeline-fast` runs lightweight repo checks only.
+- `ci-pipeline-full` runs Postgres-backed integration flow plus full pipeline checks.
+- `ci-pipeline` validates that the correct lane ran and succeeded for the current `ci_mode`.
 
 ## Bootstrap review mode
 
@@ -109,13 +116,17 @@ flowchart TD
   A["PR opened or synchronized"] --> B["risk-policy-preflight (+ docs-drift)"]
   B --> D{"codex-review required?"}
   D -- Yes --> DR["codex-review"]
-  B --> E["ci-pipeline"]
+  B --> E{"ci_mode"}
+  E -- fast --> EF["ci-pipeline-fast"]
+  E -- full --> EL["ci-pipeline-full"]
+  EF --> EA["ci-pipeline (aggregator)"]
+  EL --> EA["ci-pipeline (aggregator)"]
   B --> F{"browser-evidence required?"}
   B --> G{"harness-smoke required?"}
   F -- Yes --> H["browser-evidence"]
   G -- Yes --> I["harness-smoke"]
   DR --> J["risk-policy-gate"]
-  E --> J["risk-policy-gate"]
+  EA --> J["risk-policy-gate"]
   H --> J
   I --> J
   J --> K{"all required checks valid for current head SHA?"}

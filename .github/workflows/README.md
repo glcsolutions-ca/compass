@@ -47,3 +47,4 @@ Related references:
 
 - Policy contract: `.github/policy/merge-policy.json`
 - Agent docs: `docs/agents/README.md`
+- Governance verification: `docs/runbooks/github-governance-verification.md`

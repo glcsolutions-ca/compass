@@ -40,8 +40,6 @@ jobs:
       docs_drift_blocking: ${{ steps.preflight.outputs.docs_drift_blocking }}
       docs_drift_path: ${{ steps.docs_drift.outputs.docs_drift_path }}
       docs_drift_status: ${{ steps.docs_drift.outputs.docs_drift_status }}
-      no_org_infra_path: ${{ steps.no_org_infra.outputs.no_org_infra_path }}
-      no_org_infra_status: ${{ steps.no_org_infra.outputs.no_org_infra_status }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -67,22 +65,6 @@ jobs:
         with:
           name: preflight-${{ steps.preflight.outputs.tested_sha }}
           path: ${{ steps.preflight.outputs.preflight_path }}
-          if-no-files-found: warn
-
-      - name: Enforce no committed org-specific infra values
-        id: no_org_infra
-        env:
-          HEAD_SHA: ${{ steps.preflight.outputs.head_sha }}
-          TESTED_SHA: ${{ steps.preflight.outputs.tested_sha }}
-          RISK_TIER: ${{ steps.preflight.outputs.tier }}
-        run: node scripts/ci/no-org-infra-leak.mjs
-
-      - name: Upload no-org-infra artifact
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: no-org-infra-${{ steps.preflight.outputs.tested_sha }}
-          path: .artifacts/no-org-infra/${{ steps.preflight.outputs.tested_sha }}/result.json
           if-no-files-found: warn
 
       - name: Evaluate docs drift

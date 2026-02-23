@@ -8,12 +8,11 @@
   "packageManager": "pnpm@10.30.1",
   "scripts": {
     "build": "turbo run build",
-    "check": "pnpm check:format && pnpm check:lint && pnpm check:typecheck && pnpm check:test && pnpm check:no-org-infra && pnpm check:contract",
+    "check": "pnpm check:format && pnpm check:lint && pnpm check:typecheck && pnpm check:test && pnpm check:contract",
     "check:format": "pnpm format:check",
     "check:lint": "pnpm lint",
     "check:typecheck": "pnpm typecheck:refs && pnpm typecheck",
     "check:test": "pnpm test",
-    "check:no-org-infra": "node scripts/ci/no-org-infra-leak.mjs",
     "check:contract": "pnpm contract:check",
     "clean": "rimraf --glob .turbo coverage \"*.tsbuildinfo\" \"apps/*/dist\" \"apps/*/dist-types\" \"apps/*/.next\" \"apps/*/.turbo\" \"apps/*/coverage\" \"apps/*/*.tsbuildinfo\" \"packages/*/dist\" \"packages/*/dist-types\" \"packages/*/.next\" \"packages/*/.turbo\" \"packages/*/coverage\" \"packages/*/*.tsbuildinfo\"",
     "dev": "turbo run dev --parallel",

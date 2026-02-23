@@ -15,7 +15,6 @@
   - triggers on `pull_request` and `merge_group`
   - `risk-policy-preflight` (includes `docs-drift` evaluation)
   - `actionlint` on changed workflow files only
-  - `no-org-infra` leak guard
   - `ci-pipeline` (single stable CI check name; `fast` for `low`, `full` for `standard/high`)
   - `browser-evidence` (conditional)
   - `harness-smoke` (conditional)

@@ -23,6 +23,31 @@ async function main() {
   const policy = await loadMergePolicy(policyPath);
   const drift = evaluateDocsDrift(policy, changedFiles);
   const status = drift.shouldBlock ? "fail" : "pass";
+  const reasons = drift.reasonCodes.map((code) => {
+    if (code === "DOCS_DRIFT_BLOCKING_DOC_TARGET_MISSING") {
+      return {
+        code,
+        blocking: true,
+        message:
+          "Docs-critical paths changed without matching updates in configured docs target paths."
+      };
+    }
+
+    if (code === "DOCS_DRIFT_ADVISORY_DOC_TARGET_MISSING") {
+      return {
+        code,
+        blocking: false,
+        message:
+          "Control-plane paths changed without matching docs target updates. This is advisory for this diff."
+      };
+    }
+
+    return {
+      code,
+      blocking: false,
+      message: "Docs drift policy reported an unspecified reason code."
+    };
+  });
 
   const resultPath = path.join(".artifacts", "docs-drift", testedSha, "result.json");
   const payload = {
@@ -32,6 +57,8 @@ async function main() {
     testedSha,
     tier,
     status,
+    reasonCodes: drift.reasonCodes,
+    reasons,
     ...drift
   };
 
@@ -44,8 +71,28 @@ async function main() {
   });
 
   if (drift.shouldBlock) {
-    console.error("Docs drift blocking: docs-critical paths changed without docTargets updates.");
+    console.error(
+      [
+        "DOCS_DRIFT_BLOCKING_DOC_TARGET_MISSING",
+        "Docs drift blocking: docs-critical paths changed without docTargets updates.",
+        `Docs-critical changed paths: ${drift.docsCriticalPathsChanged.join(", ") || "(none)"}`,
+        `Docs target updates found: ${drift.touchedDocTargets.join(", ") || "(none)"}`,
+        `Expected docs target globs: ${drift.expectedDocTargets.join(", ")}`
+      ].join("\n")
+    );
     process.exit(1);
+  }
+
+  if (drift.reasonCodes.length > 0) {
+    console.info(
+      [
+        "Docs drift advisory:",
+        `Reason codes: ${drift.reasonCodes.join(", ")}`,
+        `Blocking-path changes: ${drift.blockingPathsChanged.join(", ") || "(none)"}`,
+        `Docs target updates found: ${drift.touchedDocTargets.join(", ") || "(none)"}`,
+        `Expected docs target globs: ${drift.expectedDocTargets.join(", ")}`
+      ].join("\n")
+    );
   }
 
   console.info(`Docs drift passed (${resultPath})`);

@@ -16,7 +16,9 @@ const policy = loadMergePolicyObject({
     low: ["**"]
   },
   mergePolicy: {
-    high: { requiredChecks: ["risk-policy-gate", "ci-pipeline", "harness-smoke"] },
+    high: {
+      requiredChecks: ["risk-policy-gate", "ci-pipeline", "harness-smoke", "migration-image-smoke"]
+    },
     standard: { requiredChecks: ["risk-policy-gate", "ci-pipeline"] },
     low: { requiredChecks: ["risk-policy-gate", "ci-pipeline"] }
   },
@@ -77,6 +79,14 @@ describe("required checks", () => {
     const checks = computeRequiredChecks(policy, "high", ["apps/web/src/app/page.tsx"]);
     expect(checks).toContain("browser-evidence");
     expect(checks).toContain("harness-smoke");
+    expect(checks).not.toContain("migration-image-smoke");
+  });
+
+  it("requires migration-image-smoke for high-tier migration paths", () => {
+    const checks = computeRequiredChecks(policy, "high", [
+      "db/migrations/202602230001_add_table.ts"
+    ]);
+    expect(checks).toContain("migration-image-smoke");
   });
 
   it("keeps standard tier checks minimal", () => {
@@ -86,14 +96,22 @@ describe("required checks", () => {
 });
 
 describe("docs drift", () => {
-  it("does not block control-plane changes outside docs-critical paths", () => {
+  it("records advisory reason codes for control-plane changes outside docs-critical paths", () => {
     const result = evaluateDocsDrift(policy, [".github/workflows/merge-contract.yml"]);
     expect(result.shouldBlock).toBe(false);
+    expect(result.reasonCodes).toEqual(["DOCS_DRIFT_ADVISORY_DOC_TARGET_MISSING"]);
+    expect(result.blockingPathsChanged).toEqual([".github/workflows/merge-contract.yml"]);
   });
 
   it("blocks docs-critical changes without docs updates", () => {
     const result = evaluateDocsDrift(policy, ["packages/contracts/openapi/schema.ts"]);
     expect(result.shouldBlock).toBe(true);
+    expect(result.reasonCodes).toEqual(["DOCS_DRIFT_BLOCKING_DOC_TARGET_MISSING"]);
+    expect(result.docsCriticalPathsChanged).toEqual(["packages/contracts/openapi/schema.ts"]);
+    expect(result.expectedDocTargets).toEqual([
+      "docs/merge-policy.md",
+      "docs/branch-protection.md"
+    ]);
   });
 
   it("passes when docs target is updated", () => {
@@ -103,6 +121,8 @@ describe("docs drift", () => {
     ]);
 
     expect(result.shouldBlock).toBe(false);
+    expect(result.reasonCodes).toEqual([]);
+    expect(result.touchedDocTargets).toEqual(["docs/merge-policy.md"]);
   });
 });
 

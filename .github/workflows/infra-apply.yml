@@ -208,25 +208,44 @@ jobs:
 
           acr_registry="${ACR_NAME}.azurecr.io"
 
-          normalize_image_ref() {
+          resolve_to_digest_ref() {
             local image="$1"
-            if [[ "$image" == *@sha256:* ]]; then
-              echo "$image"
-              return
-            fi
 
             if [[ "$image" != "$acr_registry/"* ]]; then
               echo "Image is not in expected ACR registry: $image" >&2
               return 1
             fi
 
-            local repo_tag="${image#${acr_registry}/}"
-            local repo="${repo_tag%%:*}"
+            local repo_ref="${image#${acr_registry}/}"
+            local repo
             local digest
-            digest="$(az acr repository show --name "$ACR_NAME" --image "$repo_tag" --query digest --output tsv)"
+
+            if [[ "$repo_ref" == *@sha256:* ]]; then
+              repo="${repo_ref%%@*}"
+              digest="${repo_ref#*@}"
+              local resolved_digest
+              resolved_digest="$(az acr repository show \
+                --name "$ACR_NAME" \
+                --image "$repo@$digest" \
+                --query digest \
+                --output tsv 2>/dev/null || true)"
+              if [ -z "$resolved_digest" ]; then
+                echo "Image digest was not found in ACR: $image" >&2
+                return 1
+              fi
+              echo "$acr_registry/$repo@$resolved_digest"
+              return
+            fi
+
+            repo="${repo_ref%%:*}"
+            digest="$(az acr repository show \
+              --name "$ACR_NAME" \
+              --image "$repo_ref" \
+              --query digest \
+              --output tsv 2>/dev/null || true)"
 
             if [ -z "$digest" ]; then
-              echo "Failed to resolve digest for $image" >&2
+              echo "Image tag was not found in ACR: $image" >&2
               return 1
             fi
 
@@ -236,13 +255,7 @@ jobs:
           resolve_from_tag() {
             local repo="$1"
             local tag="$2"
-            local digest
-            digest="$(az acr repository show --name "$ACR_NAME" --image "$repo:$tag" --query digest --output tsv)"
-            if [ -z "$digest" ]; then
-              echo "Failed to resolve digest for $repo:$tag" >&2
-              return 1
-            fi
-            echo "$acr_registry/$repo@$digest"
+            resolve_to_digest_ref "$acr_registry/$repo:$tag"
           }
 
           if [ "$EVENT_NAME" = "workflow_call" ]; then
@@ -250,8 +263,8 @@ jobs:
               echo "workflow_call requires api_image_ref and web_image_ref" >&2
               exit 1
             fi
-            api_image_ref="$(normalize_image_ref "$WORKFLOW_API_IMAGE_REF")"
-            web_image_ref="$(normalize_image_ref "$WORKFLOW_WEB_IMAGE_REF")"
+            api_image_ref="$(resolve_to_digest_ref "$WORKFLOW_API_IMAGE_REF")"
+            web_image_ref="$(resolve_to_digest_ref "$WORKFLOW_WEB_IMAGE_REF")"
           elif [ -n "${TARGET_IMAGE_TAG:-}" ]; then
             if ! [[ "$TARGET_IMAGE_TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
               echo "Invalid image tag: $TARGET_IMAGE_TAG" >&2
@@ -272,8 +285,8 @@ jobs:
               --query 'properties.template.containers[0].image' \
               --output tsv)"
 
-            api_image_ref="$(normalize_image_ref "$api_image")"
-            web_image_ref="$(normalize_image_ref "$web_image")"
+            api_image_ref="$(resolve_to_digest_ref "$api_image")"
+            web_image_ref="$(resolve_to_digest_ref "$web_image")"
           fi
 
           echo "api_image_ref=$api_image_ref" >> "$GITHUB_OUTPUT"
@@ -386,11 +399,43 @@ jobs:
 
       - name: Apply Bicep template
         run: |
-          az deployment group create \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --template-file infra/azure/main.bicep \
-            --parameters @.artifacts/infra/$HEAD_SHA/runtime.parameters.json \
-            --output json > .artifacts/infra/$HEAD_SHA/deployment.json
+          set -euo pipefail
+
+          mkdir -p ".artifacts/infra/$HEAD_SHA"
+          stderr_path=".artifacts/infra/$HEAD_SHA/deployment.stderr.log"
+          attempts_path=".artifacts/infra/$HEAD_SHA/deployment-attempts.log"
+          : > "$attempts_path"
+
+          transient_pattern='(OperationExpired|GatewayTimeout|TooManyRequests|ResourceNotReady|another operation is in progress|OperationInProgress|retryable|temporar|timeout|timed out)'
+
+          run_apply() {
+            az deployment group create \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --template-file infra/azure/main.bicep \
+              --parameters @.artifacts/infra/$HEAD_SHA/runtime.parameters.json \
+              --output json > .artifacts/infra/$HEAD_SHA/deployment.json 2> "$stderr_path"
+          }
+
+          for attempt in 1 2; do
+            echo "attempt=$attempt startedAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$attempts_path"
+
+            if run_apply; then
+              echo "attempt=$attempt status=success finishedAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$attempts_path"
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 1 ] && grep -Eiq "$transient_pattern" "$stderr_path"; then
+              echo "attempt=$attempt status=retry transient=true finishedAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$attempts_path"
+              echo "Transient infra apply failure detected; retrying once in 20 seconds..."
+              sleep 20
+              continue
+            fi
+
+            echo "attempt=$attempt status=failed transient=false finishedAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$attempts_path"
+            echo "Infra apply failed with terminal diagnostics:" >&2
+            cat "$stderr_path" >&2
+            exit 1
+          done
 
       - name: Upload infra artifact
         if: ${{ always() }}

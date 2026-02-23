@@ -31,7 +31,12 @@
   },
   "mergePolicy": {
     "high": {
-      "requiredChecks": ["risk-policy-gate", "ci-pipeline", "harness-smoke"]
+      "requiredChecks": [
+        "risk-policy-gate",
+        "ci-pipeline",
+        "harness-smoke",
+        "migration-image-smoke"
+      ]
     },
     "standard": {
       "requiredChecks": ["risk-policy-gate", "ci-pipeline"]

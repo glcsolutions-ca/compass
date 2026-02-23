@@ -21,6 +21,13 @@ export default function HomeClient() {
     error: string | null;
     payload: unknown;
   }>({ loading: false, error: null, payload: null });
+  const phase = state.loading
+    ? "loading"
+    : state.error
+      ? "error"
+      : state.payload
+        ? "success"
+        : "idle";
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -56,17 +63,23 @@ export default function HomeClient() {
       </p>
       <form onSubmit={onSubmit}>
         <input
+          data-testid="home-employee-id"
           value={employeeId}
           onChange={(event) => setEmployeeId(event.target.value)}
           placeholder="employee-123"
           aria-label="Employee ID"
         />
-        <button type="submit" disabled={state.loading}>
+        <button data-testid="home-load-view" type="submit" disabled={state.loading}>
           {state.loading ? "Loading..." : "Load View"}
         </button>
       </form>
-      {state.error ? <pre>{state.error}</pre> : null}
-      {state.payload ? <pre>{JSON.stringify(state.payload, null, 2)}</pre> : null}
+      <p data-testid="home-request-state" data-state={phase}>
+        {phase}
+      </p>
+      {state.error ? <pre data-testid="home-error-json">{state.error}</pre> : null}
+      {state.payload ? (
+        <pre data-testid="home-payload-json">{JSON.stringify(state.payload, null, 2)}</pre>
+      ) : null}
     </main>
   );
 }

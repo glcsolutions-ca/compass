@@ -1,6 +1,6 @@
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
-import { test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 function parseRequiredFlowIds() {
   const requiredFlowIdsJson = process.env.REQUIRED_FLOW_IDS_JSON?.trim();
@@ -96,7 +96,8 @@ test("compass smoke flow", async ({ page }) => {
       details?: string;
     }>;
     let flowStatus: "passed" | "failed" = "passed";
-    let latestVisiblePreText = "";
+    let latestResponseText = "";
+    let observedState = "";
 
     try {
       await page.goto(`${baseUrl}${expectedEntrypoint}`, { waitUntil: "networkidle" });
@@ -110,21 +111,38 @@ test("compass smoke flow", async ({ page }) => {
         details: headingPass ? `Heading: ${headingText}` : "No heading text found"
       });
 
-      await page.getByLabel("Employee ID").fill(expectedIdentity);
-      await page.getByRole("button", { name: "Load View" }).click();
+      await page.getByTestId("home-employee-id").fill(expectedIdentity);
+      await page.getByTestId("home-load-view").click();
 
-      const payloadLocator = page.locator("pre").first();
-      await payloadLocator.waitFor({ state: "visible", timeout: payloadTimeoutMs });
-      const payloadText = (await payloadLocator.textContent()) ?? "";
-      latestVisiblePreText = payloadText;
-
-      const identityPass = payloadText.includes(expectedIdentity);
-      flowAssertions.push({
-        id: `${flowId}:identity-present`,
-        description: `[${flowId}] Payload contains expected identity`,
-        pass: identityPass,
-        details: identityPass ? `Found ${expectedIdentity}` : payloadText.slice(0, 200)
+      const stateLocator = page.getByTestId("home-request-state");
+      await expect(stateLocator).toHaveAttribute("data-state", /success|error/, {
+        timeout: payloadTimeoutMs
       });
+      observedState = (await stateLocator.getAttribute("data-state")) ?? "";
+
+      if (observedState === "success") {
+        const payloadLocator = page.getByTestId("home-payload-json");
+        await payloadLocator.waitFor({ state: "visible", timeout: payloadTimeoutMs });
+        const payloadText = (await payloadLocator.textContent()) ?? "";
+        latestResponseText = payloadText;
+
+        const identityPass = payloadText.includes(expectedIdentity);
+        flowAssertions.push({
+          id: `${flowId}:identity-present`,
+          description: `[${flowId}] Payload contains expected identity`,
+          pass: identityPass,
+          details: identityPass ? `Found ${expectedIdentity}` : payloadText.slice(0, 200)
+        });
+      } else {
+        const errorText = ((await page.getByTestId("home-error-json").textContent()) ?? "").trim();
+        latestResponseText = errorText;
+        flowAssertions.push({
+          id: `${flowId}:request-state-success`,
+          description: `[${flowId}] Request state reaches success`,
+          pass: false,
+          details: `state=${observedState}, error=${errorText.slice(0, 200)}`
+        });
+      }
     } catch (error) {
       flowStatus = "failed";
       flowAssertions.push({
@@ -136,24 +154,23 @@ test("compass smoke flow", async ({ page }) => {
     }
 
     try {
-      const preBlocks = page.locator("pre");
-      const preCount = await preBlocks.count();
-      if (preCount > 0) {
-        const latestText = (await preBlocks.nth(preCount - 1).textContent())?.trim() ?? "";
-        if (latestText.length > 0) {
-          latestVisiblePreText = latestText;
-        }
+      if (latestResponseText.length === 0) {
+        const payloadText = (
+          (await page.getByTestId("home-payload-json").textContent()) ?? ""
+        ).trim();
+        const errorText = ((await page.getByTestId("home-error-json").textContent()) ?? "").trim();
+        latestResponseText = payloadText || errorText;
       }
     } catch {
       // Ignore artifact-only diagnostics failures.
     }
 
-    if (flowStatus === "failed" && latestVisiblePreText.length > 0) {
+    if (flowStatus === "failed" && latestResponseText.length > 0) {
       flowAssertions.push({
-        id: `${flowId}:last-visible-pre`,
-        description: `[${flowId}] Last visible preformatted text captured for diagnostics`,
+        id: `${flowId}:response-diagnostics`,
+        description: `[${flowId}] Latest response payload captured for diagnostics`,
         pass: false,
-        details: latestVisiblePreText.slice(0, 600)
+        details: `state=${observedState || "unknown"} response=${latestResponseText.slice(0, 600)}`
       });
     }
 

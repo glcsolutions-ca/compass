@@ -34,6 +34,13 @@ pnpm dev
 3. Open a PR to `main`.
 4. Let CI enforce merge safety (`risk-policy-gate`).
 
+## PR title and format standard
+
+- Title: `<type>(<scope>): <summary>`
+- Types: `feat`, `fix`, `docs`, `refactor`, `test`, `ci`, `chore`
+- Rules: lowercase, imperative summary, max 72 characters, no trailing period
+- Description sections: `## Summary`, `## Testing`, `## Risk`
+
 ## Navigate
 
 - Contributor workflow: `CONTRIBUTING.md`

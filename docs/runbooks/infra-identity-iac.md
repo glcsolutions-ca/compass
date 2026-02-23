@@ -93,6 +93,12 @@ Required GitHub environment variables for infra apply:
 - `ENTRA_AUDIENCE`
 - `ENTRA_JWKS_URI`
 
+Optional GitHub environment variables for custom domains:
+
+- `ACA_API_CUSTOM_DOMAIN`
+- `ACA_WEB_CUSTOM_DOMAIN`
+- `ACA_CUSTOM_DOMAIN_VALIDATION_METHOD` (`CNAME` default, also supports `HTTP` and `TXT`)
+
 Required GitHub environment secrets for infra apply:
 
 - `AZURE_DEPLOY_CLIENT_ID`

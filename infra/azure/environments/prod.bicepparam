@@ -31,3 +31,6 @@ param postgresAdminPassword = 'SET_IN_GITHUB_ENV'
 
 param apiImage = 'SET_IN_GITHUB_ENV'
 param webImage = 'SET_IN_GITHUB_ENV'
+param apiCustomDomain = ''
+param webCustomDomain = ''
+param customDomainValidationMethod = 'CNAME'

@@ -44,6 +44,12 @@ All concrete deploy values must be stored in the GitHub `production` environment
 - `ACA_MIGRATE_JOB_NAME=<container-app-job-name>`
 - `ACR_NAME=<acr-name>`
 
+Optional custom domain variables (leave unset to keep default ACA hostnames):
+
+- `ACA_API_CUSTOM_DOMAIN=<api-subdomain>`
+- `ACA_WEB_CUSTOM_DOMAIN=<web-subdomain>`
+- `ACA_CUSTOM_DOMAIN_VALIDATION_METHOD=<CNAME|HTTP|TXT>` (optional; default `CNAME`)
+
 ## Required GitHub Environment Secrets (`production`)
 
 - `AZURE_DEPLOY_CLIENT_ID`
@@ -145,6 +151,38 @@ With single revision mode, rollback is image-based, not traffic-split based:
 2. Run `Infra Apply` manually with `image_tag=<known-good-sha>`.
 3. Confirm API/Web use expected image tags and health checks pass.
 4. Re-run deploy smoke checks if needed.
+
+## Custom Domain Flow (Optional)
+
+Use this flow when you want managed TLS on custom API/Web hostnames.
+Do not commit concrete domain values; store them in GitHub `production` environment vars.
+
+1. Set these GitHub `production` environment vars:
+   - `ACA_API_CUSTOM_DOMAIN`
+   - `ACA_WEB_CUSTOM_DOMAIN`
+   - optionally `ACA_CUSTOM_DOMAIN_VALIDATION_METHOD` (default `CNAME`)
+2. Generate exact DNS records from live ACA state:
+
+   ```bash
+   AZURE_RESOURCE_GROUP="<resource-group>" \
+   ACA_API_APP_NAME="<api-app-name>" \
+   ACA_WEB_APP_NAME="<web-app-name>" \
+   ACA_API_CUSTOM_DOMAIN="<api-subdomain>" \
+   ACA_WEB_CUSTOM_DOMAIN="<web-subdomain>" \
+   pnpm deploy:custom-domain:dns
+   ```
+
+3. Add the printed records at your DNS provider:
+   - `CNAME <custom-domain> -> <aca-ingress-fqdn>`
+   - `TXT asuid.<custom-domain> -> <customDomainVerificationId>`
+4. Wait for DNS propagation.
+5. Run `.github/workflows/infra-apply.yml` (or the main deploy workflow) to create managed certs and bind both hostnames.
+6. Verify bindings:
+
+   ```bash
+   az containerapp hostname list --resource-group "<resource-group>" --name "<api-app-name>" --output table
+   az containerapp hostname list --resource-group "<resource-group>" --name "<web-app-name>" --output table
+   ```
 
 ## Artifacts
 

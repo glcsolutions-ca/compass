@@ -30,6 +30,14 @@ param postgresStorageMb int = 32768
 
 param apiImage string = 'SET_IN_GITHUB_ENV'
 param webImage string = 'SET_IN_GITHUB_ENV'
+param apiCustomDomain string = ''
+param webCustomDomain string = ''
+@allowed([
+  'CNAME'
+  'HTTP'
+  'TXT'
+])
+param customDomainValidationMethod string = 'CNAME'
 
 param apiLogLevel string = 'warn'
 
@@ -59,6 +67,36 @@ module containerEnvironment './modules/containerapps-env.bicep' = {
     environmentName: environmentName
     infrastructureSubnetId: network.outputs.acaInfrastructureSubnetId
     logAnalyticsWorkspaceName: logAnalyticsWorkspaceName
+  }
+}
+
+resource managedEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
+  name: environmentName
+}
+
+resource apiManagedCertificate 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(apiCustomDomain)) {
+  parent: managedEnvironment
+  name: 'api-${uniqueString(environmentName, apiCustomDomain)}'
+  location: location
+  dependsOn: [
+    containerEnvironment
+  ]
+  properties: {
+    subjectName: apiCustomDomain
+    domainControlValidation: customDomainValidationMethod
+  }
+}
+
+resource webManagedCertificate 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(webCustomDomain)) {
+  parent: managedEnvironment
+  name: 'web-${uniqueString(environmentName, webCustomDomain)}'
+  location: location
+  dependsOn: [
+    containerEnvironment
+  ]
+  properties: {
+    subjectName: webCustomDomain
+    domainControlValidation: customDomainValidationMethod
   }
 }
 
@@ -92,6 +130,9 @@ var encodedDbUser = uriComponent(postgresAdminUsername)
 var encodedDbPassword = uriComponent(postgresAdminPassword)
 var encodedDbName = uriComponent(postgresDatabaseName)
 var databaseUrl = 'postgres://${encodedDbUser}:${encodedDbPassword}@${postgres.outputs.fqdn}:5432/${encodedDbName}?sslmode=require'
+var apiBaseUrl = empty(apiCustomDomain)
+  ? 'https://${apiAppName}.${containerEnvironment.outputs.defaultDomain}'
+  : 'https://${apiCustomDomain}'
 
 resource acrPullIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: acrPullIdentityName
@@ -126,6 +167,8 @@ module api './modules/containerapp-api.bicep' = {
     registryIdentityResourceId: acrPullIdentity.id
     databaseUrl: databaseUrl
     logLevel: apiLogLevel
+    customDomainName: apiCustomDomain
+    customDomainCertificateId: empty(apiCustomDomain) ? '' : apiManagedCertificate.id
   }
   dependsOn: [
     acrPullIdentityRoleAssignment
@@ -141,7 +184,9 @@ module web './modules/containerapp-web.bicep' = {
     image: webImage
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
-    apiBaseUrl: 'https://${apiAppName}.${containerEnvironment.outputs.defaultDomain}'
+    apiBaseUrl: apiBaseUrl
+    customDomainName: webCustomDomain
+    customDomainCertificateId: empty(webCustomDomain) ? '' : webManagedCertificate.id
   }
   dependsOn: [
     acrPullIdentityRoleAssignment
@@ -167,6 +212,7 @@ module migrateJob './modules/containerapp-job-migrate.bicep' = {
 output containerAppsEnvironmentName string = containerEnvironment.outputs.environmentNameOutput
 output containerAppsEnvironmentId string = containerEnvironment.outputs.environmentId
 output containerAppsDefaultDomain string = containerEnvironment.outputs.defaultDomain
+output apiBaseUrlOutput string = apiBaseUrl
 output acrId string = acr.outputs.registryId
 output acrNameOutput string = acr.outputs.registryNameOutput
 output acrLoginServer string = acr.outputs.loginServer

@@ -46,6 +46,7 @@ Use these local checks to reduce format-only and policy drift failures in CI:
   - provider registration preflight
   - validates private Postgres DNS zone suffix (`*.postgres.database.azure.com`)
   - validates Burstable Postgres SKU pairing (`POSTGRES_SKU_NAME` starts with `Standard_B`)
+  - optional custom domain wiring via GitHub environment vars (`ACA_API_CUSTOM_DOMAIN`, `ACA_WEB_CUSTOM_DOMAIN`, `ACA_CUSTOM_DOMAIN_VALIDATION_METHOD`)
   - explicit ACR `authentication-as-arm` convergence check/enable
   - validates supplied workflow-call image refs exist in ACR before apply
   - retries once for recognized transient ARM/ACA provisioning failures

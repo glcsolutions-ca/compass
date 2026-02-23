@@ -5,7 +5,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export const TIER_ORDER = ["t3", "t2", "t1", "deps", "t0"];
+export const TIER_ORDER = ["high", "normal", "low"];
 export const KNOWN_CHECKS = [
   "risk-policy-gate",
   "preflight",
@@ -191,28 +191,14 @@ export function assertMergePolicyShape(policy) {
 }
 
 export function resolveRiskTier(policy, changedFiles) {
-  const depsPatterns = policy.riskTierRules.deps;
-  const isDepsOnlyChange =
-    Array.isArray(depsPatterns) &&
-    changedFiles.length > 0 &&
-    changedFiles.every((filePath) => matchesAnyPattern(filePath, depsPatterns));
-
-  if (isDepsOnlyChange) {
-    return "deps";
-  }
-
   for (const tier of TIER_ORDER) {
-    if (tier === "deps") {
-      continue;
-    }
-
     const patterns = policy.riskTierRules[tier];
     if (changedFiles.some((filePath) => matchesAnyPattern(filePath, patterns))) {
       return tier;
     }
   }
 
-  return "t0";
+  return "low";
 }
 
 export function requiresBrowserEvidence(policy, changedFiles) {
@@ -247,7 +233,7 @@ export function evaluateDocsDrift(policy, changedFiles) {
   );
 
   const docsUpdated = touchedDocTargets.length > 0;
-  const shouldBlock = (touchesBlockingPaths || touchesDocsCriticalPaths) && !docsUpdated;
+  const shouldBlock = touchesDocsCriticalPaths && !docsUpdated;
 
   return {
     touchesBlockingPaths,

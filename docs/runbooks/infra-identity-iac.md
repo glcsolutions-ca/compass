@@ -126,6 +126,8 @@ Registry policy:
 - `infra-apply` derives the ACR login server from `ACR_NAME` and resolves image references from current deployed image or `image_tag` override.
 - Migration job image is pinned to the API image (single-image release artifact pattern).
 - ACR storage lifecycle is controlled by `.github/workflows/acr-cleanup.yml` (scheduled/manual tag pruning).
+- Decision and feasibility rationale is captured in `docs/adr/TDR-002-production-container-registry-strategy.md`.
+- Cost baseline for planning: ACR Basic registry unit is approximately `$0.1666/day` plus storage at approximately `$0.10/GB-month` (commercial regions).
 
 Database policy:
 

@@ -34,6 +34,19 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true
   },
   transpilePackages: ["@compass/sdk"],
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "X-Robots-Tag",
+            value: "noindex, nofollow, noarchive, nosnippet, noimageindex"
+          }
+        ]
+      }
+    ];
+  },
   webpack: (rawConfig: unknown): unknown => {
     if (!isRecord(rawConfig)) {
       return rawConfig;

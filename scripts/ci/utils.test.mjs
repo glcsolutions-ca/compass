@@ -82,6 +82,23 @@ describe("required checks", () => {
     expect(checks).toContain("browser-evidence");
     expect(checks).not.toContain("codex-review");
   });
+
+  it("excludes codex-review when policy disables it", () => {
+    const checks = computeRequiredChecks(policy, "t3", ["scripts/ci/gate.mjs"]);
+    expect(checks).not.toContain("codex-review");
+  });
+
+  it("includes codex-review when policy enables it", () => {
+    const enabledPolicy = loadMergePolicyObject({
+      ...policy,
+      reviewPolicy: {
+        codexReviewEnabled: true
+      }
+    });
+
+    const checks = computeRequiredChecks(enabledPolicy, "t3", ["scripts/ci/gate.mjs"]);
+    expect(checks).toContain("codex-review");
+  });
 });
 
 describe("docs drift", () => {

@@ -46,7 +46,7 @@ resource migrateJob 'Microsoft.App/jobs@2024-03-01' = {
           image: image
           command: [
             'node'
-            'scripts/db/migrate.mjs'
+            'db/scripts/migrate.mjs'
             'up'
           ]
           env: [

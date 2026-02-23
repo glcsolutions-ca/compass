@@ -108,7 +108,7 @@ Non-exhaustive examples:
 - `scripts/ci/**`, `scripts/deploy/**`, `scripts/infra/**`
 - `apps/api/src/features/auth/**`
 - `infra/**`, `infra/azure/**`, `infra/identity/**`
-- `migrations/**`
+- `db/migrations/**`, `db/scripts/**`
 - `deploy/**`
 
 ## Flow

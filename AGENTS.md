@@ -4,13 +4,12 @@
 compass/
 - .github/{policy,workflows}
 - apps/{api,web,worker}
-- db/postgres
-- docs/{agents,runbooks}
+- db/{migrations,postgres,scripts,seeds}
+- docs/{agents,runbooks,architecture,adr}
 - infra/{azure,identity}
-- migrations
 - packages/{contracts,sdk}
-- scripts/{ci,db,deploy}
-- tests/{e2e,harness}
+- scripts/{ci,deploy}
+- tests/{e2e,system}
 ```
 
 ## Main commands

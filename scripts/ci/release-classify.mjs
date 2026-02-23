@@ -4,8 +4,8 @@ import { appendGithubOutput, getChangedFiles, getCurrentSha, getParentSha } from
 const RUNTIME_PATTERNS = [
   "apps/**",
   "packages/**",
-  "migrations/**",
-  "scripts/db/**",
+  "db/migrations/**",
+  "db/scripts/**",
   "apps/api/Dockerfile",
   "apps/web/Dockerfile",
   "package.json",
@@ -34,7 +34,7 @@ const INFRA_ROLLOUT_PATTERNS = [
   "infra/azure/environments/**"
 ];
 
-const MIGRATION_PATTERNS = ["migrations/**", "scripts/db/**"];
+const MIGRATION_PATTERNS = ["db/migrations/**", "db/scripts/**"];
 
 function matchesAny(filePath, patterns) {
   const normalized = filePath.replaceAll("\\", "/");

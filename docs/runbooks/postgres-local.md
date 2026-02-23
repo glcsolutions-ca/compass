@@ -16,8 +16,8 @@ pnpm dev
 
 1. Starts Docker PostgreSQL.
 2. Waits for readiness.
-3. Applies migrations from `migrations/`.
-4. Seeds demo data from `db/postgres/seed/001_consolidated_employee_views.sql`.
+3. Applies migrations from `db/migrations/`.
+4. Seeds demo data from `db/seeds/001_consolidated_employee_views.sql`.
 
 Stop services:
 

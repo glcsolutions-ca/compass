@@ -38,8 +38,7 @@ Use these local checks to reduce format-only and policy drift failures in CI:
   - stale candidates are skipped at exactly two irreversible boundaries (pre-infra and pre-migration/deploy)
   - runtime promotion uses digest refs only (`repo@sha256`), not tags
   - migration+deploy is one atomic boundary (no stale abort between migration and deploy)
-  - runs API smoke and browser evidence with test-time token injection (`BROWSER_SMOKE_BEARER_TOKEN`)
-  - API smoke includes bounded authorized retry for token propagation windows
+  - runs API smoke and browser evidence against baseline health/openapi and UI flow checks
   - enforces drift policy (`single` mode, `minReplicas=0`, `maxReplicas=1`, `cpu=0.25`, `memory=0.5Gi`, `maxInactiveRevisions<=2`, active revision == latest revision)
   - infra apply retries once for recognized transient ARM/ACA provisioning errors, then fails with terminal diagnostics
   - records successful production promotions in GitHub Deployments for deterministic base-SHA tracing

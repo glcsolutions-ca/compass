@@ -6,7 +6,6 @@ permissions:
 
 env:
   EXPECTED_ENTRYPOINT: /
-  EXPECTED_ACCOUNT_IDENTITY: employee-123
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -257,12 +256,6 @@ jobs:
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Generate dev bearer token
-        id: token
-        run: |
-          token=$(node -e 'const crypto=require("node:crypto"); const h=Buffer.from(JSON.stringify({alg:"HS256",typ:"JWT"})).toString("base64url"); const p=Buffer.from(JSON.stringify({sub:"employee-123",scp:"time.read",roles:[]})).toString("base64url"); const s=crypto.createHmac("sha256","dev-secret-change-me").update(h+"."+p).digest("base64url"); process.stdout.write(h+"."+p+"."+s);')
-          echo "token=$token" >> "$GITHUB_OUTPUT"
-
       - name: Build contracts package
         run: pnpm --filter @compass/contracts build
 
@@ -324,9 +317,7 @@ jobs:
           PR_NUMBER: ${{ needs.preflight.outputs.pr_number }}
           RISK_TIER: ${{ needs.preflight.outputs.tier }}
           WEB_BASE_URL: http://127.0.0.1:3000
-          BROWSER_SMOKE_BEARER_TOKEN: ${{ steps.token.outputs.token }}
           EXPECTED_ENTRYPOINT: ${{ env.EXPECTED_ENTRYPOINT }}
-          EXPECTED_ACCOUNT_IDENTITY: ${{ env.EXPECTED_ACCOUNT_IDENTITY }}
           REQUIRED_FLOW_IDS_JSON: ${{ needs.preflight.outputs.required_flow_ids_json }}
         run: pnpm ci:browser-evidence
 
@@ -575,7 +566,6 @@ jobs:
           CHECK_RESULTS_JSON: ${{ format('{{"preflight":"{0}","ci-pipeline":"{1}","browser-evidence":"{2}","harness-smoke":"{3}","migration-image-smoke":"{4}"}}', needs.preflight.result, needs.ci_pipeline.result, needs.browser_evidence.result, needs.harness_smoke.result, needs.migration_image_smoke.result) }}
           BROWSER_EVIDENCE_MANIFEST_PATH: ${{ needs.browser_evidence.outputs.browser_manifest_path }}
           EXPECTED_ENTRYPOINT: ${{ env.EXPECTED_ENTRYPOINT }}
-          EXPECTED_ACCOUNT_IDENTITY: ${{ env.EXPECTED_ACCOUNT_IDENTITY }}
         run: node scripts/ci/gate.mjs
 
       - name: Upload risk-policy-gate artifact

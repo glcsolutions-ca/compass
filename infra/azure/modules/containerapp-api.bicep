@@ -6,11 +6,6 @@ param registryServer string
 param registryIdentityResourceId string
 @secure()
 param databaseUrl string
-param authMode string = 'entra'
-param requiredScope string = 'time.read'
-param entraIssuer string
-param entraAudience string
-param entraJwksUri string
 param logLevel string = 'warn'
 
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
@@ -71,26 +66,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'DB_SSL_REJECT_UNAUTHORIZED'
               value: 'true'
-            }
-            {
-              name: 'AUTH_MODE'
-              value: authMode
-            }
-            {
-              name: 'REQUIRED_SCOPE'
-              value: requiredScope
-            }
-            {
-              name: 'ENTRA_ISSUER'
-              value: entraIssuer
-            }
-            {
-              name: 'ENTRA_AUDIENCE'
-              value: entraAudience
-            }
-            {
-              name: 'ENTRA_JWKS_URI'
-              value: entraJwksUri
             }
             {
               name: 'LOG_LEVEL'

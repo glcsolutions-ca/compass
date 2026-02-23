@@ -12,12 +12,12 @@ resource "azuread_application" "api" {
     requested_access_token_version = 2
 
     oauth2_permission_scope {
-      admin_consent_description  = "Read Compass employee consolidated time data"
-      admin_consent_display_name = "Read Compass employee data"
+      admin_consent_description  = "Read Compass platform data"
+      admin_consent_display_name = "Read Compass platform data"
       enabled                    = true
       id                         = "37c2d02e-5e58-4834-a822-b38488be7862"
       type                       = "User"
-      user_consent_description   = "Read your consolidated employee data"
+      user_consent_description   = "Read your Compass platform data"
       user_consent_display_name  = "Read your Compass data"
       value                      = var.required_scope_name
     }

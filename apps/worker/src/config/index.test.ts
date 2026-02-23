@@ -7,23 +7,23 @@ describe("loadWorkerConfig", () => {
 
     expect(config).toEqual({
       connectionString: undefined,
-      queueName: "compass-updates",
+      queueName: "compass-events",
       maxAttempts: 5
     });
   });
 
-  it("coerces MAX_SYNC_ATTEMPTS to a number", () => {
+  it("uses MAX_EVENT_ATTEMPTS when provided", () => {
     const config = loadWorkerConfig({
-      MAX_SYNC_ATTEMPTS: "7"
+      MAX_EVENT_ATTEMPTS: "7"
     });
 
     expect(config.maxAttempts).toBe(7);
   });
 
-  it("fails fast when MAX_SYNC_ATTEMPTS is invalid", () => {
+  it("fails fast when attempts is invalid", () => {
     expect(() =>
       loadWorkerConfig({
-        MAX_SYNC_ATTEMPTS: "0"
+        MAX_EVENT_ATTEMPTS: "0"
       })
     ).toThrow();
   });

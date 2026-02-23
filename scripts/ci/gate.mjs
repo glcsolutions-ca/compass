@@ -151,7 +151,6 @@ async function validateBrowserEvidence({
 
   const browserManifest = await readJsonFile(browserManifestPath);
   const expectedEntrypoint = process.env.EXPECTED_ENTRYPOINT?.trim() || "/";
-  const expectedAccountIdentity = process.env.EXPECTED_ACCOUNT_IDENTITY?.trim() || "";
 
   if (browserManifest.headSha !== headSha) {
     appendReason(
@@ -220,14 +219,6 @@ async function validateBrowserEvidence({
         reasons,
         "BROWSER_EVIDENCE_ENTRYPOINT_MISMATCH",
         `browser-evidence flow ${flowId} entrypoint mismatch: expected ${expectedEntrypoint}, got ${flow.entrypoint}`
-      );
-    }
-
-    if (expectedAccountIdentity.length > 0 && flow.accountIdentity !== expectedAccountIdentity) {
-      appendReason(
-        reasons,
-        "BROWSER_EVIDENCE_IDENTITY_MISMATCH",
-        `browser-evidence flow ${flowId} identity mismatch: expected ${expectedAccountIdentity}, got ${flow.accountIdentity}`
       );
     }
 

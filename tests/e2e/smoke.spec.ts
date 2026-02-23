@@ -1,6 +1,6 @@
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
-import { expect, test } from "@playwright/test";
+import { test } from "@playwright/test";
 
 function parseRequiredFlowIds() {
   const requiredFlowIdsJson = process.env.REQUIRED_FLOW_IDS_JSON?.trim();
@@ -42,11 +42,7 @@ test("compass smoke flow", async ({ page }) => {
   const prNumber = Number(process.env.PR_NUMBER ?? "0");
   const baseUrl = process.env.WEB_BASE_URL ?? "http://127.0.0.1:3000";
   const expectedEntrypoint = process.env.EXPECTED_ENTRYPOINT ?? "/";
-  const expectedIdentity = process.env.EXPECTED_ACCOUNT_IDENTITY ?? "employee-123";
-  const browserSmokeBearerToken = process.env.BROWSER_SMOKE_BEARER_TOKEN?.trim() ?? "";
-  const payloadTimeoutMsRaw = Number(process.env.BROWSER_SMOKE_PAYLOAD_TIMEOUT_MS ?? "45000");
-  const payloadTimeoutMs =
-    Number.isFinite(payloadTimeoutMsRaw) && payloadTimeoutMsRaw > 0 ? payloadTimeoutMsRaw : 45_000;
+  const baselineLabel = "platform-baseline";
   const flowIds = parseRequiredFlowIds();
 
   const outputDir = path.join(".artifacts", "browser-evidence", testedSha);
@@ -76,16 +72,6 @@ test("compass smoke flow", async ({ page }) => {
 
   let hasFailedFlow = false;
 
-  if (browserSmokeBearerToken.length > 0) {
-    await page.route("**/api/v1/**", async (route) => {
-      const headers = {
-        ...route.request().headers(),
-        authorization: `Bearer ${browserSmokeBearerToken}`
-      };
-      await route.continue({ headers });
-    });
-  }
-
   for (const flowId of flowIds) {
     const screenshotPath = path.join(outputDir, `${flowId}.png`);
     const startedAt = new Date().toISOString();
@@ -96,8 +82,6 @@ test("compass smoke flow", async ({ page }) => {
       details?: string;
     }>;
     let flowStatus: "passed" | "failed" = "passed";
-    let latestResponseText = "";
-    let observedState = "";
 
     try {
       await page.goto(`${baseUrl}${expectedEntrypoint}`, { waitUntil: "networkidle" });
@@ -111,38 +95,16 @@ test("compass smoke flow", async ({ page }) => {
         details: headingPass ? `Heading: ${headingText}` : "No heading text found"
       });
 
-      await page.getByTestId("home-employee-id").fill(expectedIdentity);
-      await page.getByTestId("home-load-view").click();
-
-      const stateLocator = page.getByTestId("home-request-state");
-      await expect(stateLocator).toHaveAttribute("data-state", /success|error/, {
-        timeout: payloadTimeoutMs
+      const helperText = await page.locator(".helper").allTextContents();
+      const helperPass = helperText.some((value) =>
+        value.toLowerCase().includes("foundation baseline is active")
+      );
+      flowAssertions.push({
+        id: `${flowId}:baseline-copy-visible`,
+        description: `[${flowId}] Foundation baseline copy is visible`,
+        pass: helperPass,
+        details: helperPass ? "Baseline copy found" : helperText.join(" | ")
       });
-      observedState = (await stateLocator.getAttribute("data-state")) ?? "";
-
-      if (observedState === "success") {
-        const payloadLocator = page.getByTestId("home-payload-json");
-        await payloadLocator.waitFor({ state: "visible", timeout: payloadTimeoutMs });
-        const payloadText = (await payloadLocator.textContent()) ?? "";
-        latestResponseText = payloadText;
-
-        const identityPass = payloadText.includes(expectedIdentity);
-        flowAssertions.push({
-          id: `${flowId}:identity-present`,
-          description: `[${flowId}] Payload contains expected identity`,
-          pass: identityPass,
-          details: identityPass ? `Found ${expectedIdentity}` : payloadText.slice(0, 200)
-        });
-      } else {
-        const errorText = ((await page.getByTestId("home-error-json").textContent()) ?? "").trim();
-        latestResponseText = errorText;
-        flowAssertions.push({
-          id: `${flowId}:request-state-success`,
-          description: `[${flowId}] Request state reaches success`,
-          pass: false,
-          details: `state=${observedState}, error=${errorText.slice(0, 200)}`
-        });
-      }
     } catch (error) {
       flowStatus = "failed";
       flowAssertions.push({
@@ -150,27 +112,6 @@ test("compass smoke flow", async ({ page }) => {
         description: `[${flowId}] Playwright flow executed without runtime errors`,
         pass: false,
         details: error instanceof Error ? error.message : String(error)
-      });
-    }
-
-    try {
-      if (latestResponseText.length === 0) {
-        const payloadText = (
-          (await page.getByTestId("home-payload-json").textContent()) ?? ""
-        ).trim();
-        const errorText = ((await page.getByTestId("home-error-json").textContent()) ?? "").trim();
-        latestResponseText = payloadText || errorText;
-      }
-    } catch {
-      // Ignore artifact-only diagnostics failures.
-    }
-
-    if (flowStatus === "failed" && latestResponseText.length > 0) {
-      flowAssertions.push({
-        id: `${flowId}:response-diagnostics`,
-        description: `[${flowId}] Latest response payload captured for diagnostics`,
-        pass: false,
-        details: `state=${observedState || "unknown"} response=${latestResponseText.slice(0, 600)}`
       });
     }
 
@@ -203,7 +144,7 @@ test("compass smoke flow", async ({ page }) => {
     flows.push({
       id: flowId,
       entrypoint: expectedEntrypoint,
-      accountIdentity: expectedIdentity,
+      accountIdentity: baselineLabel,
       status: flowStatus,
       startedAt,
       finishedAt

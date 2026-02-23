@@ -8,7 +8,7 @@
 
 ## Product Family Naming
 
-- `Compass Hub`: central workspace and consolidated operational view.
+- `Compass Hub`: central workspace for day-to-day operations.
 - `Compass Timesheets`: time capture and time investment visibility.
 - `Compass Chat`: AI chat interface for questions, information retrieval, and time-entry actions.
 - `Compass Client Portal`: client-facing status and delivery visibility.

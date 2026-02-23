@@ -3,7 +3,7 @@
 ## Purpose
 
 This repository treats migrations as the source of truth for PostgreSQL schema.
-Local seed data is a convenience for dev/testing only.
+Local seed data is optional convenience for dev/testing only.
 
 ## Standard Local Flow
 
@@ -17,7 +17,7 @@ pnpm dev
 1. Starts Docker PostgreSQL.
 2. Waits for readiness.
 3. Applies migrations from `db/migrations/`.
-4. Seeds demo data from `db/seeds/001_consolidated_employee_views.sql`.
+4. Runs generic seed loading from `db/seeds/*.sql` (no-op if no seed files exist).
 
 Stop services:
 
@@ -25,7 +25,7 @@ Stop services:
 pnpm db:postgres:down
 ```
 
-Reset database state (drop volume, recreate schema, reseed):
+Reset database state (drop volume, recreate schema, rerun optional seeds):
 
 ```bash
 pnpm db:postgres:reset
@@ -42,5 +42,4 @@ pnpm db:migrate:down -- 1
 
 ## CI Behavior
 
-`ci-pipeline` provisions PostgreSQL as a service, applies migrations, seeds data, and runs
-`pnpm --filter @compass/api test:integration` before the normal pipeline command.
+`ci-pipeline` provisions PostgreSQL as a service, applies migrations, runs `pnpm db:seed`, and then executes `pnpm --filter @compass/api test:integration` before the normal pipeline command.

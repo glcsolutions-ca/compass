@@ -33,6 +33,7 @@ If multiple tiers match, highest tier wins.
 ## Deterministic order
 
 1. `risk-policy-preflight` (includes docs-drift evaluation)
+   - includes workflow lint (`actionlint`) when workflow/control-plane changes are detected
 2. `codex-review` (conditional)
 3. `ci-pipeline-fast` or `ci-pipeline-full` (selected by tier)
 4. `ci-pipeline` (aggregates lane result into one stable required check)

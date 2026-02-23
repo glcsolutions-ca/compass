@@ -64,6 +64,7 @@ All concrete deploy values must be stored in the GitHub `production` environment
 - API and Web run in `activeRevisionsMode: single`.
 - API and Web keep at most `maxInactiveRevisions: 2` for short rollback depth without revision sprawl.
 - In single-revision mode, ACA routes app traffic to the latest ready revision automatically.
+- These drift assertions are operational guardrails for the current cost-first posture (no override mode).
 
 ## Web/API Boundary (Standardized)
 
@@ -95,12 +96,15 @@ All concrete deploy values must be stored in the GitHub `production` environment
 ## Deploy Sequence
 
 1. `classify` computes:
+   - `base_sha` (last successful production deployment SHA, with bootstrap fallback)
+   - `base_source` (`deployment-record` or `bootstrap-fallback`)
+   - `base_deployment_id` (when available)
    - `kind=checks|infra|runtime`
    - `rollout`
    - `needs_infra`
    - `needs_migrations`
 2. For `checks`:
-   - run factory checks only (`format`, merge-contract unit tests, no-org-infra, actionlint)
+   - run factory checks only (`format`, merge-contract unit tests, no-org-infra)
    - do not log into Azure and do not mutate production
 3. For `infra` or `runtime`, `promote` starts and performs stale-head guard before any mutation.
 4. For `infra`:
@@ -122,6 +126,13 @@ All concrete deploy values must be stored in the GitHub `production` environment
 - Production converges to the latest `main` head.
 - Pending runs may be superseded by newer commits due to GitHub concurrency behavior.
 - Stale runs are skipped before irreversible mutation boundaries.
+- Classification diff is `base_sha..head_sha`, so skipped pending commits are still included by the next head run.
+
+## Irreversible Boundaries
+
+- Stale guard boundary 1: before infra apply.
+- Stale guard boundary 2: before entering migration+deploy boundary (`runtime` only).
+- After migration starts, deploy completes for that candidate (no stale abort between migration and deploy).
 
 ## ACR Tag Retention
 
@@ -143,8 +154,8 @@ With single revision mode, rollback is image-based, not traffic-split based:
 
 Release summary artifacts are written under `.artifacts/release/<sha>/`:
 
-- `manifest.json` (current refs + candidate refs + kind)
-- `result.json` (final status and stale-guard outcomes)
+- `manifest.json` (base/head SHA trace + current refs + candidate refs + kind)
+- `result.json` (final status + stale-guard outcomes + deployment IDs)
 
 Deploy artifacts remain under `.artifacts/deploy/<sha>/`:
 

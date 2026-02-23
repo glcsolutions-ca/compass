@@ -12,6 +12,7 @@
 
 - `merge-contract.yml`: deterministic merge-contract workflow with ordered checks:
   - `risk-policy-preflight` (includes `docs-drift` evaluation)
+  - `actionlint` on changed workflow files (falls back to all workflows for `t3` control-plane changes)
   - `no-org-infra` leak guard (fails on committed org-specific infra values)
   - `codex-review` (conditional; runs only when policy requires it)
   - `ci-pipeline-fast` (conditional lane for `t0`; lightweight repo checks, no Postgres service)
@@ -21,14 +22,16 @@
     - web smoke runs against Next standalone runtime with static/public assets copied into the standalone tree
   - `harness-smoke` (conditional)
   - `risk-policy-gate` (final required gate; policy-driven check aggregation + browser manifest assertions)
-- `dependabot-auto-merge.yml`: metadata-only safe-lane auto-merge for Dependabot PRs (patch/minor only, no PR checkout)
+- `dependabot-auto-merge.yml`: safe-lane auto-merge for Dependabot PRs (patch/minor only) with required gate-context checks (`risk-policy-gate`, `ci-pipeline`) before enabling auto-merge
 - `deploy.yml`: mainline release orchestrator (`classify -> checks -> promote -> report`)
   - `promote` is the only job with `environment: production` and `concurrency: prod-main`
-  - stale candidates are skipped before irreversible boundaries
+  - classification base uses the last successful production deployment SHA (bootstrap fallback if none exists)
+  - stale candidates are skipped at exactly two irreversible boundaries (pre-infra and pre-migration/deploy)
   - runtime promotion uses digest refs only (`repo@sha256`), not tags
   - migration+deploy is one atomic boundary (no stale abort between migration and deploy)
   - runs API smoke and browser evidence with test-time token injection (`BROWSER_SMOKE_BEARER_TOKEN`)
   - enforces drift policy (`single` mode, `minReplicas=0`, `maxReplicas=1`, `cpu=0.25`, `memory=0.5Gi`, `maxInactiveRevisions<=2`, active revision == latest revision)
+  - records successful production promotions in GitHub Deployments for deterministic base-SHA tracing
 - `infra-apply.yml`: Azure Bicep infra apply workflow (`workflow_call` + manual dispatch; no push trigger)
   - provider registration preflight
   - validates private Postgres DNS zone suffix (`*.postgres.database.azure.com`)

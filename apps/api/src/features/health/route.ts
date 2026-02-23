@@ -1,11 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { type ZodTypeProvider } from "fastify-type-provider-zod";
-import { z } from "zod";
-
-const HealthSchema = z.object({
-  status: z.literal("ok"),
-  timestamp: z.string().datetime()
-});
+import { HealthResponseSchema } from "@compass/contracts";
 
 export function registerHealthRoute(app: FastifyInstance, now: () => Date) {
   const typedApp = app.withTypeProvider<ZodTypeProvider>();
@@ -15,7 +10,7 @@ export function registerHealthRoute(app: FastifyInstance, now: () => Date) {
     {
       schema: {
         response: {
-          200: HealthSchema
+          200: HealthResponseSchema
         }
       }
     },

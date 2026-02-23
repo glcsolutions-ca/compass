@@ -26,16 +26,16 @@ function main(): void {
       console.error("Service Bus processing error", error);
     },
     processMessage: async (message) => {
-      const syncMessage = parseSyncMessage(message);
-      if (!syncMessage) {
+      const event = parseSyncMessage(message);
+      if (!event) {
         await receiver.deadLetterMessage(message, {
           deadLetterReason: "invalid_payload",
-          deadLetterErrorDescription: "Message body does not match SyncMessage schema"
+          deadLetterErrorDescription: "Message body does not match EventEnvelope schema"
         });
         return;
       }
 
-      const result = processSyncMessage(syncMessage, store, { maxAttempts: config.maxAttempts });
+      const result = processSyncMessage(event, store, { maxAttempts: config.maxAttempts });
 
       switch (result.status) {
         case "processed":

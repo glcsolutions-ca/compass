@@ -43,16 +43,10 @@ All concrete deploy values must be stored in the GitHub `production` environment
 - `ACA_WEB_APP_NAME=<container-app-web-name>`
 - `ACA_MIGRATE_JOB_NAME=<container-app-job-name>`
 - `ACR_NAME=<acr-name>`
-- `ENTRA_ISSUER=<issuer-url>`
-- `ENTRA_JWKS_URI=<jwks-url>`
-- `ENTRA_AUDIENCE=<api-audience>`
-- `SMOKE_EXPECTED_ACCOUNT_IDENTITY=<employee-id>` (optional; default `employee-123`)
-- `SMOKE_REQUIRE_EMPLOYEE_FOUND=<true|false>` (optional; default `false`)
 
 ## Required GitHub Environment Secrets (`production`)
 
 - `AZURE_DEPLOY_CLIENT_ID`
-- `AZURE_SMOKE_CLIENT_ID`
 
 ## Runtime Sizing and Revision Policy
 
@@ -72,7 +66,7 @@ All concrete deploy values must be stored in the GitHub `production` environment
 - The Web app route handler proxies those requests to the API app using runtime `API_BASE_URL`.
 - Proxy forwarding is intentionally minimal: allowlisted request headers only, hop-by-hop headers stripped, and bounded upstream timeout.
 - Do not use `NEXT_PUBLIC_*` token or API URL wiring for production/CI smoke behavior.
-- Browser evidence authentication is injected at test time via `BROWSER_SMOKE_BEARER_TOKEN`.
+- Browser evidence validates baseline UI flow and no longer depends on token injection.
 
 ## App Topology Decision
 
@@ -175,13 +169,5 @@ Browser evidence timeout policy:
 
 `verify-api-smoke.mjs` behavior:
 
-- Always validates `/health` and auth protection behavior.
-- Uses `SMOKE_EXPECTED_ACCOUNT_IDENTITY` for authenticated request path.
-- If `SMOKE_REQUIRE_EMPLOYEE_FOUND=true`, requires `200` with payload assertions.
-- If unset/`false`, accepts `200` (with payload checks) or `404` (data-independent smoke).
-- Authorized smoke requests use bounded retry (`AUTHORIZED_RETRY_ATTEMPTS`, `AUTHORIZED_RETRY_DELAY_MS`) to handle short Entra token propagation windows.
-
-Deploy diagnostics contract:
-
-- `migration.json` includes `reasonCode`, `reason`, `executionSummary`, `statusTimeline`, elapsed timing, and `logsSource`.
-- `api-smoke.json` includes `reasonCode`, `reason`, authorized retry timeline, response snippets, and assertion IDs.
+- Always validates `/health` and `/openapi.json`.
+- Verifies the generated OpenAPI document includes `/health`.

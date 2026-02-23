@@ -1,8 +1,8 @@
-import type { SyncMessage } from "@compass/contracts";
+import type { EventEnvelope } from "@compass/contracts";
 
 export interface ProcessOptions {
   maxAttempts?: number;
-  shouldFailTransiently?: (message: SyncMessage) => boolean;
+  shouldFailTransiently?: (message: EventEnvelope) => boolean;
 }
 
 export interface ProcessResult {
@@ -23,7 +23,7 @@ export class InMemoryIdempotencyStore {
 }
 
 export function processSyncMessage(
-  message: SyncMessage,
+  message: EventEnvelope,
   store: InMemoryIdempotencyStore,
   options: ProcessOptions = {}
 ): ProcessResult {

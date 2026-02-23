@@ -14,22 +14,40 @@ describe("parseSyncMessage", () => {
     expect(parsed).toBeNull();
   });
 
-  it("parses valid payload and applies attempt default", () => {
+  it("parses valid object payload and applies attempt default", () => {
     const parsed = parseSyncMessage(
       messageWithBody({
-        id: "msg-1",
-        employeeId: "employee-123",
-        sourceSystem: "jira",
-        occurredAt: "2026-02-21T00:00:00.000Z"
+        id: "evt-1",
+        eventType: "system.ping",
+        source: "test-suite",
+        occurredAt: "2026-02-21T00:00:00.000Z",
+        payload: { ok: true }
       })
     );
 
     expect(parsed).toEqual({
-      id: "msg-1",
-      employeeId: "employee-123",
-      sourceSystem: "jira",
+      id: "evt-1",
+      eventType: "system.ping",
+      source: "test-suite",
       occurredAt: "2026-02-21T00:00:00.000Z",
-      attempt: 0
+      attempt: 0,
+      payload: { ok: true }
     });
+  });
+
+  it("parses valid JSON string payload", () => {
+    const parsed = parseSyncMessage(
+      messageWithBody(
+        JSON.stringify({
+          id: "evt-2",
+          eventType: "system.ping",
+          source: "test-suite",
+          occurredAt: "2026-02-21T00:00:00.000Z",
+          payload: null
+        })
+      )
+    );
+
+    expect(parsed?.id).toBe("evt-2");
   });
 });

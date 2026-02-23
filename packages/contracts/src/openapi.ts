@@ -4,72 +4,37 @@ import {
   extendZodWithOpenApi
 } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
-import {
-  ApiErrorSchema,
-  ConsolidatedEmployeeViewParamsSchema,
-  ConsolidatedEmployeeViewSchema,
-  SourceSystemSnapshotSchema,
-  TimeEntrySchema,
-  WorkPackageSchema
-} from "./schemas.js";
+import { HealthResponseSchema } from "./schemas.js";
 
 export const API_VERSION = "v1";
 
+let zodExtended = false;
+
+function ensureZodExtended() {
+  if (!zodExtended) {
+    extendZodWithOpenApi(z);
+    zodExtended = true;
+  }
+}
+
 export function buildOpenApiDocument(): Record<string, unknown> {
-  extendZodWithOpenApi(z);
+  ensureZodExtended();
   const registry = new OpenAPIRegistry();
 
-  registry.register("SourceSystemSnapshot", SourceSystemSnapshotSchema);
-  registry.register("TimeEntry", TimeEntrySchema);
-  registry.register("WorkPackage", WorkPackageSchema);
-  registry.register("ConsolidatedEmployeeView", ConsolidatedEmployeeViewSchema);
-  registry.register("ApiError", ApiErrorSchema);
-  registry.registerComponent("securitySchemes", "bearerAuth", {
-    type: "http",
-    scheme: "bearer",
-    bearerFormat: "JWT"
-  });
+  registry.register("HealthResponse", HealthResponseSchema);
 
   registry.registerPath({
     method: "get",
-    path: "/api/v1/employees/{employeeId}/consolidated-view",
-    operationId: "getEmployeeConsolidatedView",
-    summary: "Get consolidated time entries and work packages for an employee",
-    tags: ["Consolidated View"],
-    security: [{ bearerAuth: [] }],
-    request: {
-      params: ConsolidatedEmployeeViewParamsSchema
-    },
+    path: "/health",
+    operationId: "getHealth",
+    summary: "Get API health status",
+    tags: ["System"],
     responses: {
       200: {
-        description: "Consolidated employee view",
+        description: "API health status",
         content: {
           "application/json": {
-            schema: ConsolidatedEmployeeViewSchema
-          }
-        }
-      },
-      401: {
-        description: "Missing or invalid access token",
-        content: {
-          "application/json": {
-            schema: ApiErrorSchema
-          }
-        }
-      },
-      403: {
-        description: "Authenticated but not authorized for this employee",
-        content: {
-          "application/json": {
-            schema: ApiErrorSchema
-          }
-        }
-      },
-      404: {
-        description: "Employee record not found in the consolidated view",
-        content: {
-          "application/json": {
-            schema: ApiErrorSchema
+            schema: HealthResponseSchema
           }
         }
       }
@@ -81,11 +46,11 @@ export function buildOpenApiDocument(): Record<string, unknown> {
   return generator.generateDocument({
     openapi: "3.1.0",
     info: {
-      title: "Compass Hub API",
+      title: "Compass API",
       version: API_VERSION,
-      description: "Read-only consolidated employee time and work-package API"
+      description: "Foundation API with system endpoints only"
     },
     servers: [{ url: "http://localhost:3001" }],
-    tags: [{ name: "Consolidated View", description: "Employee-centered consolidated read API" }]
+    tags: [{ name: "System", description: "Platform system endpoints" }]
   }) as unknown as Record<string, unknown>;
 }

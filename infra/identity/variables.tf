@@ -35,7 +35,7 @@ variable "api_identifier_uri" {
 variable "required_scope_name" {
   description = "Delegated scope value for API"
   type        = string
-  default     = "time.read"
+  default     = "platform.read"
 }
 
 variable "timesync_admin_role_id" {

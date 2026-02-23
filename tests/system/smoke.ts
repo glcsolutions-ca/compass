@@ -32,11 +32,9 @@ async function main() {
     const health = await app.inject({ method: "GET", url: "/health" });
     assert.equal(health.statusCode, 200, "health endpoint should return 200");
 
-    const unauthenticated = await app.inject({
-      method: "GET",
-      url: "/api/v1/employees/employee-123/consolidated-view"
-    });
-    assert.equal(unauthenticated.statusCode, 401, "consolidated view should reject missing auth");
+    const openapi = await app.inject({ method: "GET", url: "/openapi.json" });
+    assert.equal(openapi.statusCode, 200, "openapi endpoint should return 200");
+    assert.ok(openapi.json().paths?.["/health"], "openapi should include /health path");
 
     const payload = {
       schemaVersion: "1",
@@ -47,7 +45,7 @@ async function main() {
       status: "pass",
       checks: [
         { id: "api-health", status: "pass" },
-        { id: "auth-required", status: "pass" }
+        { id: "openapi-available", status: "pass" }
       ]
     };
 

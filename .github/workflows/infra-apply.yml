@@ -66,9 +66,6 @@ jobs:
           POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
           POSTGRES_SKU_TIER: ${{ vars.POSTGRES_SKU_TIER }}
           POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
-          ENTRA_ISSUER: ${{ vars.ENTRA_ISSUER }}
-          ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
-          ENTRA_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
         run: |
           set -euo pipefail
 
@@ -96,9 +93,6 @@ jobs:
             POSTGRES_SKU_NAME
             POSTGRES_SKU_TIER
             POSTGRES_STORAGE_MB
-            ENTRA_ISSUER
-            ENTRA_AUDIENCE
-            ENTRA_JWKS_URI
           )
 
           for name in "${required_vars[@]}"; do
@@ -314,9 +308,6 @@ jobs:
           POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
           POSTGRES_SKU_TIER: ${{ vars.POSTGRES_SKU_TIER }}
           POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
-          ENTRA_ISSUER: ${{ vars.ENTRA_ISSUER }}
-          ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
-          ENTRA_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
           API_IMAGE_REF: ${{ steps.images.outputs.api_image_ref }}
           WEB_IMAGE_REF: ${{ steps.images.outputs.web_image_ref }}
@@ -353,9 +344,6 @@ jobs:
             --arg postgresAdminPassword "$POSTGRES_ADMIN_PASSWORD" \
             --arg apiImage "$API_IMAGE_REF" \
             --arg webImage "$WEB_IMAGE_REF" \
-            --arg entraIssuer "$ENTRA_ISSUER" \
-            --arg entraAudience "$ENTRA_AUDIENCE" \
-            --arg entraJwksUri "$ENTRA_JWKS_URI" \
             '{
               "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
               "contentVersion": "1.0.0.0",
@@ -382,10 +370,7 @@ jobs:
                 "postgresStorageMb": {"value": ($postgresStorageMb | tonumber)},
                 "postgresAdminPassword": {"value": $postgresAdminPassword},
                 "apiImage": {"value": $apiImage},
-                "webImage": {"value": $webImage},
-                "entraIssuer": {"value": $entraIssuer},
-                "entraAudience": {"value": $entraAudience},
-                "entraJwksUri": {"value": $entraJwksUri}
+                "webImage": {"value": $webImage}
               }
             }' > ".artifacts/infra/$HEAD_SHA/runtime.parameters.json"
 

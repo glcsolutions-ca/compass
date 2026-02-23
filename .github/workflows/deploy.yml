@@ -119,9 +119,6 @@ jobs:
       POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
       POSTGRES_SKU_TIER: ${{ vars.POSTGRES_SKU_TIER }}
       POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
-      ENTRA_ISSUER: ${{ vars.ENTRA_ISSUER }}
-      ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
-      ENTRA_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
     outputs:
       stale_preinfra: ${{ steps.stale_preinfra.outputs.is_stale || 'false' }}
       stale_preboundary: ${{ steps.stale_preboundary.outputs.is_stale || 'false' }}
@@ -373,9 +370,6 @@ jobs:
             --arg postgresAdminPassword "$POSTGRES_ADMIN_PASSWORD" \
             --arg apiImage "$API_IMAGE" \
             --arg webImage "$WEB_IMAGE" \
-            --arg entraIssuer "$ENTRA_ISSUER" \
-            --arg entraAudience "$ENTRA_AUDIENCE" \
-            --arg entraJwksUri "$ENTRA_JWKS_URI" \
             '{
               "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
               "contentVersion": "1.0.0.0",
@@ -402,10 +396,7 @@ jobs:
                 "postgresStorageMb": {"value": ($postgresStorageMb | tonumber)},
                 "postgresAdminPassword": {"value": $postgresAdminPassword},
                 "apiImage": {"value": $apiImage},
-                "webImage": {"value": $webImage},
-                "entraIssuer": {"value": $entraIssuer},
-                "entraAudience": {"value": $entraAudience},
-                "entraJwksUri": {"value": $entraJwksUri}
+                "webImage": {"value": $webImage}
               }
             }' > ".artifacts/infra/$HEAD_SHA/runtime.parameters.json"
 
@@ -695,38 +686,10 @@ jobs:
             fi
           done
 
-      - name: Azure login (smoke identity)
-        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && (env.KIND == 'infra' || (env.KIND == 'runtime' && steps.stale_preboundary.outputs.is_stale != 'true')) }}
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_SMOKE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          allow-no-subscriptions: true
-
-      - name: Acquire Entra smoke token
-        id: token
-        if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && (env.KIND == 'infra' || (env.KIND == 'runtime' && steps.stale_preboundary.outputs.is_stale != 'true')) }}
-        run: |
-          audience="${{ vars.ENTRA_AUDIENCE }}"
-          if [[ "$audience" == */.default ]]; then
-            scope="$audience"
-          else
-            scope="$audience/.default"
-          fi
-
-          smoke_token=$(az account get-access-token --scope "$scope" --query accessToken -o tsv)
-          echo "::add-mask::$smoke_token"
-          echo "smoke_token=$smoke_token" >> "$GITHUB_OUTPUT"
-
       - name: API smoke verification
         if: ${{ steps.stale_preinfra.outputs.is_stale != 'true' && (env.KIND == 'infra' || (env.KIND == 'runtime' && steps.stale_preboundary.outputs.is_stale != 'true')) }}
         env:
           TARGET_API_BASE_URL: ${{ steps.current_state.outputs.api_prod_url }}
-          ACCESS_TOKEN: ${{ steps.token.outputs.smoke_token }}
-          EXPECTED_EMPLOYEE_ID: ${{ vars.SMOKE_EXPECTED_ACCOUNT_IDENTITY }}
-          REQUIRE_EMPLOYEE_FOUND: ${{ vars.SMOKE_REQUIRE_EMPLOYEE_FOUND }}
-          AUTHORIZED_RETRY_ATTEMPTS: 3
-          AUTHORIZED_RETRY_DELAY_MS: 5000
         run: node scripts/deploy/verify-api-smoke.mjs
 
       - name: Install Playwright browser
@@ -740,17 +703,10 @@ jobs:
           PR_NUMBER: 0
           RISK_TIER: high
           WEB_BASE_URL: ${{ steps.current_state.outputs.web_prod_url }}
-          BROWSER_SMOKE_BEARER_TOKEN: ${{ steps.token.outputs.smoke_token }}
           BROWSER_SMOKE_PAYLOAD_TIMEOUT_MS: "45000"
           EXPECTED_ENTRYPOINT: /
-          EXPECTED_ACCOUNT_IDENTITY_RAW: ${{ vars.SMOKE_EXPECTED_ACCOUNT_IDENTITY }}
           REQUIRED_FLOW_IDS_JSON: '["compass-smoke"]'
-        run: |
-          expected_identity="$EXPECTED_ACCOUNT_IDENTITY_RAW"
-          if [ -z "$expected_identity" ]; then
-            expected_identity="employee-123"
-          fi
-          EXPECTED_ACCOUNT_IDENTITY="$expected_identity" pnpm ci:browser-evidence
+        run: pnpm ci:browser-evidence
 
       - name: Record successful production deployment
         id: record_production_deployment

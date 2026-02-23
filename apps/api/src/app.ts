@@ -1,40 +1,13 @@
 import fastifyPostgres from "@fastify/postgres";
 import cors from "@fastify/cors";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify from "fastify";
 import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
 import { loadApiConfig, type ApiConfig } from "./config/index.js";
-import {
-  InMemoryConsolidatedViewRepository,
-  PostgresConsolidatedViewRepository,
-  registerConsolidatedViewRoute,
-  registerHealthRoute,
-  registerOpenApiRoute,
-  type ConsolidatedViewRepository
-} from "./features/index.js";
+import { registerHealthRoute, registerOpenApiRoute } from "./features/index.js";
 
 export interface BuildApiAppOptions {
   config?: ApiConfig;
   now?: () => Date;
-  repository?: ConsolidatedViewRepository;
-}
-
-function resolveRepository(
-  app: FastifyInstance,
-  config: ApiConfig,
-  now: () => Date,
-  repositoryOverride?: ConsolidatedViewRepository
-): ConsolidatedViewRepository {
-  if (repositoryOverride) {
-    return repositoryOverride;
-  }
-
-  if (config.databaseUrl) {
-    return new PostgresConsolidatedViewRepository({
-      query: (queryText, values) => app.pg.query(queryText, values)
-    });
-  }
-
-  return new InMemoryConsolidatedViewRepository(now());
 }
 
 export function buildApiApp(options: BuildApiAppOptions = {}) {
@@ -74,15 +47,8 @@ export function buildApiApp(options: BuildApiAppOptions = {}) {
     });
   }
 
-  const repository = resolveRepository(app, config, now, options.repository);
-
   registerHealthRoute(app, now);
   registerOpenApiRoute(app);
-  registerConsolidatedViewRoute(app, {
-    config,
-    repository,
-    now
-  });
 
   return app;
 }

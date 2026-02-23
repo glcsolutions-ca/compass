@@ -5,11 +5,12 @@ describe("processSyncMessage", () => {
   it("marks successfully processed messages as idempotent", () => {
     const store = new InMemoryIdempotencyStore();
     const message = {
-      id: "msg-1",
-      employeeId: "employee-123",
-      sourceSystem: "jira",
+      id: "evt-1",
+      eventType: "system.ping",
+      source: "test-suite",
       occurredAt: "2026-02-21T00:00:00.000Z",
-      attempt: 0
+      attempt: 0,
+      payload: { ok: true }
     };
 
     const first = processSyncMessage(message, store);
@@ -23,11 +24,12 @@ describe("processSyncMessage", () => {
     const store = new InMemoryIdempotencyStore();
     const result = processSyncMessage(
       {
-        id: "msg-2",
-        employeeId: "employee-123",
-        sourceSystem: "legacy-erp",
+        id: "evt-2",
+        eventType: "system.ping",
+        source: "test-suite",
         occurredAt: "2026-02-21T00:00:00.000Z",
-        attempt: 5
+        attempt: 5,
+        payload: null
       },
       store,
       { maxAttempts: 5 }
@@ -40,11 +42,12 @@ describe("processSyncMessage", () => {
     const store = new InMemoryIdempotencyStore();
     const result = processSyncMessage(
       {
-        id: "msg-3",
-        employeeId: "employee-123",
-        sourceSystem: "jira",
+        id: "evt-3",
+        eventType: "system.ping",
+        source: "test-suite",
         occurredAt: "2026-02-21T00:00:00.000Z",
-        attempt: 1
+        attempt: 1,
+        payload: null
       },
       store,
       { shouldFailTransiently: () => true }

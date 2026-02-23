@@ -34,16 +34,24 @@ interface RouteContext {
   }>;
 }
 
-function getApiBaseUrl() {
-  return (process.env.API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/+$/, "");
+function resolveApiBaseUrl() {
+  const configured = process.env.API_BASE_URL?.trim();
+  if (configured) {
+    return configured.replace(/\/+$/, "");
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    return null;
+  }
+
+  return DEFAULT_API_BASE_URL;
 }
 
-function toUpstreamUrl(requestUrl: string, pathSegments: string[] = []) {
+function toUpstreamUrl(baseUrl: string, requestUrl: string, pathSegments: string[] = []) {
   const incomingUrl = new URL(requestUrl);
-  const normalizedBaseUrl = getApiBaseUrl();
   const encodedPath = pathSegments.map((segment) => encodeURIComponent(segment)).join("/");
   const suffix = encodedPath.length > 0 ? `/${encodedPath}` : "";
-  return `${normalizedBaseUrl}/api/v1${suffix}${incomingUrl.search}`;
+  return `${baseUrl}/api/v1${suffix}${incomingUrl.search}`;
 }
 
 function buildUpstreamRequestHeaders(requestHeaders: Headers) {
@@ -77,8 +85,24 @@ function buildDownstreamResponseHeaders(upstreamHeaders: Headers) {
 }
 
 async function proxyRequest(request: NextRequest, context: RouteContext) {
+  const apiBaseUrl = resolveApiBaseUrl();
+  if (!apiBaseUrl) {
+    return Response.json(
+      {
+        error: "API base URL is not configured",
+        code: "API_BASE_URL_REQUIRED"
+      },
+      {
+        status: 500,
+        headers: {
+          "cache-control": "no-store"
+        }
+      }
+    );
+  }
+
   const { path } = await context.params;
-  const upstreamUrl = toUpstreamUrl(request.url, path);
+  const upstreamUrl = toUpstreamUrl(apiBaseUrl, request.url, path);
   const headers = buildUpstreamRequestHeaders(request.headers);
 
   const hasBody = request.method !== "GET" && request.method !== "HEAD";

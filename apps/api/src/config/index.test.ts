@@ -15,7 +15,6 @@ describe("loadApiConfig", () => {
     expect(config.dbConnectionTimeoutMs).toBe(2_000);
     expect(config.dbSslMode).toBe("disable");
     expect(config.dbSslRejectUnauthorized).toBe(true);
-    expect(config.authMode).toBe("development");
   });
 
   it("parses postgres settings when provided", () => {
@@ -52,14 +51,5 @@ describe("loadApiConfig", () => {
         DB_POOL_MAX: "0"
       })
     ).toThrow();
-  });
-
-  it("requires AUTH_MODE=entra in production", () => {
-    expect(() =>
-      loadApiConfig({
-        NODE_ENV: "production",
-        AUTH_MODE: "development"
-      })
-    ).toThrow("AUTH_MODE must be entra when NODE_ENV=production");
   });
 });

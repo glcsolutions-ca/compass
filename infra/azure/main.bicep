@@ -31,12 +31,7 @@ param postgresStorageMb int = 32768
 param apiImage string = 'SET_IN_GITHUB_ENV'
 param webImage string = 'SET_IN_GITHUB_ENV'
 
-param authMode string = 'entra'
-param requiredScope string = 'time.read'
 param apiLogLevel string = 'warn'
-param entraIssuer string
-param entraAudience string
-param entraJwksUri string
 
 var acrPullRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
@@ -130,12 +125,7 @@ module api './modules/containerapp-api.bicep' = {
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
     databaseUrl: databaseUrl
-    authMode: authMode
-    requiredScope: requiredScope
     logLevel: apiLogLevel
-    entraIssuer: entraIssuer
-    entraAudience: entraAudience
-    entraJwksUri: entraJwksUri
   }
   dependsOn: [
     acrPullIdentityRoleAssignment

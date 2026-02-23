@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: "Compass Hub",
-  description: "Compass by GLC. One place to see work, time, and delivery across your company."
+  title: "Compass Platform",
+  description: "Domain-neutral foundation for API, web, and worker services."
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

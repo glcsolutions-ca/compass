@@ -1,4 +1,4 @@
-FROM node:24-alpine AS build
+FROM node:22-alpine AS build
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
@@ -11,7 +11,7 @@ RUN pnpm --filter @compass/contracts build
 RUN pnpm --filter @compass/api build
 RUN pnpm --filter @compass/api deploy --legacy --prod /opt/app
 
-FROM node:24-alpine AS runtime
+FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV API_HOST=0.0.0.0

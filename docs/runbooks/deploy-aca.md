@@ -92,6 +92,8 @@ All concrete deploy values must be stored in the GitHub `production` environment
 - ACR login server is derived in workflow as `${ACR_NAME}.azurecr.io`.
 - ACA API/Web/Job resources pull images through managed identity (shared user-assigned pull identity).
 - `AcrPull` role assignment for the shared pull identity is provisioned by Bicep (`infra/azure/main.bicep`).
+- Decision record: `docs/adr/TDR-002-production-container-registry-strategy.md`.
+- Under managed-identity-only runtime auth, GHCR is not a direct production replacement for ACR.
 
 ## Deploy Sequence
 

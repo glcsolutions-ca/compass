@@ -23,3 +23,5 @@ General documentation and architecture records live here.
 - `runbooks/deploy-aca.md`
 - `runbooks/infra-identity-iac.md`
 - `runbooks/migration-safety.md`
+
+<!-- ci-validation: low-tier docs-only -->

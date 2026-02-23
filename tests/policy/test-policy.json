@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1",
+  "schemaVersion": "2",
   "scanRoots": ["apps", "packages", "tests"],
   "layers": {
     "commitStage": [
@@ -33,5 +33,35 @@
     "TC010": { "enabled": true },
     "TC011": { "enabled": true },
     "TC020": { "enabled": true }
+  },
+  "runtime": {
+    "modes": {
+      "commitStage": {
+        "allowLoopbackOnly": true,
+        "allowPostgres": false,
+        "blockChildProcess": true,
+        "blockedPorts": [5432]
+      },
+      "integration": {
+        "allowLoopbackOnly": true,
+        "allowPostgres": true,
+        "blockChildProcess": false,
+        "blockedPorts": []
+      }
+    }
+  },
+  "lint": {
+    "commitStageGlobs": [
+      "apps/*/src/**/*.test.ts",
+      "apps/*/src/**/*.test.tsx",
+      "packages/*/src/**/*.test.ts",
+      "packages/*/src/**/*.test.tsx"
+    ],
+    "focusedTests": true,
+    "disallowMathRandom": true,
+    "disallowRawSetTimeout": true,
+    "disallowDbImports": true,
+    "disallowChildProcessImports": true,
+    "dbModules": ["pg", "@prisma/client", "mysql2", "mongodb", "redis", "ioredis", "better-sqlite3"]
   }
 }

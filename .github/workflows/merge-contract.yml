@@ -173,18 +173,15 @@ jobs:
           set -euo pipefail
 
           if [ "$CI_MODE" = "fast" ]; then
-            pnpm check:format
-            pnpm check:lint
-            pnpm check:typecheck
-            pnpm test:merge-contract
+            pnpm test
             exit 0
           fi
 
           pnpm db:postgres:wait
           pnpm db:migrate:up
           pnpm db:seed
-          pnpm --filter @compass/api test:integration
-          pnpm ci:pipeline
+          pnpm test:full
+          pnpm build
 
       - name: Stop Postgres (full mode only)
         if: ${{ always() && needs.preflight.outputs.ci_mode == 'full' }}

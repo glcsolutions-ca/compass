@@ -11,10 +11,10 @@ This directory contains operational guidance for coding and review agents workin
 ## Local CI Fast Path
 
 - Install repo hooks once per clone: `pnpm hooks:install`
-- Run the fast local merge-contract checks: `pnpm check:quick`
+- Run the default commit-stage suite: `pnpm test`
 - Hook behavior:
   - `.githooks/pre-commit` runs `pnpm exec lint-staged`
-  - `.githooks/pre-push` runs `pnpm check:quick`
+  - `.githooks/pre-push` runs `pnpm test`
 
 ## Control Plane Links
 

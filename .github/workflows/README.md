@@ -15,17 +15,18 @@
 
 Use these local checks to reduce format-only and policy drift failures in CI:
 
-- `pnpm check:quick` runs the fast pre-merge contract (`format`, `lint`, `typecheck`, and merge-contract unit tests).
+- `pnpm test` runs the commit-stage suite (`static checks + unit/component + contract checks`).
+- `pnpm test:full` runs commit-stage plus integration tests.
 - `pnpm hooks:install` configures repo-local git hooks (`.githooks`).
 - Installed hooks run:
   - `pre-commit`: `pnpm exec lint-staged`
-  - `pre-push`: `pnpm check:quick`
+  - `pre-push`: `pnpm test`
 
 - `merge-contract.yml`: deterministic PR gate with dependency-based parallel checks:
   - triggers on `pull_request` and `merge_group`
   - `risk-policy-preflight` (includes `docs-drift` evaluation)
   - `actionlint` on changed workflow files only
-  - `ci-pipeline` (single stable CI check name; `fast` for `low`, `full` for `standard/high`)
+  - `ci-pipeline` (single stable CI check name; `fast` runs `pnpm test`, `full` runs DB setup + `pnpm test:full` + `pnpm build`)
   - `browser-evidence` (conditional)
   - `harness-smoke` (conditional)
   - `migration-image-smoke` (conditional for high-tier migration/runtime path changes)

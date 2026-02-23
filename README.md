@@ -21,16 +21,19 @@ pnpm dev
 ## Main commands
 
 - `pnpm dev` - run local apps/services
-- `pnpm check` - run format, lint, typecheck, test, and contract checks
+- `pnpm test` - run commit-stage checks (static + unit/component + contract)
+- `pnpm test:full` - run commit-stage + integration tests
+- `pnpm test:integration` - run integration tests only
+- `pnpm test:e2e` - run Playwright smoke flow only
+- `pnpm check` - alias of `pnpm test` (kept for compatibility)
 - `pnpm build` - build all apps/packages
-- `pnpm test` - run test suites
 - `pnpm db:postgres:up` - start local Postgres, apply migrations, seed data
 - `pnpm db:postgres:down` - stop local Postgres
 
 ## PR flow
 
 1. Implement the change.
-2. Run `pnpm check` and `pnpm build`.
+2. Run `pnpm test` and `pnpm build`.
 3. Open a PR to `main`.
 4. Let CI enforce merge safety (`risk-policy-gate`).
 
@@ -46,6 +49,7 @@ pnpm dev
 - Contributor workflow: `CONTRIBUTING.md`
 - Agent guide: `AGENTS.md`
 - Docs index: `docs/README.md`
+- Testing philosophy: `docs/testing.md`
 - Merge policy (human): `docs/merge-policy.md`
 - Branch protection: `docs/branch-protection.md`
 - Machine policy: `.github/policy/merge-policy.json`

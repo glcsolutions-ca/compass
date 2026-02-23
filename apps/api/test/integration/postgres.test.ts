@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "pg";
-import { buildApiApp } from "./app.js";
-import { loadApiConfig } from "./config/index.js";
+import { buildApiApp } from "../../src/app.js";
+import { loadApiConfig } from "../../src/config/index.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 

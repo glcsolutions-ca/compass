@@ -9,6 +9,9 @@
       "path": "./packages/sdk/tsconfig.ref.json"
     },
     {
+      "path": "./packages/testkit/tsconfig.ref.json"
+    },
+    {
       "path": "./apps/api/tsconfig.ref.json"
     },
     {

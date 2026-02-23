@@ -20,9 +20,10 @@ async function writeResult(filePath: string, payload: unknown) {
 
 async function main() {
   const headSha = process.env.HEAD_SHA ?? "local";
-  const tier = process.env.RISK_TIER ?? "t3";
+  const testedSha = process.env.TESTED_SHA ?? headSha;
+  const tier = process.env.RISK_TIER ?? "high";
 
-  const resultPath = path.join(".artifacts", "harness-smoke", headSha, "result.json");
+  const resultPath = path.join(".artifacts", "harness-smoke", testedSha, "result.json");
   const app = buildApiApp();
 
   try {
@@ -41,6 +42,7 @@ async function main() {
       schemaVersion: "1",
       generatedAt: new Date().toISOString(),
       headSha,
+      testedSha,
       tier,
       status: "pass",
       checks: [
@@ -57,6 +59,7 @@ async function main() {
       schemaVersion: "1",
       generatedAt: new Date().toISOString(),
       headSha,
+      testedSha,
       tier,
       status: "fail",
       checks: [

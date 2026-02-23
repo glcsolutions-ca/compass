@@ -306,6 +306,7 @@ async function readTextIfSafe(filePath) {
 
 async function main() {
   const headSha = process.env.HEAD_SHA?.trim() || (await getCurrentSha());
+  const testedSha = process.env.TESTED_SHA?.trim() || headSha;
   const tier = process.env.RISK_TIER?.trim() || "low";
   const files = await getTrackedFiles();
 
@@ -319,12 +320,13 @@ async function main() {
   }
 
   const status = findings.length === 0 ? "pass" : "fail";
-  const resultPath = path.join(".artifacts", "no-org-infra", headSha, "result.json");
+  const resultPath = path.join(".artifacts", "no-org-infra", testedSha, "result.json");
 
   await writeJsonFile(resultPath, {
     schemaVersion: "1",
     generatedAt: new Date().toISOString(),
     headSha,
+    testedSha,
     tier,
     status,
     findingCount: findings.length,

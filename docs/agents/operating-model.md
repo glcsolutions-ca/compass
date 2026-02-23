@@ -6,7 +6,7 @@ Compass uses a deterministic merge contract.
 
 1. Risk tier is computed from changed paths.
 2. Required checks are computed from tier.
-3. Evidence must match current head SHA and computed tier.
+3. Evidence must match current head SHA, tested merge SHA, and computed tier.
 4. `risk-policy-gate` is the final required check and fails closed.
 
 ## Key Terms
@@ -17,6 +17,6 @@ Compass uses a deterministic merge contract.
 ## Canonical Check Dependencies
 
 1. `risk-policy-preflight` runs first (includes `docs-drift`).
-2. `ci-pipeline` always runs from preflight outputs (`fast` for `low`, `full` for `normal/high`).
-3. `browser-evidence`, `harness-smoke`, and `codex-review` run conditionally in parallel.
+2. `ci-pipeline` always runs from preflight outputs (`fast` for `low`, `full` for `standard/high`).
+3. `browser-evidence` and `harness-smoke` run conditionally in parallel.
 4. `risk-policy-gate` is final and validates required `needs.*.result` outcomes.

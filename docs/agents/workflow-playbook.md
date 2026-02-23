@@ -14,7 +14,6 @@ pnpm build
 
 ```bash
 pnpm ci:preflight
-pnpm ci:codex-review
 pnpm ci:pipeline
 pnpm ci:gate
 ```
@@ -30,9 +29,9 @@ pnpm ci:gate
 3. CI runs required checks in parallel after preflight.
 4. `ci-pipeline` check name is fixed; mode is tier-driven:
    - `fast` for `low`
-   - `full` for `normal` and `high`
+   - `full` for `standard` and `high`
    - target: `low` PRs should not start Postgres containers
-5. `risk-policy-gate` blocks merge unless current-head evidence is complete and valid.
+5. `risk-policy-gate` blocks merge unless required evidence is complete and valid for both `headSha` and `testedSha`.
 6. Merge to `main` runs one release pipeline: `classify`, `checks`, `promote`, `report`.
 7. `classify` diffs `base_sha` (last successful production deployment SHA) to `head_sha`.
 8. `promote` is the only production-mutating job (`environment: production`, `concurrency: prod-main`).
@@ -45,5 +44,4 @@ pnpm ci:gate
 When tier resolves to `high`, expect additional required evidence:
 
 - `harness-smoke`
-- `codex-review` (when `reviewPolicy.codexReviewEnabled=true`)
 - `actionlint` when workflow files changed

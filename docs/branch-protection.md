@@ -4,7 +4,7 @@ Configure branch protection for `main` with one required status check:
 
 - `risk-policy-gate`
 
-Do not require dynamic checks directly (`ci-pipeline`, `browser-evidence`, `harness-smoke`, `codex-review`).
+Do not require dynamic checks directly (`ci-pipeline`, `browser-evidence`, `harness-smoke`).
 
 Those are tier-conditional and enforced by `risk-policy-gate` using `.github/policy/merge-policy.json`.
 

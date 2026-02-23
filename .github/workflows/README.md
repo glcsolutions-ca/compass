@@ -14,11 +14,11 @@
   - `risk-policy-preflight` (includes `docs-drift` evaluation)
   - `actionlint` on changed workflow files only
   - `no-org-infra` leak guard
-  - `ci-pipeline` (single stable CI check name; `fast` for `low`, `full` for `normal/high`)
+  - `ci-pipeline` (single stable CI check name; `fast` for `low`, `full` for `standard/high`)
   - `browser-evidence` (conditional)
   - `harness-smoke` (conditional)
-  - `codex-review` (conditional; when enabled and required)
-  - `risk-policy-gate` (final required gate; validates required checks from `needs.*.result`)
+  - `risk-policy-gate` (final required gate; validates required outcomes from `needs.*.result`)
+- `codex-review-trusted.yml`: manual trusted-context codex review for PR diffs (non-blocking to merge contract)
 - `dependabot-auto-merge.yml`: safe-lane auto-merge for Dependabot PRs (patch/minor only) with required gate-context checks (`risk-policy-gate`, `ci-pipeline`) before enabling auto-merge
 - `deploy.yml`: mainline release orchestrator (`classify -> checks -> promote -> report`)
   - `promote` is the only job with `environment: production` and `concurrency: prod-main`

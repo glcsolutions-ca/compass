@@ -23,7 +23,7 @@
   - `risk-policy-gate` (final required gate; policy-driven check aggregation + browser manifest assertions)
 - `dependabot-auto-merge.yml`: metadata-only safe-lane auto-merge for Dependabot PRs (patch/minor only, no PR checkout)
 - `deploy.yml`: mainline release orchestrator (`classify -> checks -> promote -> report`)
-  - `validate` lane runs `actionlint` via pinned `rhysd/actionlint@v1.7.11`
+  - `validate` lane runs `actionlint` via pinned `rhysd/actionlint@v1.7.11` scoped to `deploy.yml`
   - `promote` is the only job with `environment: production` and `concurrency: prod-main`
   - stale candidates are skipped before irreversible boundaries
   - runtime promotion uses digest refs only (`repo@sha256`), not tags

@@ -443,9 +443,9 @@ jobs:
           {
             echo "candidate_api_ref=$api_ref"
             echo "candidate_web_ref=$web_ref"
+            echo "api_tag=$api_tag"
+            echo "web_tag=$web_tag"
           } >> "$GITHUB_OUTPUT"
-          echo "api_tag=$api_tag" >> "$GITHUB_OUTPUT"
-          echo "web_tag=$web_tag" >> "$GITHUB_OUTPUT"
 
       - name: Resolve candidate refs
         id: candidate_refs

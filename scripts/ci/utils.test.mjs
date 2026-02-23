@@ -127,7 +127,7 @@ describe("glob matching engine", () => {
     ).toBe(true);
   });
 
-  it("uses path.posix.matchesGlob semantics for '**' against dot-prefixed paths", () => {
+  it("keeps dot-path behavior deterministic for '**' patterns", () => {
     expect(matchesAnyPattern(".github/policy/merge-policy.json", ["**"])).toBe(false);
     expect(matchesAnyPattern("README.md", ["**"])).toBe(true);
   });

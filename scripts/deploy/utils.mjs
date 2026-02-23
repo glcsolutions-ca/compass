@@ -18,7 +18,7 @@ export function getHeadSha() {
 }
 
 export function getTier() {
-  return process.env.RISK_TIER?.trim() || "t3";
+  return process.env.RISK_TIER?.trim() || "high";
 }
 
 export async function run(command, args, options = {}) {

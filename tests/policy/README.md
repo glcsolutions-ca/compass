@@ -20,6 +20,7 @@ Testing philosophy lives in `tests/README.md`. This folder defines how that phil
 - `tests/policy/test-policy.json`: machine-readable policy contract for layers 1-3.
 - `tests/policy/test-quarantine.json`: temporary skip metadata used by `TC011`.
 - `tests/policy/README.md`: policy, quarantine, and troubleshooting guidance.
+- `.github/CODEOWNERS`: review ownership for policy and enforcement files.
 
 ## Enforcement layers
 

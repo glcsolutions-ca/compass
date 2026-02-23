@@ -1,0 +1,12 @@
+# Policy-driven merge gates
+/.github/policy/** @justinkropp
+/scripts/ci/preflight.mjs @justinkropp
+
+# Policy-driven testing enforcement (layers 1-3)
+/tests/README.md @justinkropp
+/tests/policy/** @justinkropp
+/scripts/ci/test-policy.mjs @justinkropp
+/scripts/ci/testing-contract.mjs @justinkropp
+/scripts/ci/eslint-policy.test.mjs @justinkropp
+/packages/testkit/guardrails/** @justinkropp
+/eslint.config.mjs @justinkropp

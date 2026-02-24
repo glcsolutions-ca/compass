@@ -15,7 +15,7 @@ Production stage must deploy accepted candidate digest refs and must not rebuild
 ## Non-Commit Rule
 
 Do not commit organization-specific infrastructure values in this repository.
-All concrete production values must be stored in GitHub environments (`acceptance`, `production`, `production-control-plane`).
+All concrete production values must be stored in GitHub environments (`acceptance`, `production`).
 
 ## Workflow
 
@@ -24,7 +24,6 @@ All concrete production values must be stored in GitHub environments (`acceptanc
   - `push` to `main`
   - `workflow_dispatch` replay by `candidate_sha`
 - Production job model:
-  - `approve-control-plane` (conditional)
   - `deploy-approved-candidate`
   - `production-blackbox-verify`
   - `production-stage`
@@ -39,7 +38,6 @@ Desktop deployables use a separate deployment pipeline:
 ## Environment Boundaries
 
 - `acceptance`: non-mutating validation credentials only.
-- `production-control-plane`: approval checkpoint for infra/identity/control-plane mutations.
 - `production`: mutation credentials and deployment execution.
 
 ## Required GitHub Environment Variables (`production`)
@@ -114,7 +112,7 @@ Identity config preflight contract (shared with acceptance):
 ## Production Sequence
 
 1. Use candidate digest refs from frozen manifest.
-2. Require `approve-control-plane` only when `infra`, `identity`, or `requiresInfraConvergence` is true.
+2. Use one automated production mutation path for `runtime`, `infra`, and `identity` scope.
 3. Run identity config preflight and identity apply when `identity` scope is true.
 4. Run infra apply when `infra` scope is true or runtime requires infra convergence.
 5. For runtime:

@@ -12,7 +12,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -b tsconfig.build.json",
     "generate": "openapi-typescript ../contracts/openapi/openapi.json --output src/generated/schema.ts",
     "lint": "eslint . --ext .ts --max-warnings=0",
     "test": "vitest run --config vitest.config.mts --passWithNoTests",

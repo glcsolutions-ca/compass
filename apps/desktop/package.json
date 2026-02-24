@@ -1,0 +1,27 @@
+{
+  "name": "@compass/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "productName": "Compass",
+  "main": "dist/main.js",
+  "scripts": {
+    "prepack:deps": "node ./scripts/rebuild-native-deps.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "dev:run": "pnpm run prepack:deps && pnpm run build && cross-env npm_config_node_linker=hoisted electron-forge start",
+    "lint": "eslint src forge.config.ts --ext .ts --max-warnings=0",
+    "test": "vitest run --config vitest.config.mts",
+    "typecheck": "tsc -p tsconfig.ref.json --noEmit",
+    "make:mac": "pnpm run prepack:deps && pnpm run build && node ./scripts/write-runtime-config.mjs && cross-env npm_config_node_linker=hoisted electron-forge make --platform=darwin --arch=arm64",
+    "make:win": "pnpm run prepack:deps && pnpm run build && node ./scripts/write-runtime-config.mjs && cross-env npm_config_node_linker=hoisted electron-forge make --platform=win32 --arch=x64"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.11.1",
+    "@electron-forge/core": "^7.11.1",
+    "@electron-forge/maker-dmg": "^7.11.1",
+    "@electron-forge/maker-wix": "^7.11.1",
+    "@electron-forge/publisher-github": "^7.11.1",
+    "@types/node": "24.10.13",
+    "cross-env": "^10.1.0",
+    "electron": "^40.6.0"
+  }
+}

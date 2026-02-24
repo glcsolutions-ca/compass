@@ -22,7 +22,8 @@
 7. API Container App.
 8. Web Container App.
 9. Codex Container App.
-10. Manual-trigger migration ACA Job pinned to API image.
+10. ACA managed certificates (per custom domain), created after app hostname registration.
+11. Manual-trigger migration ACA Job pinned to API image.
 
 ## Module Contract
 

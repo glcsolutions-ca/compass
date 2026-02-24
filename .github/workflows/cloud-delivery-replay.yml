@@ -884,6 +884,23 @@ jobs:
           MIGRATION_TIMEOUT_SECONDS: 900
         run: node scripts/pipeline/cloud/production/wait-migration-job.mjs
 
+      - name: Resolve Codex app name
+        if: ${{ env.RUNTIME_CHANGED == 'true' }}
+        run: |
+          set -euo pipefail
+
+          codex_app_name="${ACA_CODEX_APP_NAME:-}"
+          if [ -z "$codex_app_name" ]; then
+            if [[ "$ACA_API_APP_NAME" == *"-api-"* ]]; then
+              codex_app_name="${ACA_API_APP_NAME/-api-/-codex-}"
+            else
+              echo "ACA_CODEX_APP_NAME is empty and fallback from ACA_API_APP_NAME failed" >&2
+              exit 1
+            fi
+          fi
+
+          echo "ACA_CODEX_APP_NAME=$codex_app_name" >> "$GITHUB_ENV"
+
       - name: Deploy API
         if: ${{ env.RUNTIME_CHANGED == 'true' }}
         uses: azure/container-apps-deploy-action@v1

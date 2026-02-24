@@ -10,11 +10,11 @@ async function main() {
 
   if (headSha !== currentMainHead) {
     throw new Error(
-      `Refusing stale deploy candidate ${headSha}; current ${remote}/${branch} is ${currentMainHead}`
+      `Refusing stale deploy release package ${headSha}; current ${remote}/${branch} is ${currentMainHead}`
     );
   }
 
-  console.info(`Deploy candidate is current ${remote}/${branch} head: ${headSha}`);
+  console.info(`Deploy release package is current ${remote}/${branch} head: ${headSha}`);
 }
 
 void main();

@@ -9,8 +9,8 @@
 - Terraform + provider versions/backend declaration: `infra/identity/versions.tf`
 - Environment variable template: `infra/identity/env/prod.tfvars`
 - Pipeline stages:
-  - `.github/workflows/cloud-deployment-pipeline.yml` (`identity-readonly-acceptance`, plan)
-  - `.github/workflows/cloud-deployment-pipeline.yml` (`deploy-approved-candidate`, apply)
+  - `.github/workflows/cloud-delivery-pipeline.yml` (`identity-readonly-acceptance`, plan)
+  - `.github/workflows/cloud-delivery-pipeline.yml` (`deploy-release-package`, apply)
 
 ## Provisioned Identity Objects
 
@@ -30,14 +30,14 @@
 
 - Backend is `azurerm` (remote state in Azure Storage).
 - Authentication model is OIDC + Azure AD auth (`use_oidc=true`, `use_azuread_auth=true`).
-- Cloud Deployment Pipeline acceptance stage runs non-mutating Terraform plan evidence.
-- Cloud Deployment Pipeline production stage runs guarded Terraform apply for accepted candidates.
+- Cloud Delivery Pipeline acceptance stage runs non-mutating Terraform plan evidence.
+- Cloud Delivery Pipeline production stage runs guarded Terraform apply for accepted release packages.
 
 ## Acceptance vs Production Credential Boundary
 
 - Acceptance identity plan uses read-only identity credentials in `acceptance` environment.
 - Production identity apply uses mutating credentials in `production` environment.
-- Cloud Deployment Pipeline enforces this split with `AZURE_ACCEPTANCE_IDENTITY_CLIENT_ID` for acceptance and `AZURE_IDENTITY_CLIENT_ID` for production.
+- Cloud Delivery Pipeline enforces this split with `AZURE_ACCEPTANCE_IDENTITY_CLIENT_ID` for acceptance and `AZURE_IDENTITY_CLIENT_ID` for production.
 
 ## Required Production Variables (identity acceptance/apply)
 
@@ -77,7 +77,7 @@ Bootstrap steps:
 3. Assign `Application Administrator` to the bootstrap service principal.
 4. Create/prepare Terraform state storage and grant `Storage Blob Data Contributor` on the tfstate container scope.
 5. Set GitHub `production` secret `AZURE_IDENTITY_CLIENT_ID` to the bootstrap app client ID.
-6. Run Cloud Deployment Pipeline with identity scope to confirm non-mutating auth and backend access.
+6. Run Cloud Delivery Pipeline with identity scope to confirm non-mutating auth and backend access.
 
 ## Bootstrap Identity Rotation
 
@@ -87,14 +87,14 @@ Rotate bootstrap identity with explicit handoff:
 2. Add the same federated credential subject (`repo:<org>/<repo>:environment:production`).
 3. Grant the same Entra role assignments and Azure RBAC access used by the previous bootstrap identity.
 4. Update GitHub `production` secret `AZURE_IDENTITY_CLIENT_ID` to the new client ID.
-5. Run Cloud Deployment Pipeline (identity scope) to verify auth and backend access.
+5. Run Cloud Delivery Pipeline (identity scope) to verify auth and backend access.
 6. Remove old role assignments and old bootstrap app after replacement is verified.
 
 ## Workflow Evidence
 
-- Cloud Deployment Pipeline acceptance stage writes `.artifacts/identity/<sha>/plan.json`.
-- Cloud Deployment Pipeline acceptance stage writes config-contract results to `.artifacts/identity/<sha>/config-validation.json`.
-- Cloud Deployment Pipeline production stage writes `.artifacts/identity/<sha>/outputs.json`.
+- Cloud Delivery Pipeline acceptance stage writes `.artifacts/identity/<sha>/plan.json`.
+- Cloud Delivery Pipeline acceptance stage writes config-contract results to `.artifacts/identity/<sha>/config-validation.json`.
+- Cloud Delivery Pipeline production stage writes `.artifacts/identity/<sha>/outputs.json`.
 
 ## Outputs Contract and Downstream Mapping
 
@@ -155,7 +155,8 @@ terraform -chdir=infra/identity apply \
 
 ## References
 
-- `.github/workflows/cloud-deployment-pipeline.yml`
+- `.github/workflows/cloud-delivery-pipeline.yml`
+- `.github/workflows/cloud-delivery-replay.yml`
 - `infra/README.md`
 - `infra/azure/README.md`
-- `docs/runbooks/production-stage.md`
+- `docs/runbooks/cloud-delivery-pipeline.md`

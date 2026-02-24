@@ -3,8 +3,8 @@ export function evaluateAcceptanceStageResults({
   runtimeRequired,
   infraRequired,
   identityRequired,
-  candidateRefContractStatus,
-  candidateRefContractReasonCodes,
+  releasePackageRefContractStatus,
+  releasePackageRefContractReasonCodes,
   identityConfigContractStatus,
   identityConfigContractReasonCodes
 }) {
@@ -29,10 +29,10 @@ export function evaluateAcceptanceStageResults({
     });
   }
 
-  if (checkResults["load-release-candidate"] !== "success") {
+  if (checkResults["load-release-package"] !== "success") {
     reasons.push({
-      code: "CHECK_LOAD_RELEASE_CANDIDATE_NOT_SUCCESS",
-      message: `load-release-candidate result is ${checkResults["load-release-candidate"]}`
+      code: "CHECK_LOAD_RELEASE_PACKAGE_NOT_SUCCESS",
+      message: `load-release-package result is ${checkResults["load-release-package"]}`
     });
   }
 
@@ -76,15 +76,16 @@ export function evaluateAcceptanceStageResults({
     failureMessage: `identity-readonly-acceptance required but result is ${checkResults["identity-readonly-acceptance"]}`
   });
 
-  if ((runtimeRequired || infraRequired) && candidateRefContractStatus !== "pass") {
+  if ((runtimeRequired || infraRequired) && releasePackageRefContractStatus !== "pass") {
     const reasonSuffix =
-      Array.isArray(candidateRefContractReasonCodes) && candidateRefContractReasonCodes.length > 0
-        ? ` (${candidateRefContractReasonCodes.join(", ")})`
+      Array.isArray(releasePackageRefContractReasonCodes) &&
+      releasePackageRefContractReasonCodes.length > 0
+        ? ` (${releasePackageRefContractReasonCodes.join(", ")})`
         : "";
 
     reasons.push({
-      code: "CONFIG_CONTRACT_CANDIDATE_REFS_NOT_PASS",
-      message: `candidate ref contract required for runtime/infra acceptance but status is ${candidateRefContractStatus}${reasonSuffix}`
+      code: "CONFIG_CONTRACT_RELEASE_PACKAGE_REFS_NOT_PASS",
+      message: `release package ref contract required for runtime/infra acceptance but status is ${releasePackageRefContractStatus}${reasonSuffix}`
     });
   }
 

@@ -67,7 +67,7 @@
   "productionStage": {
     "requireFreshHeadOnAuto": true
   },
-  "cloudDeploymentPipeline": {
+  "cloudDeliveryPipeline": {
     "slo": {
       "mode": "observe",
       "acceptanceTargetSeconds": 900,

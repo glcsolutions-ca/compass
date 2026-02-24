@@ -49,13 +49,13 @@ async function main() {
       reasonCodes = ["ACCEPTANCE_GATE_FAILED"];
     }
   } else {
-    let reasonMessage = "No deployment required for this candidate.";
+    let reasonMessage = "No deployment required for this release package.";
     if (deploySkipReasonCode === "DOCS_ONLY_CHANGE") {
-      reasonMessage = "Docs-only candidate; deployment not required.";
+      reasonMessage = "Docs-only release package; deployment not required.";
     } else if (deploySkipReasonCode === "CHECKS_ONLY_CHANGE") {
-      reasonMessage = "Checks-only candidate; deployment not required.";
+      reasonMessage = "Checks-only release package; deployment not required.";
     } else if (deploySkipReasonCode === "DESKTOP_ONLY_CHANGE") {
-      reasonMessage = "Desktop-only candidate; cloud deployment not required.";
+      reasonMessage = "Desktop-only change; cloud delivery not required.";
     }
 
     reasonCodes = [deploySkipReasonCode];

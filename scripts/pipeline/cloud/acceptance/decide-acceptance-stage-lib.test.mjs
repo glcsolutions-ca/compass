@@ -4,7 +4,7 @@ import { evaluateAcceptanceStageResults } from "./decide-acceptance-stage-lib.mj
 function base(overrides = {}) {
   return {
     checkResults: {
-      "load-release-candidate": "success",
+      "load-release-package": "success",
       "runtime-api-system-acceptance": "skipped",
       "runtime-browser-acceptance": "skipped",
       "runtime-migration-image-acceptance": "skipped",
@@ -14,8 +14,8 @@ function base(overrides = {}) {
     runtimeRequired: false,
     infraRequired: false,
     identityRequired: false,
-    candidateRefContractStatus: "pass",
-    candidateRefContractReasonCodes: [],
+    releasePackageRefContractStatus: "pass",
+    releasePackageRefContractReasonCodes: [],
     identityConfigContractStatus: "pass",
     identityConfigContractReasonCodes: [],
     ...overrides
@@ -23,11 +23,11 @@ function base(overrides = {}) {
 }
 
 describe("evaluateAcceptanceStageResults", () => {
-  it("always requires load-release-candidate", () => {
+  it("always requires load-release-package", () => {
     const reasons = evaluateAcceptanceStageResults(
       base({
         checkResults: {
-          "load-release-candidate": "failure",
+          "load-release-package": "failure",
           "runtime-api-system-acceptance": "skipped",
           "runtime-browser-acceptance": "skipped",
           "runtime-migration-image-acceptance": "skipped",
@@ -39,8 +39,8 @@ describe("evaluateAcceptanceStageResults", () => {
 
     expect(reasons).toEqual([
       {
-        code: "CHECK_LOAD_RELEASE_CANDIDATE_NOT_SUCCESS",
-        message: "load-release-candidate result is failure"
+        code: "CHECK_LOAD_RELEASE_PACKAGE_NOT_SUCCESS",
+        message: "load-release-package result is failure"
       }
     ]);
   });
@@ -52,7 +52,7 @@ describe("evaluateAcceptanceStageResults", () => {
         infraRequired: true,
         identityRequired: true,
         checkResults: {
-          "load-release-candidate": "success",
+          "load-release-package": "success",
           "runtime-api-system-acceptance": "failure",
           "runtime-browser-acceptance": "cancelled",
           "runtime-migration-image-acceptance": "timed_out",
@@ -91,7 +91,7 @@ describe("evaluateAcceptanceStageResults", () => {
       base({
         infraRequired: true,
         checkResults: {
-          "load-release-candidate": "success",
+          "load-release-package": "success",
           "runtime-api-system-acceptance": "skipped",
           "runtime-browser-acceptance": "skipped",
           "runtime-migration-image-acceptance": "skipped",
@@ -115,15 +115,15 @@ describe("evaluateAcceptanceStageResults", () => {
         runtimeRequired: true,
         identityRequired: true,
         checkResults: {
-          "load-release-candidate": "success",
+          "load-release-package": "success",
           "runtime-api-system-acceptance": "success",
           "runtime-browser-acceptance": "success",
           "runtime-migration-image-acceptance": "success",
           "infra-readonly-acceptance": "skipped",
           "identity-readonly-acceptance": "success"
         },
-        candidateRefContractStatus: "fail",
-        candidateRefContractReasonCodes: ["CANDIDATE_API_REF_MISSING"],
+        releasePackageRefContractStatus: "fail",
+        releasePackageRefContractReasonCodes: ["RELEASE_PACKAGE_API_REF_MISSING"],
         identityConfigContractStatus: "fail",
         identityConfigContractReasonCodes: ["IDENTITY_API_IDENTIFIER_URI_INVALID_FORMAT"]
       })
@@ -131,9 +131,9 @@ describe("evaluateAcceptanceStageResults", () => {
 
     expect(reasons).toEqual([
       {
-        code: "CONFIG_CONTRACT_CANDIDATE_REFS_NOT_PASS",
+        code: "CONFIG_CONTRACT_RELEASE_PACKAGE_REFS_NOT_PASS",
         message:
-          "candidate ref contract required for runtime/infra acceptance but status is fail (CANDIDATE_API_REF_MISSING)"
+          "release package ref contract required for runtime/infra acceptance but status is fail (RELEASE_PACKAGE_API_REF_MISSING)"
       },
       {
         code: "CONFIG_CONTRACT_IDENTITY_NOT_PASS",

@@ -26,6 +26,14 @@ jobs:
       release_package_sha: ${{ steps.source.outputs.release_package_sha }}
       source_run_id: ${{ steps.resolve_run.outputs.run_id }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
       - name: Resolve release package SHA
         id: source
         env:

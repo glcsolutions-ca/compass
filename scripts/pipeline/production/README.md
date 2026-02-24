@@ -15,6 +15,7 @@
 | `wait-migration-job.mjs`                  | Polls migration execution to terminal state, captures logs/status artifacts. |
 | `verify-api-smoke.mjs`                    | Verifies API health/OpenAPI after promotion.                                 |
 | `record-release.mjs`                      | Writes successful production deployment record to GitHub Deployments API.    |
+| `decide-production-stage.mjs`             | Produces production stage YES/NO result artifact and reason codes.           |
 | `managed-certificate-contract.mjs`        | Shared contract logic for managed certificate assertions.                    |
 | `utils.mjs`                               | Shared execution/env/artifact helpers for production scripts.                |
 

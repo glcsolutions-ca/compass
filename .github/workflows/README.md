@@ -20,10 +20,10 @@
 - `deployment-pipeline.yml`
   - trigger: `push` to `main`, `workflow_dispatch` replay by `candidate_sha`
   - key jobs: commit group (`determine-scope`, `fast-feedback`, optional static checks, `commit-stage`)
-  - candidate group: `freeze-release-candidate-images`, `publish-release-candidate`, `load-release-candidate`
-  - acceptance group: optional `runtime-blackbox-acceptance` / `infra-readonly-acceptance` / `identity-readonly-acceptance`, `acceptance-stage` (`YES` or `NO`)
+  - candidate group: `freeze-candidate-api-image`, `freeze-candidate-web-image`, `freeze-current-runtime-refs`, `publish-release-candidate`, `load-release-candidate`
+  - acceptance group: optional `runtime-api-system-acceptance` / `runtime-browser-acceptance` / `runtime-migration-image-acceptance` / `infra-readonly-acceptance` / `identity-readonly-acceptance`, `acceptance-stage` (`YES` or `NO`)
   - production group: conditional `approve-control-plane`, `deploy-approved-candidate`, `production-blackbox-verify`, `production-stage`
-  - final gate: `release-decision` writes `.artifacts/release/<sha>/decision.json`
+  - final gate: `release-decision` writes `.artifacts/release/<sha>/decision.json` and `.artifacts/pipeline/<sha>/timing.json`
   - no `workflow_run` chaining inside the core release path
 - `acr-cleanup.yml`
   - scheduled/manual ACR cleanup

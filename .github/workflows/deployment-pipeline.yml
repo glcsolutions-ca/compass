@@ -136,20 +136,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.1
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Run fast feedback suite
         run: pnpm commit:fast-feedback
@@ -249,29 +237,94 @@ jobs:
             .artifacts/commit-stage/${{ needs.determine_scope.outputs.tested_sha }}/timing.json
           if-no-files-found: warn
 
-  freeze_release_candidate_images:
-    name: freeze-release-candidate-images
+  freeze_candidate_api_image:
+    name: freeze-candidate-api-image
     needs:
       - candidate_context
       - determine_scope
-      - fast_feedback
-      - infra_static_check
-      - identity_static_check
-      - commit_stage
-    if: ${{ always() && needs.candidate_context.outputs.replay_mode != 'true' && needs.determine_scope.result == 'success' && needs.commit_stage.result == 'success' && needs.fast_feedback.result == 'success' && (needs.infra_static_check.result == 'success' || needs.infra_static_check.result == 'skipped') && (needs.identity_static_check.result == 'success' || needs.identity_static_check.result == 'skipped') }}
+    if: ${{ needs.candidate_context.outputs.replay_mode != 'true' && needs.determine_scope.outputs.runtime_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production
     outputs:
       candidate_api_ref: ${{ steps.freeze.outputs.candidate_api_ref }}
+    env:
+      HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Freeze candidate API image
+        id: freeze
+        env:
+          FREEZE_MODE: build-api
+        run: node scripts/pipeline/shared/freeze-release-candidate-refs.mjs
+
+  freeze_candidate_web_image:
+    name: freeze-candidate-web-image
+    needs:
+      - candidate_context
+      - determine_scope
+    if: ${{ needs.candidate_context.outputs.replay_mode != 'true' && needs.determine_scope.outputs.runtime_changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    outputs:
       candidate_web_ref: ${{ steps.freeze.outputs.candidate_web_ref }}
     env:
       HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
-      RUNTIME_CHANGED: ${{ needs.determine_scope.outputs.runtime_changed }}
-      INFRA_CHANGED: ${{ needs.determine_scope.outputs.infra_changed }}
-      REQUIRES_INFRA_CONVERGENCE: ${{ needs.determine_scope.outputs.requires_infra_convergence }}
       ACR_NAME: ${{ vars.ACR_NAME }}
       ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Freeze candidate Web image
+        id: freeze
+        env:
+          FREEZE_MODE: build-web
+        run: node scripts/pipeline/shared/freeze-release-candidate-refs.mjs
+
+  freeze_current_runtime_refs:
+    name: freeze-current-runtime-refs
+    needs:
+      - candidate_context
+      - determine_scope
+    if: ${{ needs.candidate_context.outputs.replay_mode != 'true' && needs.determine_scope.outputs.runtime_changed != 'true' && (needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.requires_infra_convergence == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    outputs:
+      candidate_api_ref: ${{ steps.freeze.outputs.candidate_api_ref }}
+      candidate_web_ref: ${{ steps.freeze.outputs.candidate_web_ref }}
+    env:
+      ACR_NAME: ${{ vars.ACR_NAME }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
@@ -279,101 +332,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        if: ${{ env.RUNTIME_CHANGED == 'true' }}
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.1
-
       - name: Setup Node
-        if: ${{ env.RUNTIME_CHANGED == 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        if: ${{ env.RUNTIME_CHANGED == 'true' }}
-        run: pnpm install --frozen-lockfile
 
       - name: Azure login (OIDC)
-        if: ${{ env.RUNTIME_CHANGED == 'true' || env.INFRA_CHANGED == 'true' || env.REQUIRES_INFRA_CONVERGENCE == 'true' }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Freeze release candidate image refs
+      - name: Freeze current runtime refs
         id: freeze
-        run: |
-          set -euo pipefail
-
-          resolve_to_digest_ref() {
-            local image="$1"
-            local acr_registry="${ACR_NAME}.azurecr.io"
-
-            if [[ "$image" != "$acr_registry/"* ]]; then
-              echo "Image is not in expected ACR registry: $image" >&2
-              return 1
-            fi
-
-            local registry_prefix="${acr_registry}/"
-            local repo_ref="${image#"$registry_prefix"}"
-            local repo
-            local digest
-
-            if [[ "$repo_ref" == *@sha256:* ]]; then
-              repo="${repo_ref%%@*}"
-              digest="${repo_ref#*@}"
-              local resolved_digest
-              resolved_digest="$(az acr repository show --name "$ACR_NAME" --image "$repo@$digest" --query digest --output tsv 2>/dev/null || true)"
-              if [ -z "$resolved_digest" ]; then
-                echo "Image digest was not found in ACR: $image" >&2
-                return 1
-              fi
-              echo "$acr_registry/$repo@$resolved_digest"
-              return
-            fi
-
-            repo="${repo_ref%%:*}"
-            digest="$(az acr repository show --name "$ACR_NAME" --image "$repo_ref" --query digest --output tsv 2>/dev/null || true)"
-            if [ -z "$digest" ]; then
-              echo "Image tag was not found in ACR: $image" >&2
-              return 1
-            fi
-
-            echo "$acr_registry/$repo@$digest"
-          }
-
-          api_ref=""
-          web_ref=""
-
-          if [ "$RUNTIME_CHANGED" = "true" ]; then
-            az acr login --name "$ACR_NAME" --only-show-errors
-
-            api_tag="$ACR_REGISTRY/compass-api:$HEAD_SHA"
-            web_tag="$ACR_REGISTRY/compass-web:$HEAD_SHA"
-
-            docker build -f apps/api/Dockerfile -t "$api_tag" .
-            docker push "$api_tag"
-
-            docker build -f apps/web/Dockerfile -t "$web_tag" .
-            docker push "$web_tag"
-
-            api_ref="$(docker inspect --format='{{index .RepoDigests 0}}' "$api_tag")"
-            web_ref="$(docker inspect --format='{{index .RepoDigests 0}}' "$web_tag")"
-          elif [ "$INFRA_CHANGED" = "true" ] || [ "$REQUIRES_INFRA_CONVERGENCE" = "true" ]; then
-            api_image="$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_API_APP_NAME" --query 'properties.template.containers[0].image' --output tsv)"
-            web_image="$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_WEB_APP_NAME" --query 'properties.template.containers[0].image' --output tsv)"
-
-            api_ref="$(resolve_to_digest_ref "$api_image")"
-            web_ref="$(resolve_to_digest_ref "$web_image")"
-          fi
-
-          echo "candidate_api_ref=$api_ref" >> "$GITHUB_OUTPUT"
-          echo "candidate_web_ref=$web_ref" >> "$GITHUB_OUTPUT"
+        env:
+          FREEZE_MODE: resolve-current-runtime-refs
+        run: node scripts/pipeline/shared/freeze-release-candidate-refs.mjs
 
   publish_release_candidate:
     name: publish-release-candidate
@@ -381,8 +356,10 @@ jobs:
       - candidate_context
       - determine_scope
       - commit_stage
-      - freeze_release_candidate_images
-    if: ${{ always() && needs.candidate_context.outputs.replay_mode != 'true' && needs.determine_scope.result == 'success' && needs.commit_stage.result == 'success' }}
+      - freeze_candidate_api_image
+      - freeze_candidate_web_image
+      - freeze_current_runtime_refs
+    if: ${{ always() && needs.candidate_context.outputs.replay_mode != 'true' && needs.determine_scope.result == 'success' && needs.commit_stage.result == 'success' && ((needs.determine_scope.outputs.runtime_changed == 'true' && needs.freeze_candidate_api_image.result == 'success' && needs.freeze_candidate_web_image.result == 'success') || ((needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.requires_infra_convergence == 'true') && needs.freeze_current_runtime_refs.result == 'success') || (needs.determine_scope.outputs.runtime_changed != 'true' && needs.determine_scope.outputs.infra_changed != 'true' && needs.determine_scope.outputs.requires_infra_convergence != 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -398,9 +375,11 @@ jobs:
       DOCS_ONLY_CHANGED: ${{ needs.determine_scope.outputs.docs_only_changed }}
       REQUIRES_INFRA_CONVERGENCE: ${{ needs.determine_scope.outputs.requires_infra_convergence }}
       REQUIRES_MIGRATIONS: ${{ needs.determine_scope.outputs.requires_migrations }}
-      CANDIDATE_API_REF: ${{ needs.freeze_release_candidate_images.outputs.candidate_api_ref }}
-      CANDIDATE_WEB_REF: ${{ needs.freeze_release_candidate_images.outputs.candidate_web_ref }}
-      FREEZE_RESULT: ${{ needs.freeze_release_candidate_images.result }}
+      CANDIDATE_API_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.freeze_candidate_api_image.outputs.candidate_api_ref || needs.freeze_current_runtime_refs.outputs.candidate_api_ref }}
+      CANDIDATE_WEB_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.freeze_candidate_web_image.outputs.candidate_web_ref || needs.freeze_current_runtime_refs.outputs.candidate_web_ref }}
+      FREEZE_API_RESULT: ${{ needs.freeze_candidate_api_image.result }}
+      FREEZE_WEB_RESULT: ${{ needs.freeze_candidate_web_image.result }}
+      FREEZE_CURRENT_REFS_RESULT: ${{ needs.freeze_current_runtime_refs.result }}
     steps:
       - name: Publish release candidate manifest
         id: publish
@@ -415,9 +394,16 @@ jobs:
             requires_refs=true
           fi
 
-          if [ "$requires_refs" = "true" ] && [ "$FREEZE_RESULT" != "success" ]; then
-            echo "Freeze release candidate images did not succeed but candidate refs are required." >&2
-            exit 1
+          if [ "$RUNTIME_CHANGED" = "true" ]; then
+            if [ "$FREEZE_API_RESULT" != "success" ] || [ "$FREEZE_WEB_RESULT" != "success" ]; then
+              echo "Runtime candidate refs are required but runtime freeze jobs did not both succeed." >&2
+              exit 1
+            fi
+          elif [ "$INFRA_CHANGED" = "true" ] || [ "$REQUIRES_INFRA_CONVERGENCE" = "true" ]; then
+            if [ "$FREEZE_CURRENT_REFS_RESULT" != "success" ]; then
+              echo "Current runtime refs are required but freeze-current-runtime-refs did not succeed." >&2
+              exit 1
+            fi
           fi
 
           if [ "$requires_refs" = "true" ]; then
@@ -465,7 +451,7 @@ jobs:
     needs:
       - candidate_context
       - publish_release_candidate
-    if: ${{ needs.candidate_context.outputs.replay_mode == 'true' || needs.publish_release_candidate.result == 'success' }}
+    if: ${{ always() && (needs.candidate_context.outputs.replay_mode == 'true' || needs.publish_release_candidate.result == 'success') }}
     runs-on: ubuntu-latest
     outputs:
       head_sha: ${{ steps.manifest.outputs.head_sha }}
@@ -535,13 +521,13 @@ jobs:
           path: ${{ steps.manifest.outputs.release_candidate_manifest_copy_path }}
           if-no-files-found: error
 
-  runtime_blackbox_acceptance:
-    name: runtime-blackbox-acceptance
+  runtime_api_system_acceptance:
+    name: runtime-api-system-acceptance
     needs:
       - load_release_candidate
     if: ${{ needs.load_release_candidate.outputs.runtime_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 70
+    timeout-minutes: 45
     environment: acceptance
     env:
       HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
@@ -558,43 +544,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.1
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright browser
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Validate candidate reference contract
-        run: |
-          set -euo pipefail
-
-          if [ "$CANDIDATE_REF_CONTRACT_STATUS" != "pass" ]; then
-            echo "Candidate ref contract status is $CANDIDATE_REF_CONTRACT_STATUS" >&2
-            exit 1
-          fi
-
-          for image in "$CANDIDATE_API_REF" "$CANDIDATE_WEB_REF"; do
-            if [ -z "$image" ]; then
-              echo "Candidate image reference is missing" >&2
-              exit 1
-            fi
-            if [[ "$image" != *"@sha256:"* ]]; then
-              echo "Candidate image is not a digest reference: $image" >&2
-              exit 1
-            fi
-          done
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Azure login for runtime candidate pull
         uses: azure/login@v2
@@ -603,166 +554,119 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Pull candidate runtime images
-        run: |
-          set -euo pipefail
-          az acr login --name "$ACR_NAME" --only-show-errors
-          docker pull "$CANDIDATE_API_REF"
-          docker pull "$CANDIDATE_WEB_REF"
+      - name: Run API/system acceptance against candidate API image
+        run: node scripts/pipeline/acceptance/run-runtime-api-system-acceptance.mjs
 
-      - name: Start candidate runtime stack
-        run: |
-          set -euo pipefail
-          artifact_dir=".artifacts/runtime-candidate/$HEAD_SHA"
-          migration_artifact_dir=".artifacts/migration-image-smoke/$HEAD_SHA"
-          mkdir -p "$artifact_dir" "$migration_artifact_dir"
-          log_path="$artifact_dir/run.log"
-          network_name="acceptance-candidate-net"
-          postgres_name="acceptance-candidate-postgres"
-          api_container="acceptance-candidate-api"
-          web_container="acceptance-candidate-web"
-
-          {
-            docker network create "$network_name"
-
-            docker run -d \
-              --name "$postgres_name" \
-              --network "$network_name" \
-              -e POSTGRES_DB=compass \
-              -e POSTGRES_USER=compass \
-              -e POSTGRES_PASSWORD=compass \
-              postgres:16-alpine
-
-            for i in $(seq 1 90); do
-              if docker exec "$postgres_name" pg_isready -U compass -d compass >/dev/null 2>&1; then
-                break
-              fi
-
-              if [ "$i" -eq 90 ]; then
-                echo "Timed out waiting for postgres in candidate runtime stack" >&2
-                exit 1
-              fi
-
-              sleep 1
-            done
-
-            db_url="postgres://compass:compass@$postgres_name:5432/compass"
-
-            docker run --rm \
-              --network "$network_name" \
-              -e DATABASE_URL="$db_url" \
-              "$CANDIDATE_API_REF" \
-              node db/scripts/migrate.mjs up
-
-            docker run --rm \
-              --network "$network_name" \
-              -e DATABASE_URL="$db_url" \
-              "$CANDIDATE_API_REF" \
-              node db/scripts/seed-postgres.mjs
-
-            docker run -d \
-              --name "$api_container" \
-              --network "$network_name" \
-              -p 3001:3001 \
-              -e DATABASE_URL="$db_url" \
-              "$CANDIDATE_API_REF"
-
-            for _ in $(seq 1 90); do
-              if curl --silent --fail http://127.0.0.1:3001/health >/dev/null; then
-                break
-              fi
-              sleep 1
-            done
-
-            if ! curl --silent --fail http://127.0.0.1:3001/health >/dev/null; then
-              echo "Timed out waiting for candidate API readiness" >&2
-              exit 1
-            fi
-
-            docker run -d \
-              --name "$web_container" \
-              --network "$network_name" \
-              -p 3000:3000 \
-              -e API_BASE_URL="http://$api_container:3001" \
-              "$CANDIDATE_WEB_REF"
-
-            for _ in $(seq 1 90); do
-              if curl --silent --fail http://127.0.0.1:3000 >/dev/null; then
-                break
-              fi
-              sleep 1
-            done
-
-            if ! curl --silent --fail http://127.0.0.1:3000 >/dev/null; then
-              echo "Timed out waiting for candidate Web readiness" >&2
-              exit 1
-            fi
-          } 2>&1 | tee "$log_path"
-
-          cat > "$artifact_dir/result.json" <<JSON
-          {
-            "schemaVersion": "1",
-            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-            "headSha": "$HEAD_SHA",
-            "status": "pass",
-            "candidate": {
-              "apiRef": "$CANDIDATE_API_REF",
-              "webRef": "$CANDIDATE_WEB_REF"
-            },
-            "logPath": "$artifact_dir/run.log"
-          }
-          JSON
-
-          cat > "$migration_artifact_dir/result.json" <<JSON
-          {
-            "schemaVersion": "1",
-            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-            "headSha": "$HEAD_SHA",
-            "status": "pass",
-            "reasonCode": "",
-            "candidateApiRef": "$CANDIDATE_API_REF",
-            "logPath": "$artifact_dir/run.log"
-          }
-          JSON
-
-      - name: API smoke against candidate API
-        env:
-          TARGET_API_BASE_URL: http://127.0.0.1:3001
-        run: pnpm deploy:smoke
-
-      - name: System smoke against candidate API
-        env:
-          BASE_URL: http://127.0.0.1:3001
-        run: pnpm acceptance:system-smoke
-
-      - name: Browser evidence against candidate Web
-        env:
-          PR_NUMBER: 0
-          WEB_BASE_URL: http://127.0.0.1:3000
-          EXPECTED_ENTRYPOINT: ${{ env.EXPECTED_ENTRYPOINT }}
-          REQUIRED_FLOW_IDS_JSON: '["compass-smoke"]'
-        run: pnpm acceptance:browser-evidence
-
-      - name: Upload runtime acceptance artifacts
+      - name: Upload runtime API/system acceptance artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: runtime-blackbox-acceptance-${{ env.HEAD_SHA }}
+          name: runtime-api-system-acceptance-${{ env.HEAD_SHA }}
           path: |
-            .artifacts/browser-evidence/${{ env.HEAD_SHA }}
-            .artifacts/harness-smoke/${{ env.HEAD_SHA }}/result.json
-            .artifacts/deploy/${{ env.HEAD_SHA }}/api-smoke.json
-            .artifacts/migration-image-smoke/${{ env.HEAD_SHA }}
-            .artifacts/runtime-candidate/${{ env.HEAD_SHA }}/result.json
+            .artifacts/runtime-api-system/${{ env.HEAD_SHA }}
+            .artifacts/harness-smoke/${{ env.TESTED_SHA }}/result.json
+            .artifacts/deploy/${{ env.TESTED_SHA }}/api-smoke.json
           if-no-files-found: warn
 
-      - name: Stop runtime acceptance services
+  runtime_browser_acceptance:
+    name: runtime-browser-acceptance
+    needs:
+      - load_release_candidate
+    if: ${{ needs.load_release_candidate.outputs.runtime_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: acceptance
+    strategy:
+      matrix:
+        flow_id:
+          - compass-smoke
+      fail-fast: false
+    env:
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      TESTED_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      EVIDENCE_FLOW_ID: ${{ matrix.flow_id }}
+      CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.candidate_api_ref }}
+      CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.candidate_web_ref }}
+      CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.candidate_ref_contract_status }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Azure login for runtime candidate pull
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_ACCEPTANCE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run browser acceptance against candidate Web image
+        run: node scripts/pipeline/acceptance/run-runtime-browser-acceptance.mjs
+
+      - name: Upload runtime browser acceptance artifacts
         if: ${{ always() }}
-        run: |
-          docker rm -f acceptance-candidate-web >/dev/null 2>&1 || true
-          docker rm -f acceptance-candidate-api >/dev/null 2>&1 || true
-          docker rm -f acceptance-candidate-postgres >/dev/null 2>&1 || true
-          docker network rm acceptance-candidate-net >/dev/null 2>&1 || true
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-browser-acceptance-${{ env.HEAD_SHA }}-${{ matrix.flow_id }}
+          path: |
+            .artifacts/runtime-browser/${{ env.HEAD_SHA }}
+            .artifacts/browser-evidence/${{ env.TESTED_SHA }}
+          if-no-files-found: warn
+
+  runtime_migration_image_acceptance:
+    name: runtime-migration-image-acceptance
+    needs:
+      - load_release_candidate
+    if: ${{ needs.load_release_candidate.outputs.runtime_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: acceptance
+    env:
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.candidate_api_ref }}
+      CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.candidate_web_ref }}
+      CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.candidate_ref_contract_status }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Azure login for runtime candidate pull
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_ACCEPTANCE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run migration-image acceptance against candidate API image
+        run: node scripts/pipeline/acceptance/run-runtime-migration-image-acceptance.mjs
+
+      - name: Upload migration-image acceptance artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-migration-image-acceptance-${{ env.HEAD_SHA }}
+          path: .artifacts/migration-image-smoke/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
 
   infra_readonly_acceptance:
     name: infra-readonly-acceptance
@@ -840,72 +744,7 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Validate required environment configuration
-        run: |
-          set -euo pipefail
-
-          required_values=(
-            AZURE_TENANT_ID
-            AZURE_SUBSCRIPTION_ID
-            AZURE_RESOURCE_GROUP
-            AZURE_LOCATION
-            AZURE_VNET_NAME
-            AZURE_ACA_SUBNET_NAME
-            AZURE_POSTGRES_SUBNET_NAME
-            AZURE_PRIVATE_DNS_ZONE_NAME
-            ACA_ENVIRONMENT_NAME
-            AZURE_LOG_ANALYTICS_WORKSPACE_NAME
-            ACA_API_APP_NAME
-            ACA_WEB_APP_NAME
-            ACA_MIGRATE_JOB_NAME
-            ACR_PULL_IDENTITY_NAME
-            ACR_NAME
-            ACR_SKU
-            POSTGRES_SERVER_NAME
-            POSTGRES_DATABASE_NAME
-            POSTGRES_ADMIN_USERNAME
-            POSTGRES_VERSION
-            POSTGRES_SKU_NAME
-            POSTGRES_SKU_TIER
-            POSTGRES_STORAGE_MB
-            POSTGRES_ADMIN_PASSWORD
-          )
-
-          for name in "${required_values[@]}"; do
-            if [ -z "${!name:-}" ]; then
-              echo "Missing required value: ${name}" >&2
-              exit 1
-            fi
-          done
-
-          providers=(
-            "Microsoft.App"
-            "Microsoft.ContainerService"
-            "Microsoft.Network"
-            "Microsoft.DBforPostgreSQL"
-            "Microsoft.OperationalInsights"
-          )
-
-          for namespace in "${providers[@]}"; do
-            state="$(az provider show --namespace "$namespace" --query registrationState -o tsv)"
-            if [ "$state" != "Registered" ]; then
-              echo "Provider $namespace is not registered (state=$state)" >&2
-              exit 1
-            fi
-          done
-
-          private_dns_suffix=".postgres.database.azure.com"
-          private_dns_zone_normalized="$(echo "$AZURE_PRIVATE_DNS_ZONE_NAME" | tr '[:upper:]' '[:lower:]')"
-          if [[ "$private_dns_zone_normalized" != *"$private_dns_suffix" ]]; then
-            echo "AZURE_PRIVATE_DNS_ZONE_NAME must end with .postgres.database.azure.com" >&2
-            exit 1
-          fi
-
-          postgres_sku_tier_normalized="$(echo "$POSTGRES_SKU_TIER" | tr '[:upper:]' '[:lower:]')"
-          postgres_sku_name_normalized="$(echo "$POSTGRES_SKU_NAME" | tr '[:upper:]' '[:lower:]')"
-          if [ "$postgres_sku_tier_normalized" = "burstable" ] && [[ ! "$postgres_sku_name_normalized" =~ ^standard_b ]]; then
-            echo "POSTGRES_SKU_NAME must start with Standard_B when POSTGRES_SKU_TIER=Burstable" >&2
-            exit 1
-          fi
+        run: node scripts/pipeline/shared/validate-infra-acceptance-config.mjs
 
       - name: Validate managed certificate contract
         run: node scripts/pipeline/production/assert-managed-certificate-contract.mjs
@@ -1032,7 +871,9 @@ jobs:
     name: acceptance-stage
     needs:
       - load_release_candidate
-      - runtime_blackbox_acceptance
+      - runtime_api_system_acceptance
+      - runtime_browser_acceptance
+      - runtime_migration_image_acceptance
       - infra_readonly_acceptance
       - identity_readonly_acceptance
     if: ${{ always() && needs.load_release_candidate.result == 'success' }}
@@ -1056,38 +897,13 @@ jobs:
       - name: Resolve acceptance scope
         id: scope
         env:
+          STAGE_ELIGIBILITY_MODE: acceptance
           CHANGE_CLASS: ${{ needs.load_release_candidate.outputs.change_class }}
           INFRA_CHANGED: ${{ needs.load_release_candidate.outputs.infra_changed }}
           IDENTITY_CHANGED: ${{ needs.load_release_candidate.outputs.identity_changed }}
           DOCS_ONLY_CHANGED: ${{ needs.load_release_candidate.outputs.docs_only_changed }}
           REQUIRES_INFRA_CONVERGENCE: ${{ needs.load_release_candidate.outputs.requires_infra_convergence }}
-        run: |
-          set -euo pipefail
-
-          deploy_required="true"
-          deploy_skip_reason_code=""
-          control_plane_required="false"
-
-          if [ "$DOCS_ONLY_CHANGED" = "true" ]; then
-            deploy_required="false"
-            deploy_skip_reason_code="DOCS_ONLY_CHANGE"
-          elif [ "$CHANGE_CLASS" = "checks" ]; then
-            deploy_required="false"
-            deploy_skip_reason_code="CHECKS_ONLY_CHANGE"
-          elif [ "$CHANGE_CLASS" = "desktop" ]; then
-            deploy_required="false"
-            deploy_skip_reason_code="DESKTOP_ONLY_CHANGE"
-          fi
-
-          if [ "$INFRA_CHANGED" = "true" ] || [ "$IDENTITY_CHANGED" = "true" ] || [ "$REQUIRES_INFRA_CONVERGENCE" = "true" ]; then
-            control_plane_required="true"
-          fi
-
-          {
-            echo "deploy_required=$deploy_required"
-            echo "control_plane_required=$control_plane_required"
-            echo "deploy_skip_reason_code=$deploy_skip_reason_code"
-          } >> "$GITHUB_OUTPUT"
+        run: node scripts/pipeline/shared/resolve-stage-eligibility.mjs
 
       - name: Decide acceptance stage
         id: decide
@@ -1104,38 +920,8 @@ jobs:
           CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_release_candidate.outputs.candidate_ref_contract_reason_codes_json }}
           IDENTITY_CONFIG_CONTRACT_STATUS: ${{ needs.identity_readonly_acceptance.outputs.identity_config_contract_status }}
           IDENTITY_CONFIG_CONTRACT_REASON_CODES_JSON: ${{ needs.identity_readonly_acceptance.outputs.identity_config_contract_reason_codes_json }}
-          CHECK_RESULTS_JSON: ${{ format('{{"load-release-candidate":"{0}","runtime-blackbox-acceptance":"{1}","infra-readonly-acceptance":"{2}","identity-readonly-acceptance":"{3}"}}', needs.load_release_candidate.result, needs.runtime_blackbox_acceptance.result, needs.infra_readonly_acceptance.result, needs.identity_readonly_acceptance.result) }}
+          CHECK_RESULTS_JSON: ${{ format('{{"load-release-candidate":"{0}","runtime-api-system-acceptance":"{1}","runtime-browser-acceptance":"{2}","runtime-migration-image-acceptance":"{3}","infra-readonly-acceptance":"{4}","identity-readonly-acceptance":"{5}"}}', needs.load_release_candidate.result, needs.runtime_api_system_acceptance.result, needs.runtime_browser_acceptance.result, needs.runtime_migration_image_acceptance.result, needs.infra_readonly_acceptance.result, needs.identity_readonly_acceptance.result) }}
         run: node scripts/pipeline/acceptance/decide-acceptance-stage.mjs
-
-      - name: Write non-deploy acceptance result
-        if: ${{ steps.scope.outputs.deploy_required != 'true' }}
-        env:
-          HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
-          DEPLOY_SKIP_REASON_CODE: ${{ steps.scope.outputs.deploy_skip_reason_code }}
-        run: |
-          set -euo pipefail
-
-          reason_message="No deployment required for this candidate."
-          if [ "$DEPLOY_SKIP_REASON_CODE" = "DOCS_ONLY_CHANGE" ]; then
-            reason_message="Docs-only candidate; deployment not required."
-          elif [ "$DEPLOY_SKIP_REASON_CODE" = "CHECKS_ONLY_CHANGE" ]; then
-            reason_message="Checks-only candidate; deployment not required."
-          elif [ "$DEPLOY_SKIP_REASON_CODE" = "DESKTOP_ONLY_CHANGE" ]; then
-            reason_message="Desktop-only candidate; cloud deployment not required."
-          fi
-
-          mkdir -p ".artifacts/acceptance/$HEAD_SHA"
-          cat > ".artifacts/acceptance/$HEAD_SHA/result.json" <<JSON
-          {
-            "schemaVersion": "1",
-            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-            "headSha": "$HEAD_SHA",
-            "pass": true,
-            "decision": "YES",
-            "reasonCodes": ["$DEPLOY_SKIP_REASON_CODE"],
-            "reasons": ["$reason_message"]
-          }
-          JSON
 
       - name: Finalize acceptance decision
         id: finalize
@@ -1144,37 +930,7 @@ jobs:
           DEPLOY_SKIP_REASON_CODE: ${{ steps.scope.outputs.deploy_skip_reason_code }}
           HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
           DECIDE_OUTCOME: ${{ steps.decide.outcome }}
-        run: |
-          set -euo pipefail
-
-          acceptance_decision="YES"
-          reason_codes_json='[]'
-          result_path=".artifacts/acceptance/$HEAD_SHA/result.json"
-
-          if [ "$DEPLOY_REQUIRED" = "true" ]; then
-            if [ "$DECIDE_OUTCOME" != "success" ]; then
-              acceptance_decision="NO"
-            fi
-
-            if [ -f "$result_path" ]; then
-              parsed_reason_codes="$(jq -c '.reasonCodes // []' "$result_path")"
-              if [ -n "$parsed_reason_codes" ]; then
-                reason_codes_json="$parsed_reason_codes"
-              fi
-            fi
-
-            if [ "$acceptance_decision" = "NO" ] && [ "$reason_codes_json" = "[]" ]; then
-              reason_codes_json='["ACCEPTANCE_GATE_FAILED"]'
-            fi
-          else
-            reason="${DEPLOY_SKIP_REASON_CODE:-NO_DEPLOY_REQUIRED}"
-            reason_codes_json="$(jq -cn --arg reason "$reason" '[$reason]')"
-          fi
-
-          {
-            echo "acceptance_decision=$acceptance_decision"
-            echo "reason_codes_json=$reason_codes_json"
-          } >> "$GITHUB_OUTPUT"
+        run: node scripts/pipeline/acceptance/finalize-acceptance-stage.mjs
 
       - name: Upload acceptance artifacts
         if: ${{ always() }}
@@ -1504,20 +1260,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.1
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: API smoke verification
         run: node scripts/pipeline/production/verify-api-smoke.mjs
@@ -1571,60 +1315,7 @@ jobs:
           DEPLOY_RESULT: ${{ needs.deploy_approved_candidate.result }}
           VERIFY_RESULT: ${{ needs.production_blackbox_verify.result }}
           DEPLOYMENT_ID: ${{ needs.deploy_approved_candidate.outputs.deployment_id }}
-        run: |
-          set -euo pipefail
-
-          production_decision="YES"
-          reason_codes_json='[]'
-
-          if [ "$ACCEPTANCE_DECISION" != "YES" ]; then
-            production_decision="NO"
-            reason_codes_json="${ACCEPTANCE_REASON_CODES_JSON:-[\"ACCEPTANCE_DECISION_NOT_YES\"]}"
-          elif [ "$DEPLOY_REQUIRED" != "true" ]; then
-            production_decision="YES"
-            reason_codes_json="${ACCEPTANCE_REASON_CODES_JSON:-[\"NO_DEPLOY_REQUIRED\"]}"
-          else
-            if [ "$DEPLOY_RESULT" != "success" ]; then
-              production_decision="NO"
-              reason_codes_json='["DEPLOY_APPROVED_CANDIDATE_FAILED"]'
-            elif { [ "$RUNTIME_CHANGED" = "true" ] || [ "$INFRA_CHANGED" = "true" ] || [ "$REQUIRES_INFRA_CONVERGENCE" = "true" ]; } && [ "$VERIFY_RESULT" != "success" ]; then
-              production_decision="NO"
-              reason_codes_json='["PRODUCTION_BLACKBOX_VERIFY_FAILED"]'
-            fi
-          fi
-
-          mkdir -p ".artifacts/production/$HEAD_SHA"
-          cat > ".artifacts/production/$HEAD_SHA/result.json" <<JSON
-          {
-            "schemaVersion": "1",
-            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-            "headSha": "$HEAD_SHA",
-            "changeClass": "$CHANGE_CLASS",
-            "decision": "$production_decision",
-            "deployRequired": $DEPLOY_REQUIRED,
-            "reasonCodes": $reason_codes_json,
-            "scope": {
-              "runtime": $RUNTIME_CHANGED,
-              "desktop": $DESKTOP_CHANGED,
-              "infra": $INFRA_CHANGED,
-              "identity": $IDENTITY_CHANGED
-            },
-            "checks": {
-              "deployApprovedCandidateResult": "${DEPLOY_RESULT:-skipped}",
-              "productionBlackboxVerifyResult": "${VERIFY_RESULT:-skipped}"
-            },
-            "candidate": {
-              "apiRef": "$CANDIDATE_API_REF",
-              "webRef": "$CANDIDATE_WEB_REF"
-            },
-            "deploymentId": "${DEPLOYMENT_ID:-}"
-          }
-          JSON
-
-          {
-            echo "production_decision=$production_decision"
-            echo "reason_codes_json=$reason_codes_json"
-          } >> "$GITHUB_OUTPUT"
+        run: node scripts/pipeline/production/decide-production-stage.mjs
 
       - name: Upload production result artifact
         uses: actions/upload-artifact@v4
@@ -1645,6 +1336,30 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Collect deployment-stage timing
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha || needs.candidate_context.outputs.candidate_sha }}
+        run: node scripts/pipeline/shared/collect-deployment-stage-timing.mjs
+
+      - name: Upload deployment timing artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-pipeline-timing-${{ needs.load_release_candidate.outputs.head_sha || needs.candidate_context.outputs.candidate_sha }}
+          path: .artifacts/pipeline/${{ needs.load_release_candidate.outputs.head_sha || needs.candidate_context.outputs.candidate_sha }}/timing.json
+          if-no-files-found: warn
+
       - name: Write release decision artifact
         env:
           CANDIDATE_SHA: ${{ needs.candidate_context.outputs.candidate_sha }}
@@ -1654,80 +1369,14 @@ jobs:
           ACCEPTANCE_STAGE_RESULT: ${{ needs.acceptance_stage.result }}
           PRODUCTION_STAGE_RESULT: ${{ needs.production_stage.result }}
           HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha || needs.candidate_context.outputs.candidate_sha }}
-          ACCEPTANCE_DECISION: ${{ needs.acceptance_stage.outputs.acceptance_decision || 'NO' }}
+          ACCEPTANCE_DECISION: ${{ needs.acceptance_stage.outputs.acceptance_decision || '' }}
           ACCEPTANCE_REASON_CODES_JSON: ${{ needs.acceptance_stage.outputs.reason_codes_json || '[]' }}
-          PRODUCTION_DECISION: ${{ needs.production_stage.outputs.production_decision || 'NO' }}
+          PRODUCTION_DECISION: ${{ needs.production_stage.outputs.production_decision || '' }}
           PRODUCTION_REASON_CODES_JSON: ${{ needs.production_stage.outputs.reason_codes_json || '[]' }}
-          DEPLOY_REQUIRED: ${{ needs.acceptance_stage.outputs.deploy_required || 'true' }}
+          DEPLOY_REQUIRED: ${{ needs.acceptance_stage.outputs.deploy_required || '' }}
           CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.candidate_api_ref }}
           CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.candidate_web_ref }}
-        run: |
-          set -euo pipefail
-
-          commit_decision="YES"
-          if [ "$REPLAY_MODE" = "true" ]; then
-            commit_decision="REPLAY"
-          elif [ "$COMMIT_STAGE_RESULT" != "success" ]; then
-            commit_decision="NO"
-          fi
-
-          combined_reason_codes="$(jq -c -n \
-            --arg replay_mode "$REPLAY_MODE" \
-            --arg commit_result "$COMMIT_STAGE_RESULT" \
-            --arg load_result "$LOAD_RELEASE_CANDIDATE_RESULT" \
-            --arg acceptance_stage_result "$ACCEPTANCE_STAGE_RESULT" \
-            --arg production_stage_result "$PRODUCTION_STAGE_RESULT" \
-            --arg acceptance_decision "$ACCEPTANCE_DECISION" \
-            --arg production_decision "$PRODUCTION_DECISION" \
-            --argjson acceptance "$ACCEPTANCE_REASON_CODES_JSON" \
-            --argjson production "$PRODUCTION_REASON_CODES_JSON" \
-            '[]
-             + (if $replay_mode != "true" and $commit_result != "success" then ["COMMIT_STAGE_FAILED"] else [] end)
-             + (if $load_result != "success" then ["LOAD_RELEASE_CANDIDATE_NOT_SUCCESS"] else [] end)
-             + (if $acceptance_stage_result != "success" and (($acceptance // []) | length) == 0 then ["ACCEPTANCE_STAGE_NOT_SUCCESS"] else [] end)
-             + (if $acceptance_decision != "YES" and (($acceptance // []) | length) == 0 then ["ACCEPTANCE_DECISION_NOT_YES"] else [] end)
-             + (if $production_stage_result != "success" and (($production // []) | length) == 0 then ["PRODUCTION_STAGE_NOT_SUCCESS"] else [] end)
-             + (if $production_decision != "YES" and (($production // []) | length) == 0 then ["PRODUCTION_DECISION_NOT_YES"] else [] end)
-             + ($acceptance // [])
-             + ($production // [])
-             | unique')"
-
-          releaseable="false"
-          if [ "$REPLAY_MODE" = "true" ]; then
-            if [ "$ACCEPTANCE_DECISION" = "YES" ] && [ "$PRODUCTION_DECISION" = "YES" ]; then
-              releaseable="true"
-            fi
-          else
-            if [ "$commit_decision" = "YES" ] && [ "$ACCEPTANCE_DECISION" = "YES" ] && [ "$PRODUCTION_DECISION" = "YES" ]; then
-              releaseable="true"
-            fi
-          fi
-
-          mkdir -p ".artifacts/release/$HEAD_SHA"
-          cat > ".artifacts/release/$HEAD_SHA/decision.json" <<JSON
-          {
-            "schemaVersion": "1",
-            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-            "headSha": "$HEAD_SHA",
-            "candidateSha": "$CANDIDATE_SHA",
-            "replayMode": $REPLAY_MODE,
-            "commitStage": "$commit_decision",
-            "acceptance": "$ACCEPTANCE_DECISION",
-            "production": "$PRODUCTION_DECISION",
-            "deployRequired": $DEPLOY_REQUIRED,
-            "releaseable": $releaseable,
-            "reasonCodes": $combined_reason_codes,
-            "candidate": {
-              "apiRef": "$CANDIDATE_API_REF",
-              "webRef": "$CANDIDATE_WEB_REF"
-            }
-          }
-          JSON
-
-          if [ "$releaseable" != "true" ]; then
-            echo "Release decision is NO" >&2
-            exit 1
-          fi
+        run: node scripts/pipeline/shared/decide-release-outcome.mjs
 
       - name: Upload release decision artifact
         if: ${{ always() }}

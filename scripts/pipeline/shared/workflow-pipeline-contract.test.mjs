@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const commitStageWorkflowPath = ".github/workflows/commit-stage.yml";
 const deploymentPipelineWorkflowPath = ".github/workflows/deployment-pipeline.yml";
 const sharedApplyScriptPath = "scripts/pipeline/production/apply-infra.mjs";
+const stageEligibilityScriptPath = "scripts/pipeline/shared/resolve-stage-eligibility.mjs";
 
 function readUtf8(filePath) {
   return readFileSync(filePath, "utf8");
@@ -76,11 +77,26 @@ describe("workflow pipeline contract", () => {
   it("keeps acceptance runtime candidate-fidelity contract", () => {
     const workflow = readUtf8(deploymentPipelineWorkflowPath);
 
-    expect(workflow).toContain("Pull candidate runtime images");
-    expect(workflow).toContain('docker pull "$CANDIDATE_API_REF"');
-    expect(workflow).toContain('docker pull "$CANDIDATE_WEB_REF"');
-    expect(workflow).not.toContain("Build API");
-    expect(workflow).not.toContain("Build Web");
+    expect(workflow).toContain("name: runtime-api-system-acceptance");
+    expect(workflow).toContain("name: runtime-browser-acceptance");
+    expect(workflow).toContain("name: runtime-migration-image-acceptance");
+    expect(workflow).toContain(
+      "node scripts/pipeline/acceptance/run-runtime-api-system-acceptance.mjs"
+    );
+    expect(workflow).toContain(
+      "node scripts/pipeline/acceptance/run-runtime-browser-acceptance.mjs"
+    );
+    expect(workflow).toContain(
+      "node scripts/pipeline/acceptance/run-runtime-migration-image-acceptance.mjs"
+    );
+  });
+
+  it("keeps candidate freeze jobs parallelized by artifact type", () => {
+    const workflow = readUtf8(deploymentPipelineWorkflowPath);
+    expect(workflow).toContain("name: freeze-candidate-api-image");
+    expect(workflow).toContain("name: freeze-candidate-web-image");
+    expect(workflow).toContain("name: freeze-current-runtime-refs");
+    expect(workflow).toContain("node scripts/pipeline/shared/freeze-release-candidate-refs.mjs");
   });
 
   it("keeps commit stage merge-blocking gate context", () => {
@@ -100,6 +116,14 @@ describe("workflow pipeline contract", () => {
     expect(workflow).toContain("push:");
     expect(workflow).toContain("workflow_dispatch:");
     expect(workflow).not.toContain("workflow_run:");
+  });
+
+  it("loads release candidate with always guard to avoid skipped-needs false negatives", () => {
+    const workflow = readUtf8(deploymentPipelineWorkflowPath);
+    const loadCandidateJob = extractJobBlock(workflow, "load_release_candidate");
+    expect(loadCandidateJob).toContain(
+      "if: ${{ always() && (needs.candidate_context.outputs.replay_mode == 'true' || needs.publish_release_candidate.result == 'success') }}"
+    );
   });
 
   it("keeps control-plane approval gate for infra and identity scopes", () => {
@@ -126,6 +150,16 @@ describe("workflow pipeline contract", () => {
     expect(productionStageJob).toContain(
       "if: ${{ always() && needs.load_release_candidate.result == 'success' }}"
     );
+  });
+
+  it("keeps release decision logic in shared script and accepts docs-only non-deploy path", () => {
+    const workflow = readUtf8(deploymentPipelineWorkflowPath);
+    const stageEligibilityScript = readUtf8(stageEligibilityScriptPath);
+    expect(workflow).toContain("node scripts/pipeline/shared/collect-deployment-stage-timing.mjs");
+    expect(workflow).toContain("node scripts/pipeline/shared/decide-release-outcome.mjs");
+    expect(stageEligibilityScript).toContain("DOCS_ONLY_CHANGE");
+    expect(stageEligibilityScript).toContain("CHECKS_ONLY_CHANGE");
+    expect(stageEligibilityScript).toContain("DESKTOP_ONLY_CHANGE");
   });
 
   it("keeps ARM validate and create commands using explicit --name in shared apply script", () => {

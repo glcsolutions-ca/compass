@@ -20,6 +20,7 @@ This directory contains operational guidance for coding and review agents workin
 
 - Policy contract: [`../../.github/policy/pipeline-policy.json`](../../.github/policy/pipeline-policy.json)
 - Commit workflow: [`../../.github/workflows/commit-stage.yml`](../../.github/workflows/commit-stage.yml)
+- Merge queue workflow: [`../../.github/workflows/merge-queue-gate.yml`](../../.github/workflows/merge-queue-gate.yml)
 - Cloud delivery pipeline workflow: [`../../.github/workflows/cloud-delivery-pipeline.yml`](../../.github/workflows/cloud-delivery-pipeline.yml)
 - Cloud delivery replay workflow: [`../../.github/workflows/cloud-delivery-replay.yml`](../../.github/workflows/cloud-delivery-replay.yml)
 - Desktop deployment pipeline workflow: [`../../.github/workflows/desktop-deployment-pipeline.yml`](../../.github/workflows/desktop-deployment-pipeline.yml)

@@ -1,0 +1,218 @@
+name: Merge Queue Gate
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+  id-token: write
+
+env:
+  EXPECTED_ENTRYPOINT: /
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    branches:
+      - main
+  merge_group:
+    branches:
+      - main
+
+jobs:
+  determine_scope:
+    name: determine-scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      scope_path: ${{ steps.scope.outputs.scope_path }}
+      base_sha: ${{ steps.scope.outputs.base_sha }}
+      head_sha: ${{ steps.scope.outputs.head_sha }}
+      tested_sha: ${{ steps.scope.outputs.tested_sha }}
+      change_class: ${{ steps.scope.outputs.change_class }}
+      runtime_changed: ${{ steps.scope.outputs.runtime_changed }}
+      desktop_changed: ${{ steps.scope.outputs.desktop_changed }}
+      infra_changed: ${{ steps.scope.outputs.infra_changed }}
+      identity_changed: ${{ steps.scope.outputs.identity_changed }}
+      migration_changed: ${{ steps.scope.outputs.migration_changed }}
+      docs_only_changed: ${{ steps.scope.outputs.docs_only_changed }}
+      delivery_config_changed: ${{ steps.scope.outputs.delivery_config_changed }}
+      docs_drift_blocking: ${{ steps.scope.outputs.docs_drift_blocking }}
+      docs_drift_status: ${{ steps.docs_drift.outputs.docs_drift_status }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Resolve commit scope
+        id: scope
+        env:
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_TESTED_SHA: ${{ github.sha }}
+        run: node scripts/pipeline/commit/resolve-scope.mjs
+
+      - name: Upload scope artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: merge-queue-scope-${{ steps.scope.outputs.tested_sha }}
+          path: ${{ steps.scope.outputs.scope_path }}
+          if-no-files-found: warn
+
+      - name: Evaluate docs drift
+        id: docs_drift
+        env:
+          HEAD_SHA: ${{ steps.scope.outputs.head_sha }}
+          TESTED_SHA: ${{ steps.scope.outputs.tested_sha }}
+          CHANGED_FILES_JSON: ${{ steps.scope.outputs.changed_files_json }}
+        run: node scripts/pipeline/commit/check-docs-drift.mjs
+
+      - name: Upload docs-drift artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: merge-queue-docs-drift-${{ steps.scope.outputs.tested_sha }}
+          path: .artifacts/docs-drift/${{ steps.scope.outputs.tested_sha }}/result.json
+          if-no-files-found: warn
+
+  build_compile:
+    name: build-compile
+    needs:
+      - determine_scope
+    if: ${{ github.event_name == 'merge_group' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Build compile gate
+        run: pnpm build
+
+  migration_safety:
+    name: migration-safety
+    needs:
+      - determine_scope
+    if: ${{ github.event_name == 'merge_group' && needs.determine_scope.outputs.migration_changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Bring up local Postgres and run migration safety checks
+        run: |
+          set -euo pipefail
+          pnpm db:postgres:up
+          pnpm db:migrate:status
+
+      - name: Tear down local Postgres
+        if: ${{ always() }}
+        run: pnpm db:postgres:down
+
+  auth_critical_smoke:
+    name: auth-critical-smoke
+    needs:
+      - determine_scope
+    if: ${{ github.event_name == 'merge_group' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Run auth-critical smoke
+        run: pnpm commit:system-smoke
+
+      - name: Upload auth smoke artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: merge-queue-auth-smoke-${{ needs.determine_scope.outputs.tested_sha }}
+          path: .artifacts/commit-smoke/${{ needs.determine_scope.outputs.tested_sha }}/result.json
+          if-no-files-found: warn
+
+  minimal_integration_smoke:
+    name: minimal-integration-smoke
+    needs:
+      - determine_scope
+    if: ${{ github.event_name == 'merge_group' && needs.determine_scope.outputs.runtime_changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Run minimal integration smoke against local Postgres
+        env:
+          DATABASE_URL: postgres://compass:compass@localhost:5432/compass
+        run: |
+          set -euo pipefail
+          pnpm db:postgres:up
+          pnpm test:integration
+
+      - name: Tear down local Postgres
+        if: ${{ always() }}
+        run: pnpm db:postgres:down
+
+  merge_queue_gate:
+    name: merge-queue-gate
+    if: ${{ always() }}
+    needs:
+      - determine_scope
+      - build_compile
+      - migration_safety
+      - auth_critical_smoke
+      - minimal_integration_smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Decide merge queue gate
+        env:
+          HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
+          TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
+          BUILD_REQUIRED: ${{ github.event_name == 'merge_group' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true') }}
+          MIGRATION_REQUIRED: ${{ github.event_name == 'merge_group' && needs.determine_scope.outputs.migration_changed == 'true' }}
+          AUTH_REQUIRED: ${{ github.event_name == 'merge_group' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true') }}
+          INTEGRATION_REQUIRED: ${{ github.event_name == 'merge_group' && needs.determine_scope.outputs.runtime_changed == 'true' }}
+          DOCS_DRIFT_BLOCKING: ${{ needs.determine_scope.outputs.docs_drift_blocking }}
+          DOCS_DRIFT_STATUS: ${{ needs.determine_scope.outputs.docs_drift_status }}
+          CHECK_RESULTS_JSON: ${{ format('{{"determine-scope":"{0}","build-compile":"{1}","migration-safety":"{2}","auth-critical-smoke":"{3}","minimal-integration-smoke":"{4}"}}', needs.determine_scope.result, needs.build_compile.result, needs.migration_safety.result, needs.auth_critical_smoke.result, needs.minimal_integration_smoke.result) }}
+        run: node scripts/pipeline/commit/decide-merge-queue-gate.mjs
+
+      - name: Upload merge queue gate artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: merge-queue-gate-${{ needs.determine_scope.outputs.tested_sha }}
+          path: .artifacts/merge-queue-gate/${{ needs.determine_scope.outputs.tested_sha }}/result.json
+          if-no-files-found: warn

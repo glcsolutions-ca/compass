@@ -17,9 +17,6 @@ on:
   pull_request:
     branches:
       - main
-  merge_group:
-    branches:
-      - main
 
 jobs:
   determine_scope:
@@ -62,8 +59,8 @@ jobs:
       - name: Resolve commit scope
         id: scope
         env:
-          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GITHUB_TESTED_SHA: ${{ github.sha }}
         run: node scripts/pipeline/commit/resolve-scope.mjs
 

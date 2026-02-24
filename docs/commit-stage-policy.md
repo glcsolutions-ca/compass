@@ -1,35 +1,34 @@
 # Commit Stage Policy Contract
 
-This repository enforces a deterministic commit-stage contract defined in `.github/policy/pipeline-policy.json`.
+This repository enforces deterministic merge readiness via `.github/policy/pipeline-policy.json`.
 
 ## Objective
 
-Every PR to `main` must pass fast, reliable, merge-blocking evidence:
+Every PR to `main` must pass fast, reliable merge-readiness evidence:
 
 1. Change scope is resolved (`runtime`, `desktop`, `infra`, `identity`, `docsOnly`).
 2. Required fast checks run based on scope.
-3. Merge is allowed only when `commit-stage` passes.
+3. PRs are merge-ready only when `commit-stage` passes.
 
-`commit-stage.yml` runs for both `pull_request` and `merge_group` so the same commit-stage contract applies before merge and in queue execution.
-Post-merge deployment pipelines (`cloud-delivery-pipeline.yml` for cloud, `desktop-deployment-pipeline.yml` for desktop) run on `push` to `main`.
+`commit-stage.yml` runs on `pull_request` only.
+Exact queued-merge validation is handled separately by `merge-queue-gate.yml` (full checks on `merge_group`, lightweight placeholder context on `pull_request`).
+Post-merge delivery pipelines (`cloud-delivery-pipeline.yml` for cloud, `desktop-deployment-pipeline.yml` for desktop) run on `push` to `main`.
 
-## Source of truth precedence
+## Source of Truth Precedence
 
 When this doc and implementation differ, implementation wins:
 
 - Policy truth: `.github/policy/pipeline-policy.json`
-- Enforcement truth: `.github/workflows/commit-stage.yml` and `scripts/pipeline/commit/decide-commit-stage.mjs`
+- PR gate truth: `.github/workflows/commit-stage.yml` and `scripts/pipeline/commit/decide-commit-stage.mjs`
+- Merge queue gate truth: `.github/workflows/merge-queue-gate.yml` and `scripts/pipeline/commit/decide-merge-queue-gate.mjs`
 - This doc is explanatory and must be kept aligned with those files.
 
-## Single required branch-protection check
+## Required Gate Contexts
 
-Branch protection requires only:
+- `commit-stage` (PR gate)
+- `merge-queue-gate` (exact merge queue gate)
 
-- `commit-stage`
-
-`commit-stage` enforces required commit checks for the tested merge result on both PR and merge queue runs.
-
-## Commit-stage checks
+## Commit-Stage Checks (PR)
 
 - `determine-scope` (always)
 - `fast-feedback` (when runtime/infra/identity is true, or when delivery config blocking paths changed)
@@ -38,7 +37,16 @@ Branch protection requires only:
 - `identity-static-check` (only when `identity` scope is true)
 - `docs-drift` is always evaluated and can block merge for docs-critical drift
 
-## Scope model
+## Merge Queue Gate Checks (Exact Merge)
+
+- `determine-scope` (always)
+- `build-compile` (runtime/infra/identity/delivery-config changes)
+- `migration-safety` (when migrations changed)
+- `auth-critical-smoke` (runtime/infra/identity/delivery-config changes)
+- `minimal-integration-smoke` (runtime changes)
+- `merge-queue-gate` final decision artifact
+
+## Scope Model
 
 `pipeline-policy.json` classifies changed files into:
 
@@ -49,12 +57,11 @@ Branch protection requires only:
 - `docsOnly`
 - plus rollout flags (`migration`, `infraRollout`) used downstream
 
-Scope evaluation excludes files matching `scopeRules.docsOnly` before computing mutable scopes
-(`runtime`, `desktop`, `infra`, `identity`) so documentation-only updates do not trigger delivery config mutation paths.
+Scope evaluation excludes files matching `scopeRules.docsOnly` before computing mutable scopes (`runtime`, `desktop`, `infra`, `identity`) so documentation-only updates do not trigger delivery config mutation paths.
 
 `changeClass` is derived in priority order: `runtime` -> `infra` -> `identity` -> `desktop` -> `checks`.
 
-## Docs drift
+## Docs Drift
 
 `docs-drift` is always evaluated.
 
@@ -91,9 +98,9 @@ Timing keys:
 
 `time_to_commit_gate_seconds` is measured from first commit-stage job start to gate completion (execution time only). Queue delay is telemetry-only.
 
-## Gate semantics
+## PR Gate Semantics
 
-`commit-stage` makes merge decisions from required job outcomes (`needs.*.result`) plus docs-drift state.
+`commit-stage` makes PR merge-readiness decisions from required job outcomes (`needs.*.result`) plus docs-drift state.
 
 - `determine-scope` must succeed.
 - `fast-feedback` must succeed when runtime/infra/identity commit evidence is required, or when delivery config paths changed.
@@ -103,7 +110,7 @@ Timing keys:
 - If docs-drift blocking is true, docs-drift status must be `pass`.
 - If `commitStage.slo.mode = enforce`, gate fails when timing SLO is not met.
 
-## Runtime baseline
+## Runtime Baseline
 
 Delivery-config scripts use Node's built-in `path.posix.matchesGlob` for deterministic pattern behavior.
 

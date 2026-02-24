@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const commitStageWorkflowPath = ".github/workflows/commit-stage.yml";
+const mergeQueueGateWorkflowPath = ".github/workflows/merge-queue-gate.yml";
 const cloudDeliveryPipelineWorkflowPath = ".github/workflows/cloud-delivery-pipeline.yml";
 const cloudDeliveryReplayWorkflowPath = ".github/workflows/cloud-delivery-replay.yml";
 const desktopDeploymentPipelineWorkflowPath = ".github/workflows/desktop-deployment-pipeline.yml";
@@ -124,11 +125,21 @@ describe("workflow pipeline contract", () => {
     expect(desktopFastFeedbackJob).toContain("Run desktop fast feedback suite");
   });
 
-  it("keeps commit-stage workflow as PR and merge queue only", () => {
+  it("keeps commit-stage workflow PR-only for fast feedback", () => {
     const workflow = readUtf8(commitStageWorkflowPath);
     expect(workflow).toContain("pull_request:");
-    expect(workflow).toContain("merge_group:");
+    expect(workflow).not.toContain("merge_group:");
     expect(workflow).not.toContain("\n  push:");
+  });
+
+  it("keeps merge-queue-gate workflow focused on merge_group with PR placeholder context", () => {
+    const workflow = readUtf8(mergeQueueGateWorkflowPath);
+    expect(workflow).toContain("merge_group:");
+    expect(workflow).toContain("pull_request:");
+    expect(workflow).not.toContain("\n  push:");
+    expect(workflow).toContain("name: merge-queue-gate");
+    expect(workflow).toContain("github.event_name == 'merge_group'");
+    expect(workflow).toContain("node scripts/pipeline/commit/decide-merge-queue-gate.mjs");
   });
 
   it("keeps main cloud delivery workflow as push-only and removes replay branching", () => {
@@ -136,8 +147,8 @@ describe("workflow pipeline contract", () => {
     expect(workflow).toContain("push:");
     expect(workflow).not.toContain("workflow_dispatch:");
     expect(workflow).not.toContain("workflow_run:");
-    expect(workflow).toContain("name: verify-commit-stage-evidence");
-    expect(workflow).toContain("node scripts/pipeline/shared/verify-commit-stage-evidence.mjs");
+    expect(workflow).toContain("name: verify-merge-queue-gate-evidence");
+    expect(workflow).toContain("node scripts/pipeline/shared/verify-merge-queue-gate-evidence.mjs");
     expect(workflow).not.toContain("  fast_feedback:");
     expect(workflow).not.toContain("  candidate_context:");
   });

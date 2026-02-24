@@ -20,16 +20,15 @@ async function githubRequest(token, pathname) {
   return response.json();
 }
 
-async function main() {
-  const token = requireEnv("GITHUB_TOKEN");
-  const repository = requireEnv("GITHUB_REPOSITORY");
-  const workflowFile = requireEnv("WORKFLOW_FILE");
-  const headSha = requireEnv("HEAD_SHA");
-
-  const event = process.env.RUN_EVENT?.trim() || "";
-  const status = process.env.RUN_STATUS?.trim() || "success";
-  const perPage = Number.parseInt(process.env.RUN_LOOKUP_LIMIT ?? "50", 10) || 50;
-
+async function resolveRunForStatus({
+  token,
+  repository,
+  workflowFile,
+  headSha,
+  event,
+  status,
+  perPage
+}) {
   const params = new URLSearchParams({
     status,
     per_page: String(perPage)
@@ -44,8 +43,45 @@ async function main() {
   );
 
   const run = (data.workflow_runs || []).find((entry) => entry.head_sha === headSha);
+  return run ?? null;
+}
+
+async function main() {
+  const token = requireEnv("GITHUB_TOKEN");
+  const repository = requireEnv("GITHUB_REPOSITORY");
+  const workflowFile = requireEnv("WORKFLOW_FILE");
+  const headSha = requireEnv("HEAD_SHA");
+
+  const event = process.env.RUN_EVENT?.trim() || "";
+  const statuses = [
+    process.env.RUN_STATUS?.trim() || "success",
+    process.env.RUN_STATUS_FALLBACK?.trim() || ""
+  ]
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .filter((value, index, values) => values.indexOf(value) === index);
+  const perPage = Number.parseInt(process.env.RUN_LOOKUP_LIMIT ?? "50", 10) || 50;
+
+  let run = null;
+  let matchedStatus = "";
+  for (const status of statuses) {
+    run = await resolveRunForStatus({
+      token,
+      repository,
+      workflowFile,
+      headSha,
+      event,
+      status,
+      perPage
+    });
+    if (run) {
+      matchedStatus = status;
+      break;
+    }
+  }
+
   if (!run) {
-    throw new Error(`No ${status} ${workflowFile} run found for ${headSha}`);
+    throw new Error(`No ${statuses.join(" or ")} ${workflowFile} run found for ${headSha}`);
   }
 
   await appendGithubOutput({
@@ -53,7 +89,7 @@ async function main() {
     run_url: String(run.html_url || "")
   });
 
-  console.info(`Resolved ${workflowFile} run ${run.id} for ${headSha}`);
+  console.info(`Resolved ${workflowFile} run ${run.id} for ${headSha} (status=${matchedStatus})`);
 }
 
 void main().catch((error) => {

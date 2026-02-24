@@ -28,7 +28,18 @@ const REQUIRED_ENV_NAMES = [
   "POSTGRES_SKU_NAME",
   "POSTGRES_SKU_TIER",
   "POSTGRES_STORAGE_MB",
-  "POSTGRES_ADMIN_PASSWORD"
+  "POSTGRES_ADMIN_PASSWORD",
+  "AUTH_ISSUER",
+  "AUTH_JWKS_URI",
+  "AUTH_ALLOWED_CLIENT_IDS",
+  "AUTH_ACTIVE_TENANT_IDS",
+  "OAUTH_TOKEN_ISSUER",
+  "OAUTH_TOKEN_AUDIENCE",
+  "OAUTH_TOKEN_SIGNING_SECRET",
+  "AUTH_BOOTSTRAP_ALLOWED_TENANT_ID",
+  "AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID",
+  "AUTH_BOOTSTRAP_DELEGATED_USER_OID",
+  "AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL"
 ];
 
 const PROVIDERS = [
@@ -44,10 +55,22 @@ async function capture(cmd, args) {
   return stdout.trim();
 }
 
+function requireOneOfEnv(names) {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  throw new Error(`Missing required environment variable: one of [${names.join(", ")}]`);
+}
+
 async function main() {
   for (const envName of REQUIRED_ENV_NAMES) {
     requireEnv(envName);
   }
+  requireOneOfEnv(["AUTH_AUDIENCE", "API_IDENTIFIER_URI", "ENTRA_AUDIENCE"]);
 
   for (const namespace of PROVIDERS) {
     const state = await capture("az", [

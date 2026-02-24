@@ -53,6 +53,18 @@ Desktop deployables use a separate deployment pipeline:
 - `ACR_NAME`
 - `API_IDENTIFIER_URI` (canonical identity URI, `api://...` format)
 - `ENTRA_AUDIENCE` (legacy fallback during transition)
+- `AUTH_AUDIENCE` (runtime audience override; set to API app client ID for Entra access tokens)
+- `API_SMOKE_ALLOWED_TENANT_ID`
+- `API_SMOKE_ALLOWED_SCOPE`
+- `API_SMOKE_DENIED_TENANT_ID`
+- `API_SMOKE_DENIED_SCOPE`
+- `API_SMOKE_DENIED_EXPECTED_CODE` (`assignment_denied` for same-tenant denied app mode)
+- `AUTH_ALLOWED_CLIENT_IDS`
+- `AUTH_ACTIVE_TENANT_IDS`
+- `AUTH_BOOTSTRAP_DELEGATED_USER_OID`
+- `AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL`
+- `OAUTH_TOKEN_ISSUER`
+- `OAUTH_TOKEN_AUDIENCE`
 - plus infra parameter vars documented in `infra/azure/README.md`
 - API and Web Container App module sources are `infra/azure/modules/containerapp-api.bicep`
   and `infra/azure/modules/containerapp-web.bicep`; production expects these apps to keep
@@ -71,11 +83,17 @@ Optional custom domain vars:
 - `AZURE_DEPLOY_CLIENT_ID` (infra/runtime mutation)
 - `AZURE_IDENTITY_CLIENT_ID` (identity mutation)
 - `POSTGRES_ADMIN_PASSWORD`
+- `API_SMOKE_ALLOWED_CLIENT_ID`
+- `API_SMOKE_ALLOWED_CLIENT_SECRET`
+- `API_SMOKE_DENIED_CLIENT_ID`
+- `API_SMOKE_DENIED_CLIENT_SECRET`
+- `OAUTH_TOKEN_SIGNING_SECRET`
 
 Required acceptance environment secrets (read-only):
 
 - `AZURE_ACCEPTANCE_CLIENT_ID`
 - `AZURE_ACCEPTANCE_IDENTITY_CLIENT_ID`
+- `AUTH_DELEGATED_PROBE_TOKEN` (short-lived delegated token set only for manual probe workflow, then removed)
 
 ## Candidate and Config Contracts
 
@@ -107,6 +125,26 @@ Identity config preflight contract (shared with acceptance):
 7. Record deployment in GitHub Deployments.
 8. Emit final release decision artifact (`YES`/`NO`).
 
+## Pre-Deploy Auth Readiness
+
+1. Validate nightly Entra canary freshness (`auth-entra-canary.yml`) is green and within freshness SLO.
+2. In same-tenant denied mode, set canary/smoke deny code vars to `assignment_denied`:
+   - `AUTH_CANARY_DENIED_EXPECTED_CODE` (acceptance)
+   - `API_SMOKE_DENIED_EXPECTED_CODE` (production)
+3. Run delegated pre-deploy probe workflow for the target SHA.
+4. Ensure delegated probe produced `.artifacts/deploy/<sha>/delegated-smoke.json` and status `pass`.
+5. Remove delegated probe secret after the probe run completes.
+
+Operator sequence for delegated probe:
+
+```bash
+az login --use-device-code --tenant "<allowed-tenant-id>"
+delegated_token="$(az account get-access-token --resource "api://compass-api" --query accessToken -o tsv)"
+gh secret set AUTH_DELEGATED_PROBE_TOKEN --env acceptance --body "$delegated_token"
+gh workflow run auth-delegated-smoke.yml --ref main -f head_sha="<target-sha>" -f target_api_base_url="<target-api-base-url>"
+gh secret delete AUTH_DELEGATED_PROBE_TOKEN --env acceptance
+```
+
 ## Replay and Rollback
 
 - Manual replay: run `cloud-deployment-pipeline.yml` with `candidate_sha`.
@@ -120,6 +158,7 @@ Identity config preflight contract (shared with acceptance):
 - `.artifacts/production/<sha>/deployment-record.json`
 - `.artifacts/production/<sha>/result.json`
 - `.artifacts/deploy/<sha>/*.json`
+- `.artifacts/deploy/<sha>/delegated-smoke.json`
 - `.artifacts/infra/<sha>/*`
 - `.artifacts/identity/<sha>/*`
 - `.artifacts/browser-evidence/<sha>/manifest.json`

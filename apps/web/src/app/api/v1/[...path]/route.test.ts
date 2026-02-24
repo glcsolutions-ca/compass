@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET, POST } from "./route";
+import { createSignedSessionCookie } from "./session-cookie";
 
 function createContext(path: string[]) {
   return {
@@ -17,10 +18,21 @@ function readArrayBufferAsText(value: ArrayBuffer | null | undefined) {
   return new TextDecoder().decode(new Uint8Array(value));
 }
 
+function authCookieHeader(accessToken = "session-access-token", csrf = "csrf-token-123") {
+  const signedSession = createSignedSessionCookie({
+    accessToken,
+    secret: "web-session-secret-123456",
+    nowMs: Date.now()
+  });
+
+  return `__Host-compass_session=${signedSession}; __Host-compass_csrf=${csrf}`;
+}
+
 describe("web api proxy route", () => {
   beforeEach(() => {
     vi.stubEnv("API_BASE_URL", "http://upstream.internal:3001/");
     vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("WEB_SESSION_SECRET", "web-session-secret-123456");
   });
 
   afterEach(() => {
@@ -28,7 +40,7 @@ describe("web api proxy route", () => {
     vi.unstubAllEnvs();
   });
 
-  it("forwards allowed auth/content headers and strips hop-by-hop headers", async () => {
+  it("forwards allowlisted headers and injects authorization from session cookie", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ ok: true }), {
         status: 200,
@@ -44,11 +56,11 @@ describe("web api proxy route", () => {
     const request = new NextRequest("http://localhost:3000/api/v1/system/status?expand=true", {
       method: "GET",
       headers: {
-        authorization: "Bearer smoke-token",
+        authorization: "Bearer browser-token-that-must-be-ignored",
         accept: "application/json",
         connection: "keep-alive",
         host: "localhost:3000",
-        "x-forwarded-for": "1.2.3.4"
+        cookie: authCookieHeader("session-token-from-cookie")
       }
     });
 
@@ -58,14 +70,13 @@ describe("web api proxy route", () => {
     const firstCall = fetchMock.mock.calls.at(0);
     expect(firstCall).toBeDefined();
     const [url, init] = firstCall!;
-    expect(url).toBe("http://upstream.internal:3001/api/v1/system/status?expand=true");
+    expect(url).toBe("http://upstream.internal:3001/v1/system/status?expand=true");
     expect(init.method).toBe("GET");
     const headers = init.headers as Headers;
-    expect(headers.get("authorization")).toBe("Bearer smoke-token");
+    expect(headers.get("authorization")).toBe("Bearer session-token-from-cookie");
     expect(headers.get("accept")).toBe("application/json");
     expect(headers.get("connection")).toBeNull();
     expect(headers.get("host")).toBeNull();
-    expect(headers.get("x-forwarded-for")).toBeNull();
 
     expect(response.status).toBe(200);
     expect(response.headers.get("x-upstream-trace")).toBe("trace-123");
@@ -73,7 +84,31 @@ describe("web api proxy route", () => {
     await expect(response.json()).resolves.toEqual({ ok: true });
   });
 
-  it("forwards request body for non-GET methods", async () => {
+  it("requires csrf and origin validation for mutating requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const requestBody = JSON.stringify({ hello: "world" });
+    const request = new NextRequest("http://localhost:3000/api/v1/messages", {
+      method: "POST",
+      body: requestBody,
+      headers: {
+        "content-type": "application/json",
+        cookie: authCookieHeader("session-token", "csrf-1")
+      }
+    });
+
+    const response = await POST(request, createContext(["messages"]));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "CSRF token validation failed",
+      code: "CSRF_VALIDATION_FAILED"
+    });
+  });
+
+  it("forwards request body for non-GET methods when csrf and origin are valid", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(null, {
         status: 204
@@ -87,7 +122,9 @@ describe("web api proxy route", () => {
       body: requestBody,
       headers: {
         "content-type": "application/json",
-        authorization: "Bearer smoke-token"
+        cookie: authCookieHeader("session-token", "csrf-2"),
+        "x-csrf-token": "csrf-2",
+        origin: "http://localhost:3000"
       }
     });
 
@@ -101,8 +138,50 @@ describe("web api proxy route", () => {
     expect(init.method).toBe("POST");
     const headers = init.headers as Headers;
     expect(headers.get("content-type")).toBe("application/json");
-    expect(headers.get("authorization")).toBe("Bearer smoke-token");
+    expect(headers.get("authorization")).toBe("Bearer session-token");
     expect(readArrayBufferAsText(init.body as ArrayBuffer)).toBe(requestBody);
+  });
+
+  it("requires step-up header for high-risk role mutation route", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = new NextRequest("http://localhost:3000/api/v1/tenants/tenant-a/roles", {
+      method: "POST",
+      body: JSON.stringify({ name: "role-a", permissions: ["roles.read"] }),
+      headers: {
+        "content-type": "application/json",
+        cookie: authCookieHeader("session-token", "csrf-3"),
+        "x-csrf-token": "csrf-3",
+        origin: "http://localhost:3000"
+      }
+    });
+
+    const response = await POST(request, createContext(["tenants", "tenant-a", "roles"]));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Step-up authentication required",
+      code: "STEP_UP_REQUIRED"
+    });
+  });
+
+  it("returns deterministic 401 response when session cookie is missing", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = new NextRequest("http://localhost:3000/api/v1/system/status", {
+      method: "GET"
+    });
+
+    const response = await GET(request, createContext(["system", "status"]));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "Valid session is required",
+      code: "SESSION_REQUIRED"
+    });
   });
 
   it("returns deterministic 502 response when upstream fetch fails", async () => {
@@ -110,7 +189,10 @@ describe("web api proxy route", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const request = new NextRequest("http://localhost:3000/api/v1/system/status", {
-      method: "GET"
+      method: "GET",
+      headers: {
+        cookie: authCookieHeader()
+      }
     });
 
     const response = await GET(request, createContext(["system", "status"]));
@@ -131,7 +213,10 @@ describe("web api proxy route", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const request = new NextRequest("http://localhost:3000/api/v1/system/status", {
-      method: "GET"
+      method: "GET",
+      headers: {
+        cookie: authCookieHeader()
+      }
     });
 
     const response = await GET(request, createContext(["system", "status"]));

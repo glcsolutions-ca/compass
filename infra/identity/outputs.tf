@@ -33,3 +33,11 @@ output "smoke_application_client_id" {
 output "timesync_admin_role_id" {
   value = var.timesync_admin_role_id
 }
+
+output "integration_read_role_id" {
+  value = var.integration_read_role_id
+}
+
+output "integration_write_role_id" {
+  value = var.integration_write_role_id
+}

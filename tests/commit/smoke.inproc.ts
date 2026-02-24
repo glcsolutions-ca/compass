@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
+import { SignJWT } from "jose";
 import { buildApiApp } from "../../apps/api/src/app.ts";
+import { loadApiConfig } from "../../apps/api/src/config/index.ts";
 
 async function appendGithubOutput(values: Record<string, string>) {
   const outputPath = process.env.GITHUB_OUTPUT;
@@ -23,7 +25,15 @@ async function main() {
   const testedSha = process.env.TESTED_SHA ?? headSha;
 
   const resultPath = path.join(".artifacts", "commit-smoke", testedSha, "result.json");
-  const app = buildApiApp();
+  const config = loadApiConfig({
+    NODE_ENV: "test",
+    LOG_LEVEL: "silent",
+    AUTH_ACTIVE_TENANT_IDS: "commit-tenant",
+    AUTH_ALLOWED_CLIENT_IDS: "commit-smoke-client",
+    AUTH_ASSIGNMENTS_JSON:
+      '[{"tenantId":"commit-tenant","subjectType":"user","subjectId":"commit-smoke-user","permissions":["profile.read"]}]'
+  });
+  const app = buildApiApp({ config });
 
   try {
     await app.ready();
@@ -35,6 +45,32 @@ async function main() {
     assert.equal(openapi.statusCode, 200, "openapi endpoint should return 200");
     assert.ok(openapi.json().paths?.["/health"], "openapi should include /health path");
 
+    if (!config.authLocalJwtSecret) {
+      throw new Error("commit smoke requires AUTH_LOCAL_JWT_SECRET");
+    }
+
+    const token = await new SignJWT({
+      tid: "commit-tenant",
+      oid: "commit-smoke-user",
+      azp: "commit-smoke-client",
+      scp: "compass.user"
+    })
+      .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+      .setIssuer(config.authIssuer)
+      .setAudience(config.authAudience)
+      .setIssuedAt()
+      .setExpirationTime("5m")
+      .sign(new TextEncoder().encode(config.authLocalJwtSecret));
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/v1/me",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    assert.equal(me.statusCode, 200, "authenticated /v1/me endpoint should return 200");
+
     const payload = {
       schemaVersion: "1",
       generatedAt: new Date().toISOString(),
@@ -43,7 +79,8 @@ async function main() {
       status: "pass",
       checks: [
         { id: "api-health", status: "pass" },
-        { id: "openapi-available", status: "pass" }
+        { id: "openapi-available", status: "pass" },
+        { id: "auth-path-me", status: "pass" }
       ]
     };
 

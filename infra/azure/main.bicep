@@ -42,6 +42,19 @@ param webManagedCertificateName string = ''
 param customDomainValidationMethod string = 'CNAME'
 
 param apiLogLevel string = 'warn'
+param authIssuer string = 'SET_IN_GITHUB_ENV'
+param authJwksUri string = 'SET_IN_GITHUB_ENV'
+param authAudience string = 'SET_IN_GITHUB_ENV'
+param authAllowedClientIds string = 'SET_IN_GITHUB_ENV'
+param authActiveTenantIds string = 'SET_IN_GITHUB_ENV'
+param oauthTokenIssuer string = 'SET_IN_GITHUB_ENV'
+param oauthTokenAudience string = 'compass-scim'
+@secure()
+param oauthTokenSigningSecret string
+param authBootstrapAllowedTenantId string = 'SET_IN_GITHUB_ENV'
+param authBootstrapAllowedAppClientId string = 'SET_IN_GITHUB_ENV'
+param authBootstrapDelegatedUserOid string = 'SET_IN_GITHUB_ENV'
+param authBootstrapDelegatedUserEmail string = 'SET_IN_GITHUB_ENV'
 
 var acrPullRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
@@ -169,6 +182,14 @@ module api './modules/containerapp-api.bicep' = {
     registryIdentityResourceId: acrPullIdentity.id
     databaseUrl: databaseUrl
     logLevel: apiLogLevel
+    authIssuer: authIssuer
+    authJwksUri: authJwksUri
+    authAudience: authAudience
+    authAllowedClientIds: authAllowedClientIds
+    authActiveTenantIds: authActiveTenantIds
+    oauthTokenIssuer: oauthTokenIssuer
+    oauthTokenAudience: oauthTokenAudience
+    oauthTokenSigningSecret: oauthTokenSigningSecret
     customDomainName: apiCustomDomain
     customDomainCertificateId: empty(apiCustomDomain) ? '' : apiManagedCertificate.id
   }
@@ -205,6 +226,10 @@ module migrateJob './modules/containerapp-job-migrate.bicep' = {
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
     databaseUrl: databaseUrl
+    authBootstrapAllowedTenantId: authBootstrapAllowedTenantId
+    authBootstrapAllowedAppClientId: authBootstrapAllowedAppClientId
+    authBootstrapDelegatedUserOid: authBootstrapDelegatedUserOid
+    authBootstrapDelegatedUserEmail: authBootstrapDelegatedUserEmail
   }
   dependsOn: [
     acrPullIdentityRoleAssignment

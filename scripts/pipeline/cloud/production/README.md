@@ -13,7 +13,9 @@
 | `custom-domain-dns.mjs`                   | Emits required DNS records for managed certificate binding.                  |
 | `start-migration-job.mjs`                 | Starts ACA migration job execution and records metadata.                     |
 | `wait-migration-job.mjs`                  | Polls migration execution to terminal state, captures logs/status artifacts. |
-| `verify-api-smoke.mjs`                    | Verifies API health/OpenAPI after promotion.                                 |
+| `verify-auth-canary-freshness.mjs`        | Validates freshness of required auth canary/probe workflows.                 |
+| `verify-api-smoke.mjs`                    | Verifies API health/OpenAPI and app-token auth paths after promotion.        |
+| `verify-delegated-smoke.mjs`              | Validates delegated `/v1/me` behavior and writes delegated probe artifact.   |
 | `record-release.mjs`                      | Writes successful production deployment record to GitHub Deployments API.    |
 | `decide-production-stage.mjs`             | Produces production stage YES/NO result artifact and reason codes.           |
 | `managed-certificate-contract.mjs`        | Shared contract logic for managed certificate assertions.                    |
@@ -34,6 +36,19 @@
 
 - `HEAD_SHA`
 - `CHANGE_CLASS`
+
+### Auth Smoke Credentials
+
+- `TARGET_API_BASE_URL`
+- `API_SMOKE_ALLOWED_TENANT_ID`
+- `API_SMOKE_ALLOWED_CLIENT_ID`
+- `API_SMOKE_ALLOWED_CLIENT_SECRET`
+- `API_SMOKE_ALLOWED_SCOPE`
+- `API_SMOKE_DENIED_TENANT_ID`
+- `API_SMOKE_DENIED_CLIENT_ID`
+- `API_SMOKE_DENIED_CLIENT_SECRET`
+- `API_SMOKE_DENIED_SCOPE`
+- `API_SMOKE_DENIED_EXPECTED_CODE` (optional, defaults to `assignment_denied`)
 
 ### GitHub Deployment Record Context
 

@@ -19,6 +19,7 @@ Installers are built from a `main` candidate that already passed the deployment 
   - `web_base_url`: HTTPS URL loaded by Electron renderer
   - `draft`: publish release as draft (`true`/`false`)
   - `signing_mode`: `signed` (default), `unsigned`, `unsigned-macos`, or `unsigned-windows`
+  - `candidate_validation`: `strict` (default) or `main-only` (unsigned test mode only)
 
 ## Required GitHub Environment
 
@@ -59,6 +60,13 @@ Use `signing_mode` to control signing behavior while always producing both insta
 - `unsigned-windows`: macOS signed/notarized + Windows unsigned.
 
 Unsigned modes are for internal testing only.
+
+## Candidate Validation Modes
+
+- `strict` (default): requires a successful `deployment-pipeline.yml` run on `main` for `candidate_sha`.
+- `main-only`: allows unsigned testing when strict evidence is unavailable; verifies only that `candidate_sha` is reachable from `main`.
+
+`main-only` is blocked when `signing_mode=signed`.
 
 ## PNPM Native Build Policy
 

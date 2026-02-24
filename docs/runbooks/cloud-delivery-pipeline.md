@@ -129,3 +129,8 @@ Use replay when you need to rerun delivery for an existing release package SHA w
 - Keep production mutation serialized (`production-mutation`).
 - Keep acceptance credentials read-only and separate from production credentials.
 - Keep branch protection checks explicit: `commit-stage` for PR quality and `merge-queue-gate` for exact merge safety.
+
+## Scratch Drill Note (2026-02-24)
+
+- This runbook is used as a docs-drift target during full scratch recovery drills.
+- Drill-trigger commits may include non-functional markers in `db/scripts/**`, `infra/azure/**`, and `infra/identity/**` to force full-scope pipeline execution.

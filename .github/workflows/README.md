@@ -28,6 +28,10 @@
   - production identity apply runs the same shared identity config-contract preflight used by acceptance
 - `acr-cleanup.yml`
   - scheduled/manual ACR cleanup
+- `desktop-release.yml`
+  - trigger: manual `workflow_dispatch`
+  - key jobs: `validate-candidate`, parallel `build-macos`/`build-windows`, `publish-release`
+  - outputs signed installers (`.dmg`, `.msi`), release checksums, and desktop release manifest artifact
 - `codex-review-trusted.yml`
   - optional trusted-context review helper
 - `dependabot-auto-merge.yml`
@@ -54,4 +58,5 @@ If both are set and different, acceptance and production fail closed before Terr
 - Branch protection baseline: `docs/branch-protection.md`
 - Commit-stage policy: `docs/commit-stage-policy.md`
 - Production runbook: `docs/runbooks/production-stage.md`
+- Desktop release runbook: `docs/runbooks/desktop-release.md`
 - Identity IaC docs: `infra/identity/README.md`

@@ -4,12 +4,12 @@
 
 Run deterministic production promotion for an accepted release candidate on `main`.
 
-Production stage must deploy the accepted candidate digest refs and must not rebuild runtime images.
+Production stage must deploy accepted candidate digest refs and must not rebuild runtime images.
 
 ## Stage Topology
 
 1. `commit-stage.yml` (PR + merge queue + `main`) produces merge safety evidence and a candidate manifest on `main`.
-2. `acceptance-stage.yml` validates that candidate and returns one yes/no gate.
+2. `acceptance-stage.yml` validates that candidate and returns one YES/NO gate.
 3. `production-stage.yml` deploys the accepted candidate with production safeguards.
 
 ## Non-Commit Rule
@@ -41,6 +41,8 @@ All concrete production values must be stored in the GitHub `production` environ
 - `ACA_WEB_APP_NAME`
 - `ACA_MIGRATE_JOB_NAME`
 - `ACR_NAME`
+- `API_IDENTIFIER_URI` (canonical identity URI, `api://...` format)
+- `ENTRA_AUDIENCE` (legacy fallback during transition)
 - plus infra parameter vars documented in `infra/azure/README.md`
 
 Optional custom domain vars:
@@ -53,29 +55,40 @@ Optional custom domain vars:
 
 ## Required GitHub Environment Secrets (`production`)
 
-- `AZURE_DEPLOY_CLIENT_ID`
-- `AZURE_IDENTITY_CLIENT_ID`
+- `AZURE_DEPLOY_CLIENT_ID` (infra/runtime mutation)
+- `AZURE_IDENTITY_CLIENT_ID` (identity mutation)
 - `POSTGRES_ADMIN_PASSWORD`
 
-## Candidate Contract
+Optional acceptance-only credentials (recommended for least privilege):
+
+- `AZURE_ACCEPTANCE_CLIENT_ID`
+- `AZURE_ACCEPTANCE_IDENTITY_CLIENT_ID`
+
+## Candidate and Config Contracts
 
 Production stage consumes acceptance evidence under:
 
 - `.artifacts/acceptance/<sha>/evidence-manifest.json`
 
-Required fields:
+Required acceptance evidence fields:
 
 - `headSha`
 - `kind`
 - `scope.*`
-- `candidate.apiRef` and `candidate.webRef` (ACR digest refs for infra/runtime paths)
+- `candidate.apiRef` and `candidate.webRef` (ACR digest refs for runtime/infra paths)
 - `checks.acceptanceStageGate = success`
+
+Identity config preflight contract (shared with acceptance):
+
+- resolve `API_IDENTIFIER_URI` first, fallback `ENTRA_AUDIENCE`
+- fail if both are set and differ
+- fail if resolved value is not `api://...`
 
 ## Production Sequence
 
 1. Load accepted candidate evidence.
 2. Run stale-head guard for auto-triggered promotions.
-3. Run identity apply when `identity` scope is true.
+3. Run identity config preflight and identity apply when `identity` scope is true.
 4. Run infra apply when `infra` scope is true or runtime requires infra convergence.
 5. For runtime:
    - update migration job image to accepted API digest
@@ -98,6 +111,24 @@ Required fields:
 - `.artifacts/infra/<sha>/*`
 - `.artifacts/identity/<sha>/*`
 - `.artifacts/browser-evidence/<sha>/manifest.json`
+
+## Incident Note (2026-02-24)
+
+Observed behavior:
+
+- `Commit Stage` and `Acceptance Stage` passed for SHA `08d5bf7c39d64e03ec27eab01c4894c65fe85e9b`.
+- `Production Stage` failed during identity apply with Graph `400 Bad Request`.
+
+Root cause:
+
+- Identity input semantics were not validated early enough.
+- A non-URI audience value attempted to mutate `azuread_application.api.identifier_uris`.
+
+Prevention now in place:
+
+- Terraform variable validation for `api_identifier_uri` in `infra/identity/variables.tf`.
+- Shared identity config preflight (`scripts/pipeline/shared/validate-identity-config.mjs`) in acceptance and production.
+- Acceptance evidence now carries config-contract verdicts and candidate-fidelity verdicts.
 
 ## Safety Notes
 

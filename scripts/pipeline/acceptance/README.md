@@ -16,6 +16,11 @@
 - `.artifacts/acceptance/<sha>/result.json`
 - `.artifacts/acceptance/<sha>/evidence-manifest.json`
 
+Result payload includes:
+
+- candidate ref contract verdict + reason codes
+- identity config contract verdict + reason codes
+
 ## Change Safety
 
 Acceptance scripts must remain non-mutating. They gate promotion of the frozen release candidate.

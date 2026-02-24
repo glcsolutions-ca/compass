@@ -29,3 +29,4 @@ Commit and acceptance scripts must be non-production-mutating. Production script
 - Commit stage scripts: [`scripts/pipeline/commit/README.md`](./pipeline/commit/README.md)
 - Acceptance stage scripts: [`scripts/pipeline/acceptance/README.md`](./pipeline/acceptance/README.md)
 - Production stage scripts: [`scripts/pipeline/production/README.md`](./pipeline/production/README.md)
+- Shared scripts: [`scripts/pipeline/shared/README.md`](./pipeline/shared/README.md)

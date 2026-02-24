@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const commitStageWorkflowPath = ".github/workflows/commit-stage.yml";
+const acceptanceStageWorkflowPath = ".github/workflows/acceptance-stage.yml";
 const productionStageWorkflowPath = ".github/workflows/production-stage.yml";
 const sharedApplyScriptPath = "scripts/pipeline/production/apply-infra.mjs";
 
@@ -68,6 +69,24 @@ describe("workflow pipeline contract", () => {
 
     expect(workflow).not.toContain("docker build");
     expect(workflow).not.toContain("docker push");
+  });
+
+  it("keeps workflow_dispatch replay path executable when stale-guard is skipped", () => {
+    const workflow = readUtf8(productionStageWorkflowPath);
+
+    expect(workflow).toContain(
+      "if: ${{ always() && needs.load_accepted_candidate.result == 'success' && (github.event_name == 'workflow_dispatch' || needs.stale_guard.result == 'success') }}"
+    );
+  });
+
+  it("keeps acceptance runtime candidate-fidelity contract", () => {
+    const workflow = readUtf8(acceptanceStageWorkflowPath);
+
+    expect(workflow).toContain("Pull candidate runtime images");
+    expect(workflow).toContain('docker pull "$CANDIDATE_API_REF"');
+    expect(workflow).toContain('docker pull "$CANDIDATE_WEB_REF"');
+    expect(workflow).not.toContain("Build API");
+    expect(workflow).not.toContain("Build Web");
   });
 
   it("keeps commit stage merge-blocking gate context", () => {

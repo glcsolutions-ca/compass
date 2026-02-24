@@ -28,8 +28,9 @@ pnpm commit:docs-drift
 4. Merge queue runs the same commit-stage gate on `merge_group`.
 5. Merge to `main` reruns commit stage and emits a frozen candidate manifest.
 6. `acceptance-stage.yml` validates the same candidate and emits one yes/no gate.
-7. `production-stage.yml` promotes accepted candidate refs with production lock and stale guard.
-8. Production stage runs smoke verification and records deployment evidence.
+7. Acceptance runtime evidence pulls and executes candidate digest refs (no candidate rebuild in acceptance).
+8. `production-stage.yml` promotes accepted candidate refs with production lock and stale guard.
+9. Production stage runs smoke verification and records deployment evidence.
 
 ## Governance Invariant
 

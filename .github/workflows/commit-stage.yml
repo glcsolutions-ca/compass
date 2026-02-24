@@ -1,6 +1,7 @@
 name: Commit Stage
 
 permissions:
+  actions: read
   contents: read
   pull-requests: read
   id-token: write
@@ -334,6 +335,17 @@ jobs:
         with:
           node-version-file: .nvmrc
 
+      - name: Collect commit-stage timing snapshot
+        id: timing
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          HEAD_SHA: ${{ needs.scope.outputs.head_sha }}
+          TESTED_SHA: ${{ needs.scope.outputs.tested_sha }}
+          TIMING_PHASE: gate
+        run: node scripts/pipeline/shared/collect-stage-timing.mjs
+
       - name: Enforce commit stage gate
         env:
           HEAD_SHA: ${{ needs.scope.outputs.head_sha }}
@@ -342,6 +354,10 @@ jobs:
           IDENTITY_REQUIRED: ${{ needs.scope.outputs.identity_changed }}
           DOCS_DRIFT_BLOCKING: ${{ needs.scope.outputs.docs_drift_blocking }}
           DOCS_DRIFT_STATUS: ${{ needs.scope.outputs.docs_drift_status }}
+          COMMIT_STAGE_SLO_MODE: ${{ steps.timing.outputs.commit_stage_slo_mode }}
+          COMMIT_STAGE_SLO_PASS: ${{ steps.timing.outputs.commit_stage_slo_pass }}
+          COMMIT_STAGE_SLO_TARGET_SECONDS: ${{ steps.timing.outputs.commit_stage_slo_target_seconds }}
+          TIME_TO_COMMIT_GATE_SECONDS: ${{ steps.timing.outputs.time_to_commit_gate_seconds }}
           CHECK_RESULTS_JSON: ${{ format('{{"scope":"{0}","quick-feedback":"{1}","infra-quick-check":"{2}","identity-quick-check":"{3}"}}', needs.scope.result, needs.quick_feedback.result, needs.infra_quick_check.result, needs.identity_quick_check.result) }}
         run: node scripts/pipeline/commit/commit-stage-gate.mjs
 
@@ -350,5 +366,46 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: commit-stage-${{ needs.scope.outputs.tested_sha }}
-          path: .artifacts/commit-stage/${{ needs.scope.outputs.tested_sha }}/result.json
+          path: |
+            .artifacts/commit-stage/${{ needs.scope.outputs.tested_sha }}/result.json
+            .artifacts/commit-stage/${{ needs.scope.outputs.tested_sha }}/timing.json
+          if-no-files-found: warn
+
+  commit_stage_timing:
+    name: commit-stage-timing
+    if: ${{ always() }}
+    needs:
+      - scope
+      - quick_feedback
+      - infra_quick_check
+      - identity_quick_check
+      - candidate_build
+      - commit_stage_gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Collect commit-stage final timing
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          HEAD_SHA: ${{ needs.scope.outputs.head_sha }}
+          TESTED_SHA: ${{ needs.scope.outputs.tested_sha }}
+          TIMING_PHASE: final
+        run: node scripts/pipeline/shared/collect-stage-timing.mjs
+
+      - name: Upload commit-stage timing artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-stage-timing-${{ needs.scope.outputs.tested_sha }}
+          path: .artifacts/commit-stage/${{ needs.scope.outputs.tested_sha }}/timing.json
           if-no-files-found: warn

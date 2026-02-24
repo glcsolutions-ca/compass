@@ -8,6 +8,23 @@ This directory is the machine source of truth for delivery stage control.
 
 `commit-stage-gate` is the single merge-blocking check context. Acceptance and production are post-merge stage gates.
 
+## Policy Sections
+
+- `scopeRules`: file-to-scope classification (`runtime`, `infra`, `identity`, `docsOnly`, rollout flags)
+- `commitStage`: required commit checks plus timing SLO policy (`targetSeconds`, `mode`)
+- `acceptanceStage`: required acceptance jobs by scope
+- `productionStage`: production promotion safety toggles
+- `docsDriftRules`: control-plane/docs-critical drift enforcement
+
+## Commit-Stage SLO Mode
+
+`commitStage.slo.mode` values:
+
+- `observe`: timing breaches warn only, no merge block
+- `enforce`: timing breaches fail `commit-stage-gate`
+
+Current default is `observe`.
+
 ## Control-Plane Coverage
 
 `pipeline-policy.json` treats delivery-control paths as high-risk control plane, including:

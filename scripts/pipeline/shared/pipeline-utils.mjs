@@ -159,6 +159,21 @@ export function assertPipelinePolicyShape(policy) {
     throw new Error("commitStage.requiredChecks must be a non-empty array");
   }
 
+  if (!policy.commitStage?.slo || typeof policy.commitStage.slo !== "object") {
+    throw new Error("commitStage.slo must be an object");
+  }
+
+  if (
+    !Number.isInteger(policy.commitStage.slo.targetSeconds) ||
+    policy.commitStage.slo.targetSeconds <= 0
+  ) {
+    throw new Error("commitStage.slo.targetSeconds must be a positive integer");
+  }
+
+  if (!["observe", "enforce"].includes(policy.commitStage.slo.mode)) {
+    throw new Error("commitStage.slo.mode must be one of: observe, enforce");
+  }
+
   if (
     !Array.isArray(policy.acceptanceStage?.runtimeRequiredChecks) ||
     !Array.isArray(policy.acceptanceStage?.infraRequiredChecks) ||

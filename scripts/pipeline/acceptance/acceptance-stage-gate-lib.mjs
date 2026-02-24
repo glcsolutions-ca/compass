@@ -2,7 +2,11 @@ export function evaluateAcceptanceStageResults({
   checkResults,
   runtimeRequired,
   infraRequired,
-  identityRequired
+  identityRequired,
+  candidateRefContractStatus,
+  candidateRefContractReasonCodes,
+  identityConfigContractStatus,
+  identityConfigContractReasonCodes
 }) {
   const reasons = [];
 
@@ -31,6 +35,31 @@ export function evaluateAcceptanceStageResults({
     reasons.push({
       code: "CHECK_IDENTITY_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
       message: `identity-acceptance required but result is ${checkResults["identity-acceptance"]}`
+    });
+  }
+
+  if ((runtimeRequired || infraRequired) && candidateRefContractStatus !== "pass") {
+    const reasonSuffix =
+      Array.isArray(candidateRefContractReasonCodes) && candidateRefContractReasonCodes.length > 0
+        ? ` (${candidateRefContractReasonCodes.join(", ")})`
+        : "";
+
+    reasons.push({
+      code: "CONFIG_CONTRACT_CANDIDATE_REFS_NOT_PASS",
+      message: `candidate ref contract required for runtime/infra acceptance but status is ${candidateRefContractStatus}${reasonSuffix}`
+    });
+  }
+
+  if (identityRequired && identityConfigContractStatus !== "pass") {
+    const reasonSuffix =
+      Array.isArray(identityConfigContractReasonCodes) &&
+      identityConfigContractReasonCodes.length > 0
+        ? ` (${identityConfigContractReasonCodes.join(", ")})`
+        : "";
+
+    reasons.push({
+      code: "CONFIG_CONTRACT_IDENTITY_NOT_PASS",
+      message: `identity config contract required for acceptance but status is ${identityConfigContractStatus}${reasonSuffix}`
     });
   }
 

@@ -19,6 +19,8 @@ General documentation and architecture records live here.
 - `architecture/brand-architecture.md`
 - `adr/README.md`
 - `adr/TDR-001-initial-stack-baseline.md`
+- `adr/TDR-002-production-container-registry-strategy.md`
+- `adr/TDR-003-deployment-pipeline-visualization-model.md`
 
 ## Runbooks
 

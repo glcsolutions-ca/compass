@@ -247,7 +247,7 @@ jobs:
 
       - name: Wait for API readiness
         run: |
-          for i in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             if curl --silent --fail http://127.0.0.1:3001/health > /dev/null; then
               exit 0
             fi
@@ -265,7 +265,7 @@ jobs:
 
       - name: Wait for Web readiness
         run: |
-          for i in $(seq 1 90); do
+          for _ in $(seq 1 90); do
             if curl --silent --fail http://127.0.0.1:3000 > /dev/null; then
               exit 0
             fi
@@ -661,7 +661,7 @@ jobs:
 
       - name: Terraform plan
         run: |
-          mkdir -p .artifacts/identity/$HEAD_SHA
+          mkdir -p ".artifacts/identity/$HEAD_SHA"
           terraform -chdir=infra/identity plan \
             -input=false \
             -lock=false \
@@ -672,7 +672,7 @@ jobs:
             -var "api_identifier_uri=${ENTRA_AUDIENCE}" \
             -var "owners=${IDENTITY_OWNER_OBJECT_IDS_JSON}" \
             -out=tfplan
-          terraform -chdir=infra/identity show -json tfplan > .artifacts/identity/$HEAD_SHA/plan.json
+          terraform -chdir=infra/identity show -json tfplan > ".artifacts/identity/$HEAD_SHA/plan.json"
 
       - name: Upload identity acceptance artifact
         if: ${{ always() }}

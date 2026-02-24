@@ -232,7 +232,8 @@ jobs:
               return 1
             fi
 
-            local repo_ref="${image#${acr_registry}/}"
+            local registry_prefix="${acr_registry}/"
+            local repo_ref="${image#"$registry_prefix"}"
             local repo
             local digest
 

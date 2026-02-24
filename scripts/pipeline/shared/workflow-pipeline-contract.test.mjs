@@ -115,6 +115,19 @@ describe("workflow pipeline contract", () => {
     expect(workflow).toContain("needs.acceptance_stage.outputs.deploy_required == 'true'");
   });
 
+  it("keeps acceptance and production result jobs running with always() for deterministic reason codes", () => {
+    const workflow = readUtf8(deploymentPipelineWorkflowPath);
+    const acceptanceStageJob = extractJobBlock(workflow, "acceptance_stage");
+    const productionStageJob = extractJobBlock(workflow, "production_stage");
+
+    expect(acceptanceStageJob).toContain(
+      "if: ${{ always() && needs.load_release_candidate.result == 'success' }}"
+    );
+    expect(productionStageJob).toContain(
+      "if: ${{ always() && needs.load_release_candidate.result == 'success' }}"
+    );
+  });
+
   it("keeps ARM validate and create commands using explicit --name in shared apply script", () => {
     const script = readUtf8(sharedApplyScriptPath);
 

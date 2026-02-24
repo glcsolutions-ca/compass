@@ -2,14 +2,14 @@
 
 ## Purpose
 
-Run deterministic production promotion for an accepted release candidate on `main`.
+Run deterministic cloud production promotion for an accepted release candidate on `main`.
 
 Production stage must deploy accepted candidate digest refs and must not rebuild runtime images.
 
 ## Stage Topology
 
 1. `commit-stage.yml` gates PR and merge queue with fast merge-blocking feedback.
-2. `deployment-pipeline.yml` runs on `push` to `main`.
+2. `deployment-pipeline.yml` (cloud deployment pipeline) runs on `push` to `main`.
 3. Inside deployment pipeline: commit checks -> candidate freeze -> acceptance (YES/NO) -> production -> release decision.
 
 ## Non-Commit Rule
@@ -30,6 +30,11 @@ All concrete production values must be stored in GitHub environments (`acceptanc
   - `production-stage`
   - `release-decision`
 - Concurrency: production mutation is serialized by `concurrency: production-mutation` (`cancel-in-progress: false`).
+
+Desktop deployables use a separate deployment pipeline:
+
+- `.github/workflows/desktop-deployment-pipeline.yml`
+- runbook: `docs/runbooks/desktop-deployment-pipeline.md`
 
 ## Environment Boundaries
 

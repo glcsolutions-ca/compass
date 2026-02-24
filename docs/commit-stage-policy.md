@@ -11,7 +11,7 @@ Every PR to `main` must pass fast, reliable, merge-blocking evidence:
 3. Merge is allowed only when `commit-stage` passes.
 
 `commit-stage.yml` runs for both `pull_request` and `merge_group` so the same commit-stage contract applies before merge and in queue execution.
-`deployment-pipeline.yml` reuses the same commit-stage jobs on `push` to `main` before acceptance and production stages.
+Post-merge deployment pipelines (`deployment-pipeline.yml` for cloud, `desktop-deployment-pipeline.yml` for desktop) run on `push` to `main`.
 
 ## Source of truth precedence
 

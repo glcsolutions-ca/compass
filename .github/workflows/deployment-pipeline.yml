@@ -525,7 +525,7 @@ jobs:
     name: runtime-api-system-acceptance
     needs:
       - load_release_candidate
-    if: ${{ needs.load_release_candidate.outputs.runtime_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
+    if: ${{ always() && needs.load_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: acceptance
@@ -538,16 +538,35 @@ jobs:
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       ACR_NAME: ${{ vars.ACR_NAME }}
+      JOB_REQUIRED: ${{ needs.load_release_candidate.outputs.runtime_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
     steps:
+      - name: Record not-required runtime API/system acceptance
+        if: ${{ env.JOB_REQUIRED != 'true' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/runtime-api-system/$HEAD_SHA"
+          cat > ".artifacts/runtime-api-system/$HEAD_SHA/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "status": "not-required",
+            "reasonCode": "RUNTIME_API_SYSTEM_NOT_REQUIRED"
+          }
+          JSON
+
       - name: Checkout
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Setup Node + pnpm
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Azure login for runtime candidate pull
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_ACCEPTANCE_CLIENT_ID }}
@@ -555,6 +574,7 @@ jobs:
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Run API/system acceptance against candidate API image
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         run: node scripts/pipeline/acceptance/run-runtime-api-system-acceptance.mjs
 
       - name: Upload runtime API/system acceptance artifacts
@@ -572,7 +592,7 @@ jobs:
     name: runtime-browser-acceptance
     needs:
       - load_release_candidate
-    if: ${{ needs.load_release_candidate.outputs.runtime_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
+    if: ${{ always() && needs.load_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: acceptance
@@ -591,19 +611,40 @@ jobs:
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       ACR_NAME: ${{ vars.ACR_NAME }}
+      JOB_REQUIRED: ${{ needs.load_release_candidate.outputs.runtime_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
     steps:
+      - name: Record not-required runtime browser acceptance
+        if: ${{ env.JOB_REQUIRED != 'true' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/runtime-browser/$HEAD_SHA"
+          cat > ".artifacts/runtime-browser/$HEAD_SHA/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "flowId": "$EVIDENCE_FLOW_ID",
+            "status": "not-required",
+            "reasonCode": "RUNTIME_BROWSER_NOT_REQUIRED"
+          }
+          JSON
+
       - name: Checkout
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Setup Node + pnpm
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Install Playwright browser
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Azure login for runtime candidate pull
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_ACCEPTANCE_CLIENT_ID }}
@@ -611,6 +652,7 @@ jobs:
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Run browser acceptance against candidate Web image
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         run: node scripts/pipeline/acceptance/run-runtime-browser-acceptance.mjs
 
       - name: Upload runtime browser acceptance artifacts
@@ -627,7 +669,7 @@ jobs:
     name: runtime-migration-image-acceptance
     needs:
       - load_release_candidate
-    if: ${{ needs.load_release_candidate.outputs.runtime_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
+    if: ${{ always() && needs.load_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: acceptance
@@ -639,18 +681,37 @@ jobs:
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       ACR_NAME: ${{ vars.ACR_NAME }}
+      JOB_REQUIRED: ${{ needs.load_release_candidate.outputs.runtime_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
     steps:
+      - name: Record not-required runtime migration acceptance
+        if: ${{ env.JOB_REQUIRED != 'true' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/migration-image-smoke/$HEAD_SHA"
+          cat > ".artifacts/migration-image-smoke/$HEAD_SHA/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "status": "not-required",
+            "reasonCode": "RUNTIME_MIGRATION_IMAGE_NOT_REQUIRED"
+          }
+          JSON
+
       - name: Checkout
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Setup Node
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
 
       - name: Azure login for runtime candidate pull
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_ACCEPTANCE_CLIENT_ID }}
@@ -658,6 +719,7 @@ jobs:
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Run migration-image acceptance against candidate API image
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         run: node scripts/pipeline/acceptance/run-runtime-migration-image-acceptance.mjs
 
       - name: Upload migration-image acceptance artifacts
@@ -672,7 +734,7 @@ jobs:
     name: infra-readonly-acceptance
     needs:
       - load_release_candidate
-    if: ${{ (needs.load_release_candidate.outputs.infra_changed == 'true' || needs.load_release_candidate.outputs.requires_infra_convergence == 'true') && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
+    if: ${{ always() && needs.load_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: acceptance
@@ -711,11 +773,29 @@ jobs:
       ACA_API_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_API_MANAGED_CERTIFICATE_NAME }}
       ACA_WEB_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_WEB_MANAGED_CERTIFICATE_NAME }}
       ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
+      JOB_REQUIRED: ${{ (needs.load_release_candidate.outputs.infra_changed == 'true' || needs.load_release_candidate.outputs.requires_infra_convergence == 'true') && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
     steps:
+      - name: Record not-required infra acceptance
+        if: ${{ env.JOB_REQUIRED != 'true' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/infra/$HEAD_SHA"
+          cat > ".artifacts/infra/$HEAD_SHA/acceptance-not-required.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "status": "not-required",
+            "reasonCode": "INFRA_READONLY_ACCEPTANCE_NOT_REQUIRED"
+          }
+          JSON
+
       - name: Checkout
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: actions/checkout@v4
 
       - name: Validate candidate references for infra acceptance
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         run: |
           set -euo pipefail
 
@@ -737,6 +817,7 @@ jobs:
           done
 
       - name: Azure login (OIDC)
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_ACCEPTANCE_CLIENT_ID }}
@@ -744,12 +825,15 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Validate required environment configuration
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         run: node scripts/pipeline/shared/validate-infra-acceptance-config.mjs
 
       - name: Validate managed certificate contract
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         run: node scripts/pipeline/production/assert-managed-certificate-contract.mjs
 
       - name: Render infra parameters
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         env:
           ARM_PARAMETERS_FILE: .artifacts/infra/${{ env.HEAD_SHA }}/runtime.parameters.json
         run: |
@@ -757,6 +841,7 @@ jobs:
           node scripts/pipeline/shared/render-infra-parameters.mjs
 
       - name: Validate infra template
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         run: |
           az deployment group validate \
             --resource-group "$AZURE_RESOURCE_GROUP" \
@@ -777,7 +862,7 @@ jobs:
     name: identity-readonly-acceptance
     needs:
       - load_release_candidate
-    if: ${{ needs.load_release_candidate.outputs.identity_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
+    if: ${{ always() && needs.load_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: acceptance
@@ -801,14 +886,33 @@ jobs:
       ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
       IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
       GITHUB_ENVIRONMENT_NAME: production
+      JOB_REQUIRED: ${{ needs.load_release_candidate.outputs.identity_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
     steps:
+      - name: Record not-required identity acceptance
+        if: ${{ env.JOB_REQUIRED != 'true' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/identity/$HEAD_SHA"
+          cat > ".artifacts/identity/$HEAD_SHA/acceptance-not-required.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "status": "not-required",
+            "reasonCode": "IDENTITY_READONLY_ACCEPTANCE_NOT_REQUIRED"
+          }
+          JSON
+
       - name: Checkout
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: actions/checkout@v4
 
       - name: Setup Terraform
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: hashicorp/setup-terraform@v3
 
       - name: Validate identity config contract
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         id: identity_config
         env:
           IDENTITY_CONFIG_MODE: acceptance
@@ -816,6 +920,7 @@ jobs:
         run: node scripts/pipeline/shared/validate-identity-config.mjs
 
       - name: Azure login (OIDC)
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: azure/login@v2
         with:
           client-id: ${{ env.ARM_CLIENT_ID }}
@@ -823,9 +928,11 @@ jobs:
           allow-no-subscriptions: true
 
       - name: Terraform format check
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         run: terraform -chdir=infra/identity fmt -check -recursive
 
       - name: Terraform init
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         run: |
           terraform -chdir=infra/identity init \
             -input=false \
@@ -840,9 +947,11 @@ jobs:
             -backend-config="client_id=${ARM_CLIENT_ID}"
 
       - name: Terraform validate
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         run: terraform -chdir=infra/identity validate
 
       - name: Terraform plan
+        if: ${{ env.JOB_REQUIRED == 'true' }}
         run: |
           mkdir -p ".artifacts/identity/$HEAD_SHA"
           terraform -chdir=infra/identity plan \
@@ -1297,6 +1406,14 @@ jobs:
       production_decision: ${{ steps.result.outputs.production_decision }}
       reason_codes_json: ${{ steps.result.outputs.reason_codes_json }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
       - name: Write production stage result
         id: result
         env:

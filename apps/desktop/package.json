@@ -6,6 +6,7 @@
   "main": "dist/main.js",
   "scripts": {
     "prepack:deps": "node ./scripts/rebuild-native-deps.mjs",
+    "smoke:artifact": "node ./scripts/verify-packaged-runtime-config.mjs",
     "build": "tsc -p tsconfig.build.json",
     "dev:run": "pnpm run prepack:deps && pnpm run build && cross-env npm_config_node_linker=hoisted electron-forge start",
     "lint": "eslint src forge.config.ts --ext .ts --max-warnings=0",

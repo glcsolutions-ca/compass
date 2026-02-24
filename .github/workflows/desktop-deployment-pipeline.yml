@@ -1,0 +1,818 @@
+name: Desktop Deployment Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Candidate SHA to replay (defaults to current ref)
+        required: false
+        type: string
+      release_tag:
+        description: Release tag override (defaults to desktop-<short-sha>)
+        required: false
+        type: string
+      web_base_url:
+        description: Desktop start URL override (defaults to DESKTOP_WEB_BASE_URL)
+        required: false
+        type: string
+      draft:
+        description: Publish as draft release
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  actions: read
+  contents: write
+  id-token: write
+
+jobs:
+  desktop_candidate_context:
+    name: desktop-candidate-context
+    runs-on: ubuntu-latest
+    outputs:
+      candidate_sha: ${{ steps.resolve.outputs.candidate_sha }}
+      replay_mode: ${{ steps.resolve.outputs.replay_mode }}
+      draft: ${{ steps.resolve.outputs.draft }}
+    steps:
+      - name: Resolve desktop candidate context
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          INPUT_DRAFT: ${{ inputs.draft }}
+          PUSH_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          replay_mode="false"
+          candidate_sha="$PUSH_SHA"
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "${INPUT_CANDIDATE_SHA:-}" ]; then
+            replay_mode="true"
+            candidate_sha="$INPUT_CANDIDATE_SHA"
+          fi
+
+          draft="false"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "${INPUT_DRAFT:-false}" = "true" ]; then
+            draft="true"
+          fi
+
+          {
+            echo "replay_mode=$replay_mode"
+            echo "candidate_sha=$candidate_sha"
+            echo "draft=$draft"
+          } >> "$GITHUB_OUTPUT"
+
+  desktop_determine_scope:
+    name: desktop-determine-scope
+    needs:
+      - desktop_candidate_context
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      head_sha: ${{ steps.scope.outputs.head_sha }}
+      tested_sha: ${{ steps.scope.outputs.tested_sha }}
+      change_class: ${{ steps.scope.outputs.change_class }}
+      desktop_changed: ${{ steps.scope.outputs.desktop_changed }}
+      docs_only_changed: ${{ steps.scope.outputs.docs_only_changed }}
+      scope_path: ${{ steps.scope.outputs.scope_path }}
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.desktop_candidate_context.outputs.candidate_sha }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Resolve commit scope
+        id: scope
+        env:
+          GITHUB_HEAD_SHA: ${{ needs.desktop_candidate_context.outputs.candidate_sha }}
+          GITHUB_TESTED_SHA: ${{ needs.desktop_candidate_context.outputs.candidate_sha }}
+        run: node scripts/pipeline/commit/resolve-scope.mjs
+
+      - name: Upload desktop scope artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-scope-${{ steps.scope.outputs.tested_sha }}
+          path: ${{ steps.scope.outputs.scope_path }}
+          if-no-files-found: warn
+
+  desktop_fast_feedback:
+    name: desktop-fast-feedback
+    needs:
+      - desktop_candidate_context
+      - desktop_determine_scope
+    if: ${{ needs.desktop_determine_scope.outputs.desktop_changed == 'true' && needs.desktop_determine_scope.outputs.docs_only_changed != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.desktop_candidate_context.outputs.candidate_sha }}
+          fetch-depth: 0
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Run desktop fast feedback suite
+        run: |
+          pnpm --filter @compass/desktop lint
+          pnpm --filter @compass/desktop test
+          pnpm --filter @compass/desktop typecheck
+
+  desktop_commit_stage:
+    name: desktop-commit-stage
+    needs:
+      - desktop_determine_scope
+      - desktop_fast_feedback
+    if: ${{ always() && needs.desktop_determine_scope.result == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      commit_decision: ${{ steps.decide.outputs.commit_decision }}
+      desktop_required: ${{ steps.decide.outputs.desktop_required }}
+      reason_codes_json: ${{ steps.decide.outputs.reason_codes_json }}
+    env:
+      HEAD_SHA: ${{ needs.desktop_determine_scope.outputs.head_sha }}
+      DESKTOP_CHANGED: ${{ needs.desktop_determine_scope.outputs.desktop_changed }}
+      DOCS_ONLY_CHANGED: ${{ needs.desktop_determine_scope.outputs.docs_only_changed }}
+      FAST_FEEDBACK_RESULT: ${{ needs.desktop_fast_feedback.result }}
+    steps:
+      - name: Decide desktop commit stage
+        id: decide
+        run: |
+          set -euo pipefail
+
+          desktop_required="false"
+          commit_decision="YES"
+          reason_codes='[]'
+
+          if [ "$DESKTOP_CHANGED" = "true" ] && [ "$DOCS_ONLY_CHANGED" != "true" ]; then
+            desktop_required="true"
+            if [ "$FAST_FEEDBACK_RESULT" != "success" ]; then
+              commit_decision="NO"
+              reason_codes='["DESKTOP_FAST_FEEDBACK_NOT_SUCCESS"]'
+            fi
+          else
+            reason_codes='["DESKTOP_SCOPE_NOT_REQUIRED"]'
+          fi
+
+          mkdir -p ".artifacts/desktop-candidate/$HEAD_SHA"
+          cat > ".artifacts/desktop-candidate/$HEAD_SHA/commit-stage.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "desktopRequired": $desktop_required,
+            "decision": "$commit_decision",
+            "reasonCodes": $reason_codes
+          }
+          JSON
+
+          {
+            echo "desktop_required=$desktop_required"
+            echo "commit_decision=$commit_decision"
+            echo "reason_codes_json=$reason_codes"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload desktop commit-stage artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-commit-stage-${{ env.HEAD_SHA }}
+          path: .artifacts/desktop-candidate/${{ env.HEAD_SHA }}/commit-stage.json
+          if-no-files-found: warn
+
+      - name: Fail desktop commit stage on NO
+        if: ${{ steps.decide.outputs.commit_decision == 'NO' }}
+        run: |
+          echo "desktop commit stage decision is NO" >&2
+          exit 1
+
+  publish_desktop_candidate:
+    name: publish-desktop-candidate
+    needs:
+      - desktop_candidate_context
+      - desktop_determine_scope
+      - desktop_commit_stage
+    if: ${{ needs.desktop_commit_stage.result == 'success' && needs.desktop_commit_stage.outputs.commit_decision == 'YES' }}
+    runs-on: ubuntu-latest
+    outputs:
+      head_sha: ${{ steps.publish.outputs.head_sha }}
+      candidate_sha: ${{ steps.publish.outputs.candidate_sha }}
+      deploy_required: ${{ steps.publish.outputs.deploy_required }}
+      release_tag: ${{ steps.publish.outputs.release_tag }}
+      web_base_url: ${{ steps.publish.outputs.web_base_url }}
+      draft: ${{ steps.publish.outputs.draft }}
+      reason_codes_json: ${{ steps.publish.outputs.reason_codes_json }}
+    env:
+      CANDIDATE_SHA: ${{ needs.desktop_candidate_context.outputs.candidate_sha }}
+      CHANGE_CLASS: ${{ needs.desktop_determine_scope.outputs.change_class }}
+      DESKTOP_CHANGED: ${{ needs.desktop_determine_scope.outputs.desktop_changed }}
+      DOCS_ONLY_CHANGED: ${{ needs.desktop_determine_scope.outputs.docs_only_changed }}
+      INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+      INPUT_WEB_BASE_URL: ${{ inputs.web_base_url }}
+      DEFAULT_WEB_BASE_URL: ${{ vars.DESKTOP_WEB_BASE_URL }}
+      EVENT_NAME: ${{ github.event_name }}
+      DRAFT: ${{ needs.desktop_candidate_context.outputs.draft }}
+    steps:
+      - name: Publish desktop candidate manifest
+        id: publish
+        run: |
+          set -euo pipefail
+
+          head_sha="$CANDIDATE_SHA"
+          deploy_required="false"
+          reason_codes='["DESKTOP_SCOPE_NOT_REQUIRED"]'
+          web_base_url=""
+          release_tag="${INPUT_RELEASE_TAG:-}"
+          draft="$DRAFT"
+
+          if [ -z "$release_tag" ]; then
+            short_sha="${head_sha:0:12}"
+            release_tag="desktop-$short_sha"
+          fi
+
+          if [ "$DESKTOP_CHANGED" = "true" ] && [ "$DOCS_ONLY_CHANGED" != "true" ]; then
+            deploy_required="true"
+            reason_codes='[]'
+            web_base_url="${INPUT_WEB_BASE_URL:-${DEFAULT_WEB_BASE_URL:-}}"
+            if [ -z "$web_base_url" ]; then
+              echo "DESKTOP_WEB_BASE_URL (or workflow input web_base_url) is required for desktop deployments." >&2
+              exit 1
+            fi
+
+            node -e "const url=new URL(process.argv[1]); if (url.protocol !== 'https:') { throw new Error('DESKTOP web_base_url must be HTTPS'); }" "$web_base_url"
+          fi
+
+          mkdir -p ".artifacts/desktop-candidate/$head_sha"
+          cat > ".artifacts/desktop-candidate/$head_sha/manifest.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$head_sha",
+            "candidateSha": "$head_sha",
+            "changeClass": "$CHANGE_CLASS",
+            "releaseTag": "$release_tag",
+            "webBaseUrl": "$web_base_url",
+            "deployRequired": $deploy_required,
+            "draft": $draft,
+            "scope": {
+              "desktop": $DESKTOP_CHANGED,
+              "docsOnly": $DOCS_ONLY_CHANGED
+            },
+            "reasonCodes": $reason_codes
+          }
+          JSON
+
+          {
+            echo "head_sha=$head_sha"
+            echo "candidate_sha=$head_sha"
+            echo "deploy_required=$deploy_required"
+            echo "release_tag=$release_tag"
+            echo "web_base_url=$web_base_url"
+            echo "draft=$draft"
+            echo "reason_codes_json=$reason_codes"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload desktop candidate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-candidate-${{ steps.publish.outputs.head_sha }}
+          path: .artifacts/desktop-candidate/${{ steps.publish.outputs.head_sha }}/manifest.json
+          if-no-files-found: error
+
+  build_signed_macos:
+    name: build-signed-macos
+    needs:
+      - publish_desktop_candidate
+    if: ${{ needs.publish_desktop_candidate.outputs.deploy_required == 'true' }}
+    runs-on: macos-14
+    environment: desktop-release
+    env:
+      HEAD_SHA: ${{ needs.publish_desktop_candidate.outputs.head_sha }}
+      COMPASS_DESKTOP_START_URL: ${{ needs.publish_desktop_candidate.outputs.web_base_url }}
+    steps:
+      - name: Checkout desktop candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.publish_desktop_candidate.outputs.candidate_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        env:
+          npm_config_node_linker: hoisted
+          npm_config_allow_build_scripts: esbuild,sharp,electron,fs-xattr,macos-alias,@bitdisaster/exe-icon-extractor
+        run: pnpm install --frozen-lockfile
+
+      - name: Decode signing assets
+        id: signing_assets
+        env:
+          CERT_P12_BASE64: ${{ secrets.MACOS_SIGNING_CERT_P12_BASE64 }}
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+
+          cert_path="$RUNNER_TEMP/macos-signing-cert.p12"
+          api_key_path="$RUNNER_TEMP/apple-api-key.p8"
+
+          CERT_P12_BASE64="$CERT_P12_BASE64" APPLE_API_KEY_BASE64="$APPLE_API_KEY_BASE64" \
+            CERT_PATH="$cert_path" API_KEY_PATH="$api_key_path" node <<'NODE'
+          const fs = require("node:fs");
+          fs.writeFileSync(process.env.CERT_PATH, Buffer.from(process.env.CERT_P12_BASE64 || "", "base64"));
+          fs.writeFileSync(process.env.API_KEY_PATH, Buffer.from(process.env.APPLE_API_KEY_BASE64 || "", "base64"));
+          NODE
+
+          echo "cert_path=$cert_path" >> "$GITHUB_OUTPUT"
+          echo "api_key_path=$api_key_path" >> "$GITHUB_OUTPUT"
+
+      - name: Configure temporary keychain
+        env:
+          CERT_PATH: ${{ steps.signing_assets.outputs.cert_path }}
+          CERT_PASSWORD: ${{ secrets.MACOS_SIGNING_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          keychain="$RUNNER_TEMP/build.keychain-db"
+          keychain_password="$(openssl rand -base64 24)"
+
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          security default-keychain -d user -s "$keychain"
+
+          security import "$CERT_PATH" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain"
+
+      - name: Build signed macOS DMG
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPLE_API_KEY_PATH: ${{ steps.signing_assets.outputs.api_key_path }}
+        run: pnpm --filter @compass/desktop make:mac
+
+      - name: Validate desktop runtime config contract
+        run: pnpm --filter @compass/desktop smoke:artifact
+
+      - name: Verify macOS signing and notarization
+        run: |
+          set -euo pipefail
+
+          app_path="$(find apps/desktop/out -type d -name '*.app' | head -n 1)"
+          dmg_path="$(find apps/desktop/out/make -type f -name '*.dmg' | head -n 1)"
+
+          if [ -z "$app_path" ] || [ -z "$dmg_path" ]; then
+            echo "Missing macOS app or DMG output." >&2
+            exit 1
+          fi
+
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          spctl --assess --type execute --verbose=4 "$app_path"
+          xcrun stapler validate "$app_path"
+
+      - name: Prepare macOS artifact
+        id: collect
+        run: |
+          set -euo pipefail
+          dmg_path="$(find apps/desktop/out/make -type f -name '*.dmg' | head -n 1)"
+          artifact_name="Compass-${HEAD_SHA:0:12}-arm64.dmg"
+          artifact_path="$RUNNER_TEMP/$artifact_name"
+          cp "$dmg_path" "$artifact_path"
+          echo "artifact_path=$artifact_path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload macOS installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos-${{ env.HEAD_SHA }}
+          path: ${{ steps.collect.outputs.artifact_path }}
+          if-no-files-found: error
+
+  build_signed_windows:
+    name: build-signed-windows
+    needs:
+      - publish_desktop_candidate
+    if: ${{ needs.publish_desktop_candidate.outputs.deploy_required == 'true' }}
+    runs-on: windows-latest
+    environment: desktop-release
+    env:
+      HEAD_SHA: ${{ needs.publish_desktop_candidate.outputs.head_sha }}
+      COMPASS_DESKTOP_START_URL: ${{ needs.publish_desktop_candidate.outputs.web_base_url }}
+    steps:
+      - name: Checkout desktop candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.publish_desktop_candidate.outputs.candidate_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        env:
+          npm_config_node_linker: hoisted
+          npm_config_allow_build_scripts: esbuild,sharp,electron,fs-xattr,macos-alias,@bitdisaster/exe-icon-extractor
+        run: pnpm install --frozen-lockfile
+
+      - name: Install WiX toolset
+        run: choco install wixtoolset --yes
+
+      - name: Build Windows MSI
+        run: pnpm --filter @compass/desktop make:win
+
+      - name: Validate desktop runtime config contract
+        run: pnpm --filter @compass/desktop smoke:artifact
+
+      - name: Collect MSI path
+        id: collect
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem "apps/desktop/out/make" -Filter "*.msi" -Recurse | Select-Object -First 1
+          if ($null -eq $msi) {
+            throw "Missing MSI output in apps/desktop/out/make"
+          }
+          $shortSha = if ($env:HEAD_SHA.Length -gt 12) { $env:HEAD_SHA.Substring(0, 12) } else { $env:HEAD_SHA }
+          $artifactName = "Compass-$shortSha-x64.msi"
+          $artifactPath = Join-Path $env:RUNNER_TEMP $artifactName
+          Copy-Item $msi.FullName $artifactPath -Force
+          "msi_path=$artifactPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Azure login for signing
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign MSI with Azure Artifact Signing
+        uses: azure/artifact-signing-action@v1
+        with:
+          endpoint: ${{ vars.TRUSTED_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.TRUSTED_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.TRUSTED_SIGNING_PROFILE_NAME }}
+          files: ${{ steps.collect.outputs.msi_path }}
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify Authenticode signature
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature "${{ steps.collect.outputs.msi_path }}"
+          if ($signature.Status -ne "Valid") {
+            throw "Invalid Windows signature status: $($signature.Status)"
+          }
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-${{ env.HEAD_SHA }}
+          path: ${{ steps.collect.outputs.msi_path }}
+          if-no-files-found: error
+
+  desktop_acceptance_stage:
+    name: desktop-acceptance-stage
+    needs:
+      - publish_desktop_candidate
+      - build_signed_macos
+      - build_signed_windows
+    if: ${{ always() && needs.publish_desktop_candidate.result == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      acceptance_decision: ${{ steps.decide.outputs.acceptance_decision }}
+      reason_codes_json: ${{ steps.decide.outputs.reason_codes_json }}
+      deploy_required: ${{ needs.publish_desktop_candidate.outputs.deploy_required }}
+      release_tag: ${{ needs.publish_desktop_candidate.outputs.release_tag }}
+      web_base_url: ${{ needs.publish_desktop_candidate.outputs.web_base_url }}
+      draft: ${{ needs.publish_desktop_candidate.outputs.draft }}
+    env:
+      HEAD_SHA: ${{ needs.publish_desktop_candidate.outputs.head_sha }}
+      DEPLOY_REQUIRED: ${{ needs.publish_desktop_candidate.outputs.deploy_required }}
+      BUILD_SIGNED_MACOS_RESULT: ${{ needs.build_signed_macos.result }}
+      BUILD_SIGNED_WINDOWS_RESULT: ${{ needs.build_signed_windows.result }}
+      WEB_BASE_URL: ${{ needs.publish_desktop_candidate.outputs.web_base_url }}
+    steps:
+      - name: Decide desktop acceptance stage
+        id: decide
+        run: |
+          set -euo pipefail
+
+          acceptance_decision="YES"
+          reason_codes='[]'
+
+          if [ "$DEPLOY_REQUIRED" != "true" ]; then
+            reason_codes='["DESKTOP_SCOPE_NOT_REQUIRED"]'
+          else
+            node -e "const url=new URL(process.argv[1]); if (url.protocol !== 'https:') { throw new Error('Desktop web_base_url must be HTTPS'); }" "$WEB_BASE_URL"
+            if [ "$BUILD_SIGNED_MACOS_RESULT" != "success" ] || [ "$BUILD_SIGNED_WINDOWS_RESULT" != "success" ]; then
+              acceptance_decision="NO"
+              reason_codes='[]'
+              if [ "$BUILD_SIGNED_MACOS_RESULT" != "success" ]; then
+                reason_codes='["BUILD_SIGNED_MACOS_NOT_SUCCESS"]'
+              fi
+              if [ "$BUILD_SIGNED_WINDOWS_RESULT" != "success" ]; then
+                if [ "$reason_codes" = '[]' ]; then
+                  reason_codes='["BUILD_SIGNED_WINDOWS_NOT_SUCCESS"]'
+                else
+                  reason_codes='["BUILD_SIGNED_MACOS_NOT_SUCCESS","BUILD_SIGNED_WINDOWS_NOT_SUCCESS"]'
+                fi
+              fi
+            fi
+          fi
+
+          mkdir -p ".artifacts/desktop-acceptance/$HEAD_SHA"
+          cat > ".artifacts/desktop-acceptance/$HEAD_SHA/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "deployRequired": $DEPLOY_REQUIRED,
+            "decision": "$acceptance_decision",
+            "reasonCodes": $reason_codes,
+            "checks": {
+              "buildSignedMacos": "$BUILD_SIGNED_MACOS_RESULT",
+              "buildSignedWindows": "$BUILD_SIGNED_WINDOWS_RESULT"
+            }
+          }
+          JSON
+
+          {
+            echo "acceptance_decision=$acceptance_decision"
+            echo "reason_codes_json=$reason_codes"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload desktop acceptance artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-acceptance-${{ env.HEAD_SHA }}
+          path: .artifacts/desktop-acceptance/${{ env.HEAD_SHA }}/result.json
+          if-no-files-found: warn
+
+      - name: Fail desktop acceptance on NO
+        if: ${{ steps.decide.outputs.acceptance_decision == 'NO' }}
+        run: |
+          echo "Desktop acceptance stage decision is NO" >&2
+          exit 1
+
+  publish_desktop_release:
+    name: publish-desktop-release
+    needs:
+      - publish_desktop_candidate
+      - desktop_acceptance_stage
+      - build_signed_macos
+      - build_signed_windows
+    if: ${{ needs.desktop_acceptance_stage.outputs.acceptance_decision == 'YES' && needs.publish_desktop_candidate.outputs.deploy_required == 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      HEAD_SHA: ${{ needs.publish_desktop_candidate.outputs.head_sha }}
+      RELEASE_TAG: ${{ needs.publish_desktop_candidate.outputs.release_tag }}
+      DRAFT: ${{ needs.publish_desktop_candidate.outputs.draft }}
+    outputs:
+      release_url: ${{ steps.publish.outputs.release_url }}
+    steps:
+      - name: Download macOS installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-macos-${{ env.HEAD_SHA }}
+          path: .artifacts/desktop-production/${{ env.HEAD_SHA }}/installers
+
+      - name: Download Windows installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-windows-${{ env.HEAD_SHA }}
+          path: .artifacts/desktop-production/${{ env.HEAD_SHA }}/installers
+
+      - name: Generate checksums
+        working-directory: .artifacts/desktop-production/${{ env.HEAD_SHA }}/installers
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          files=( *.dmg *.msi )
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No installer artifacts found to checksum." >&2
+            exit 1
+          fi
+
+          sha256sum "${files[@]}" > SHA256SUMS.txt
+
+      - name: Publish GitHub release assets
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          installers_dir=".artifacts/desktop-production/$HEAD_SHA/installers"
+          cd "$installers_dir"
+
+          dmg_files=( *.dmg )
+          msi_files=( *.msi )
+          if [ "${#dmg_files[@]}" -eq 0 ] || [ "${#msi_files[@]}" -eq 0 ]; then
+            echo "Expected one .dmg and one .msi for desktop release." >&2
+            exit 1
+          fi
+
+          notes="Desktop deployment pipeline release for candidate $HEAD_SHA"
+          assets=( "${dmg_files[0]}" "${msi_files[0]}" "SHA256SUMS.txt" )
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+            gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" --notes "$notes"
+          else
+            if [ "$DRAFT" = "true" ]; then
+              gh release create "$RELEASE_TAG" "${assets[@]}" --title "$RELEASE_TAG" --notes "$notes" --draft
+            else
+              gh release create "$RELEASE_TAG" "${assets[@]}" --title "$RELEASE_TAG" --notes "$notes"
+            fi
+          fi
+
+          release_url="$(gh release view "$RELEASE_TAG" --json url --jq .url)"
+          echo "release_url=$release_url" >> "$GITHUB_OUTPUT"
+
+      - name: Write desktop production publish artifact
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/desktop-production/$HEAD_SHA"
+          cat > ".artifacts/desktop-production/$HEAD_SHA/release.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "releaseTag": "$RELEASE_TAG",
+            "releaseUrl": "${{ steps.publish.outputs.release_url }}"
+          }
+          JSON
+
+      - name: Upload desktop production artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-production-${{ env.HEAD_SHA }}
+          path: |
+            .artifacts/desktop-production/${{ env.HEAD_SHA }}/release.json
+            .artifacts/desktop-production/${{ env.HEAD_SHA }}/installers
+          if-no-files-found: warn
+
+  desktop_production_stage:
+    name: desktop-production-stage
+    needs:
+      - publish_desktop_candidate
+      - desktop_acceptance_stage
+      - publish_desktop_release
+    if: ${{ always() && needs.publish_desktop_candidate.result == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      production_decision: ${{ steps.decide.outputs.production_decision }}
+      reason_codes_json: ${{ steps.decide.outputs.reason_codes_json }}
+    env:
+      HEAD_SHA: ${{ needs.publish_desktop_candidate.outputs.head_sha }}
+      DEPLOY_REQUIRED: ${{ needs.publish_desktop_candidate.outputs.deploy_required }}
+      ACCEPTANCE_DECISION: ${{ needs.desktop_acceptance_stage.outputs.acceptance_decision }}
+      PUBLISH_RELEASE_RESULT: ${{ needs.publish_desktop_release.result }}
+      RELEASE_URL: ${{ needs.publish_desktop_release.outputs.release_url }}
+    steps:
+      - name: Decide desktop production stage
+        id: decide
+        run: |
+          set -euo pipefail
+
+          production_decision="YES"
+          reason_codes='[]'
+
+          if [ "$ACCEPTANCE_DECISION" != "YES" ]; then
+            production_decision="NO"
+            reason_codes='["ACCEPTANCE_DECISION_NOT_YES"]'
+          elif [ "$DEPLOY_REQUIRED" != "true" ]; then
+            reason_codes='["NO_DEPLOY_REQUIRED"]'
+          elif [ "$PUBLISH_RELEASE_RESULT" != "success" ]; then
+            production_decision="NO"
+            reason_codes='["PUBLISH_DESKTOP_RELEASE_NOT_SUCCESS"]'
+          else
+            reason_codes='["DESKTOP_RELEASE_PUBLISHED"]'
+          fi
+
+          mkdir -p ".artifacts/desktop-production/$HEAD_SHA"
+          cat > ".artifacts/desktop-production/$HEAD_SHA/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "deployRequired": $DEPLOY_REQUIRED,
+            "decision": "$production_decision",
+            "reasonCodes": $reason_codes,
+            "releaseUrl": "$RELEASE_URL"
+          }
+          JSON
+
+          {
+            echo "production_decision=$production_decision"
+            echo "reason_codes_json=$reason_codes"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload desktop production stage artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-production-stage-${{ env.HEAD_SHA }}
+          path: .artifacts/desktop-production/${{ env.HEAD_SHA }}/result.json
+          if-no-files-found: warn
+
+      - name: Fail desktop production stage on NO
+        if: ${{ steps.decide.outputs.production_decision == 'NO' }}
+        run: |
+          echo "Desktop production stage decision is NO" >&2
+          exit 1
+
+  desktop_release_decision:
+    name: desktop-release-decision
+    needs:
+      - desktop_candidate_context
+      - publish_desktop_candidate
+      - desktop_acceptance_stage
+      - desktop_production_stage
+    if: ${{ always() && needs.publish_desktop_candidate.result == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      HEAD_SHA: ${{ needs.publish_desktop_candidate.outputs.head_sha }}
+      CANDIDATE_SHA: ${{ needs.desktop_candidate_context.outputs.candidate_sha }}
+      DEPLOY_REQUIRED: ${{ needs.publish_desktop_candidate.outputs.deploy_required }}
+      ACCEPTANCE_DECISION: ${{ needs.desktop_acceptance_stage.outputs.acceptance_decision }}
+      ACCEPTANCE_REASON_CODES_JSON: ${{ needs.desktop_acceptance_stage.outputs.reason_codes_json }}
+      PRODUCTION_DECISION: ${{ needs.desktop_production_stage.outputs.production_decision }}
+      PRODUCTION_REASON_CODES_JSON: ${{ needs.desktop_production_stage.outputs.reason_codes_json }}
+      RELEASE_TAG: ${{ needs.publish_desktop_candidate.outputs.release_tag }}
+    steps:
+      - name: Write desktop release decision
+        run: |
+          set -euo pipefail
+
+          releaseable="false"
+          if [ "$ACCEPTANCE_DECISION" = "YES" ] && [ "$PRODUCTION_DECISION" = "YES" ]; then
+            releaseable="true"
+          fi
+
+          mkdir -p ".artifacts/desktop-release/$HEAD_SHA"
+          cat > ".artifacts/desktop-release/$HEAD_SHA/decision.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "candidateSha": "$CANDIDATE_SHA",
+            "releaseTag": "$RELEASE_TAG",
+            "deployRequired": $DEPLOY_REQUIRED,
+            "acceptance": {
+              "decision": "$ACCEPTANCE_DECISION",
+              "reasonCodes": $ACCEPTANCE_REASON_CODES_JSON
+            },
+            "production": {
+              "decision": "$PRODUCTION_DECISION",
+              "reasonCodes": $PRODUCTION_REASON_CODES_JSON
+            },
+            "releaseable": $releaseable
+          }
+          JSON
+
+          if [ "$releaseable" != "true" ]; then
+            echo "Desktop release decision is NO" >&2
+            exit 1
+          fi
+
+      - name: Upload desktop release decision artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-release-decision-${{ env.HEAD_SHA }}
+          path: .artifacts/desktop-release/${{ env.HEAD_SHA }}/decision.json
+          if-no-files-found: warn

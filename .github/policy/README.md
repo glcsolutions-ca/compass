@@ -3,7 +3,7 @@
 This directory is the machine source of truth for delivery stage control.
 
 - Canonical contract: `.github/policy/pipeline-policy.json`
-- Enforced by workflows: `.github/workflows/commit-stage.yml`, `.github/workflows/deployment-pipeline.yml`
+- Enforced by workflows: `.github/workflows/commit-stage.yml`, `.github/workflows/deployment-pipeline.yml`, `.github/workflows/desktop-deployment-pipeline.yml`
 - Required branch-protection check context: `commit-stage`
 
 `commit-stage` is the single merge-blocking check context. Acceptance and production are post-merge stages inside `deployment-pipeline.yml`.
@@ -15,6 +15,7 @@ This directory is the machine source of truth for delivery stage control.
 - `acceptanceStage`: required acceptance jobs by scope
 - `productionStage`: production promotion safety toggles
 - `deploymentPipeline`: post-merge stage timing SLO targets (`acceptance`, `production`)
+- `desktopPipeline`: desktop deployment pipeline checks, artifacts, and stage timing SLOs
 - `docsDriftRules`: control-plane/docs-critical drift enforcement
 
 `docsOnly` paths are subtracted from mutable scope classification so documentation updates fail closed only through policy checks, not production mutation paths.

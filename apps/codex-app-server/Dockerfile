@@ -9,7 +9,8 @@ COPY packages ./packages
 COPY db ./db
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @compass/codex-app-server build
+RUN pnpm --filter @compass/contracts build \
+  && pnpm --filter @compass/codex-app-server build
 
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /workspace

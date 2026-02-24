@@ -1407,6 +1407,7 @@ jobs:
       - deploy_approved_candidate
     if: ${{ always() && needs.deploy_approved_candidate.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && (needs.load_release_candidate.outputs.runtime_changed == 'true' || needs.load_release_candidate.outputs.infra_changed == 'true' || needs.load_release_candidate.outputs.requires_infra_convergence == 'true') }}
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 30
     env:
       HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}

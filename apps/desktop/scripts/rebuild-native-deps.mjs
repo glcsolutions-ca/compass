@@ -1,17 +1,17 @@
 import { spawnSync } from "node:child_process";
 
 const allowBuildScripts =
-  "esbuild,sharp,electron,fs-xattr,macos-alias,@bitdisaster/exe-icon-extractor";
+  "esbuild,sharp,electron,fs-xattr,macos-alias";
 
-const packages = ["electron", "@bitdisaster/exe-icon-extractor"];
+const packages = ["electron"];
 if (process.platform === "darwin") {
   packages.push("fs-xattr", "macos-alias");
 }
 
-const pnpmExecutable = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-const result = spawnSync(pnpmExecutable, ["rebuild", ...packages], {
+const result = spawnSync("pnpm", ["rebuild", ...packages], {
   cwd: process.cwd(),
   stdio: "inherit",
+  shell: process.platform === "win32",
   env: {
     ...process.env,
     npm_config_allow_build_scripts: allowBuildScripts

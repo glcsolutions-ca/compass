@@ -76,7 +76,7 @@ Desktop packaging requires native modules used by Electron and DMG/MSI makers.
 `desktop-release.yml` sets:
 
 - `npm_config_node_linker=hoisted`
-- `npm_config_allow_build_scripts=esbuild,sharp,electron,fs-xattr,macos-alias,@bitdisaster/exe-icon-extractor`
+- `npm_config_allow_build_scripts=esbuild,sharp,electron,fs-xattr,macos-alias`
 
 ## Execution Steps
 
@@ -96,6 +96,12 @@ Desktop packaging requires native modules used by Electron and DMG/MSI makers.
 - Windows signature status is `Valid` (`Get-AuthenticodeSignature` in workflow logs).
 - Release assets are present and checksums file is included.
 - Release manifest artifact exists for the same candidate SHA.
+
+For unsigned test modes:
+
+- macOS: copy `Compass.app` to `/Applications`, then run
+  `xattr -dr com.apple.quarantine "/Applications/Compass.app"` before first launch.
+- Windows: run the unsigned MSI and continue through SmartScreen (`More info` -> `Run anyway`).
 
 ## Failure Recovery
 

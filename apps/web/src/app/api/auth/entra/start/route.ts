@@ -8,7 +8,8 @@ import {
   randomToken
 } from "../../../../auth/sso-cookie";
 
-const ENTRA_AUTHORIZATION_ENDPOINT = "https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize";
+const ENTRA_AUTHORIZATION_ENDPOINT =
+  "https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize";
 
 function normalizeNextPath(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {

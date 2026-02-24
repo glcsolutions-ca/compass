@@ -88,7 +88,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       ) : (
         <section className="panel">
           <h2>Enterprise Login</h2>
-          <a data-testid="entra-login-link" href={`/api/auth/entra/start?next=${encodeURIComponent(nextPath)}`}>
+          <a
+            data-testid="entra-login-link"
+            href={`/api/auth/entra/start?next=${encodeURIComponent(nextPath)}`}
+          >
             Sign in with Microsoft
           </a>
         </section>

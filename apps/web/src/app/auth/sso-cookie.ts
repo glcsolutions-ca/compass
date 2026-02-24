@@ -149,7 +149,10 @@ export function serializeSsoCookie(payload: SsoSessionPayload, secret: string) {
   return serializeSignedPayload(payload, secret);
 }
 
-export function parseSsoCookie(rawCookie: string | undefined, secret: string): SsoSessionPayload | null {
+export function parseSsoCookie(
+  rawCookie: string | undefined,
+  secret: string
+): SsoSessionPayload | null {
   const parsed = parseSignedPayload<SsoSessionPayload>(rawCookie, secret);
   if (!parsed || parsed.version !== 1) {
     return null;

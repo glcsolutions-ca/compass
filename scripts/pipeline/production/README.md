@@ -2,13 +2,12 @@
 
 ## Purpose
 
-`scripts/pipeline/production/` contains production stage helpers used by `production-stage.yml`.
+`scripts/pipeline/production/` contains production stage helpers used by `mainline-pipeline.yml`.
 
 ## Script Map
 
 | Script                                    | Role                                                                         |
 | ----------------------------------------- | ---------------------------------------------------------------------------- |
-| `assert-fresh-candidate.mjs`              | Stale candidate guard before production mutation.                            |
 | `apply-infra.mjs`                         | Validates/applies Bicep with transient retry handling and infra artifacts.   |
 | `assert-managed-certificate-contract.mjs` | Validates custom-domain/certificate contract before infra apply.             |
 | `custom-domain-dns.mjs`                   | Emits required DNS records for managed certificate binding.                  |

@@ -24,16 +24,15 @@ Concrete production values belong only in GitHub `production` environment `vars`
 
 Infrastructure flows through the 3-stage delivery pipeline:
 
-1. `commit-stage` performs fast non-mutating checks and scope classification.
-2. `acceptance-stage` runs non-mutating infra/identity validation (`infra-acceptance`, `identity-acceptance`).
-3. `production-stage` performs guarded mutation (`production-mutate`) for infra and identity when required.
+1. `commit-stage.yml` performs fast non-mutating checks and scope classification on PR/merge queue.
+2. `mainline-pipeline.yml` runs acceptance jobs (`infra-readonly-acceptance`, `identity-readonly-acceptance`) against the frozen candidate.
+3. `mainline-pipeline.yml` performs guarded production mutation (`deploy-approved-candidate`) when required, with `approve-control-plane` for infra/identity control-plane scopes.
 
 ## Replay and Determinism
 
 Replay is part of the operating model:
 
-- Acceptance replay: rerun `acceptance-stage` for a prior candidate SHA.
-- Production replay: rerun `production-stage` on an accepted candidate SHA.
+- Replay via `mainline-pipeline.yml` `workflow_dispatch` with `candidate_sha=<sha>`.
 
 Both replays are expected to fail closed on drift, invalid environment configuration, or missing evidence.
 
@@ -43,7 +42,8 @@ Primary infrastructure evidence roots:
 
 - `.artifacts/infra/<sha>/` for Bicep parameters, validation/apply results, and diagnostics.
 - `.artifacts/identity/<sha>/` for Terraform plan/apply outputs.
-- `.artifacts/acceptance/<sha>/` and `.artifacts/production/<sha>/` for stage-level gate evidence.
+- `.artifacts/acceptance/<sha>/` and `.artifacts/production/<sha>/` for stage-level evidence.
+- `.artifacts/release/<sha>/decision.json` for canonical release YES/NO verdict.
 
 ## Where To Change What
 

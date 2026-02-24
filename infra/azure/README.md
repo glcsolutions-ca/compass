@@ -6,8 +6,8 @@
 - Environment parameter template: `infra/azure/environments/prod.bicepparam`
 - Reusable resource modules: `infra/azure/modules/*.bicep`
 - Pipeline stages:
-  - `.github/workflows/acceptance-stage.yml` (`infra-acceptance`, validate only)
-  - `.github/workflows/production-stage.yml` (`production-mutate`, apply)
+  - `.github/workflows/mainline-pipeline.yml` (`infra-readonly-acceptance`, validate only)
+  - `.github/workflows/mainline-pipeline.yml` (`deploy-approved-candidate`, apply)
 
 ## Resource Topology
 
@@ -136,17 +136,17 @@ pnpm deploy:custom-domain:dns
 ```
 
 3. Publish emitted `CNAME`/`TXT` records at your DNS provider.
-4. Run `production-stage.yml` for accepted candidate.
+4. Run `mainline-pipeline.yml` for accepted candidate.
 5. Verify bindings with `az containerapp hostname list`.
 
 ### Replay guidance
 
-- Re-run `acceptance-stage` or `production-stage` for the same accepted SHA to verify deterministic convergence.
+- Re-run `mainline-pipeline.yml` with the same `candidate_sha` to verify deterministic convergence.
 - Use artifact diffs under `.artifacts/infra/<sha>/` to investigate drift or transient retries.
 
 ### Rollback by candidate SHA
 
-- Trigger manual `.github/workflows/production-stage.yml` with `candidate_sha=<known-good-sha>`.
+- Trigger manual `.github/workflows/mainline-pipeline.yml` with `candidate_sha=<known-good-sha>`.
 - Production stage deploys the accepted digest refs for that SHA.
 
 ### Artifact locations
@@ -160,8 +160,7 @@ pnpm deploy:custom-domain:dns
 
 ## References
 
-- `.github/workflows/acceptance-stage.yml`
-- `.github/workflows/production-stage.yml`
+- `.github/workflows/mainline-pipeline.yml`
 - `scripts/pipeline/production/apply-infra.mjs`
 - `scripts/pipeline/production/assert-managed-certificate-contract.mjs`
 - `scripts/pipeline/production/custom-domain-dns.mjs`

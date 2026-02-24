@@ -11,6 +11,7 @@ Every PR to `main` must pass fast, reliable, merge-blocking evidence:
 3. Merge is allowed only when `commit-stage` passes.
 
 `commit-stage.yml` runs for both `pull_request` and `merge_group` so the same commit-stage contract applies before merge and in queue execution.
+`mainline-pipeline.yml` reuses the same commit-stage jobs on `push` to `main` before acceptance and production stages.
 
 ## Source of truth precedence
 
@@ -78,8 +79,11 @@ Timing artifact path:
 Timing keys:
 
 - `metrics.time_to_commit_gate_seconds`
+- `metrics.queue_delay_seconds`
 - `metrics.quick_feedback_seconds`
 - `metrics.total_run_seconds`
+
+`time_to_commit_gate_seconds` is measured from first commit-stage job start to gate completion (execution time only). Queue delay is telemetry-only.
 
 ## Gate semantics
 

@@ -26,11 +26,11 @@ pnpm commit:docs-drift
 2. `commit-stage.yml` computes scope and runs fast required checks.
 3. `commit-stage` is the merge-blocking decision.
 4. Merge queue runs the same commit-stage gate on `merge_group`.
-5. Merge to `main` reruns commit stage and emits a frozen candidate manifest.
-6. `acceptance-stage.yml` validates the same candidate and emits one yes/no gate.
-7. Acceptance runtime evidence pulls and executes candidate digest refs (no candidate rebuild in acceptance).
-8. `production-stage.yml` promotes accepted candidate refs with production lock and freshness check.
-9. Production stage runs smoke verification and records deployment evidence.
+5. Merge to `main` triggers `mainline-pipeline.yml`.
+6. Mainline pipeline runs commit checks, freezes candidate digest refs, and loads candidate contract.
+7. Mainline acceptance stage validates the same candidate and emits one yes/no decision.
+8. Mainline production stage promotes accepted candidate refs with production lock.
+9. Mainline release decision writes `.artifacts/release/<sha>/decision.json` as canonical release verdict.
 
 ## Governance Invariant
 
@@ -39,6 +39,6 @@ pnpm commit:docs-drift
 
 ## High-Risk Paths
 
-When scope includes `infra` or `identity`, expect additional acceptance and production work under `environment: production`.
+When scope includes `infra` or `identity`, expect control-plane approval via `production-control-plane` before production mutation.
 
 Trusted Codex review remains available through manual `codex-review-trusted.yml` runs and does not block merges.

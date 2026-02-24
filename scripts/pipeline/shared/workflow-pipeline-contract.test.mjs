@@ -2,8 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const commitStageWorkflowPath = ".github/workflows/commit-stage.yml";
-const acceptanceStageWorkflowPath = ".github/workflows/acceptance-stage.yml";
-const productionStageWorkflowPath = ".github/workflows/production-stage.yml";
+const mainlineWorkflowPath = ".github/workflows/mainline-pipeline.yml";
 const sharedApplyScriptPath = "scripts/pipeline/production/apply-infra.mjs";
 
 function readUtf8(filePath) {
@@ -50,7 +49,7 @@ function extractConcurrencySettings(jobBlock) {
 
 describe("workflow pipeline contract", () => {
   it("keeps production mutation under a serialized lock with cancel disabled", () => {
-    const workflow = readUtf8(productionStageWorkflowPath);
+    const workflow = readUtf8(mainlineWorkflowPath);
 
     const concurrency = extractConcurrencySettings(
       extractJobBlock(workflow, "deploy_approved_candidate")
@@ -61,28 +60,21 @@ describe("workflow pipeline contract", () => {
   });
 
   it("uses shared infra apply script and deterministic run-scoped ARM deployment name", () => {
-    const productionWorkflow = readUtf8(productionStageWorkflowPath);
+    const productionWorkflow = readUtf8(mainlineWorkflowPath);
 
     expect(productionWorkflow).toContain("node scripts/pipeline/production/apply-infra.mjs");
   });
 
   it("keeps production stage deploy-only with no docker build commands", () => {
-    const workflow = readUtf8(productionStageWorkflowPath);
+    const workflow = readUtf8(mainlineWorkflowPath);
+    const deployJob = extractJobBlock(workflow, "deploy_approved_candidate");
 
-    expect(workflow).not.toContain("docker build");
-    expect(workflow).not.toContain("docker push");
-  });
-
-  it("keeps workflow_dispatch replay path executable when freshness-check is skipped", () => {
-    const workflow = readUtf8(productionStageWorkflowPath);
-
-    expect(workflow).toContain(
-      "if: ${{ needs.production_eligibility.outputs.eligible == 'true' && needs.load_approved_candidate.outputs.docs_only_changed != 'true' && (github.event_name == 'workflow_dispatch' || needs.freshness_check.result == 'success') }}"
-    );
+    expect(deployJob).not.toContain("docker build");
+    expect(deployJob).not.toContain("docker push");
   });
 
   it("keeps acceptance runtime candidate-fidelity contract", () => {
-    const workflow = readUtf8(acceptanceStageWorkflowPath);
+    const workflow = readUtf8(mainlineWorkflowPath);
 
     expect(workflow).toContain("Pull candidate runtime images");
     expect(workflow).toContain('docker pull "$CANDIDATE_API_REF"');
@@ -94,6 +86,33 @@ describe("workflow pipeline contract", () => {
   it("keeps commit stage merge-blocking gate context", () => {
     const workflow = readUtf8(commitStageWorkflowPath);
     expect(workflow).toContain("name: commit-stage");
+  });
+
+  it("keeps commit-stage workflow as PR and merge queue only", () => {
+    const workflow = readUtf8(commitStageWorkflowPath);
+    expect(workflow).toContain("pull_request:");
+    expect(workflow).toContain("merge_group:");
+    expect(workflow).not.toContain("\n  push:");
+  });
+
+  it("keeps mainline pipeline as push/dispatch and removes cross-workflow chaining", () => {
+    const workflow = readUtf8(mainlineWorkflowPath);
+    expect(workflow).toContain("push:");
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).not.toContain("workflow_run:");
+  });
+
+  it("keeps control-plane approval gate for infra and identity scopes", () => {
+    const workflow = readUtf8(mainlineWorkflowPath);
+    expect(workflow).toContain("name: approve-control-plane");
+    expect(workflow).toContain("environment: production-control-plane");
+    expect(workflow).toContain("needs.acceptance_stage.outputs.control_plane_required == 'true'");
+  });
+
+  it("runs production only after acceptance YES and deploy-required true", () => {
+    const workflow = readUtf8(mainlineWorkflowPath);
+    expect(workflow).toContain("needs.acceptance_stage.outputs.acceptance_decision == 'YES'");
+    expect(workflow).toContain("needs.acceptance_stage.outputs.deploy_required == 'true'");
   });
 
   it("keeps ARM validate and create commands using explicit --name in shared apply script", () => {

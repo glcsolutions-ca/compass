@@ -4,28 +4,26 @@
 
 1. PRs run `commit-stage.yml` and must pass `commit-stage`.
 2. Merge queue runs the same commit gate on `merge_group` before integrating to `main`.
-3. Commits on `main` run `commit-stage.yml` again and produce a frozen candidate manifest.
-4. Successful commit-stage runs on `main` trigger `acceptance-stage.yml`.
-5. Acceptance stage validates the same candidate and emits one YES/NO gate.
-6. Successful acceptance runs trigger `production-stage.yml`.
-7. Production stage deploys the accepted candidate without rebuilding runtime images.
+3. Commits on `main` run `mainline-pipeline.yml`.
+4. Mainline pipeline performs commit checks, freezes candidate refs, runs acceptance, then runs production.
+5. Production deploys accepted candidate digests only (no runtime image rebuild).
+6. Mainline pipeline emits one canonical release decision artifact (`YES` or `NO`).
 
 ## Workflow Index
 
 - `commit-stage.yml`
-  - trigger: `pull_request`, `merge_group`, `push` to `main`
-  - key jobs: `determine-scope`, `fast-feedback`, optional `infra-static-check`/`identity-static-check`, `freeze-release-candidate-images`, `publish-release-candidate`, `commit-stage`
+  - trigger: `pull_request`, `merge_group` to `main`
+  - key jobs: `determine-scope`, `fast-feedback`, optional `infra-static-check`/`identity-static-check`, `commit-stage`
+  - merge-blocking required context: `commit-stage`
   - emits timing telemetry at `.artifacts/commit-stage/<sha>/timing.json`
-- `acceptance-stage.yml`
-  - trigger: successful `Commit Stage` runs on `main` (`workflow_run`) or manual replay
-  - key jobs: `acceptance-eligibility`, `load-release-candidate`, optional `runtime-blackbox-acceptance` / `infra-readonly-acceptance` / `identity-readonly-acceptance`, `acceptance-stage`
-  - runtime acceptance must pull and run candidate digest refs (no local candidate rebuild path)
-  - docs-only changes are explicit `not-required` outcomes
-  - identity acceptance runs shared config-contract preflight before Terraform plan
-- `production-stage.yml`
-  - trigger: successful `Acceptance Stage` runs (`workflow_run`) or manual replay
-  - key jobs: `production-eligibility`, `load-approved-candidate`, `freshness-check`, `deploy-approved-candidate`, `production-blackbox-verify`, `production-stage`
-  - production identity apply runs the same shared identity config-contract preflight used by acceptance
+- `mainline-pipeline.yml`
+  - trigger: `push` to `main`, `workflow_dispatch` replay by `candidate_sha`
+  - key jobs: commit group (`determine-scope`, `fast-feedback`, optional static checks, `commit-stage`)
+  - candidate group: `freeze-release-candidate-images`, `publish-release-candidate`, `load-release-candidate`
+  - acceptance group: optional `runtime-blackbox-acceptance` / `infra-readonly-acceptance` / `identity-readonly-acceptance`, `acceptance-stage` (`YES` or `NO`)
+  - production group: conditional `approve-control-plane`, `deploy-approved-candidate`, `production-blackbox-verify`, `production-stage`
+  - final gate: `release-decision` writes `.artifacts/release/<sha>/decision.json`
+  - no `workflow_run` chaining inside the core release path
 - `acr-cleanup.yml`
   - scheduled/manual ACR cleanup
 - `desktop-release.yml`
@@ -51,6 +49,12 @@ Use these local checks to reduce policy and drift failures in CI:
 
 Identity workflows resolve `API_IDENTIFIER_URI` first and fall back to legacy `ENTRA_AUDIENCE`.
 If both are set and different, acceptance and production fail closed before Terraform mutation.
+
+## Environment Separation
+
+- Acceptance jobs run in `acceptance` environment with read-only credentials.
+- Production mutation runs in `production`.
+- Infra/identity production mutation requires explicit `production-control-plane` approval when scope requires control-plane convergence.
 
 ## Related References
 

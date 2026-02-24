@@ -52,7 +52,7 @@ The API uses PostgreSQL when `DATABASE_URL` is set in `apps/api/.env` (see `apps
 
 ## Quality and safety checks
 
-- CI is the merge source of truth; `commit-stage-gate` is required.
+- CI is the merge source of truth; `commit-stage` is required.
 - Keep one intent per PR and avoid unrelated file changes.
 - For behavior changes, update docs in `docs/` and/or policy checks.
 - Treat `migrations/`, `infra/`, `auth`, and pipeline workflows as high risk: keep rollout and rollback explicit.
@@ -66,5 +66,4 @@ The API uses PostgreSQL when `DATABASE_URL` is set in `apps/api/.env` (see `apps
 - Human commit-stage policy: `docs/commit-stage-policy.md`
 - Machine pipeline policy: `.github/policy/pipeline-policy.json`
 - Commit stage workflow: `.github/workflows/commit-stage.yml`
-- Acceptance stage workflow: `.github/workflows/acceptance-stage.yml`
-- Production stage workflow: `.github/workflows/production-stage.yml`
+- Mainline pipeline workflow: `.github/workflows/mainline-pipeline.yml`

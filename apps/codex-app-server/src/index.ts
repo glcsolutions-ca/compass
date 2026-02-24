@@ -12,7 +12,7 @@ app
   })
   .then(() => {
     app.log.info(
-      `Codex gateway listening on ${config.host}:${config.port} (startOnBoot=${config.startOnBoot}, codexHome=${config.codexHome}, client=${config.clientName}/${config.clientVersion}, pid=${process.pid})`
+      `Codex gateway listening on ${config.host}:${config.port} (startOnBoot=${config.startOnBoot}, codexHome=${config.codexHome}, client=${config.clientName}/${config.clientVersion}, pid=${process.pid}, node=${process.version})`
     );
   })
   .catch((error) => {

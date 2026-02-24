@@ -15,9 +15,10 @@
 ## Workflow Index
 
 - `commit-stage.yml`
-  - trigger: `pull_request`
+  - trigger: `pull_request`, `merge_group`
   - required check: `commit-stage`
   - key jobs: `determine-scope`, scope-aware `fast-feedback`, scope-aware `desktop-fast-feedback`, optional static checks, final `commit-stage`
+  - behavior: heavy checks run only on `pull_request`; `merge_group` emits required `commit-stage` context for queue SHAs
   - key artifact: `.artifacts/commit-stage/<sha>/timing.json`
 
 - `merge-queue-gate.yml`

@@ -18,7 +18,7 @@ Compass uses deterministic cloud and desktop delivery with the same release logi
 
 ## Canonical Stage Dependencies
 
-1. `commit-stage.yml` runs scope detection and required fast checks on PRs.
+1. `commit-stage.yml` runs scope detection on PR and merge-group SHAs; heavy fast checks run on PRs.
 2. `merge-queue-gate.yml` runs exact-merge checks on merge queue groups.
 3. `cloud-delivery-pipeline.yml` runs on `push` to `main`.
 4. `cloud-delivery-replay.yml` runs manually for `release_package_sha`.

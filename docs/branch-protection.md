@@ -27,7 +27,7 @@ gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/req
 
 - Enforce admins (`main` has no admin bypass in normal flow).
 - Require merge queue on `main`.
-- Require `.github/workflows/commit-stage.yml` on `pull_request`.
+- Require `.github/workflows/commit-stage.yml` on `pull_request` and emit `commit-stage` context on merge-group SHAs.
 - Require `.github/workflows/merge-queue-gate.yml` on `merge_group`.
 - Require `.github/workflows/cloud-delivery-pipeline.yml` on `push` to `main` for post-merge acceptance/production gating.
 - Require PR-only integration into `main` (no direct pushes).

@@ -10,8 +10,9 @@ Every PR to `main` must pass fast, reliable merge-readiness evidence:
 2. Required fast checks run based on scope.
 3. PRs are merge-ready only when `commit-stage` passes.
 
-`commit-stage.yml` runs on `pull_request` only.
-Exact queued-merge validation is handled separately by `merge-queue-gate.yml` (full checks on `merge_group`, lightweight placeholder context on `pull_request`).
+`commit-stage.yml` runs on both `pull_request` and `merge_group`.
+Heavy fast-feedback checks stay PR-only; merge-group runs emit the required `commit-stage` context for queued merge SHAs without duplicating heavy suites.
+Exact queued-merge validation is still handled by `merge-queue-gate.yml` (full checks on `merge_group`).
 Post-merge delivery pipelines (`cloud-delivery-pipeline.yml` for cloud, `desktop-deployment-pipeline.yml` for desktop) run on `push` to `main`.
 
 ## Source of Truth Precedence
@@ -28,7 +29,7 @@ When this doc and implementation differ, implementation wins:
 - `commit-stage` (PR gate)
 - `merge-queue-gate` (exact merge queue gate)
 
-## Commit-Stage Checks (PR)
+## Commit-Stage Checks (PR Heavy Path)
 
 - `determine-scope` (always)
 - `fast-feedback` (when runtime/infra/identity is true, or when delivery config blocking paths changed)
@@ -36,6 +37,7 @@ When this doc and implementation differ, implementation wins:
 - `infra-static-check` (only when `infra` scope is true)
 - `identity-static-check` (only when `identity` scope is true)
 - `docs-drift` is always evaluated and can block merge for docs-critical drift
+- On `merge_group`, commit-stage runs only scope/docs-drift/final decision to keep required context satisfiable without rerunning heavy checks
 
 ## Merge Queue Gate Checks (Exact Merge)
 

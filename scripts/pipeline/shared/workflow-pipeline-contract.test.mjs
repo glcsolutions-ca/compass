@@ -117,18 +117,18 @@ describe("workflow pipeline contract", () => {
     const desktopFastFeedbackJob = extractJobBlock(workflow, "desktop_fast_feedback");
 
     expect(runtimeFastFeedbackJob).toContain(
-      "if: ${{ needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true' }}"
+      "if: ${{ github.event_name == 'pull_request' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true') }}"
     );
     expect(desktopFastFeedbackJob).toContain(
-      "if: ${{ needs.determine_scope.outputs.desktop_changed == 'true' && needs.determine_scope.outputs.docs_only_changed != 'true' }}"
+      "if: ${{ github.event_name == 'pull_request' && needs.determine_scope.outputs.desktop_changed == 'true' && needs.determine_scope.outputs.docs_only_changed != 'true' }}"
     );
     expect(desktopFastFeedbackJob).toContain("Run desktop fast feedback suite");
   });
 
-  it("keeps commit-stage workflow PR-only for fast feedback", () => {
+  it("keeps commit-stage workflow on pull_request and merge_group with no push trigger", () => {
     const workflow = readUtf8(commitStageWorkflowPath);
     expect(workflow).toContain("pull_request:");
-    expect(workflow).not.toContain("merge_group:");
+    expect(workflow).toContain("merge_group:");
     expect(workflow).not.toContain("\n  push:");
   });
 

@@ -33,7 +33,7 @@ H -- "Yes" --> I["Release complete (Release on Demand)"]
 
 ## Trigger Model
 
-- `commit-stage.yml`: `pull_request`
+- `commit-stage.yml`: `pull_request`, `merge_group` (heavy fast-feedback checks run only on `pull_request`; merge-group run emits required `commit-stage` context)
 - `merge-queue-gate.yml`: `pull_request`, `merge_group` (full exact-merge checks run only on `merge_group`)
 - `cloud-delivery-pipeline.yml`: `push` to `main`
 - `cloud-delivery-replay.yml`: `workflow_dispatch` with `release_package_sha`

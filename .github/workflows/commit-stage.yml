@@ -17,6 +17,9 @@ on:
   pull_request:
     branches:
       - main
+  merge_group:
+    branches:
+      - main
 
 jobs:
   determine_scope:
@@ -59,8 +62,8 @@ jobs:
       - name: Resolve commit scope
         id: scope
         env:
-          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           GITHUB_TESTED_SHA: ${{ github.sha }}
         run: node scripts/pipeline/commit/resolve-scope.mjs
 
@@ -92,7 +95,7 @@ jobs:
     name: fast-feedback
     needs:
       - determine_scope
-    if: ${{ needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -111,7 +114,7 @@ jobs:
     name: desktop-fast-feedback
     needs:
       - determine_scope
-    if: ${{ needs.determine_scope.outputs.desktop_changed == 'true' && needs.determine_scope.outputs.docs_only_changed != 'true' }}
+    if: ${{ github.event_name == 'pull_request' && needs.determine_scope.outputs.desktop_changed == 'true' && needs.determine_scope.outputs.docs_only_changed != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -133,7 +136,7 @@ jobs:
     name: infra-static-check
     needs:
       - determine_scope
-    if: ${{ needs.determine_scope.outputs.infra_changed == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && needs.determine_scope.outputs.infra_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -147,7 +150,7 @@ jobs:
     name: identity-static-check
     needs:
       - determine_scope
-    if: ${{ needs.determine_scope.outputs.identity_changed == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && needs.determine_scope.outputs.identity_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -201,10 +204,10 @@ jobs:
         env:
           HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
           TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
-          RUNTIME_REQUIRED: ${{ needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true' }}
-          DESKTOP_REQUIRED: ${{ needs.determine_scope.outputs.desktop_changed == 'true' && needs.determine_scope.outputs.docs_only_changed != 'true' }}
-          INFRA_REQUIRED: ${{ needs.determine_scope.outputs.infra_changed }}
-          IDENTITY_REQUIRED: ${{ needs.determine_scope.outputs.identity_changed }}
+          RUNTIME_REQUIRED: ${{ github.event_name == 'pull_request' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true') }}
+          DESKTOP_REQUIRED: ${{ github.event_name == 'pull_request' && needs.determine_scope.outputs.desktop_changed == 'true' && needs.determine_scope.outputs.docs_only_changed != 'true' }}
+          INFRA_REQUIRED: ${{ github.event_name == 'pull_request' && needs.determine_scope.outputs.infra_changed }}
+          IDENTITY_REQUIRED: ${{ github.event_name == 'pull_request' && needs.determine_scope.outputs.identity_changed }}
           DOCS_DRIFT_BLOCKING: ${{ needs.determine_scope.outputs.docs_drift_blocking }}
           DOCS_DRIFT_STATUS: ${{ needs.determine_scope.outputs.docs_drift_status }}
           COMMIT_STAGE_SLO_MODE: ${{ steps.timing.outputs.commit_stage_slo_mode }}

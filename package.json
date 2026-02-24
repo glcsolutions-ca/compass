@@ -51,12 +51,13 @@
     "commit:testing-policy": "node scripts/pipeline/commit/check-testing-policy.mjs",
     "acceptance:browser-evidence": "playwright test tests/e2e/smoke.spec.ts --config tests/e2e/playwright.config.ts --reporter=line --workers=1",
     "acceptance:system-smoke": "tsx tests/system/smoke.ts",
+    "acceptance:auth-entra-canary": "node scripts/pipeline/cloud/acceptance/run-auth-entra-canary.mjs",
     "desktop:dev": "pnpm --filter @compass/desktop dev:run",
     "desktop:make:mac": "pnpm --filter @compass/desktop make:mac",
     "desktop:make:win": "pnpm --filter @compass/desktop make:win",
     "commit:system-smoke": "tsx tests/commit/smoke.inproc.ts",
     "commit:stage": "node scripts/pipeline/commit/decide-commit-stage.mjs",
-    "test:pipeline-contract": "vitest run scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/cloud/acceptance/decide-acceptance-stage-lib.test.mjs scripts/pipeline/cloud/acceptance/acceptance-blackbox-contract.test.mjs scripts/pipeline/cloud/production/managed-certificate-contract.test.mjs scripts/pipeline/cloud/production/apply-infra.test.mjs",
+    "test:pipeline-contract": "vitest run scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/check-auth-openapi-metadata.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/cloud/acceptance/decide-acceptance-stage-lib.test.mjs scripts/pipeline/cloud/acceptance/acceptance-blackbox-contract.test.mjs scripts/pipeline/cloud/production/managed-certificate-contract.test.mjs scripts/pipeline/cloud/production/apply-infra.test.mjs",
     "commit:fast-feedback": "pnpm test && pnpm commit:system-smoke"
   },
   "lint-staged": {

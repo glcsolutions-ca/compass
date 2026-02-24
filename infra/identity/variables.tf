@@ -38,9 +38,39 @@ variable "api_identifier_uri" {
 }
 
 variable "required_scope_name" {
-  description = "Delegated scope value for API"
+  description = "Delegated scope value used by the web app required_resource_access entry"
   type        = string
-  default     = "platform.read"
+  default     = "compass.user"
+}
+
+variable "admin_scope_name" {
+  description = "Delegated admin scope value for API"
+  type        = string
+  default     = "compass.admin"
+}
+
+variable "user_scope_id" {
+  description = "Stable UUID for delegated compass.user scope"
+  type        = string
+  default     = "37c2d02e-5e58-4834-a822-b38488be7862"
+}
+
+variable "admin_scope_id" {
+  description = "Stable UUID for delegated compass.admin scope"
+  type        = string
+  default     = "0fd4b49e-8f47-4f3c-9f2f-f145297a67a1"
+}
+
+variable "integration_read_role_id" {
+  description = "Stable UUID for Compass.Integration.Read role"
+  type        = string
+  default     = "8f5e637f-5ae5-4d22-8e95-135f36f97939"
+}
+
+variable "integration_write_role_id" {
+  description = "Stable UUID for Compass.Integration.Write role"
+  type        = string
+  default     = "92ce2a48-1fdb-444c-8f1f-86240bbf2895"
 }
 
 variable "timesync_admin_role_id" {

@@ -6,6 +6,15 @@ param registryServer string
 param registryIdentityResourceId string
 @secure()
 param databaseUrl string
+param authIssuer string
+param authJwksUri string
+param authAudience string
+param authAllowedClientIds string
+param authActiveTenantIds string
+param oauthTokenIssuer string
+param oauthTokenAudience string
+@secure()
+param oauthTokenSigningSecret string
 param logLevel string = 'warn'
 param customDomainName string = ''
 param customDomainCertificateId string = ''
@@ -50,6 +59,10 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'database-url'
           value: databaseUrl
         }
+        {
+          name: 'oauth-token-signing-secret'
+          value: oauthTokenSigningSecret
+        }
       ]
     }
     template: {
@@ -81,6 +94,38 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'LOG_LEVEL'
               value: logLevel
+            }
+            {
+              name: 'AUTH_ISSUER'
+              value: authIssuer
+            }
+            {
+              name: 'AUTH_JWKS_URI'
+              value: authJwksUri
+            }
+            {
+              name: 'AUTH_AUDIENCE'
+              value: authAudience
+            }
+            {
+              name: 'AUTH_ALLOWED_CLIENT_IDS'
+              value: authAllowedClientIds
+            }
+            {
+              name: 'AUTH_ACTIVE_TENANT_IDS'
+              value: authActiveTenantIds
+            }
+            {
+              name: 'OAUTH_TOKEN_ISSUER'
+              value: oauthTokenIssuer
+            }
+            {
+              name: 'OAUTH_TOKEN_AUDIENCE'
+              value: oauthTokenAudience
+            }
+            {
+              name: 'OAUTH_TOKEN_SIGNING_SECRET'
+              secretRef: 'oauth-token-signing-secret'
             }
           ]
           resources: {

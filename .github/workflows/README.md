@@ -18,17 +18,31 @@
   - artifact: `.artifacts/commit-stage/<sha>/timing.json`
 - `cloud-deployment-pipeline.yml` (cloud runtime/infra/identity)
   - trigger: `push` to `main`, `workflow_dispatch` replay by `candidate_sha`
-  - stage groups: commit -> candidate freeze -> acceptance -> production -> release decision
-  - final artifact: `.artifacts/release/<sha>/decision.json`
+  - key jobs: commit group (`determine-scope`, `fast-feedback`, optional static checks, `commit-stage`)
+  - candidate group: `freeze-candidate-api-image`, `freeze-candidate-web-image`, `freeze-current-runtime-refs`, `publish-release-candidate`, `load-release-candidate`
+  - acceptance group: optional `runtime-api-system-acceptance` / `runtime-browser-acceptance` / `runtime-migration-image-acceptance` / `infra-readonly-acceptance` / `identity-readonly-acceptance`, `acceptance-stage` (`YES` or `NO`)
+  - production group: conditional `approve-control-plane`, `deploy-approved-candidate`, `production-blackbox-verify`, `production-stage`
+  - production blackbox auth contract: requires fresh nightly `auth-entra-canary` run and fresh `auth-delegated-smoke` run for target SHA
+  - final gate: `release-decision` writes `.artifacts/release/<sha>/decision.json` and `.artifacts/pipeline/<sha>/timing.json`
+  - no `workflow_run` chaining inside the core release path
 - `desktop-deployment-pipeline.yml` (desktop installers)
   - trigger: `push` to `main`, `workflow_dispatch` replay by `candidate_sha`
   - stage groups: desktop commit -> desktop acceptance (backend compatibility contract + signed macOS + signed Windows) -> desktop production -> desktop release decision
   - final artifact: `.artifacts/desktop-release/<sha>/decision.json`
+- `auth-entra-canary.yml`
+  - trigger: nightly schedule + `workflow_dispatch`
+  - key checks: runtime-minted allowed app token succeeds, denied app token returns configured deny code (default `assignment_denied`), invalid token returns `401`
+  - emits `.artifacts/auth-canary/<sha>/result.json`
+- `auth-delegated-smoke.yml`
+  - trigger: `workflow_dispatch` only (operator-driven pre-deploy probe)
+  - key checks: delegated token returns `200` and `caller.tokenType=delegated`
+  - requires environment secret `AUTH_DELEGATED_PROBE_TOKEN` set immediately before probe run
+  - emits `.artifacts/deploy/<sha>/delegated-smoke.json`
+- `acr-cleanup.yml`
+  - scheduled/manual ACR cleanup
 - `desktop-release.yml`
   - manual compatibility workflow for one transition cycle
   - signed-only release publication path
-- `acr-cleanup.yml`
-  - scheduled/manual container registry cleanup
 - `codex-review-trusted.yml`
   - optional trusted-context review helper
 - `dependabot-auto-merge.yml`

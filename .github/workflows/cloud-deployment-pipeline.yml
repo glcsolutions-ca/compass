@@ -777,6 +777,20 @@ jobs:
       ACA_WEB_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_WEB_MANAGED_CERTIFICATE_NAME }}
       ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
       JOB_REQUIRED: ${{ (needs.load_release_candidate.outputs.infra_changed == 'true' || needs.load_release_candidate.outputs.requires_infra_convergence == 'true') && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
+      API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
+      ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
+      AUTH_AUDIENCE: ${{ vars.AUTH_AUDIENCE }}
+      AUTH_ISSUER: ${{ vars.ENTRA_ISSUER }}
+      AUTH_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
+      AUTH_ALLOWED_CLIENT_IDS: ${{ vars.AUTH_ALLOWED_CLIENT_IDS }}
+      AUTH_ACTIVE_TENANT_IDS: ${{ vars.AUTH_ACTIVE_TENANT_IDS }}
+      OAUTH_TOKEN_ISSUER: ${{ vars.OAUTH_TOKEN_ISSUER }}
+      OAUTH_TOKEN_AUDIENCE: ${{ vars.OAUTH_TOKEN_AUDIENCE }}
+      OAUTH_TOKEN_SIGNING_SECRET: ${{ secrets.OAUTH_TOKEN_SIGNING_SECRET }}
+      AUTH_BOOTSTRAP_ALLOWED_TENANT_ID: ${{ vars.API_SMOKE_ALLOWED_TENANT_ID }}
+      AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_ID }}
+      AUTH_BOOTSTRAP_DELEGATED_USER_OID: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_OID }}
+      AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL }}
     steps:
       - name: Record not-required infra acceptance
         if: ${{ env.JOB_REQUIRED != 'true' }}
@@ -1124,6 +1138,20 @@ jobs:
       ACA_API_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_API_MANAGED_CERTIFICATE_NAME }}
       ACA_WEB_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_WEB_MANAGED_CERTIFICATE_NAME }}
       ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
+      API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
+      ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
+      AUTH_AUDIENCE: ${{ vars.AUTH_AUDIENCE }}
+      AUTH_ISSUER: ${{ vars.ENTRA_ISSUER }}
+      AUTH_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
+      AUTH_ALLOWED_CLIENT_IDS: ${{ vars.AUTH_ALLOWED_CLIENT_IDS }}
+      AUTH_ACTIVE_TENANT_IDS: ${{ vars.AUTH_ACTIVE_TENANT_IDS }}
+      OAUTH_TOKEN_ISSUER: ${{ vars.OAUTH_TOKEN_ISSUER }}
+      OAUTH_TOKEN_AUDIENCE: ${{ vars.OAUTH_TOKEN_AUDIENCE }}
+      OAUTH_TOKEN_SIGNING_SECRET: ${{ secrets.OAUTH_TOKEN_SIGNING_SECRET }}
+      AUTH_BOOTSTRAP_ALLOWED_TENANT_ID: ${{ vars.API_SMOKE_ALLOWED_TENANT_ID }}
+      AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_ID }}
+      AUTH_BOOTSTRAP_DELEGATED_USER_OID: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_OID }}
+      AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL }}
       POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
       ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
     steps:
@@ -1368,12 +1396,41 @@ jobs:
       WEB_BASE_URL: ${{ needs.deploy_approved_candidate.outputs.web_prod_url }}
       EXPECTED_ENTRYPOINT: /
       REQUIRED_FLOW_IDS_JSON: '["compass-smoke"]'
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      AUTH_CANARY_WORKFLOW_FILE: auth-entra-canary.yml
+      AUTH_CANARY_MAX_AGE_HOURS: "24"
+      DELEGATED_SMOKE_WORKFLOW_FILE: auth-delegated-smoke.yml
+      DELEGATED_SMOKE_MAX_AGE_HOURS: "24"
+      API_SMOKE_ALLOWED_TENANT_ID: ${{ vars.API_SMOKE_ALLOWED_TENANT_ID }}
+      API_SMOKE_ALLOWED_CLIENT_ID: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_ID }}
+      API_SMOKE_ALLOWED_CLIENT_SECRET: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_SECRET }}
+      API_SMOKE_ALLOWED_SCOPE: ${{ vars.API_SMOKE_ALLOWED_SCOPE }}
+      API_SMOKE_DENIED_TENANT_ID: ${{ vars.API_SMOKE_DENIED_TENANT_ID }}
+      API_SMOKE_DENIED_CLIENT_ID: ${{ secrets.API_SMOKE_DENIED_CLIENT_ID }}
+      API_SMOKE_DENIED_CLIENT_SECRET: ${{ secrets.API_SMOKE_DENIED_CLIENT_SECRET }}
+      API_SMOKE_DENIED_SCOPE: ${{ vars.API_SMOKE_DENIED_SCOPE }}
+      API_SMOKE_DENIED_EXPECTED_CODE: ${{ vars.API_SMOKE_DENIED_EXPECTED_CODE }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node + pnpm
         uses: ./.github/actions/setup-node-pnpm
+
+      - name: Verify auth canary freshness
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/pipeline/cloud/production/verify-auth-canary-freshness.mjs
+
+      - name: Verify delegated pre-deploy probe freshness
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AUTH_CANARY_WORKFLOW_FILE: ${{ env.DELEGATED_SMOKE_WORKFLOW_FILE }}
+          AUTH_CANARY_MAX_AGE_HOURS: ${{ env.DELEGATED_SMOKE_MAX_AGE_HOURS }}
+          AUTH_CANARY_REQUIRED_HEAD_SHA: ${{ env.HEAD_SHA }}
+          AUTH_CANARY_ARTIFACT_NAME: delegated-smoke-freshness
+          AUTH_CANARY_REQUIRED_ARTIFACT_NAME: auth-delegated-smoke-${{ env.HEAD_SHA }}
+        run: node scripts/pipeline/cloud/production/verify-auth-canary-freshness.mjs
 
       - name: API smoke verification
         run: node scripts/pipeline/cloud/production/verify-api-smoke.mjs
@@ -1392,7 +1449,10 @@ jobs:
         with:
           name: production-blackbox-verify-${{ env.HEAD_SHA }}
           path: |
+            .artifacts/deploy/${{ env.HEAD_SHA }}/auth-canary-freshness.json
             .artifacts/deploy/${{ env.HEAD_SHA }}/api-smoke.json
+            .artifacts/deploy/${{ env.HEAD_SHA }}/delegated-smoke-freshness.json
+            .artifacts/deploy/${{ env.HEAD_SHA }}/delegated-smoke.json
             .artifacts/browser-evidence/${{ env.HEAD_SHA }}
           if-no-files-found: warn
 

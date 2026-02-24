@@ -10,6 +10,9 @@ The route handler at `src/app/api/v1/[...path]/route.ts` proxies browser request
 
 - forwards only allowlisted request headers
 - strips hop-by-hop headers on request and response
+- injects upstream bearer token from a signed `__Host-compass_session` cookie (BFF pattern)
+- requires CSRF token + origin/referer validation on mutating requests
+- enforces step-up marker for high-risk role/scim mutations
 - uses a bounded upstream timeout (`10_000ms`)
 - returns `500` with `API_BASE_URL_REQUIRED` if `API_BASE_URL` is missing in production
 - returns `502` with `UPSTREAM_UNAVAILABLE` when upstream fetch fails
@@ -18,12 +21,15 @@ Proxy target rules:
 
 - In `development`/`test`, default target is `http://localhost:3001` when `API_BASE_URL` is unset.
 - In `production`, `API_BASE_URL` must be provided.
+- Proxied API destination is `/v1/*` on the upstream API service.
 
 ## Env Table
 
-| Env Var        | Default                                 | Notes                                                         |
-| -------------- | --------------------------------------- | ------------------------------------------------------------- |
-| `API_BASE_URL` | `http://localhost:3001` (dev/test only) | Runtime proxy target for `/api/v1/*`; required in production. |
+| Env Var               | Default                                 | Notes                                                                                 |
+| --------------------- | --------------------------------------- | ------------------------------------------------------------------------------------- |
+| `API_BASE_URL`        | `http://localhost:3001` (dev/test only) | Runtime proxy target for `/api/v1/*`; required in production.                         |
+| `WEB_SESSION_SECRET`  | dev/test default                        | Required in production; signs/verifies host-only BFF session cookie.                  |
+| `WEB_ALLOWED_ORIGINS` | unset                                   | Optional comma-separated allowlist for origin/referer checks on mutating proxy calls. |
 
 Local template: `apps/web/.env.local.example`.
 

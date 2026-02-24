@@ -1,0 +1,45 @@
+name: Auth Entra Canary
+
+permissions:
+  contents: read
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  auth_entra_canary:
+    name: auth-entra-canary
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: acceptance
+    env:
+      HEAD_SHA: ${{ github.sha }}
+      TARGET_API_BASE_URL: ${{ vars.AUTH_CANARY_API_BASE_URL }}
+      ENTRA_CANARY_ALLOWED_TENANT_ID: ${{ vars.AUTH_CANARY_ALLOWED_TENANT_ID }}
+      ENTRA_CANARY_ALLOWED_CLIENT_ID: ${{ secrets.AUTH_CANARY_ALLOWED_CLIENT_ID }}
+      ENTRA_CANARY_ALLOWED_CLIENT_SECRET: ${{ secrets.AUTH_CANARY_ALLOWED_CLIENT_SECRET }}
+      ENTRA_CANARY_APP_SCOPE: ${{ vars.AUTH_CANARY_APP_SCOPE }}
+      ENTRA_CANARY_DENIED_TENANT_ID: ${{ vars.AUTH_CANARY_DENIED_TENANT_ID }}
+      ENTRA_CANARY_DENIED_CLIENT_ID: ${{ secrets.AUTH_CANARY_DENIED_CLIENT_ID }}
+      ENTRA_CANARY_DENIED_CLIENT_SECRET: ${{ secrets.AUTH_CANARY_DENIED_CLIENT_SECRET }}
+      ENTRA_CANARY_DENIED_APP_SCOPE: ${{ vars.AUTH_CANARY_DENIED_APP_SCOPE }}
+      ENTRA_CANARY_DENIED_EXPECTED_CODE: ${{ vars.AUTH_CANARY_DENIED_EXPECTED_CODE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Run live Entra auth canary
+        run: node scripts/pipeline/cloud/acceptance/run-auth-entra-canary.mjs
+
+      - name: Upload canary artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-entra-canary-${{ github.sha }}
+          path: .artifacts/auth-canary/${{ github.sha }}
+          if-no-files-found: warn

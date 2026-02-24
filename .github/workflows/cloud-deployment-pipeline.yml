@@ -1077,7 +1077,7 @@ jobs:
       - load_release_candidate
       - acceptance_stage
       - approve_control_plane
-    if: ${{ needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && (needs.acceptance_stage.outputs.control_plane_required != 'true' || needs.approve_control_plane.result == 'success') }}
+    if: ${{ always() && needs.load_release_candidate.result == 'success' && needs.acceptance_stage.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && (needs.acceptance_stage.outputs.control_plane_required != 'true' || needs.approve_control_plane.result == 'success') }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 75
@@ -1359,7 +1359,7 @@ jobs:
       - load_release_candidate
       - acceptance_stage
       - deploy_approved_candidate
-    if: ${{ needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && (needs.load_release_candidate.outputs.runtime_changed == 'true' || needs.load_release_candidate.outputs.infra_changed == 'true' || needs.load_release_candidate.outputs.requires_infra_convergence == 'true') }}
+    if: ${{ always() && needs.deploy_approved_candidate.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && (needs.load_release_candidate.outputs.runtime_changed == 'true' || needs.load_release_candidate.outputs.infra_changed == 'true' || needs.load_release_candidate.outputs.requires_infra_convergence == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

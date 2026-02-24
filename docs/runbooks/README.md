@@ -2,7 +2,7 @@
 
 ## Runbook Index
 
-- [`deploy-aca.md`](./deploy-aca.md): production release pipeline and ACA deployment operations.
+- [`production-stage.md`](./production-stage.md): production stage promotion and release-candidate operations.
 - [`github-governance-verification.md`](./github-governance-verification.md): governance and GitHub policy verification checks.
 - [`migration-safety.md`](./migration-safety.md): migration rollout and rollback safety practices.
 - [`postgres-local.md`](./postgres-local.md): local Postgres startup, migration, and seed operations.
@@ -12,7 +12,7 @@
 
 | Situation                                                         | Runbook                             |
 | ----------------------------------------------------------------- | ----------------------------------- |
-| You need to understand or troubleshoot production release flow    | `deploy-aca.md`                     |
+| You need to understand or troubleshoot production release flow    | `production-stage.md`               |
 | You need to validate branch protection and merge governance setup | `github-governance-verification.md` |
 | You are planning or validating migration safety boundaries        | `migration-safety.md`               |
 | You are setting up local database dependencies                    | `postgres-local.md`                 |

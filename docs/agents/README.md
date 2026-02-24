@@ -18,6 +18,8 @@ This directory contains operational guidance for coding and review agents workin
 
 ## Control Plane Links
 
-- Policy contract: [`../../.github/policy/merge-policy.json`](../../.github/policy/merge-policy.json)
-- Workflow: [`../../.github/workflows/merge-contract.yml`](../../.github/workflows/merge-contract.yml)
-- Policy docs: [`../merge-policy.md`](../merge-policy.md)
+- Policy contract: [`../../.github/policy/pipeline-policy.json`](../../.github/policy/pipeline-policy.json)
+- Commit workflow: [`../../.github/workflows/commit-stage.yml`](../../.github/workflows/commit-stage.yml)
+- Acceptance workflow: [`../../.github/workflows/acceptance-stage.yml`](../../.github/workflows/acceptance-stage.yml)
+- Production workflow: [`../../.github/workflows/production-stage.yml`](../../.github/workflows/production-stage.yml)
+- Policy docs: [`../commit-stage-policy.md`](../commit-stage-policy.md)

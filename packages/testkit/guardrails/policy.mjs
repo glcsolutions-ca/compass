@@ -1,4 +1,7 @@
-import { DEFAULT_TEST_POLICY_PATH, loadTestPolicySync } from "../../../scripts/ci/test-policy.mjs";
+import {
+  DEFAULT_TEST_POLICY_PATH,
+  loadTestPolicySync
+} from "../../../scripts/pipeline/commit/testing-policy.mjs";
 
 function normalizeModeKey(mode) {
   if (mode === "commit-stage") {

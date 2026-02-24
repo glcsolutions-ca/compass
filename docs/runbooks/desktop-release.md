@@ -18,6 +18,7 @@ Installers are built from a `main` candidate that already passed the deployment 
   - `release_tag`: release tag (for example `desktop-v0.1.0`)
   - `web_base_url`: HTTPS URL loaded by Electron renderer
   - `draft`: publish release as draft (`true`/`false`)
+  - `signing_mode`: `signed` (default) or `unsigned-macos` (temporary macOS-only test build)
 
 ## Required GitHub Environment
 
@@ -48,6 +49,15 @@ Build jobs (`build-macos`, `build-windows`) run inside this environment.
   - `TRUSTED_SIGNING_ACCOUNT_NAME`
   - `TRUSTED_SIGNING_PROFILE_NAME`
 
+## Temporary Unsigned macOS Test Mode
+
+Use `signing_mode=unsigned-macos` when you need a temporary installable macOS DMG before signing credentials are ready.
+
+- This mode skips macOS code signing and notarization checks.
+- This mode skips Windows build/signing.
+- GitHub Release assets include `.dmg` and `SHA256SUMS.txt` (no `.msi`).
+- Do not distribute unsigned builds externally.
+
 ## PNPM Native Build Policy
 
 This repo restricts install-time build scripts by default (`.npmrc`).
@@ -62,12 +72,13 @@ Desktop packaging requires native modules used by Electron and DMG/MSI makers.
 
 1. Confirm deployment pipeline success for the `candidate_sha` on `main`.
 2. Start `Desktop Release` workflow with target inputs.
-3. Wait for both build jobs:
+3. Wait for build jobs:
    - `build-macos`: signs + notarizes app, emits renamed DMG.
-   - `build-windows`: builds MSI, signs via Azure Artifact Signing.
+   - `build-windows`: builds MSI, signs via Azure Artifact Signing (`signed` mode only).
 4. Validate `publish-release` job:
    - GitHub Release is created/updated by `release_tag`.
-   - Assets include one `.dmg`, one `.msi`, and `SHA256SUMS.txt`.
+   - `signed` mode: assets include one `.dmg`, one `.msi`, and `SHA256SUMS.txt`.
+   - `unsigned-macos` mode: assets include one `.dmg` and `SHA256SUMS.txt`.
    - Artifact `.artifacts/desktop/<sha>/release-manifest.json` is uploaded.
 
 ## Verification Checklist

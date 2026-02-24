@@ -20,6 +20,14 @@ on:
         required: false
         default: true
         type: boolean
+      signing_mode:
+        description: Signing behavior (`signed` for production, `unsigned-macos` for temporary macOS testing)
+        required: false
+        default: signed
+        type: choice
+        options:
+          - signed
+          - unsigned-macos
 
 permissions:
   actions: read
@@ -141,6 +149,7 @@ jobs:
 
       - name: Decode signing assets
         id: signing_assets
+        if: ${{ inputs.signing_mode == 'signed' }}
         env:
           CERT_P12_BASE64: ${{ secrets.MACOS_SIGNING_CERT_P12_BASE64 }}
           APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
@@ -165,6 +174,7 @@ jobs:
           echo "api_key_path=$api_key_path" >> "$GITHUB_OUTPUT"
 
       - name: Configure temporary keychain
+        if: ${{ inputs.signing_mode == 'signed' }}
         env:
           CERT_PATH: ${{ steps.signing_assets.outputs.cert_path }}
           CERT_PASSWORD: ${{ secrets.MACOS_SIGNING_CERT_PASSWORD }}
@@ -184,6 +194,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain"
 
       - name: Build signed macOS DMG
+        if: ${{ inputs.signing_mode == 'signed' }}
         env:
           COMPASS_DESKTOP_START_URL: ${{ inputs.web_base_url }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -192,7 +203,14 @@ jobs:
           APPLE_API_KEY_PATH: ${{ steps.signing_assets.outputs.api_key_path }}
         run: pnpm --filter @compass/desktop make:mac
 
+      - name: Build unsigned macOS DMG
+        if: ${{ inputs.signing_mode == 'unsigned-macos' }}
+        env:
+          COMPASS_DESKTOP_START_URL: ${{ inputs.web_base_url }}
+        run: pnpm --filter @compass/desktop make:mac
+
       - name: Verify macOS signing and notarization
+        if: ${{ inputs.signing_mode == 'signed' }}
         run: |
           set -euo pipefail
 
@@ -207,6 +225,23 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app_path"
           spctl --assess --type execute --verbose=4 "$app_path"
           xcrun stapler validate "$app_path"
+
+      - name: Verify unsigned macOS package output
+        if: ${{ inputs.signing_mode == 'unsigned-macos' }}
+        run: |
+          set -euo pipefail
+
+          app_path="$(find apps/desktop/out -type d -name '*.app' | head -n 1)"
+          dmg_path="$(find apps/desktop/out/make -type f -name '*.dmg' | head -n 1)"
+
+          if [ -z "$app_path" ] || [ -z "$dmg_path" ]; then
+            echo "Missing macOS app or DMG output." >&2
+            exit 1
+          fi
+
+          echo "Unsigned test artifacts generated:"
+          echo "  app: $app_path"
+          echo "  dmg: $dmg_path"
 
       - name: Prepare macOS installer artifact
         id: collect
@@ -232,6 +267,7 @@ jobs:
     name: build-windows
     needs:
       - validate_candidate
+    if: ${{ inputs.signing_mode == 'signed' }}
     runs-on: windows-latest
     environment: desktop-release
     steps:
@@ -321,6 +357,7 @@ jobs:
       - validate_candidate
       - build_macos
       - build_windows
+    if: ${{ needs.validate_candidate.result == 'success' && needs.build_macos.result == 'success' && (inputs.signing_mode == 'unsigned-macos' || needs.build_windows.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - name: Download macOS installer artifact
@@ -330,6 +367,7 @@ jobs:
           path: .artifacts/desktop/${{ needs.validate_candidate.outputs.candidate_sha }}/installers
 
       - name: Download Windows installer artifact
+        if: ${{ inputs.signing_mode == 'signed' }}
         uses: actions/download-artifact@v4
         with:
           name: desktop-windows-${{ needs.validate_candidate.outputs.candidate_sha }}
@@ -337,7 +375,17 @@ jobs:
 
       - name: Generate checksums
         working-directory: .artifacts/desktop/${{ needs.validate_candidate.outputs.candidate_sha }}/installers
-        run: sha256sum *.dmg *.msi > SHA256SUMS.txt
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          files=( *.dmg *.msi )
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No installer artifacts found to checksum." >&2
+            exit 1
+          fi
+
+          sha256sum "${files[@]}" > SHA256SUMS.txt
 
       - name: Create release manifest
         run: |
@@ -400,25 +448,43 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag }}
           DRAFT: ${{ inputs.draft }}
           CANDIDATE_SHA: ${{ needs.validate_candidate.outputs.candidate_sha }}
+          SIGNING_MODE: ${{ inputs.signing_mode }}
         run: |
           set -euo pipefail
+          shopt -s nullglob
 
           installers_dir=".artifacts/desktop/$CANDIDATE_SHA/installers"
           cd "$installers_dir"
 
-          dmg_file="$(ls *.dmg)"
-          msi_file="$(ls *.msi)"
+          dmg_files=( *.dmg )
+          msi_files=( *.msi )
+          if [ "${#dmg_files[@]}" -eq 0 ]; then
+            echo "Expected at least one DMG in release installers directory." >&2
+            exit 1
+          fi
+
+          dmg_file="${dmg_files[0]}"
           sums_file="SHA256SUMS.txt"
           notes="Desktop installers for candidate ${CANDIDATE_SHA}"
+          assets=( "$dmg_file" "$sums_file" )
+
+          if [ "${#msi_files[@]}" -gt 0 ]; then
+            assets+=( "${msi_files[0]}" )
+          elif [ "$SIGNING_MODE" = "signed" ]; then
+            echo "Signed mode requires an MSI artifact." >&2
+            exit 1
+          else
+            notes="${notes}\n\nUnsigned macOS test build. Windows installer omitted."
+          fi
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "$dmg_file" "$msi_file" "$sums_file" --clobber
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
             gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" --notes "$notes"
           else
             if [ "$DRAFT" = "true" ]; then
-              gh release create "$RELEASE_TAG" "$dmg_file" "$msi_file" "$sums_file" --title "$RELEASE_TAG" --notes "$notes" --draft
+              gh release create "$RELEASE_TAG" "${assets[@]}" --title "$RELEASE_TAG" --notes "$notes" --draft
             else
-              gh release create "$RELEASE_TAG" "$dmg_file" "$msi_file" "$sums_file" --title "$RELEASE_TAG" --notes "$notes"
+              gh release create "$RELEASE_TAG" "${assets[@]}" --title "$RELEASE_TAG" --notes "$notes"
             fi
           fi
 

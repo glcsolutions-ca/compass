@@ -151,11 +151,13 @@ describe("workflow pipeline contract", () => {
 
   it("keeps control-plane approval gating on deploy for infra and identity scopes", () => {
     const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+    expect(workflow).toContain("name: approve-control-plane");
     expect(workflow).toContain(
-      "environment: ${{ needs.acceptance_stage.outputs.control_plane_required == 'true' && 'production-control-plane' || 'production' }}"
+      "environment: ${{ needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && needs.acceptance_stage.outputs.control_plane_required == 'true' && 'production-control-plane' || 'acceptance' }}"
     );
+    expect(workflow).toContain("environment: production");
     expect(workflow).toContain("needs.acceptance_stage.outputs.control_plane_required == 'true'");
-    expect(workflow).not.toContain("name: approve-control-plane");
+    expect(workflow).toContain("needs.approve_control_plane.result == 'success'");
   });
 
   it("runs production only after acceptance YES and deploy-required true", () => {

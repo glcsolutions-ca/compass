@@ -21,13 +21,15 @@ on:
         default: true
         type: boolean
       signing_mode:
-        description: Signing behavior (`signed` for production, `unsigned-macos` for temporary macOS testing)
+        description: Installer signing policy (`signed`, `unsigned`, `unsigned-macos`, `unsigned-windows`)
         required: false
         default: signed
         type: choice
         options:
           - signed
+          - unsigned
           - unsigned-macos
+          - unsigned-windows
 
 permissions:
   actions: read
@@ -149,7 +151,7 @@ jobs:
 
       - name: Decode signing assets
         id: signing_assets
-        if: ${{ inputs.signing_mode == 'signed' }}
+        if: ${{ inputs.signing_mode == 'signed' || inputs.signing_mode == 'unsigned-windows' }}
         env:
           CERT_P12_BASE64: ${{ secrets.MACOS_SIGNING_CERT_P12_BASE64 }}
           APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
@@ -174,7 +176,7 @@ jobs:
           echo "api_key_path=$api_key_path" >> "$GITHUB_OUTPUT"
 
       - name: Configure temporary keychain
-        if: ${{ inputs.signing_mode == 'signed' }}
+        if: ${{ inputs.signing_mode == 'signed' || inputs.signing_mode == 'unsigned-windows' }}
         env:
           CERT_PATH: ${{ steps.signing_assets.outputs.cert_path }}
           CERT_PASSWORD: ${{ secrets.MACOS_SIGNING_CERT_PASSWORD }}
@@ -194,7 +196,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain"
 
       - name: Build signed macOS DMG
-        if: ${{ inputs.signing_mode == 'signed' }}
+        if: ${{ inputs.signing_mode == 'signed' || inputs.signing_mode == 'unsigned-windows' }}
         env:
           COMPASS_DESKTOP_START_URL: ${{ inputs.web_base_url }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -204,13 +206,13 @@ jobs:
         run: pnpm --filter @compass/desktop make:mac
 
       - name: Build unsigned macOS DMG
-        if: ${{ inputs.signing_mode == 'unsigned-macos' }}
+        if: ${{ inputs.signing_mode == 'unsigned' || inputs.signing_mode == 'unsigned-macos' }}
         env:
           COMPASS_DESKTOP_START_URL: ${{ inputs.web_base_url }}
         run: pnpm --filter @compass/desktop make:mac
 
       - name: Verify macOS signing and notarization
-        if: ${{ inputs.signing_mode == 'signed' }}
+        if: ${{ inputs.signing_mode == 'signed' || inputs.signing_mode == 'unsigned-windows' }}
         run: |
           set -euo pipefail
 
@@ -227,7 +229,7 @@ jobs:
           xcrun stapler validate "$app_path"
 
       - name: Verify unsigned macOS package output
-        if: ${{ inputs.signing_mode == 'unsigned-macos' }}
+        if: ${{ inputs.signing_mode == 'unsigned' || inputs.signing_mode == 'unsigned-macos' }}
         run: |
           set -euo pipefail
 
@@ -267,7 +269,6 @@ jobs:
     name: build-windows
     needs:
       - validate_candidate
-    if: ${{ inputs.signing_mode == 'signed' }}
     runs-on: windows-latest
     environment: desktop-release
     steps:
@@ -319,6 +320,7 @@ jobs:
           "msi_path=$artifactPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Azure login for signing
+        if: ${{ inputs.signing_mode == 'signed' || inputs.signing_mode == 'unsigned-macos' }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -326,6 +328,7 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Sign MSI with Azure Artifact Signing
+        if: ${{ inputs.signing_mode == 'signed' || inputs.signing_mode == 'unsigned-macos' }}
         uses: azure/artifact-signing-action@v1
         with:
           endpoint: ${{ vars.TRUSTED_SIGNING_ENDPOINT }}
@@ -337,11 +340,22 @@ jobs:
           timestamp-digest: SHA256
 
       - name: Verify Authenticode signature
+        if: ${{ inputs.signing_mode == 'signed' || inputs.signing_mode == 'unsigned-macos' }}
         shell: pwsh
         run: |
           $signature = Get-AuthenticodeSignature "${{ steps.collect.outputs.msi_path }}"
           if ($signature.Status -ne "Valid") {
             throw "Invalid Windows signature status: $($signature.Status)"
+          }
+
+      - name: Verify unsigned Windows package output
+        if: ${{ inputs.signing_mode == 'unsigned' || inputs.signing_mode == 'unsigned-windows' }}
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature "${{ steps.collect.outputs.msi_path }}"
+          Write-Host "Unsigned MSI signature status: $($signature.Status)"
+          if ($signature.Status -eq "Valid") {
+            throw "Expected unsigned MSI but signature status is Valid."
           }
 
       - name: Upload Windows installer artifact
@@ -357,7 +371,7 @@ jobs:
       - validate_candidate
       - build_macos
       - build_windows
-    if: ${{ needs.validate_candidate.result == 'success' && needs.build_macos.result == 'success' && (inputs.signing_mode == 'unsigned-macos' || needs.build_windows.result == 'success') }}
+    if: ${{ needs.validate_candidate.result == 'success' && needs.build_macos.result == 'success' && needs.build_windows.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Download macOS installer artifact
@@ -367,7 +381,6 @@ jobs:
           path: .artifacts/desktop/${{ needs.validate_candidate.outputs.candidate_sha }}/installers
 
       - name: Download Windows installer artifact
-        if: ${{ inputs.signing_mode == 'signed' }}
         uses: actions/download-artifact@v4
         with:
           name: desktop-windows-${{ needs.validate_candidate.outputs.candidate_sha }}
@@ -462,20 +475,35 @@ jobs:
             echo "Expected at least one DMG in release installers directory." >&2
             exit 1
           fi
+          if [ "${#msi_files[@]}" -eq 0 ]; then
+            echo "Expected at least one MSI in release installers directory." >&2
+            exit 1
+          fi
 
           dmg_file="${dmg_files[0]}"
+          msi_file="${msi_files[0]}"
           sums_file="SHA256SUMS.txt"
+          assets=( "$dmg_file" "$msi_file" "$sums_file" )
           notes="Desktop installers for candidate ${CANDIDATE_SHA}"
-          assets=( "$dmg_file" "$sums_file" )
 
-          if [ "${#msi_files[@]}" -gt 0 ]; then
-            assets+=( "${msi_files[0]}" )
-          elif [ "$SIGNING_MODE" = "signed" ]; then
-            echo "Signed mode requires an MSI artifact." >&2
-            exit 1
-          else
-            notes="${notes}\n\nUnsigned macOS test build. Windows installer omitted."
-          fi
+          case "$SIGNING_MODE" in
+            signed)
+              notes="${notes}\n\nSigning mode: signed (macOS signed/notarized, Windows signed)."
+              ;;
+            unsigned)
+              notes="${notes}\n\nSigning mode: unsigned (macOS unsigned, Windows unsigned) for internal testing."
+              ;;
+            unsigned-macos)
+              notes="${notes}\n\nSigning mode: unsigned-macos (macOS unsigned, Windows signed) for internal testing."
+              ;;
+            unsigned-windows)
+              notes="${notes}\n\nSigning mode: unsigned-windows (macOS signed/notarized, Windows unsigned) for internal testing."
+              ;;
+            *)
+              echo "Unsupported signing mode: $SIGNING_MODE" >&2
+              exit 1
+              ;;
+          esac
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber

@@ -29,8 +29,8 @@
   - scheduled/manual ACR cleanup
 - `desktop-release.yml`
   - trigger: manual `workflow_dispatch`
-  - key jobs: `validate-candidate`, `build-macos`, optional `build-windows` (`signed` mode), `publish-release`
-  - supports `signing_mode=signed` (default) and `signing_mode=unsigned-macos` for temporary macOS-only testing
+  - key jobs: `validate-candidate`, parallel `build-macos`/`build-windows`, `publish-release`
+  - supports `signing_mode` policy: `signed`, `unsigned`, `unsigned-macos`, `unsigned-windows`
   - outputs release installers/checksums plus desktop release manifest artifact
 - `codex-review-trusted.yml`
   - optional trusted-context review helper

@@ -17,6 +17,11 @@ on:
   pull_request:
     branches:
       - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
   merge_group:
     branches:
       - main
@@ -186,7 +191,7 @@ jobs:
       - auth_critical_smoke
       - minimal_integration_smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -195,6 +200,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+
+      - name: Collect merge queue throughput metrics
+        if: ${{ github.event_name == 'merge_group' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
+          MERGE_QUEUE_GATE_WORKFLOW_FILE: merge-queue-gate.yml
+        run: node scripts/pipeline/shared/collect-merge-queue-gate-metrics.mjs
 
       - name: Decide merge queue gate
         env:
@@ -214,5 +229,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: merge-queue-gate-${{ needs.determine_scope.outputs.tested_sha }}
-          path: .artifacts/merge-queue-gate/${{ needs.determine_scope.outputs.tested_sha }}/result.json
+          path: |
+            .artifacts/merge-queue-gate/${{ needs.determine_scope.outputs.tested_sha }}/result.json
+            .artifacts/merge-queue-gate/${{ needs.determine_scope.outputs.tested_sha }}/timing.json
           if-no-files-found: warn

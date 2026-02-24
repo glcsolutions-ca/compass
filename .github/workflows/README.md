@@ -15,22 +15,24 @@
 ## Workflow Index
 
 - `commit-stage.yml`
-  - trigger: `pull_request`, `merge_group`
+  - trigger: `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`), `merge_group`
   - required check: `commit-stage`
   - key jobs: `determine-scope`, scope-aware `fast-feedback`, scope-aware `desktop-fast-feedback`, optional static checks, final `commit-stage`
   - behavior: heavy checks run only on `pull_request`; `merge_group` emits required `commit-stage` context for queue SHAs
   - key artifact: `.artifacts/commit-stage/<sha>/timing.json`
 
 - `merge-queue-gate.yml`
-  - trigger: `pull_request`, `merge_group`
+  - trigger: `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`), `merge_group`
   - required check: `merge-queue-gate`
   - key jobs: `determine-scope` (always), merge-group-only checks `build-compile`, `migration-safety`, `auth-critical-smoke`, `minimal-integration-smoke`, final `merge-queue-gate`
-  - key artifact: `.artifacts/merge-queue-gate/<sha>/result.json`
+  - key artifacts:
+    - `.artifacts/merge-queue-gate/<sha>/result.json`
+    - `.artifacts/merge-queue-gate/<sha>/timing.json`
 
 - `cloud-delivery-pipeline.yml`
   - trigger: `push` to `main`
   - key flow (Farley language):
-    - Integration Confidence: `verify-merge-queue-gate-evidence`, `determine-scope`
+    - Integration Confidence: `verify-commit-stage-evidence`, `verify-merge-queue-gate-evidence`, `determine-scope`
     - Build Once: `build-release-package-api-image`, `build-release-package-web-image`, `build-release-package-codex-image`, `capture-current-runtime-refs`, `publish-release-package`
     - Promote, Don't Rebuild: `load-release-package`
     - Acceptance Stage: runtime + infra + identity acceptance jobs, then `acceptance-stage`

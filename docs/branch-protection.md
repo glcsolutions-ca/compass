@@ -23,12 +23,21 @@ gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/req
   --input /tmp/required-status-checks.json
 ```
 
+## Merge Queue Ruleset Baseline
+
+- Ruleset name: `Main Merge Queue`
+- Rule: `merge_queue`
+- `max_entries_to_merge`: `1`
+- `grouping_strategy`: `ALLGREEN`
+
+Use this to keep exact-merge debugging simple and recovery fast.
+
 ## Required Cloud Delivery Pipeline Safety Controls
 
 - Enforce admins (`main` has no admin bypass in normal flow).
 - Require merge queue on `main`.
-- Require `.github/workflows/commit-stage.yml` on `pull_request` and emit `commit-stage` context on merge-group SHAs.
-- Require `.github/workflows/merge-queue-gate.yml` on `merge_group`.
+- Require `.github/workflows/commit-stage.yml` on `pull_request` + `merge_group`.
+- Require `.github/workflows/merge-queue-gate.yml` on `pull_request` + `merge_group`.
 - Require `.github/workflows/cloud-delivery-pipeline.yml` on `push` to `main` for post-merge acceptance/production gating.
 - Require PR-only integration into `main` (no direct pushes).
 - Keep force-push and deletion blocked.
@@ -43,7 +52,7 @@ gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/req
 ## Triage notes
 
 - `commit-stage` artifacts include `reasonCodes` and `reasonDetails` for direct remediation.
-- `merge-queue-gate` artifacts include exact-merge reason codes and check outcomes.
+- `merge-queue-gate` artifacts include exact-merge reason codes, check outcomes, and throughput timing.
 - `docs-drift` artifacts include changed blocking paths, docs-critical paths, and expected doc targets.
 
 ## Verification runbook

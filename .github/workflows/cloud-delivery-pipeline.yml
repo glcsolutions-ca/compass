@@ -16,6 +16,40 @@ env:
   EXPECTED_ENTRYPOINT: /
 
 jobs:
+  verify_commit_stage_evidence:
+    name: verify-commit-stage-evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      commit_stage_run_id: ${{ steps.verify.outputs.commit_stage_run_id }}
+      commit_stage_evidence_path: ${{ steps.verify.outputs.commit_stage_evidence_path }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Verify commit-stage evidence for release SHA
+        id: verify
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.sha }}
+          COMMIT_STAGE_WORKFLOW_FILE: commit-stage.yml
+          COMMIT_STAGE_EVENT: merge_group
+        run: node scripts/pipeline/shared/verify-commit-stage-evidence.mjs
+
+      - name: Upload commit-stage evidence artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-stage-evidence-${{ github.sha }}
+          path: .artifacts/commit-stage/${{ github.sha }}/evidence.json
+          if-no-files-found: warn
+
   verify_merge_queue_gate_evidence:
     name: verify-merge-queue-gate-evidence
     runs-on: ubuntu-latest
@@ -52,6 +86,7 @@ jobs:
   determine_scope:
     name: determine-scope
     needs:
+      - verify_commit_stage_evidence
       - verify_merge_queue_gate_evidence
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -271,13 +306,14 @@ jobs:
   publish_release_package:
     name: publish-release-package
     needs:
+      - verify_commit_stage_evidence
       - verify_merge_queue_gate_evidence
       - determine_scope
       - build_release_package_api_image
       - build_release_package_web_image
       - build_release_package_codex_image
       - capture_current_runtime_refs
-    if: ${{ always() && needs.verify_merge_queue_gate_evidence.result == 'success' && needs.determine_scope.result == 'success' && ((needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_package_api_image.result == 'success' && needs.build_release_package_web_image.result == 'success' && needs.build_release_package_codex_image.result == 'success') || ((needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.requires_infra_convergence == 'true') && needs.capture_current_runtime_refs.result == 'success') || (needs.determine_scope.outputs.runtime_changed != 'true' && needs.determine_scope.outputs.infra_changed != 'true' && needs.determine_scope.outputs.requires_infra_convergence != 'true')) }}
+    if: ${{ always() && needs.verify_commit_stage_evidence.result == 'success' && needs.verify_merge_queue_gate_evidence.result == 'success' && needs.determine_scope.result == 'success' && ((needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_package_api_image.result == 'success' && needs.build_release_package_web_image.result == 'success' && needs.build_release_package_codex_image.result == 'success') || ((needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.requires_infra_convergence == 'true') && needs.capture_current_runtime_refs.result == 'success') || (needs.determine_scope.outputs.runtime_changed != 'true' && needs.determine_scope.outputs.infra_changed != 'true' && needs.determine_scope.outputs.requires_infra_convergence != 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -286,6 +322,7 @@ jobs:
       HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
       TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
       CHANGE_CLASS: ${{ needs.determine_scope.outputs.change_class }}
+      COMMIT_STAGE_RUN_ID: ${{ needs.verify_commit_stage_evidence.outputs.commit_stage_run_id }}
       MERGE_QUEUE_GATE_RUN_ID: ${{ needs.verify_merge_queue_gate_evidence.outputs.merge_queue_gate_run_id }}
       RUNTIME_CHANGED: ${{ needs.determine_scope.outputs.runtime_changed }}
       DESKTOP_CHANGED: ${{ needs.determine_scope.outputs.desktop_changed }}
@@ -341,6 +378,7 @@ jobs:
             "headSha": "$HEAD_SHA",
             "testedSha": "$TESTED_SHA",
             "changeClass": "$CHANGE_CLASS",
+            "commitStageRunId": "$COMMIT_STAGE_RUN_ID",
             "mergeQueueGateRunId": "$MERGE_QUEUE_GATE_RUN_ID",
             "buildRunId": "${GITHUB_RUN_ID}",
             "scope": {

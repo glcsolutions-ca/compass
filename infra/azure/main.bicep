@@ -1,6 +1,7 @@
 param location string = 'SET_IN_GITHUB_ENV'
 // Scratch-drill trigger marker: intentionally non-functional.
 // Final-proof scratch-drill marker: intentionally non-functional.
+// Post-infra-fix scratch-drill marker: intentionally non-functional.
 
 param vnetName string = 'SET_IN_GITHUB_ENV'
 param acaSubnetName string = 'SET_IN_GITHUB_ENV'

@@ -24,6 +24,14 @@ postgres_name="acceptance-browser-postgres"
 api_container="acceptance-browser-api"
 web_container="acceptance-browser-web"
 db_url="postgres://compass:compass@$postgres_name:5432/compass"
+tenant_id="acceptance-tenant"
+delegated_client_id="web-client"
+app_client_id="integration-client"
+auth_issuer="https://compass.local/auth"
+auth_audience="api://compass-api"
+auth_secret="acceptance-local-jwt-secret-123456"
+oauth_signing_secret="acceptance-oauth-signing-secret-123456"
+auth_assignments='[{"tenantId":"acceptance-tenant","subjectType":"user","subjectId":"smoke-user","permissions":["profile.read"],"principalId":"principal-smoke-user"},{"tenantId":"acceptance-tenant","subjectType":"app","subjectId":"integration-client","permissions":["profile.read"],"principalId":"principal-smoke-app"}]'
 
 cleanup() {
   docker rm -f "$web_container" >/dev/null 2>&1 || true
@@ -75,6 +83,14 @@ docker run -d \
   --network "$network_name" \
   -p 3001:3001 \
   -e DATABASE_URL="$db_url" \
+  -e AUTH_ISSUER="$auth_issuer" \
+  -e AUTH_AUDIENCE="$auth_audience" \
+  -e AUTH_LOCAL_JWT_SECRET="$auth_secret" \
+  -e AUTH_ACTIVE_TENANT_IDS="$tenant_id" \
+  -e AUTH_ALLOWED_CLIENT_IDS="$delegated_client_id,$app_client_id" \
+  -e AUTH_ALLOW_JIT_USERS=false \
+  -e AUTH_ASSIGNMENTS_JSON="$auth_assignments" \
+  -e OAUTH_TOKEN_SIGNING_SECRET="$oauth_signing_secret" \
   "${apiRef}"
 
 for i in $(seq 1 90); do
@@ -83,6 +99,8 @@ for i in $(seq 1 90); do
   fi
   if [ "$i" -eq 90 ]; then
     echo "Timed out waiting for candidate API readiness (browser path)" >&2
+    echo "=== Capturing API logs ===" >&2
+    docker logs "$api_container" >&2 || true
     exit 1
   fi
   sleep 1

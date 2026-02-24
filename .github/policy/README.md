@@ -5,17 +5,19 @@ This directory is the machine source of truth for delivery policy.
 - Canonical contract: `.github/policy/pipeline-policy.json`
 - Enforced by workflows:
   - `.github/workflows/commit-stage.yml`
+  - `.github/workflows/merge-queue-gate.yml`
   - `.github/workflows/cloud-delivery-pipeline.yml`
   - `.github/workflows/cloud-delivery-replay.yml`
   - `.github/workflows/desktop-deployment-pipeline.yml`
-- Required branch-protection context: `commit-stage`
+- Required gate contexts: `commit-stage`, `merge-queue-gate`
 
-`commit-stage` is the single merge-blocking check. Acceptance and production are post-merge stages.
+PR fast feedback and exact merge queue validation are separate by design. Acceptance and production are post-merge stages.
 
 ## Policy Sections
 
 - `scopeRules`: file-to-scope classification (`runtime`, `desktop`, `infra`, `identity`, `docsOnly`, rollout flags)
-- `commitStage`: required commit checks + commit SLO policy (`targetSeconds`, `mode`)
+- `commitStage`: required PR checks + commit SLO policy (`targetSeconds`, `mode`)
+- `mergeQueueGate`: required exact-merge checks
 - `acceptanceStage`: required acceptance jobs by scope
 - `productionStage`: production promotion safety toggles
 - `cloudDeliveryPipeline`: cloud delivery timing SLO targets (`acceptance`, `production`)

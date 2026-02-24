@@ -161,7 +161,11 @@ async function main() {
 
   const { run, jobs } = await fetchRunAndJobs({ token, repository, runId });
 
-  const commitStart = earliestStartEpoch(jobs, ["verify-commit-stage-evidence", "determine-scope"]);
+  const commitStart = earliestStartEpoch(jobs, [
+    "verify-merge-queue-gate-evidence",
+    "verify-commit-stage-evidence",
+    "determine-scope"
+  ]);
   const commitEnd = latestEndEpoch(jobs, ["determine-scope"]);
 
   const releasePackageStart = earliestStartEpoch(jobs, [

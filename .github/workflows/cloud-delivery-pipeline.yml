@@ -16,13 +16,13 @@ env:
   EXPECTED_ENTRYPOINT: /
 
 jobs:
-  verify_commit_stage_evidence:
-    name: verify-commit-stage-evidence
+  verify_merge_queue_gate_evidence:
+    name: verify-merge-queue-gate-evidence
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      commit_stage_run_id: ${{ steps.verify.outputs.commit_stage_run_id }}
-      commit_stage_evidence_path: ${{ steps.verify.outputs.commit_stage_evidence_path }}
+      merge_queue_gate_run_id: ${{ steps.verify.outputs.merge_queue_gate_run_id }}
+      merge_queue_gate_evidence_path: ${{ steps.verify.outputs.merge_queue_gate_evidence_path }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,27 +32,27 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Verify commit-stage evidence for release SHA
+      - name: Verify merge queue gate evidence for release SHA
         id: verify
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           HEAD_SHA: ${{ github.sha }}
-          COMMIT_STAGE_WORKFLOW_FILE: commit-stage.yml
-        run: node scripts/pipeline/shared/verify-commit-stage-evidence.mjs
+          MERGE_QUEUE_GATE_WORKFLOW_FILE: merge-queue-gate.yml
+        run: node scripts/pipeline/shared/verify-merge-queue-gate-evidence.mjs
 
-      - name: Upload commit-stage evidence artifact
+      - name: Upload merge queue gate evidence artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: commit-stage-evidence-${{ github.sha }}
-          path: .artifacts/commit-stage/${{ github.sha }}/evidence.json
+          name: merge-queue-gate-evidence-${{ github.sha }}
+          path: .artifacts/merge-queue-gate/${{ github.sha }}/evidence.json
           if-no-files-found: warn
 
   determine_scope:
     name: determine-scope
     needs:
-      - verify_commit_stage_evidence
+      - verify_merge_queue_gate_evidence
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -91,8 +91,8 @@ jobs:
       - name: Resolve commit scope
         id: scope
         env:
-          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_BASE_SHA: ${{ github.event.before }}
+          GITHUB_HEAD_SHA: ${{ github.sha }}
           GITHUB_TESTED_SHA: ${{ github.sha }}
         run: node scripts/pipeline/commit/resolve-scope.mjs
 
@@ -271,13 +271,13 @@ jobs:
   publish_release_package:
     name: publish-release-package
     needs:
-      - verify_commit_stage_evidence
+      - verify_merge_queue_gate_evidence
       - determine_scope
       - build_release_package_api_image
       - build_release_package_web_image
       - build_release_package_codex_image
       - capture_current_runtime_refs
-    if: ${{ always() && needs.verify_commit_stage_evidence.result == 'success' && needs.determine_scope.result == 'success' && ((needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_package_api_image.result == 'success' && needs.build_release_package_web_image.result == 'success' && needs.build_release_package_codex_image.result == 'success') || ((needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.requires_infra_convergence == 'true') && needs.capture_current_runtime_refs.result == 'success') || (needs.determine_scope.outputs.runtime_changed != 'true' && needs.determine_scope.outputs.infra_changed != 'true' && needs.determine_scope.outputs.requires_infra_convergence != 'true')) }}
+    if: ${{ always() && needs.verify_merge_queue_gate_evidence.result == 'success' && needs.determine_scope.result == 'success' && ((needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_package_api_image.result == 'success' && needs.build_release_package_web_image.result == 'success' && needs.build_release_package_codex_image.result == 'success') || ((needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.requires_infra_convergence == 'true') && needs.capture_current_runtime_refs.result == 'success') || (needs.determine_scope.outputs.runtime_changed != 'true' && needs.determine_scope.outputs.infra_changed != 'true' && needs.determine_scope.outputs.requires_infra_convergence != 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -286,7 +286,7 @@ jobs:
       HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
       TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
       CHANGE_CLASS: ${{ needs.determine_scope.outputs.change_class }}
-      COMMIT_STAGE_RUN_ID: ${{ needs.verify_commit_stage_evidence.outputs.commit_stage_run_id }}
+      MERGE_QUEUE_GATE_RUN_ID: ${{ needs.verify_merge_queue_gate_evidence.outputs.merge_queue_gate_run_id }}
       RUNTIME_CHANGED: ${{ needs.determine_scope.outputs.runtime_changed }}
       DESKTOP_CHANGED: ${{ needs.determine_scope.outputs.desktop_changed }}
       INFRA_CHANGED: ${{ needs.determine_scope.outputs.infra_changed }}
@@ -341,7 +341,7 @@ jobs:
             "headSha": "$HEAD_SHA",
             "testedSha": "$TESTED_SHA",
             "changeClass": "$CHANGE_CLASS",
-            "commitStageRunId": "$COMMIT_STAGE_RUN_ID",
+            "mergeQueueGateRunId": "$MERGE_QUEUE_GATE_RUN_ID",
             "buildRunId": "${GITHUB_RUN_ID}",
             "scope": {
               "runtime": ${RUNTIME_CHANGED},
@@ -1449,7 +1449,7 @@ jobs:
   release_decision:
     name: release-decision
     needs:
-      - verify_commit_stage_evidence
+      - verify_merge_queue_gate_evidence
       - determine_scope
       - load_release_package
       - acceptance_stage
@@ -1485,7 +1485,7 @@ jobs:
         env:
           RELEASE_PACKAGE_SHA: ${{ needs.load_release_package.outputs.head_sha || github.sha }}
           REPLAY_MODE: "false"
-          COMMIT_STAGE_RESULT: ${{ needs.verify_commit_stage_evidence.result }}
+          COMMIT_STAGE_RESULT: ${{ needs.verify_merge_queue_gate_evidence.result }}
           LOAD_RELEASE_PACKAGE_RESULT: ${{ needs.load_release_package.result }}
           ACCEPTANCE_STAGE_RESULT: ${{ needs.acceptance_stage.result }}
           PRODUCTION_STAGE_RESULT: ${{ needs.production_stage.result }}

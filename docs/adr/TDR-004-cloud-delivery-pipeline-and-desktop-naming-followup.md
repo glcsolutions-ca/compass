@@ -14,6 +14,7 @@ Refactor cloud delivery to plain language and Farley-aligned terms:
 
 - use `cloud-delivery-pipeline.yml` for push-to-main delivery
 - split replay into dedicated `cloud-delivery-replay.yml`
+- add dedicated exact-merge workflow `merge-queue-gate.yml`
 - rename cloud artifact contract from `candidate` to `release package`
 - rename cloud wording from `control-plane` to `delivery config`
 
@@ -52,9 +53,9 @@ The desired operating model is:
 
 - `control-plane` -> `delivery config` in cloud/commit docs and cloud outputs
 
-5. Keep branch protection unchanged:
+5. Keep branch protection explicit for both merge gates:
 
-- required context remains only `commit-stage`
+- required contexts are `commit-stage` and `merge-queue-gate`
 
 ## Consequences
 
@@ -76,4 +77,5 @@ Track desktop naming migration as a separate ADR/PR sequence:
 - `.github/workflows/cloud-delivery-pipeline.yml`
 - `.github/workflows/cloud-delivery-replay.yml`
 - `.github/workflows/commit-stage.yml`
+- `.github/workflows/merge-queue-gate.yml`
 - `docs/runbooks/cloud-delivery-pipeline.md`

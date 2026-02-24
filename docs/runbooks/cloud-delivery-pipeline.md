@@ -13,28 +13,28 @@ Run and troubleshoot cloud delivery with one clear flow:
 
 ```mermaid
 flowchart TD
-A["Code change (Small Batch)"] --> B["Quick checks (Commit Stage / Fast Feedback)"]
-B --> C["Create one exact release package (Build Once)"]
-C --> D["Test same package in safe env (Promote, Don't Rebuild)"]
-D --> E["Prove real behavior works (Acceptance Stage)"]
-E --> F{"Good enough to release?"}
-F -- "No" --> X["Stop and fix (Fast Feedback / Fix Forward)"]
-F -- "Yes" --> G["Deploy same package to production (Continuous Delivery)"]
-G --> H["Verify production health + auth (Production Verification)"]
-H --> I{"Production checks pass?"}
-I -- "No" --> X
-I -- "Yes" --> J["Release complete (Release on Demand)"]
+A["Code change (Small Batch)"] --> B["Quick checks on PR (Commit Stage / Fast Feedback)"]
+B --> C["Exact merge checks in queue (Integration Confidence)"]
+C --> D["Build one release package on main (Build Once)"]
+D --> E["Test same package in acceptance (Promote, Don't Rebuild)"]
+E --> F["Deploy same package to production (Continuous Delivery)"]
+F --> G["Verify production behavior + auth (Production Verification)"]
+G --> H{"All checks pass?"}
+H -- "No" --> X["Stop and fix forward (Fast Feedback)"]
+H -- "Yes" --> I["Release complete (Release on Demand)"]
 ```
 
 ## Workflow Files
 
+- PR fast feedback: `.github/workflows/commit-stage.yml`
+- Merge queue exact-merge gate: `.github/workflows/merge-queue-gate.yml`
 - Push path: `.github/workflows/cloud-delivery-pipeline.yml`
 - Manual replay path: `.github/workflows/cloud-delivery-replay.yml`
-- Merge gate: `.github/workflows/commit-stage.yml`
 
 ## Trigger Model
 
-- `commit-stage.yml`: `pull_request`, `merge_group`
+- `commit-stage.yml`: `pull_request`, `merge_group` (heavy fast-feedback checks run only on `pull_request`; merge-group run emits required `commit-stage` context)
+- `merge-queue-gate.yml`: `pull_request`, `merge_group` (full exact-merge checks run only on `merge_group`)
 - `cloud-delivery-pipeline.yml`: `push` to `main`
 - `cloud-delivery-replay.yml`: `workflow_dispatch` with `release_package_sha`
 
@@ -42,42 +42,48 @@ I -- "Yes" --> J["Release complete (Release on Demand)"]
 
 1. Commit Stage / Fast Feedback
 
-- Confirm `main` commit has merge-gate evidence from `commit-stage`.
-- Resolve scope and docs drift for the release SHA.
+- Run quick PR checks.
+- Decide whether the PR is merge-ready.
 
-2. Build Once
+2. Integration Confidence (Exact Merge)
+
+- Run focused checks on the queued merge result.
+- Confirm exact merge behavior before it lands in `main`.
+
+3. Build Once
 
 - Build digest-pinned runtime images when runtime changed.
 - If runtime did not change but infra needs convergence, capture current runtime digests.
 - Publish one release package manifest.
 
-3. Promote, Don’t Rebuild
+4. Promote, Don't Rebuild
 
 - Load `.artifacts/release-package/<sha>/manifest.json`.
 - Validate digest refs and release package contract.
 
-4. Acceptance Stage
+5. Acceptance Stage
 
 - Run required acceptance checks by scope.
 - Emit one decision: `YES` or `NO`.
 
-5. Continuous Delivery
+6. Continuous Delivery
 
 - If acceptance is `YES` and deploy is required, run production mutation under lock `production-mutation`.
 - Deploy the exact package refs from the manifest.
 
-6. Production Verification
+7. Production Verification
 
 - Verify auth canary freshness.
 - Verify delegated probe freshness for target SHA.
 - Run API smoke and browser smoke.
 
-7. Release on Demand Evidence
+8. Release on Demand Evidence
 
 - Write final release decision artifact at `.artifacts/release/<sha>/decision.json`.
 
 ## Artifact Contracts
 
+- Merge queue evidence: `.artifacts/merge-queue-gate/<sha>/result.json`
 - Release package manifest: `.artifacts/release-package/<sha>/manifest.json`
 - Acceptance result: `.artifacts/acceptance/<sha>/result.json`
 - Production result: `.artifacts/production/<sha>/result.json`
@@ -95,6 +101,8 @@ Use replay when you need to rerun delivery for an existing release package SHA w
 
 ## Failure Response
 
+- Commit stage failed: fix in PR and rerun fast checks.
+- Merge queue gate failed: fix forward in PR and re-queue.
 - Acceptance failed: fix forward, then merge a new small batch.
 - Production verification failed: treat as release failure, fix forward, then re-deliver.
 - Replay failure: investigate drift/config issues; replay should fail closed.
@@ -116,4 +124,4 @@ Use replay when you need to rerun delivery for an existing release package SHA w
 - Do not rebuild runtime images in production stage jobs.
 - Keep production mutation serialized (`production-mutation`).
 - Keep acceptance credentials read-only and separate from production credentials.
-- Keep branch protection simple: only `commit-stage` is required.
+- Keep branch protection checks explicit: `commit-stage` for PRs, `merge-queue-gate` for merge queue.

@@ -2,11 +2,15 @@
 
 ## Delivery Model
 
-1. PR and merge queue run `commit-stage.yml` for fast feedback and merge blocking.
-2. A merge to `main` runs cloud delivery in `cloud-delivery-pipeline.yml`.
-3. Desktop delivery runs independently in `desktop-deployment-pipeline.yml`.
-4. Replay is separate and manual in `cloud-delivery-replay.yml`.
-5. Branch protection requires only `commit-stage`.
+1. PRs run `commit-stage.yml` for fast feedback and merge readiness.
+2. Merge queue runs `merge-queue-gate.yml` on the exact queued merge result.
+3. A merge to `main` runs cloud delivery in `cloud-delivery-pipeline.yml`.
+4. Desktop delivery runs independently in `desktop-deployment-pipeline.yml`.
+5. Replay is separate and manual in `cloud-delivery-replay.yml`.
+6. Required gate contexts:
+
+- PR gate: `commit-stage`
+- Merge queue gate: `merge-queue-gate`
 
 ## Workflow Index
 
@@ -14,14 +18,21 @@
   - trigger: `pull_request`, `merge_group`
   - required check: `commit-stage`
   - key jobs: `determine-scope`, scope-aware `fast-feedback`, scope-aware `desktop-fast-feedback`, optional static checks, final `commit-stage`
+  - behavior: heavy checks run only on `pull_request`; `merge_group` emits required `commit-stage` context for queue SHAs
   - key artifact: `.artifacts/commit-stage/<sha>/timing.json`
+
+- `merge-queue-gate.yml`
+  - trigger: `pull_request`, `merge_group`
+  - required check: `merge-queue-gate`
+  - key jobs: `determine-scope` (always), merge-group-only checks `build-compile`, `migration-safety`, `auth-critical-smoke`, `minimal-integration-smoke`, final `merge-queue-gate`
+  - key artifact: `.artifacts/merge-queue-gate/<sha>/result.json`
 
 - `cloud-delivery-pipeline.yml`
   - trigger: `push` to `main`
   - key flow (Farley language):
-    - Commit Stage / Fast Feedback: `verify-commit-stage-evidence`, `determine-scope`
+    - Integration Confidence: `verify-merge-queue-gate-evidence`, `determine-scope`
     - Build Once: `build-release-package-api-image`, `build-release-package-web-image`, `build-release-package-codex-image`, `capture-current-runtime-refs`, `publish-release-package`
-    - Promote, Don’t Rebuild: `load-release-package`
+    - Promote, Don't Rebuild: `load-release-package`
     - Acceptance Stage: runtime + infra + identity acceptance jobs, then `acceptance-stage`
     - Continuous Delivery: `deploy-release-package` (when acceptance is YES and deploy is required)
     - Production Verification: `production-blackbox-verify`, then `production-stage`

@@ -11,7 +11,8 @@
 | `pipeline-utils.mjs`                      | Shared env, file, policy, and artifact utilities.                    |
 | `collect-commit-stage-timing.mjs`         | Commit-stage timing collection and SLO telemetry writer.             |
 | `collect-cloud-delivery-stage-timing.mjs` | Cloud delivery stage timing collection and bottleneck reporting.     |
-| `verify-commit-stage-evidence.mjs`        | Verifies successful merge-gate evidence exists for release SHA.      |
+| `verify-commit-stage-evidence.mjs`        | Legacy commit-stage evidence verifier (kept for compatibility).      |
+| `verify-merge-queue-gate-evidence.mjs`    | Verifies successful merge-queue evidence exists for release SHA.     |
 | `validate-identity-config.mjs`            | Identity config contract preflight (`API_IDENTIFIER_URI` semantics). |
 | `validate-infra-acceptance-config.mjs`    | Infra acceptance env/provider semantic contract checks.              |
 | `resolve-triggered-run-id.mjs`            | Resolve source run IDs for manual replay artifact loading.           |

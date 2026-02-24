@@ -10,9 +10,9 @@ Every PR to `main` must pass fast, reliable merge-readiness evidence:
 2. Required fast checks run based on scope.
 3. PRs are merge-ready only when `commit-stage` passes.
 
-`commit-stage.yml` runs on both `pull_request` and `merge_group`.
-Heavy fast-feedback checks stay PR-only; merge-group runs emit the required `commit-stage` context for queued merge SHAs without duplicating heavy suites.
-Exact queued-merge validation is still handled by `merge-queue-gate.yml` (full checks on `merge_group`).
+`commit-stage.yml` runs on `pull_request` and `merge_group`.
+Heavy fast-feedback checks stay PR-only; merge-group runs emit required `commit-stage` context for queued merge SHAs without rerunning heavy suites.
+Exact queued-merge validation is handled by `merge-queue-gate.yml` (full checks on `merge_group`).
 Post-merge delivery pipelines (`cloud-delivery-pipeline.yml` for cloud, `desktop-deployment-pipeline.yml` for desktop) run on `push` to `main`.
 
 ## Source of Truth Precedence
@@ -26,8 +26,17 @@ When this doc and implementation differ, implementation wins:
 
 ## Required Gate Contexts
 
-- `commit-stage` (PR gate)
+- `commit-stage` (PR quality gate)
 - `merge-queue-gate` (exact merge queue gate)
+
+## Trigger Contract
+
+- `commit-stage.yml`
+  - `pull_request` types: `opened`, `synchronize`, `reopened`, `ready_for_review`
+  - `merge_group`
+- `merge-queue-gate.yml`
+  - `pull_request` types: `opened`, `synchronize`, `reopened`, `ready_for_review`
+  - `merge_group`
 
 ## Commit-Stage Checks (PR Heavy Path)
 
@@ -37,7 +46,7 @@ When this doc and implementation differ, implementation wins:
 - `infra-static-check` (only when `infra` scope is true)
 - `identity-static-check` (only when `identity` scope is true)
 - `docs-drift` is always evaluated and can block merge for docs-critical drift
-- On `merge_group`, commit-stage runs only scope/docs-drift/final decision to keep required context satisfiable without rerunning heavy checks
+- On `merge_group`, commit-stage runs scope/docs-drift/final decision only to keep required context satisfiable without rerunning heavy checks
 
 ## Merge Queue Gate Checks (Exact Merge)
 
@@ -47,6 +56,7 @@ When this doc and implementation differ, implementation wins:
 - `auth-critical-smoke` (runtime/infra/identity/delivery-config changes)
 - `minimal-integration-smoke` (runtime changes)
 - `merge-queue-gate` final decision artifact
+- merge-queue throughput telemetry artifact
 
 ## Scope Model
 
@@ -99,6 +109,21 @@ Timing keys:
 - `metrics.total_run_seconds`
 
 `time_to_commit_gate_seconds` is measured from first commit-stage job start to gate completion (execution time only). Queue delay is telemetry-only.
+
+## Merge Queue Throughput Telemetry
+
+Merge queue throughput snapshot is emitted per `merge_group` run:
+
+- `.artifacts/merge-queue-gate/<testedSha>/timing.json`
+
+Snapshot keys include:
+
+- `throughputWindow.queueDelaySeconds.median`
+- `throughputWindow.queueDelaySeconds.p95`
+- `throughputWindow.totalRunSeconds.median`
+- `throughputWindow.totalRunSeconds.p95`
+- `throughputWindow.rerunRatio`
+- `throughputWindow.passRateByStage`
 
 ## PR Gate Semantics
 

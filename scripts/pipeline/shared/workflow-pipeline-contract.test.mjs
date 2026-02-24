@@ -139,6 +139,7 @@ describe("workflow pipeline contract", () => {
     expect(workflow).not.toContain("\n  push:");
     expect(workflow).toContain("name: merge-queue-gate");
     expect(workflow).toContain("github.event_name == 'merge_group'");
+    expect(workflow).toContain("node scripts/pipeline/shared/collect-merge-queue-gate-metrics.mjs");
     expect(workflow).toContain("node scripts/pipeline/commit/decide-merge-queue-gate.mjs");
   });
 
@@ -147,6 +148,8 @@ describe("workflow pipeline contract", () => {
     expect(workflow).toContain("push:");
     expect(workflow).not.toContain("workflow_dispatch:");
     expect(workflow).not.toContain("workflow_run:");
+    expect(workflow).toContain("name: verify-commit-stage-evidence");
+    expect(workflow).toContain("node scripts/pipeline/shared/verify-commit-stage-evidence.mjs");
     expect(workflow).toContain("name: verify-merge-queue-gate-evidence");
     expect(workflow).toContain("node scripts/pipeline/shared/verify-merge-queue-gate-evidence.mjs");
     expect(workflow).not.toContain("  fast_feedback:");

@@ -134,6 +134,9 @@
       "auth-critical-smoke",
       "minimal-integration-smoke",
       "merge-queue-gate"
-    ]
+    ],
+    "telemetry": {
+      "sampleSize": 20
+    }
   }
 }

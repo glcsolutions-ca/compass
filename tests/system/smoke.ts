@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
-import { buildApiApp } from "../../apps/api/src/app.ts";
 
 async function appendGithubOutput(values: Record<string, string>) {
   const outputPath = process.env.GITHUB_OUTPUT;
@@ -18,62 +17,82 @@ async function writeResult(filePath: string, payload: unknown) {
   await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
+async function requestJson(url: string) {
+  const response = await fetch(url, { method: "GET" });
+  const text = await response.text();
+  let json: unknown = null;
+  try {
+    json = text.length > 0 ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+
+  return {
+    status: response.status,
+    json,
+    textSnippet: text.slice(0, 300)
+  };
+}
+
 async function main() {
   const headSha = process.env.HEAD_SHA ?? "local";
   const testedSha = process.env.TESTED_SHA ?? headSha;
-  const tier = process.env.RISK_TIER ?? "high";
+  const baseUrl = (
+    process.env.BASE_URL ??
+    process.env.TARGET_API_BASE_URL ??
+    "http://127.0.0.1:3001"
+  ).replace(/\/$/, "");
 
   const resultPath = path.join(".artifacts", "harness-smoke", testedSha, "result.json");
-  const app = buildApiApp();
+  const assertions: Array<{ id: string; pass: boolean; details: string }> = [];
 
   try {
-    await app.ready();
+    const health = await requestJson(`${baseUrl}/health`);
+    assert.equal(health.status, 200, "health endpoint should return 200");
+    assertions.push({ id: "health-200", pass: true, details: `status=${health.status}` });
 
-    const health = await app.inject({ method: "GET", url: "/health" });
-    assert.equal(health.statusCode, 200, "health endpoint should return 200");
+    const openapi = await requestJson(`${baseUrl}/openapi.json`);
+    assert.equal(openapi.status, 200, "openapi endpoint should return 200");
+    assertions.push({ id: "openapi-200", pass: true, details: `status=${openapi.status}` });
 
-    const openapi = await app.inject({ method: "GET", url: "/openapi.json" });
-    assert.equal(openapi.statusCode, 200, "openapi endpoint should return 200");
-    assert.ok(openapi.json().paths?.["/health"], "openapi should include /health path");
+    const hasHealthPath = Boolean(
+      (openapi.json as { paths?: Record<string, unknown> } | null)?.paths?.["/health"]
+    );
+    assert.equal(hasHealthPath, true, "openapi should include /health path");
+    assertions.push({
+      id: "openapi-has-health",
+      pass: true,
+      details: `hasHealthPath=${hasHealthPath}`
+    });
 
     const payload = {
       schemaVersion: "1",
       generatedAt: new Date().toISOString(),
       headSha,
       testedSha,
-      tier,
+      baseUrl,
       status: "pass",
-      checks: [
-        { id: "api-health", status: "pass" },
-        { id: "openapi-available", status: "pass" }
-      ]
+      assertions
     };
 
     await writeResult(resultPath, payload);
-    await appendGithubOutput({ harness_smoke_path: resultPath });
-    console.info(`harness-smoke passed (${resultPath})`);
+    await appendGithubOutput({ system_smoke_path: resultPath });
+    console.info(`system black-box smoke passed (${resultPath})`);
   } catch (error) {
     const payload = {
       schemaVersion: "1",
       generatedAt: new Date().toISOString(),
       headSha,
       testedSha,
-      tier,
+      baseUrl,
       status: "fail",
-      checks: [
-        {
-          id: "harness-smoke",
-          status: "fail",
-          details: error instanceof Error ? error.message : String(error)
-        }
-      ]
+      assertions,
+      error: error instanceof Error ? error.message : String(error)
     };
 
     await writeResult(resultPath, payload);
-    await appendGithubOutput({ harness_smoke_path: resultPath });
+    await appendGithubOutput({ system_smoke_path: resultPath });
     throw error;
-  } finally {
-    await app.close();
   }
 }
 

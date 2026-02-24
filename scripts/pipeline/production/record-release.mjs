@@ -9,7 +9,7 @@ const logUrl = process.env.DEPLOY_LOG_URL?.trim() || "";
 const environmentUrl = process.env.DEPLOY_ENVIRONMENT_URL?.trim() || "";
 const candidateApiRef = process.env.CANDIDATE_API_REF?.trim() || "";
 const candidateWebRef = process.env.CANDIDATE_WEB_REF?.trim() || "";
-const kind = process.env.KIND?.trim() || "runtime";
+const changeClass = process.env.CHANGE_CLASS?.trim() || "runtime";
 
 async function githubRequest(pathname, options = {}) {
   const response = await fetch(`https://api.github.com${pathname}`, {
@@ -42,9 +42,9 @@ async function main() {
       required_contexts: [],
       transient_environment: false,
       production_environment: environment === "production",
-      description: `Release candidate promotion (${kind})`,
+      description: `Release candidate promotion (${changeClass})`,
       payload: {
-        kind,
+        changeClass,
         candidateApiRef,
         candidateWebRef
       }

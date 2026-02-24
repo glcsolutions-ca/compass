@@ -35,7 +35,7 @@ pnpm dev
 1. Implement the change.
 2. Run `pnpm test` and `pnpm build`.
 3. Open a PR to `main`.
-4. Let CI enforce merge safety (`commit-stage-gate`).
+4. Let CI enforce merge safety (`commit-stage`).
 
 ## PR title and format standard
 

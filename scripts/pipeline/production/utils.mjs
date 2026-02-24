@@ -1,24 +1,17 @@
 import { execFile } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import {
+  appendGithubOutput,
+  requireEnv,
+  writeJsonFile as writeArtifact
+} from "../shared/pipeline-utils.mjs";
 
 const execFileAsync = promisify(execFile);
-
-export function requireEnv(name) {
-  const value = process.env[name]?.trim();
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-}
+export { appendGithubOutput, requireEnv, writeArtifact };
 
 export function getHeadSha() {
   return process.env.HEAD_SHA?.trim() || process.env.GITHUB_SHA?.trim() || "local";
-}
-
-export function getTier() {
-  return process.env.RISK_TIER?.trim() || "high";
 }
 
 export async function run(command, args, options = {}) {
@@ -59,25 +52,10 @@ export async function runJson(command, args, options = {}) {
   }
 }
 
-export async function writeArtifact(filePath, payload) {
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-}
-
 export async function writeDeployArtifact(name, payload) {
   const artifactPath = path.join(".artifacts", "deploy", getHeadSha(), `${name}.json`);
   await writeArtifact(artifactPath, payload);
   return artifactPath;
-}
-
-export async function appendGithubOutput(values) {
-  const outputPath = process.env.GITHUB_OUTPUT;
-  if (!outputPath) {
-    return;
-  }
-
-  const lines = Object.entries(values).map(([key, value]) => `${key}=${value}`);
-  await writeFile(outputPath, `${lines.join("\n")}\n`, { encoding: "utf8", flag: "a" });
 }
 
 export async function sleep(ms) {

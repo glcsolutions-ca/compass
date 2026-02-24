@@ -45,17 +45,17 @@ const policy = loadPipelinePolicyObject({
     ]
   },
   commitStage: {
-    requiredChecks: ["scope", "quick-feedback", "commit-stage-gate"],
+    requiredChecks: ["determine-scope", "fast-feedback", "commit-stage"],
     slo: {
       targetSeconds: 300,
-      mode: "observe"
+      mode: "enforce"
     }
   },
   acceptanceStage: {
     requiredFlowIds: ["compass-smoke"],
-    runtimeRequiredChecks: ["runtime-acceptance"],
-    infraRequiredChecks: ["infra-acceptance"],
-    identityRequiredChecks: ["identity-acceptance"]
+    runtimeRequiredChecks: ["runtime-blackbox-acceptance"],
+    infraRequiredChecks: ["infra-readonly-acceptance"],
+    identityRequiredChecks: ["identity-readonly-acceptance"]
   },
   productionStage: {
     requireFreshHeadOnAuto: true

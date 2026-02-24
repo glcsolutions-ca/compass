@@ -6,12 +6,17 @@
 
 ## Script Map
 
-| Script                                | Role                                                                 |
-| ------------------------------------- | -------------------------------------------------------------------- |
-| `pipeline-utils.mjs`                  | Shared env, file, policy, and artifact utilities.                    |
-| `collect-stage-timing.mjs`            | Commit-stage timing collection and SLO telemetry artifact writer.    |
-| `validate-identity-config.mjs`        | Identity config contract preflight (`API_IDENTIFIER_URI` semantics). |
-| `workflow-pipeline-contract.test.mjs` | Structural regression checks for workflow contracts.                 |
+| Script                                  | Role                                                                 |
+| --------------------------------------- | -------------------------------------------------------------------- |
+| `pipeline-utils.mjs`                    | Shared env, file, policy, and artifact utilities.                    |
+| `collect-commit-stage-timing.mjs`       | Commit-stage timing collection and SLO telemetry artifact writer.    |
+| `validate-identity-config.mjs`          | Identity config contract preflight (`API_IDENTIFIER_URI` semantics). |
+| `resolve-triggered-run-id.mjs`          | Resolve triggering workflow run IDs for replay and cross-stage load. |
+| `load-release-candidate-contract.mjs`   | Parse and validate release-candidate manifest contract.              |
+| `load-acceptance-evidence-contract.mjs` | Parse and validate acceptance evidence contract.                     |
+| `write-acceptance-evidence.mjs`         | Write canonical acceptance evidence manifest payloads.               |
+| `render-infra-parameters.mjs`           | Render Bicep parameter JSON from environment variables.              |
+| `workflow-pipeline-contract.test.mjs`   | Structural regression checks for workflow contracts.                 |
 
 ## Artifact Contract
 

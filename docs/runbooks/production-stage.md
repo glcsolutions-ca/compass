@@ -24,11 +24,11 @@ All concrete production values must be stored in the GitHub `production` environ
   - `workflow_run` from successful `Acceptance Stage`
   - `workflow_dispatch` replay by `candidate_sha`
 - Job model:
-  - `load-accepted-candidate`
-  - `stale-guard`
-  - `production-mutate`
-  - `post-deploy-verify`
-  - `production-stage-result`
+  - `load-approved-candidate`
+  - `freshness-check`
+  - `deploy-approved-candidate`
+  - `production-blackbox-verify`
+  - `production-stage`
 - Concurrency: production mutation is serialized by `concurrency: production-mutation` (`cancel-in-progress: false`).
 - GitHub environment: `production`.
 
@@ -73,10 +73,10 @@ Production stage consumes acceptance evidence under:
 Required acceptance evidence fields:
 
 - `headSha`
-- `kind`
+- `changeClass`
 - `scope.*`
 - `candidate.apiRef` and `candidate.webRef` (ACR digest refs for runtime/infra paths)
-- `checks.acceptanceStageGate = success`
+- `checks.acceptanceStage` (`success` for required candidates, `not-required` for docs-only)
 
 Identity config preflight contract (shared with acceptance):
 
@@ -86,8 +86,8 @@ Identity config preflight contract (shared with acceptance):
 
 ## Production Sequence
 
-1. Load accepted candidate evidence.
-2. Run stale-head guard for auto-triggered promotions.
+1. Load approved candidate evidence.
+2. Run freshness check for auto-triggered promotions.
 3. Run identity config preflight and identity apply when `identity` scope is true.
 4. Run infra apply when `infra` scope is true or runtime requires infra convergence.
 5. For runtime:
@@ -133,5 +133,5 @@ Prevention now in place:
 ## Safety Notes
 
 - Keep `production-stage.yml` deploy-only for runtime artifacts (no `docker build`/`docker push`).
-- Keep stale guard fail-closed for auto promotions.
+- Keep freshness check fail-closed for auto promotions.
 - Keep infra/identity mutation under `environment: production` and `production-mutation` lock.

@@ -1,7 +1,6 @@
 import {
   appendGithubOutput,
   getHeadSha,
-  getTier,
   requireEnv,
   runJson,
   writeDeployArtifact
@@ -32,7 +31,6 @@ async function main() {
     schemaVersion: "1",
     generatedAt: new Date().toISOString(),
     headSha: getHeadSha(),
-    tier: getTier(),
     status: "pass",
     jobName,
     executionName

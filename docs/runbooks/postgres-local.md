@@ -42,4 +42,4 @@ pnpm db:migrate:down -- 1
 
 ## CI Behavior
 
-`runtime-acceptance` provisions PostgreSQL as a service, applies migrations, runs `pnpm db:seed`, then executes `pnpm test:full`.
+`runtime-blackbox-acceptance` starts PostgreSQL in a Docker network, runs migrations and seed through the candidate API image, then executes black-box API/system/browser smoke checks against candidate containers.

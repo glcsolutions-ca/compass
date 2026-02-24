@@ -25,8 +25,8 @@ on:
       - main
 
 jobs:
-  scope:
-    name: scope
+  determine_scope:
+    name: determine-scope
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -35,15 +35,15 @@ jobs:
       head_sha: ${{ steps.scope.outputs.head_sha }}
       tested_sha: ${{ steps.scope.outputs.tested_sha }}
       pr_number: ${{ steps.scope.outputs.pr_number }}
-      kind: ${{ steps.scope.outputs.kind }}
+      change_class: ${{ steps.scope.outputs.change_class }}
       runtime_changed: ${{ steps.scope.outputs.runtime_changed }}
       infra_changed: ${{ steps.scope.outputs.infra_changed }}
       identity_changed: ${{ steps.scope.outputs.identity_changed }}
       migration_changed: ${{ steps.scope.outputs.migration_changed }}
       infra_rollout_changed: ${{ steps.scope.outputs.infra_rollout_changed }}
       docs_only_changed: ${{ steps.scope.outputs.docs_only_changed }}
-      needs_infra: ${{ steps.scope.outputs.needs_infra }}
-      needs_migrations: ${{ steps.scope.outputs.needs_migrations }}
+      requires_infra_convergence: ${{ steps.scope.outputs.requires_infra_convergence }}
+      requires_migrations: ${{ steps.scope.outputs.requires_migrations }}
       changed_files_json: ${{ steps.scope.outputs.changed_files_json }}
       required_flow_ids_json: ${{ steps.scope.outputs.required_flow_ids_json }}
       docs_drift_blocking: ${{ steps.scope.outputs.docs_drift_blocking }}
@@ -92,10 +92,10 @@ jobs:
           path: .artifacts/docs-drift/${{ steps.scope.outputs.tested_sha }}/result.json
           if-no-files-found: warn
 
-  quick_feedback:
-    name: quick-feedback
+  fast_feedback:
+    name: fast-feedback
     needs:
-      - scope
+      - determine_scope
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -119,14 +119,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run quick feedback suite
-        run: pnpm test
+      - name: Run fast feedback suite
+        run: pnpm commit:fast-feedback
 
-  infra_quick_check:
-    name: infra-quick-check
+  infra_static_check:
+    name: infra-static-check
     needs:
-      - scope
-    if: ${{ needs.scope.outputs.infra_changed == 'true' }}
+      - determine_scope
+    if: ${{ needs.determine_scope.outputs.infra_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -136,11 +136,11 @@ jobs:
       - name: Compile Bicep entrypoint
         run: az bicep build --file infra/azure/main.bicep --stdout >/dev/null
 
-  identity_quick_check:
-    name: identity-quick-check
+  identity_static_check:
+    name: identity-static-check
     needs:
-      - scope
-    if: ${{ needs.scope.outputs.identity_changed == 'true' }}
+      - determine_scope
+    if: ${{ needs.determine_scope.outputs.identity_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -159,27 +159,25 @@ jobs:
       - name: Terraform validate
         run: terraform -chdir=infra/identity validate
 
-  candidate_build:
-    name: candidate-build
+  freeze_release_candidate_images:
+    name: freeze-release-candidate-images
     needs:
-      - scope
-      - quick_feedback
-      - infra_quick_check
-      - identity_quick_check
-    if: ${{ github.event_name == 'push' }}
+      - determine_scope
+      - fast_feedback
+      - infra_static_check
+      - identity_static_check
+    if: ${{ github.event_name == 'push' && needs.determine_scope.result == 'success' && needs.fast_feedback.result == 'success' && (needs.infra_static_check.result == 'success' || needs.infra_static_check.result == 'skipped') && (needs.identity_static_check.result == 'success' || needs.identity_static_check.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production
+    outputs:
+      candidate_api_ref: ${{ steps.freeze.outputs.candidate_api_ref }}
+      candidate_web_ref: ${{ steps.freeze.outputs.candidate_web_ref }}
     env:
-      HEAD_SHA: ${{ needs.scope.outputs.head_sha }}
-      TESTED_SHA: ${{ needs.scope.outputs.tested_sha }}
-      KIND: ${{ needs.scope.outputs.kind }}
-      RUNTIME_CHANGED: ${{ needs.scope.outputs.runtime_changed }}
-      INFRA_CHANGED: ${{ needs.scope.outputs.infra_changed }}
-      IDENTITY_CHANGED: ${{ needs.scope.outputs.identity_changed }}
-      DOCS_ONLY_CHANGED: ${{ needs.scope.outputs.docs_only_changed }}
-      NEEDS_INFRA: ${{ needs.scope.outputs.needs_infra }}
-      NEEDS_MIGRATIONS: ${{ needs.scope.outputs.needs_migrations }}
+      HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
+      RUNTIME_CHANGED: ${{ needs.determine_scope.outputs.runtime_changed }}
+      INFRA_CHANGED: ${{ needs.determine_scope.outputs.infra_changed }}
+      REQUIRES_INFRA_CONVERGENCE: ${{ needs.determine_scope.outputs.requires_infra_convergence }}
       ACR_NAME: ${{ vars.ACR_NAME }}
       ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
@@ -208,21 +206,17 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Azure login (OIDC)
-        if: ${{ env.RUNTIME_CHANGED == 'true' || env.INFRA_CHANGED == 'true' }}
+        if: ${{ env.RUNTIME_CHANGED == 'true' || env.INFRA_CHANGED == 'true' || env.REQUIRES_INFRA_CONVERGENCE == 'true' }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build/freeze candidate refs
-        env:
-          GITHUB_RUN_ID: ${{ github.run_id }}
+      - name: Freeze release candidate image refs
+        id: freeze
         run: |
           set -euo pipefail
-
-          artifact_dir=".artifacts/candidate/$HEAD_SHA"
-          mkdir -p "$artifact_dir"
 
           resolve_to_digest_ref() {
             local image="$1"
@@ -278,12 +272,61 @@ jobs:
 
             api_ref="$(docker inspect --format='{{index .RepoDigests 0}}' "$api_tag")"
             web_ref="$(docker inspect --format='{{index .RepoDigests 0}}' "$web_tag")"
-          elif [ "$INFRA_CHANGED" = "true" ]; then
+          elif [ "$INFRA_CHANGED" = "true" ] || [ "$REQUIRES_INFRA_CONVERGENCE" = "true" ]; then
             api_image="$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_API_APP_NAME" --query 'properties.template.containers[0].image' --output tsv)"
             web_image="$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_WEB_APP_NAME" --query 'properties.template.containers[0].image' --output tsv)"
 
             api_ref="$(resolve_to_digest_ref "$api_image")"
             web_ref="$(resolve_to_digest_ref "$web_image")"
+          fi
+
+          echo "candidate_api_ref=$api_ref" >> "$GITHUB_OUTPUT"
+          echo "candidate_web_ref=$web_ref" >> "$GITHUB_OUTPUT"
+
+  publish_release_candidate:
+    name: publish-release-candidate
+    needs:
+      - determine_scope
+      - freeze_release_candidate_images
+    if: ${{ always() && github.event_name == 'push' && needs.determine_scope.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
+      TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
+      CHANGE_CLASS: ${{ needs.determine_scope.outputs.change_class }}
+      RUNTIME_CHANGED: ${{ needs.determine_scope.outputs.runtime_changed }}
+      INFRA_CHANGED: ${{ needs.determine_scope.outputs.infra_changed }}
+      IDENTITY_CHANGED: ${{ needs.determine_scope.outputs.identity_changed }}
+      DOCS_ONLY_CHANGED: ${{ needs.determine_scope.outputs.docs_only_changed }}
+      REQUIRES_INFRA_CONVERGENCE: ${{ needs.determine_scope.outputs.requires_infra_convergence }}
+      REQUIRES_MIGRATIONS: ${{ needs.determine_scope.outputs.requires_migrations }}
+      CANDIDATE_API_REF: ${{ needs.freeze_release_candidate_images.outputs.candidate_api_ref }}
+      CANDIDATE_WEB_REF: ${{ needs.freeze_release_candidate_images.outputs.candidate_web_ref }}
+      FREEZE_RESULT: ${{ needs.freeze_release_candidate_images.result }}
+    steps:
+      - name: Publish release candidate manifest
+        run: |
+          set -euo pipefail
+
+          artifact_dir=".artifacts/candidate/$HEAD_SHA"
+          mkdir -p "$artifact_dir"
+
+          requires_refs=false
+          if [ "$RUNTIME_CHANGED" = "true" ] || [ "$INFRA_CHANGED" = "true" ] || [ "$REQUIRES_INFRA_CONVERGENCE" = "true" ]; then
+            requires_refs=true
+          fi
+
+          if [ "$requires_refs" = "true" ] && [ "$FREEZE_RESULT" != "success" ]; then
+            echo "Freeze release candidate images did not succeed but candidate refs are required." >&2
+            exit 1
+          fi
+
+          if [ "$requires_refs" = "true" ]; then
+            if [ -z "${CANDIDATE_API_REF:-}" ] || [ -z "${CANDIDATE_WEB_REF:-}" ]; then
+              echo "Candidate refs are required but missing." >&2
+              exit 1
+            fi
           fi
 
           cat > "$artifact_dir/manifest.json" <<JSON
@@ -292,38 +335,38 @@ jobs:
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "headSha": "$HEAD_SHA",
             "testedSha": "$TESTED_SHA",
-            "kind": "$KIND",
-            "buildRunId": "$GITHUB_RUN_ID",
+            "changeClass": "$CHANGE_CLASS",
+            "buildRunId": "${GITHUB_RUN_ID}",
             "scope": {
               "runtime": ${RUNTIME_CHANGED},
               "infra": ${INFRA_CHANGED},
               "identity": ${IDENTITY_CHANGED},
               "docsOnly": ${DOCS_ONLY_CHANGED}
             },
-            "needsInfra": ${NEEDS_INFRA},
-            "needsMigrations": ${NEEDS_MIGRATIONS},
+            "requiresInfraConvergence": ${REQUIRES_INFRA_CONVERGENCE},
+            "requiresMigrations": ${REQUIRES_MIGRATIONS},
             "candidate": {
-              "apiRef": "$api_ref",
-              "webRef": "$web_ref"
+              "apiRef": "${CANDIDATE_API_REF:-}",
+              "webRef": "${CANDIDATE_WEB_REF:-}"
             }
           }
           JSON
 
-      - name: Upload candidate artifact
+      - name: Upload release candidate artifact
         uses: actions/upload-artifact@v4
         with:
           name: candidate-${{ env.HEAD_SHA }}
           path: .artifacts/candidate/${{ env.HEAD_SHA }}/manifest.json
           if-no-files-found: error
 
-  commit_stage_gate:
-    name: commit-stage-gate
+  commit_stage:
+    name: commit-stage
     if: ${{ always() }}
     needs:
-      - scope
-      - quick_feedback
-      - infra_quick_check
-      - identity_quick_check
+      - determine_scope
+      - fast_feedback
+      - infra_static_check
+      - identity_static_check
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -335,77 +378,38 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Collect commit-stage timing snapshot
+      - name: Collect commit-stage timing
         id: timing
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
-          HEAD_SHA: ${{ needs.scope.outputs.head_sha }}
-          TESTED_SHA: ${{ needs.scope.outputs.tested_sha }}
-          TIMING_PHASE: gate
-        run: node scripts/pipeline/shared/collect-stage-timing.mjs
+          HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
+          TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
+          TIMING_PHASE: final
+        run: node scripts/pipeline/shared/collect-commit-stage-timing.mjs
 
-      - name: Enforce commit stage gate
+      - name: Decide commit stage
         env:
-          HEAD_SHA: ${{ needs.scope.outputs.head_sha }}
-          TESTED_SHA: ${{ needs.scope.outputs.tested_sha }}
-          INFRA_REQUIRED: ${{ needs.scope.outputs.infra_changed }}
-          IDENTITY_REQUIRED: ${{ needs.scope.outputs.identity_changed }}
-          DOCS_DRIFT_BLOCKING: ${{ needs.scope.outputs.docs_drift_blocking }}
-          DOCS_DRIFT_STATUS: ${{ needs.scope.outputs.docs_drift_status }}
+          HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
+          TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
+          INFRA_REQUIRED: ${{ needs.determine_scope.outputs.infra_changed }}
+          IDENTITY_REQUIRED: ${{ needs.determine_scope.outputs.identity_changed }}
+          DOCS_DRIFT_BLOCKING: ${{ needs.determine_scope.outputs.docs_drift_blocking }}
+          DOCS_DRIFT_STATUS: ${{ needs.determine_scope.outputs.docs_drift_status }}
           COMMIT_STAGE_SLO_MODE: ${{ steps.timing.outputs.commit_stage_slo_mode }}
           COMMIT_STAGE_SLO_PASS: ${{ steps.timing.outputs.commit_stage_slo_pass }}
           COMMIT_STAGE_SLO_TARGET_SECONDS: ${{ steps.timing.outputs.commit_stage_slo_target_seconds }}
           TIME_TO_COMMIT_GATE_SECONDS: ${{ steps.timing.outputs.time_to_commit_gate_seconds }}
-          CHECK_RESULTS_JSON: ${{ format('{{"scope":"{0}","quick-feedback":"{1}","infra-quick-check":"{2}","identity-quick-check":"{3}"}}', needs.scope.result, needs.quick_feedback.result, needs.infra_quick_check.result, needs.identity_quick_check.result) }}
-        run: node scripts/pipeline/commit/commit-stage-gate.mjs
+          CHECK_RESULTS_JSON: ${{ format('{{"determine-scope":"{0}","fast-feedback":"{1}","infra-static-check":"{2}","identity-static-check":"{3}"}}', needs.determine_scope.result, needs.fast_feedback.result, needs.infra_static_check.result, needs.identity_static_check.result) }}
+        run: node scripts/pipeline/commit/decide-commit-stage.mjs
 
       - name: Upload commit-stage artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: commit-stage-${{ needs.scope.outputs.tested_sha }}
+          name: commit-stage-${{ needs.determine_scope.outputs.tested_sha }}
           path: |
-            .artifacts/commit-stage/${{ needs.scope.outputs.tested_sha }}/result.json
-            .artifacts/commit-stage/${{ needs.scope.outputs.tested_sha }}/timing.json
-          if-no-files-found: warn
-
-  commit_stage_timing:
-    name: commit-stage-timing
-    if: ${{ always() }}
-    needs:
-      - scope
-      - quick_feedback
-      - infra_quick_check
-      - identity_quick_check
-      - candidate_build
-      - commit_stage_gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-
-      - name: Collect commit-stage final timing
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          HEAD_SHA: ${{ needs.scope.outputs.head_sha }}
-          TESTED_SHA: ${{ needs.scope.outputs.tested_sha }}
-          TIMING_PHASE: final
-        run: node scripts/pipeline/shared/collect-stage-timing.mjs
-
-      - name: Upload commit-stage timing artifact
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: commit-stage-timing-${{ needs.scope.outputs.tested_sha }}
-          path: .artifacts/commit-stage/${{ needs.scope.outputs.tested_sha }}/timing.json
+            .artifacts/commit-stage/${{ needs.determine_scope.outputs.tested_sha }}/result.json
+            .artifacts/commit-stage/${{ needs.determine_scope.outputs.tested_sha }}/timing.json
           if-no-files-found: warn

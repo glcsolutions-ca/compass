@@ -1,7 +1,6 @@
 import {
   appendGithubOutput,
   getHeadSha,
-  getTier,
   requireEnv,
   run,
   runJson,
@@ -120,7 +119,6 @@ async function failMigration({
     schemaVersion: "2",
     generatedAt: new Date().toISOString(),
     headSha: getHeadSha(),
-    tier: getTier(),
     status: "fail",
     reasonCode,
     reason,
@@ -195,7 +193,6 @@ async function main() {
         schemaVersion: "2",
         generatedAt: new Date().toISOString(),
         headSha: getHeadSha(),
-        tier: getTier(),
         status: "pass",
         reasonCode: "",
         reason: "",

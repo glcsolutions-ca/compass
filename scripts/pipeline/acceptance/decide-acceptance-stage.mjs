@@ -1,5 +1,5 @@
 import path from "node:path";
-import { evaluateAcceptanceStageResults } from "./acceptance-stage-gate-lib.mjs";
+import { evaluateAcceptanceStageResults } from "./decide-acceptance-stage-lib.mjs";
 import { appendGithubOutput, requireEnv, writeJsonFile } from "../shared/pipeline-utils.mjs";
 
 function parseBooleanEnv(name, fallback = false) {
@@ -41,10 +41,10 @@ function parseCheckResults() {
   }
 
   const expectedChecks = [
-    "load-candidate",
-    "runtime-acceptance",
-    "infra-acceptance",
-    "identity-acceptance"
+    "load-release-candidate",
+    "runtime-blackbox-acceptance",
+    "infra-readonly-acceptance",
+    "identity-readonly-acceptance"
   ];
 
   const checkResults = {};
@@ -111,14 +111,14 @@ async function main() {
   });
 
   if (reasons.length > 0) {
-    console.error("acceptance-stage-gate blocking reasons:");
+    console.error("acceptance-stage blocking reasons:");
     for (const reason of reasons) {
       console.error(`- [${reason.code}] ${reason.message}`);
     }
     process.exit(1);
   }
 
-  console.info(`acceptance-stage-gate passed for ${headSha}`);
+  console.info(`acceptance-stage passed for ${headSha}`);
 }
 
 void main();

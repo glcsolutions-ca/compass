@@ -12,7 +12,7 @@ List the commands you ran and any important outputs.
 
 ## Commit Stage Evidence (If Applicable)
 
-- Scope kind:
+- Change class:
 - Commit scope artifact path:
 - Docs-drift artifact path:
 - Testing policy artifact path:

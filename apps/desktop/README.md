@@ -21,6 +21,9 @@ Required for installer builds:
 
 - `COMPASS_DESKTOP_START_URL`: HTTPS base URL loaded by the packaged app.
 
+macOS signing/notarization is enabled only when Apple signing env vars are present (`APPLE_TEAM_ID`, key id/issuer/path).
+Windows signing is handled in CI by Azure Trusted Signing. Without signing credentials, packaging still produces unsigned installers suitable for temporary local testing.
+
 Optional:
 
 - `COMPASS_DESKTOP_ALLOWED_ORIGINS`: comma-separated list of allowed HTTP(S) origins.

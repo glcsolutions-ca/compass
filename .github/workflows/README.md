@@ -30,7 +30,9 @@
 - `desktop-release.yml`
   - trigger: manual `workflow_dispatch`
   - key jobs: `validate-candidate`, parallel `build-macos`/`build-windows`, `publish-release`
-  - outputs signed installers (`.dmg`, `.msi`), release checksums, and desktop release manifest artifact
+  - supports `signing_mode` policy: `signed`, `unsigned`, `unsigned-macos`, `unsigned-windows`
+  - supports `candidate_validation`: `strict` (default) and `main-only` (unsigned testing only)
+  - outputs release installers/checksums plus desktop release manifest artifact
 - `codex-review-trusted.yml`
   - optional trusted-context review helper
 - `dependabot-auto-merge.yml`

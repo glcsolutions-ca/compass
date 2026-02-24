@@ -1,4 +1,4 @@
-name: Deployment Pipeline
+name: Cloud Deployment Pipeline
 
 on:
   push:
@@ -72,6 +72,7 @@ jobs:
       migration_changed: ${{ steps.scope.outputs.migration_changed }}
       infra_rollout_changed: ${{ steps.scope.outputs.infra_rollout_changed }}
       docs_only_changed: ${{ steps.scope.outputs.docs_only_changed }}
+      control_plane_changed: ${{ steps.scope.outputs.control_plane_changed }}
       requires_infra_convergence: ${{ steps.scope.outputs.requires_infra_convergence }}
       requires_migrations: ${{ steps.scope.outputs.requires_migrations }}
       changed_files_json: ${{ steps.scope.outputs.changed_files_json }}
@@ -127,7 +128,7 @@ jobs:
     needs:
       - candidate_context
       - determine_scope
-    if: ${{ needs.candidate_context.outputs.replay_mode != 'true' }}
+    if: ${{ needs.candidate_context.outputs.replay_mode != 'true' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.control_plane_changed == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -216,6 +217,8 @@ jobs:
         env:
           HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
           TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
+          RUNTIME_REQUIRED: ${{ needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.control_plane_changed == 'true' }}
+          DESKTOP_REQUIRED: "false"
           INFRA_REQUIRED: ${{ needs.determine_scope.outputs.infra_changed }}
           IDENTITY_REQUIRED: ${{ needs.determine_scope.outputs.identity_changed }}
           DOCS_DRIFT_BLOCKING: ${{ needs.determine_scope.outputs.docs_drift_blocking }}
@@ -224,7 +227,7 @@ jobs:
           COMMIT_STAGE_SLO_PASS: ${{ steps.timing.outputs.commit_stage_slo_pass }}
           COMMIT_STAGE_SLO_TARGET_SECONDS: ${{ steps.timing.outputs.commit_stage_slo_target_seconds }}
           TIME_TO_COMMIT_GATE_SECONDS: ${{ steps.timing.outputs.time_to_commit_gate_seconds }}
-          CHECK_RESULTS_JSON: ${{ format('{{"determine-scope":"{0}","fast-feedback":"{1}","infra-static-check":"{2}","identity-static-check":"{3}"}}', needs.determine_scope.result, needs.fast_feedback.result, needs.infra_static_check.result, needs.identity_static_check.result) }}
+          CHECK_RESULTS_JSON: ${{ format('{{"determine-scope":"{0}","fast-feedback":"{1}","desktop-fast-feedback":"skipped","infra-static-check":"{2}","identity-static-check":"{3}"}}', needs.determine_scope.result, needs.fast_feedback.result, needs.infra_static_check.result, needs.identity_static_check.result) }}
         run: node scripts/pipeline/commit/decide-commit-stage.mjs
 
       - name: Upload commit-stage artifact
@@ -485,7 +488,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          WORKFLOW_FILE: deployment-pipeline.yml
+          WORKFLOW_FILE: cloud-deployment-pipeline.yml
           HEAD_SHA: ${{ needs.candidate_context.outputs.candidate_sha }}
           RUN_EVENT: push
           RUN_STATUS: success
@@ -575,7 +578,7 @@ jobs:
 
       - name: Run API/system acceptance against candidate API image
         if: ${{ env.JOB_REQUIRED == 'true' }}
-        run: node scripts/pipeline/acceptance/run-runtime-api-system-acceptance.mjs
+        run: node scripts/pipeline/cloud/acceptance/run-runtime-api-system-acceptance.mjs
 
       - name: Upload runtime API/system acceptance artifacts
         if: ${{ always() }}
@@ -653,7 +656,7 @@ jobs:
 
       - name: Run browser acceptance against candidate Web image
         if: ${{ env.JOB_REQUIRED == 'true' }}
-        run: node scripts/pipeline/acceptance/run-runtime-browser-acceptance.mjs
+        run: node scripts/pipeline/cloud/acceptance/run-runtime-browser-acceptance.mjs
 
       - name: Upload runtime browser acceptance artifacts
         if: ${{ always() }}
@@ -720,7 +723,7 @@ jobs:
 
       - name: Run migration-image acceptance against candidate API image
         if: ${{ env.JOB_REQUIRED == 'true' }}
-        run: node scripts/pipeline/acceptance/run-runtime-migration-image-acceptance.mjs
+        run: node scripts/pipeline/cloud/acceptance/run-runtime-migration-image-acceptance.mjs
 
       - name: Upload migration-image acceptance artifacts
         if: ${{ always() }}
@@ -830,7 +833,7 @@ jobs:
 
       - name: Validate managed certificate contract
         if: ${{ env.JOB_REQUIRED == 'true' }}
-        run: node scripts/pipeline/production/assert-managed-certificate-contract.mjs
+        run: node scripts/pipeline/cloud/production/assert-managed-certificate-contract.mjs
 
       - name: Render infra parameters
         if: ${{ env.JOB_REQUIRED == 'true' }}
@@ -1030,7 +1033,7 @@ jobs:
           IDENTITY_CONFIG_CONTRACT_STATUS: ${{ needs.identity_readonly_acceptance.outputs.identity_config_contract_status }}
           IDENTITY_CONFIG_CONTRACT_REASON_CODES_JSON: ${{ needs.identity_readonly_acceptance.outputs.identity_config_contract_reason_codes_json }}
           CHECK_RESULTS_JSON: ${{ format('{{"load-release-candidate":"{0}","runtime-api-system-acceptance":"{1}","runtime-browser-acceptance":"{2}","runtime-migration-image-acceptance":"{3}","infra-readonly-acceptance":"{4}","identity-readonly-acceptance":"{5}"}}', needs.load_release_candidate.result, needs.runtime_api_system_acceptance.result, needs.runtime_browser_acceptance.result, needs.runtime_migration_image_acceptance.result, needs.infra_readonly_acceptance.result, needs.identity_readonly_acceptance.result) }}
-        run: node scripts/pipeline/acceptance/decide-acceptance-stage.mjs
+        run: node scripts/pipeline/cloud/acceptance/decide-acceptance-stage.mjs
 
       - name: Finalize acceptance decision
         id: finalize
@@ -1039,7 +1042,7 @@ jobs:
           DEPLOY_SKIP_REASON_CODE: ${{ steps.scope.outputs.deploy_skip_reason_code }}
           HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
           DECIDE_OUTCOME: ${{ steps.decide.outcome }}
-        run: node scripts/pipeline/acceptance/finalize-acceptance-stage.mjs
+        run: node scripts/pipeline/cloud/acceptance/finalize-acceptance-stage.mjs
 
       - name: Upload acceptance artifacts
         if: ${{ always() }}
@@ -1241,13 +1244,13 @@ jobs:
           set -euo pipefail
 
           mkdir -p ".artifacts/infra/$HEAD_SHA"
-          node scripts/pipeline/production/assert-managed-certificate-contract.mjs
+          node scripts/pipeline/cloud/production/assert-managed-certificate-contract.mjs
           node scripts/pipeline/shared/render-infra-parameters.mjs
 
           export ARM_TEMPLATE_FILE="infra/azure/main.bicep"
           export ARM_ARTIFACT_DIR=".artifacts/infra/$HEAD_SHA"
 
-          node scripts/pipeline/production/apply-infra.mjs
+          node scripts/pipeline/cloud/production/apply-infra.mjs
 
       - name: Update migration job image
         if: ${{ env.RUNTIME_CHANGED == 'true' }}
@@ -1264,7 +1267,7 @@ jobs:
         env:
           AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
           ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
-        run: node scripts/pipeline/production/start-migration-job.mjs
+        run: node scripts/pipeline/cloud/production/start-migration-job.mjs
 
       - name: Wait for migration completion
         if: ${{ env.RUNTIME_CHANGED == 'true' && env.REQUIRES_MIGRATIONS == 'true' }}
@@ -1273,7 +1276,7 @@ jobs:
           ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
           MIGRATION_EXECUTION_NAME: ${{ steps.migration_start.outputs.migration_execution_name }}
           MIGRATION_TIMEOUT_SECONDS: 900
-        run: node scripts/pipeline/production/wait-migration-job.mjs
+        run: node scripts/pipeline/cloud/production/wait-migration-job.mjs
 
       - name: Deploy API
         if: ${{ env.RUNTIME_CHANGED == 'true' }}
@@ -1318,7 +1321,7 @@ jobs:
           CANDIDATE_API_REF: ${{ env.CANDIDATE_API_REF }}
           CANDIDATE_WEB_REF: ${{ env.CANDIDATE_WEB_REF }}
           CHANGE_CLASS: ${{ env.CHANGE_CLASS }}
-        run: node scripts/pipeline/production/record-release.mjs
+        run: node scripts/pipeline/cloud/production/record-release.mjs
 
       - name: Write deployment record artifact
         if: ${{ always() }}
@@ -1373,7 +1376,7 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
 
       - name: API smoke verification
-        run: node scripts/pipeline/production/verify-api-smoke.mjs
+        run: node scripts/pipeline/cloud/production/verify-api-smoke.mjs
 
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
@@ -1432,7 +1435,7 @@ jobs:
           DEPLOY_RESULT: ${{ needs.deploy_approved_candidate.result }}
           VERIFY_RESULT: ${{ needs.production_blackbox_verify.result }}
           DEPLOYMENT_ID: ${{ needs.deploy_approved_candidate.outputs.deployment_id }}
-        run: node scripts/pipeline/production/decide-production-stage.mjs
+        run: node scripts/pipeline/cloud/production/decide-production-stage.mjs
 
       - name: Upload production result artifact
         uses: actions/upload-artifact@v4
@@ -1461,19 +1464,19 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Collect deployment-stage timing
+      - name: Collect cloud deployment-stage timing
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha || needs.candidate_context.outputs.candidate_sha }}
-        run: node scripts/pipeline/shared/collect-deployment-stage-timing.mjs
+        run: node scripts/pipeline/shared/collect-cloud-deployment-stage-timing.mjs
 
-      - name: Upload deployment timing artifact
+      - name: Upload cloud deployment timing artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: deployment-pipeline-timing-${{ needs.load_release_candidate.outputs.head_sha || needs.candidate_context.outputs.candidate_sha }}
+          name: cloud-deployment-pipeline-timing-${{ needs.load_release_candidate.outputs.head_sha || needs.candidate_context.outputs.candidate_sha }}
           path: .artifacts/pipeline/${{ needs.load_release_candidate.outputs.head_sha || needs.candidate_context.outputs.candidate_sha }}/timing.json
           if-no-files-found: warn
 

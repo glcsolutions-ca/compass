@@ -1,4 +1,4 @@
-# TDR-003: Deployment Pipeline Visualization Model (Single Workflow)
+# TDR-003: Cloud Deployment Pipeline Visualization Model (Single Workflow)
 
 ## Status
 
@@ -10,20 +10,20 @@ Accepted
 
 ## Summary
 
-Keep the production release path in one authoritative workflow (`deployment-pipeline.yml`) instead of introducing reusable-workflow wrappers only to make the GitHub graph look grouped.
+Keep the production release path in one authoritative workflow (`cloud-deployment-pipeline.yml`) instead of introducing reusable-workflow wrappers only to make the GitHub graph look grouped.
 
 ## Context
 
 - GitHub Actions visualization is a job DAG and does not support true nested/collapsible stage groups inside one workflow run.
 - The current delivery model already uses Farley-aligned stage language and sequencing:
   - PR/merge-queue gate in `commit-stage.yml`
-  - `main` release flow in `deployment-pipeline.yml` with commit, acceptance, and production jobs
+  - `main` release flow in `cloud-deployment-pipeline.yml` with commit, acceptance, and production jobs
 - Previous cross-workflow chaining produced ambiguous outcomes and troubleshooting overhead.
 - The team requested clearer stage legibility without reintroducing orchestration complexity.
 
 ## Decision
 
-- Keep `deployment-pipeline.yml` as the single authoritative `main` release workflow.
+- Keep `cloud-deployment-pipeline.yml` as the single authoritative `main` release workflow.
 - Keep `commit-stage.yml` as the only PR/merge-queue required merge gate.
 - Do not add reusable-workflow wrappers solely for visual grouping at this time.
 - Continue to improve readability through:
@@ -65,7 +65,7 @@ Reconsider reusable stage wrappers only if both conditions are true:
 ## References
 
 - `.github/workflows/commit-stage.yml`
-- `.github/workflows/deployment-pipeline.yml`
+- `.github/workflows/cloud-deployment-pipeline.yml`
 - `.github/workflows/README.md`
 - `docs/commit-stage-policy.md`
 - `docs/runbooks/production-stage.md`

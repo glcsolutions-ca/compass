@@ -28,7 +28,7 @@ async function githubRequest(token, pathname) {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${token}`,
       "X-GitHub-Api-Version": GITHUB_API_VERSION,
-      "User-Agent": "compass-deployment-stage-timing"
+      "User-Agent": "compass-cloud-deployment-stage-timing"
     }
   });
 
@@ -152,18 +152,19 @@ async function main() {
   const policyPath =
     process.env.PIPELINE_POLICY_PATH ?? path.join(".github", "policy", "pipeline-policy.json");
   const policy = await loadPipelinePolicy(policyPath);
-  const deploymentSlo = policy.deploymentPipeline?.slo ?? {};
-  const sloMode = String(deploymentSlo.mode || "observe")
+  const cloudDeploymentSlo = policy.cloudDeploymentPipeline?.slo ?? {};
+  const sloMode = String(cloudDeploymentSlo.mode || "observe")
     .trim()
     .toLowerCase();
-  const acceptanceTarget = parseTarget(deploymentSlo.acceptanceTargetSeconds);
-  const productionTarget = parseTarget(deploymentSlo.productionTargetSeconds);
+  const acceptanceTarget = parseTarget(cloudDeploymentSlo.acceptanceTargetSeconds);
+  const productionTarget = parseTarget(cloudDeploymentSlo.productionTargetSeconds);
 
   const { run, jobs } = await fetchRunAndJobs({ token, repository, runId });
 
   const commitStart = earliestStartEpoch(jobs, [
     "determine-scope",
     "fast-feedback",
+    "desktop-fast-feedback",
     "infra-static-check",
     "identity-static-check"
   ]);
@@ -238,13 +239,15 @@ async function main() {
 
   await appendGithubOutput({
     pipeline_timing_path: artifactPath,
-    deployment_acceptance_seconds: acceptanceDuration === null ? "" : String(acceptanceDuration),
-    deployment_production_seconds: productionDuration === null ? "" : String(productionDuration)
+    cloud_deployment_acceptance_seconds:
+      acceptanceDuration === null ? "" : String(acceptanceDuration),
+    cloud_deployment_production_seconds:
+      productionDuration === null ? "" : String(productionDuration)
   });
 
   await appendGithubStepSummary(
     [
-      "### Deployment Pipeline Timing",
+      "### Cloud Deployment Pipeline Timing",
       `- queue delay (non-SLO): ${formatMetric(queueDelaySeconds)}`,
       `- overall execution: ${formatMetric(overallExecutionSeconds)}`,
       `- commit stage: ${formatMetric(commitDuration)}`,

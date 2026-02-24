@@ -1,8 +1,8 @@
-# Acceptance Stage Scripts
+# Cloud Acceptance Stage Scripts
 
 ## Purpose
 
-`scripts/pipeline/acceptance/` contains acceptance-stage gate logic used by `deployment-pipeline.yml`.
+`scripts/pipeline/cloud/acceptance/` contains cloud acceptance-stage gate logic used by `cloud-deployment-pipeline.yml`.
 
 ## Script Map
 

@@ -5,7 +5,7 @@ import {
   appendGithubOutput,
   requireEnv,
   writeJsonFile as writeArtifact
-} from "../shared/pipeline-utils.mjs";
+} from "../../shared/pipeline-utils.mjs";
 
 const execFileAsync = promisify(execFile);
 export { appendGithubOutput, requireEnv, writeArtifact };

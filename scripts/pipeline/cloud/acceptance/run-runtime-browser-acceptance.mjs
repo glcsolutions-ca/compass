@@ -1,4 +1,4 @@
-import { requireEnv, writeJsonFile } from "../shared/pipeline-utils.mjs";
+import { requireEnv, writeJsonFile } from "../../shared/pipeline-utils.mjs";
 import { requireCandidateRefs, runShell } from "./runtime-acceptance-lib.mjs";
 
 async function main() {

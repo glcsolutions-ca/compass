@@ -1,6 +1,6 @@
 import path from "node:path";
 import { evaluateAcceptanceStageResults } from "./decide-acceptance-stage-lib.mjs";
-import { appendGithubOutput, requireEnv, writeJsonFile } from "../shared/pipeline-utils.mjs";
+import { appendGithubOutput, requireEnv, writeJsonFile } from "../../shared/pipeline-utils.mjs";
 
 function parseBooleanEnv(name, fallback = false) {
   const raw = process.env[name];

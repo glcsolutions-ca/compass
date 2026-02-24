@@ -31,7 +31,7 @@ jobs:
     name: validate-candidate
     runs-on: ubuntu-latest
     outputs:
-      deployment_pipeline_run_id: ${{ steps.validate.outputs.deployment_pipeline_run_id }}
+      cloud_deployment_pipeline_run_id: ${{ steps.validate.outputs.cloud_deployment_pipeline_run_id }}
       candidate_sha: ${{ steps.validate.outputs.candidate_sha }}
       release_version: ${{ steps.version.outputs.release_version }}
     steps:
@@ -71,13 +71,13 @@ jobs:
           }
 
           function writeOutputs(runId) {
-            fs.appendFileSync(outputPath, `deployment_pipeline_run_id=${runId}\n`);
+            fs.appendFileSync(outputPath, `cloud_deployment_pipeline_run_id=${runId}\n`);
             fs.appendFileSync(outputPath, `candidate_sha=${candidateSha}\n`);
           }
 
           (async () => {
             const data = await request(
-              `/repos/${repository}/actions/workflows/deployment-pipeline.yml/runs?status=success&per_page=100`
+              `/repos/${repository}/actions/workflows/cloud-deployment-pipeline.yml/runs?status=success&per_page=100`
             );
 
             const run = (data.workflow_runs || []).find(
@@ -89,7 +89,7 @@ jobs:
 
             if (!run) {
               throw new Error(
-                `No successful Deployment Pipeline run on main found for candidate ${candidateSha}`
+                `No successful Cloud Deployment Pipeline run on main found for candidate ${candidateSha}`
               );
             }
 
@@ -378,7 +378,7 @@ jobs:
           const manifestPath = process.env.MANIFEST_PATH;
           const releaseTag = process.env.RELEASE_TAG;
           const candidateSha = process.env.CANDIDATE_SHA;
-          const deploymentPipelineRunId = process.env.DEPLOYMENT_PIPELINE_RUN_ID;
+          const cloudDeploymentPipelineRunId = process.env.CLOUD_DEPLOYMENT_PIPELINE_RUN_ID;
 
           const files = fs
             .readdirSync(installersDir)
@@ -399,7 +399,7 @@ jobs:
             schemaVersion: "1",
             generatedAt: new Date().toISOString(),
             candidateSha,
-            deploymentPipelineRunId,
+            cloudDeploymentPipelineRunId,
             releaseTag,
             artifacts
           };
@@ -413,7 +413,7 @@ jobs:
           MANIFEST_PATH: .artifacts/desktop/${{ needs.validate_candidate.outputs.candidate_sha }}/release-manifest.json
           RELEASE_TAG: ${{ inputs.release_tag }}
           CANDIDATE_SHA: ${{ needs.validate_candidate.outputs.candidate_sha }}
-          DEPLOYMENT_PIPELINE_RUN_ID: ${{ needs.validate_candidate.outputs.deployment_pipeline_run_id }}
+          CLOUD_DEPLOYMENT_PIPELINE_RUN_ID: ${{ needs.validate_candidate.outputs.cloud_deployment_pipeline_run_id }}
 
       - name: Publish GitHub release assets
         env:

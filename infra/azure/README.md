@@ -6,8 +6,8 @@
 - Environment parameter template: `infra/azure/environments/prod.bicepparam`
 - Reusable resource modules: `infra/azure/modules/*.bicep`
 - Pipeline stages:
-  - `.github/workflows/deployment-pipeline.yml` (`infra-readonly-acceptance`, validate only)
-  - `.github/workflows/deployment-pipeline.yml` (`deploy-approved-candidate`, apply)
+  - `.github/workflows/cloud-deployment-pipeline.yml` (`infra-readonly-acceptance`, validate only)
+  - `.github/workflows/cloud-deployment-pipeline.yml` (`deploy-approved-candidate`, apply)
 
 ## Resource Topology
 
@@ -101,7 +101,7 @@ Infra validation/apply fails closed when any contract guard fails:
 Production apply behavior is deterministic:
 
 1. Build runtime parameters in `.artifacts/infra/<sha>/runtime.parameters.json`.
-2. `scripts/pipeline/production/apply-infra.mjs` runs `az deployment group validate`.
+2. `scripts/pipeline/cloud/production/apply-infra.mjs` runs `az deployment group validate`.
 3. If validation succeeds, it runs `az deployment group create`.
 4. Create retries once with backoff only for recognized transient ARM/ACA failures.
 5. Terminal failures emit explicit stderr diagnostics and artifact logs.
@@ -136,17 +136,17 @@ pnpm deploy:custom-domain:dns
 ```
 
 3. Publish emitted `CNAME`/`TXT` records at your DNS provider.
-4. Run `deployment-pipeline.yml` for accepted candidate.
+4. Run `cloud-deployment-pipeline.yml` for accepted candidate.
 5. Verify bindings with `az containerapp hostname list`.
 
 ### Replay guidance
 
-- Re-run `deployment-pipeline.yml` with the same `candidate_sha` to verify deterministic convergence.
+- Re-run `cloud-deployment-pipeline.yml` with the same `candidate_sha` to verify deterministic convergence.
 - Use artifact diffs under `.artifacts/infra/<sha>/` to investigate drift or transient retries.
 
 ### Rollback by candidate SHA
 
-- Trigger manual `.github/workflows/deployment-pipeline.yml` with `candidate_sha=<known-good-sha>`.
+- Trigger manual `.github/workflows/cloud-deployment-pipeline.yml` with `candidate_sha=<known-good-sha>`.
 - Production stage deploys the accepted digest refs for that SHA.
 
 ### Artifact locations
@@ -160,8 +160,8 @@ pnpm deploy:custom-domain:dns
 
 ## References
 
-- `.github/workflows/deployment-pipeline.yml`
-- `scripts/pipeline/production/apply-infra.mjs`
-- `scripts/pipeline/production/assert-managed-certificate-contract.mjs`
-- `scripts/pipeline/production/custom-domain-dns.mjs`
+- `.github/workflows/cloud-deployment-pipeline.yml`
+- `scripts/pipeline/cloud/production/apply-infra.mjs`
+- `scripts/pipeline/cloud/production/assert-managed-certificate-contract.mjs`
+- `scripts/pipeline/cloud/production/custom-domain-dns.mjs`
 - `docs/runbooks/production-stage.md`

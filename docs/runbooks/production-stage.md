@@ -9,8 +9,8 @@ Production stage must deploy accepted candidate digest refs and must not rebuild
 ## Stage Topology
 
 1. `commit-stage.yml` gates PR and merge queue with fast merge-blocking feedback.
-2. `deployment-pipeline.yml` (cloud deployment pipeline) runs on `push` to `main`.
-3. Inside deployment pipeline: commit checks -> candidate freeze -> acceptance (YES/NO) -> production -> release decision.
+2. `cloud-deployment-pipeline.yml` (Cloud Deployment Pipeline) runs on `push` to `main`.
+3. Inside the Cloud Deployment Pipeline: commit checks -> candidate freeze -> acceptance (YES/NO) -> production -> release decision.
 
 ## Non-Commit Rule
 
@@ -19,7 +19,7 @@ All concrete production values must be stored in GitHub environments (`acceptanc
 
 ## Workflow
 
-- Workflow file: `.github/workflows/deployment-pipeline.yml`
+- Workflow file: `.github/workflows/cloud-deployment-pipeline.yml`
 - Trigger:
   - `push` to `main`
   - `workflow_dispatch` replay by `candidate_sha`
@@ -79,7 +79,7 @@ Required acceptance environment secrets (read-only):
 
 ## Candidate and Config Contracts
 
-Deployment pipeline loads candidate manifest contract from:
+Cloud Deployment Pipeline loads candidate manifest contract from:
 
 - `.artifacts/candidate/<sha>/manifest.json`
 
@@ -109,7 +109,7 @@ Identity config preflight contract (shared with acceptance):
 
 ## Replay and Rollback
 
-- Manual replay: run `deployment-pipeline.yml` with `candidate_sha`.
+- Manual replay: run `cloud-deployment-pipeline.yml` with `candidate_sha`.
 - Replay uses the same candidate manifest and digest refs.
 - For runtime rollback, replay a previously accepted candidate SHA.
 
@@ -126,6 +126,6 @@ Identity config preflight contract (shared with acceptance):
 
 ## Safety Notes
 
-- Keep `deployment-pipeline.yml` deploy-only for runtime artifacts in production jobs (no `docker build`/`docker push` in production stage jobs).
+- Keep `cloud-deployment-pipeline.yml` deploy-only for runtime artifacts in production jobs (no `docker build`/`docker push` in production stage jobs).
 - Keep infra/identity mutation under `environment: production` and `production-mutation` lock.
 - Keep acceptance credentials read-only and isolated from production mutation credentials.

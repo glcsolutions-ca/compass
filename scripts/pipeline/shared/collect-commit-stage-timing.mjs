@@ -153,6 +153,14 @@ function formatMetric(value) {
   return `${value}s`;
 }
 
+function maxDuration(values) {
+  const finite = values.filter((value) => Number.isFinite(value));
+  if (finite.length === 0) {
+    return null;
+  }
+  return Math.max(...finite);
+}
+
 async function main() {
   const token = requireEnv("GITHUB_TOKEN");
   const repository = requireEnv("GITHUB_REPOSITORY");
@@ -173,17 +181,22 @@ async function main() {
   const runCreatedAt = parseIsoToEpochSeconds(run?.created_at);
   const runUpdatedAt = parseIsoToEpochSeconds(run?.updated_at);
 
-  const quickFeedbackJob = jobs.find((job) => job.name === "fast-feedback");
+  const runtimeQuickFeedbackJob = jobs.find((job) => job.name === "fast-feedback");
+  const desktopQuickFeedbackJob = jobs.find((job) => job.name === "desktop-fast-feedback");
   const gateJob = jobs.find((job) => job.name === "commit-stage");
   const executionStartedAt = earliestStartEpoch(jobs, [
     "determine-scope",
     "fast-feedback",
+    "desktop-fast-feedback",
     "infra-static-check",
     "identity-static-check",
     "commit-stage"
   ]);
 
-  const quickFeedbackSeconds = durationSeconds(quickFeedbackJob);
+  const quickFeedbackSeconds = maxDuration([
+    durationSeconds(runtimeQuickFeedbackJob),
+    durationSeconds(desktopQuickFeedbackJob)
+  ]);
   const queueDelaySeconds = calculateQueueDelaySeconds({
     runCreatedAt,
     executionStartedAt

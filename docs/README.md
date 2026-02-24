@@ -20,7 +20,7 @@ General documentation and architecture records live here.
 - `adr/README.md`
 - `adr/TDR-001-initial-stack-baseline.md`
 - `adr/TDR-002-production-container-registry-strategy.md`
-- `adr/TDR-003-deployment-pipeline-visualization-model.md`
+- `adr/TDR-003-cloud-deployment-pipeline-visualization-model.md`
 
 ## Runbooks
 

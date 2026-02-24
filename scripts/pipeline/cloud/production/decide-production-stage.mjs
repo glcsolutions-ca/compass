@@ -1,4 +1,4 @@
-import { appendGithubOutput, requireEnv, writeJsonFile } from "../shared/pipeline-utils.mjs";
+import { appendGithubOutput, requireEnv, writeJsonFile } from "../../shared/pipeline-utils.mjs";
 
 function asBool(value) {
   return (

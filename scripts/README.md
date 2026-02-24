@@ -7,8 +7,8 @@ The `scripts/` directory contains delivery pipeline control-plane automation.
 ## Pipeline Stage Boundaries
 
 - `scripts/pipeline/commit/`: fast, merge-blocking checks and scope/docs/testing policy gate logic.
-- `scripts/pipeline/acceptance/`: acceptance decision logic and release-candidate validation helpers used in deployment pipeline.
-- `scripts/pipeline/production/`: production mutation helpers (infra apply, migration orchestration, smoke verification, release recording).
+- `scripts/pipeline/cloud/`: cloud deployment pipeline helpers, split by stage.
+- `scripts/pipeline/desktop/`: desktop deployment pipeline acceptance/production helpers.
 - `scripts/pipeline/shared/`: shared utilities, replay loaders, and workflow contract tests.
 
 Commit and acceptance scripts must be non-production-mutating. Production scripts are allowed to mutate production only from guarded workflows.
@@ -28,6 +28,8 @@ Commit and acceptance scripts must be non-production-mutating. Production script
 ## Child READMEs
 
 - Commit stage scripts: [`scripts/pipeline/commit/README.md`](./pipeline/commit/README.md)
-- Acceptance stage scripts: [`scripts/pipeline/acceptance/README.md`](./pipeline/acceptance/README.md)
-- Production stage scripts: [`scripts/pipeline/production/README.md`](./pipeline/production/README.md)
+- Cloud pipeline index: [`scripts/pipeline/cloud/README.md`](./pipeline/cloud/README.md)
+- Cloud acceptance stage scripts: [`scripts/pipeline/cloud/acceptance/README.md`](./pipeline/cloud/acceptance/README.md)
+- Cloud production stage scripts: [`scripts/pipeline/cloud/production/README.md`](./pipeline/cloud/production/README.md)
+- Desktop pipeline scripts: [`scripts/pipeline/desktop/README.md`](./pipeline/desktop/README.md)
 - Shared scripts: [`scripts/pipeline/shared/README.md`](./pipeline/shared/README.md)

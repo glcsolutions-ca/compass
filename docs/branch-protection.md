@@ -6,6 +6,22 @@ Configure branch protection for `main` with one required status check:
 
 Do not require acceptance or production checks directly. Those are post-merge stage gates.
 
+## Apply or Repair via GitHub CLI
+
+If required checks drift, reset the `main` required status checks to this baseline:
+
+```bash
+cat > /tmp/required-status-checks.json <<'JSON'
+{
+  "strict": true,
+  "contexts": ["commit-stage-gate"]
+}
+JSON
+
+gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/required_status_checks \
+  --input /tmp/required-status-checks.json
+```
+
 ## Required Mainline Safety Controls
 
 - Enforce admins (`main` has no admin bypass in normal flow).

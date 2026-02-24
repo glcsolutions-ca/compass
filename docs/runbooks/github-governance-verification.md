@@ -26,6 +26,20 @@ Expected:
 - `allow_force_pushes.enabled=false`
 - `allow_deletions.enabled=false`
 
+If the required check context differs, apply the baseline:
+
+```bash
+cat > /tmp/required-status-checks.json <<'JSON'
+{
+  "strict": true,
+  "contexts": ["commit-stage-gate"]
+}
+JSON
+
+gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/required_status_checks \
+  --input /tmp/required-status-checks.json
+```
+
 ## 2) Merge Method Policy
 
 ```bash

@@ -31,6 +31,11 @@ pnpm commit:docs-drift
 7. `production-stage.yml` promotes accepted candidate refs with production lock and stale guard.
 8. Production stage runs smoke verification and records deployment evidence.
 
+## Governance Invariant
+
+- `main` required check context is only `commit-stage-gate` with strict checks enabled.
+- Acceptance and production checks are never configured as branch-protection required contexts.
+
 ## High-Risk Paths
 
 When scope includes `infra` or `identity`, expect additional acceptance and production work under `environment: production`.

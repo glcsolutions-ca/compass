@@ -89,49 +89,13 @@ module containerEnvironment './modules/containerapps-env.bicep' = {
     environmentName: environmentName
     infrastructureSubnetId: network.outputs.acaInfrastructureSubnetId
     logAnalyticsWorkspaceName: logAnalyticsWorkspaceName
-  }
-}
-
-resource managedEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
-  name: environmentName
-}
-
-resource apiManagedCertificate 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(apiCustomDomain)) {
-  parent: managedEnvironment
-  name: apiManagedCertificateName
-  location: location
-  dependsOn: [
-    containerEnvironment
-  ]
-  properties: {
-    subjectName: apiCustomDomain
-    domainControlValidation: customDomainValidationMethod
-  }
-}
-
-resource webManagedCertificate 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(webCustomDomain)) {
-  parent: managedEnvironment
-  name: webManagedCertificateName
-  location: location
-  dependsOn: [
-    containerEnvironment
-  ]
-  properties: {
-    subjectName: webCustomDomain
-    domainControlValidation: customDomainValidationMethod
-  }
-}
-
-resource codexManagedCertificate 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(codexCustomDomain)) {
-  parent: managedEnvironment
-  name: codexManagedCertificateName
-  location: location
-  dependsOn: [
-    containerEnvironment
-  ]
-  properties: {
-    subjectName: codexCustomDomain
-    domainControlValidation: customDomainValidationMethod
+    apiCustomDomain: apiCustomDomain
+    webCustomDomain: webCustomDomain
+    codexCustomDomain: codexCustomDomain
+    apiManagedCertificateName: apiManagedCertificateName
+    webManagedCertificateName: webManagedCertificateName
+    codexManagedCertificateName: codexManagedCertificateName
+    customDomainValidationMethod: customDomainValidationMethod
   }
 }
 
@@ -215,7 +179,7 @@ module api './modules/containerapp-api.bicep' = {
     // Required at runtime for OAuth token issuance; keep this managed via infra convergence.
     oauthTokenSigningSecret: oauthTokenSigningSecret
     customDomainName: apiCustomDomain
-    customDomainCertificateId: empty(apiCustomDomain) ? '' : apiManagedCertificate.id
+    customDomainCertificateId: containerEnvironment.outputs.apiManagedCertificateId
   }
   dependsOn: [
     acrPullIdentityRoleAssignment
@@ -233,7 +197,7 @@ module web './modules/containerapp-web.bicep' = {
     registryIdentityResourceId: acrPullIdentity.id
     apiBaseUrl: apiBaseUrl
     customDomainName: webCustomDomain
-    customDomainCertificateId: empty(webCustomDomain) ? '' : webManagedCertificate.id
+    customDomainCertificateId: containerEnvironment.outputs.webManagedCertificateId
   }
   dependsOn: [
     acrPullIdentityRoleAssignment
@@ -252,7 +216,7 @@ module codex './modules/containerapp-codex.bicep' = {
     databaseUrl: databaseUrl
     logLevel: codexLogLevel
     customDomainName: codexCustomDomain
-    customDomainCertificateId: empty(codexCustomDomain) ? '' : codexManagedCertificate.id
+    customDomainCertificateId: containerEnvironment.outputs.codexManagedCertificateId
   }
   dependsOn: [
     acrPullIdentityRoleAssignment

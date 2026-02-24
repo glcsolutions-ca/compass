@@ -8,7 +8,8 @@ if (process.platform === "darwin") {
   packages.push("fs-xattr", "macos-alias");
 }
 
-const result = spawnSync("pnpm", ["rebuild", ...packages], {
+const pnpmExecutable = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const result = spawnSync(pnpmExecutable, ["rebuild", ...packages], {
   cwd: process.cwd(),
   stdio: "inherit",
   env: {

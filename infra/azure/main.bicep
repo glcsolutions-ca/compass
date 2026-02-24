@@ -90,13 +90,6 @@ module containerEnvironment './modules/containerapps-env.bicep' = {
     environmentName: environmentName
     infrastructureSubnetId: network.outputs.acaInfrastructureSubnetId
     logAnalyticsWorkspaceName: logAnalyticsWorkspaceName
-    apiCustomDomain: apiCustomDomain
-    webCustomDomain: webCustomDomain
-    codexCustomDomain: codexCustomDomain
-    apiManagedCertificateName: apiManagedCertificateName
-    webManagedCertificateName: webManagedCertificateName
-    codexManagedCertificateName: codexManagedCertificateName
-    customDomainValidationMethod: customDomainValidationMethod
   }
 }
 
@@ -180,7 +173,6 @@ module api './modules/containerapp-api.bicep' = {
     // Required at runtime for OAuth token issuance; keep this managed via infra convergence.
     oauthTokenSigningSecret: oauthTokenSigningSecret
     customDomainName: apiCustomDomain
-    customDomainCertificateId: containerEnvironment.outputs.apiManagedCertificateId
   }
   dependsOn: [
     acrPullIdentityRoleAssignment
@@ -198,7 +190,6 @@ module web './modules/containerapp-web.bicep' = {
     registryIdentityResourceId: acrPullIdentity.id
     apiBaseUrl: apiBaseUrl
     customDomainName: webCustomDomain
-    customDomainCertificateId: containerEnvironment.outputs.webManagedCertificateId
   }
   dependsOn: [
     acrPullIdentityRoleAssignment
@@ -217,10 +208,52 @@ module codex './modules/containerapp-codex.bicep' = {
     databaseUrl: databaseUrl
     logLevel: codexLogLevel
     customDomainName: codexCustomDomain
-    customDomainCertificateId: containerEnvironment.outputs.codexManagedCertificateId
   }
   dependsOn: [
     acrPullIdentityRoleAssignment
+  ]
+}
+
+resource managedEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
+  name: environmentName
+}
+
+resource apiManagedCertificate 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(apiCustomDomain)) {
+  parent: managedEnvironment
+  name: apiManagedCertificateName
+  location: location
+  properties: {
+    subjectName: apiCustomDomain
+    domainControlValidation: customDomainValidationMethod
+  }
+  dependsOn: [
+    api
+  ]
+}
+
+resource webManagedCertificate 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(webCustomDomain)) {
+  parent: managedEnvironment
+  name: webManagedCertificateName
+  location: location
+  properties: {
+    subjectName: webCustomDomain
+    domainControlValidation: customDomainValidationMethod
+  }
+  dependsOn: [
+    web
+  ]
+}
+
+resource codexManagedCertificate 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(codexCustomDomain)) {
+  parent: managedEnvironment
+  name: codexManagedCertificateName
+  location: location
+  properties: {
+    subjectName: codexCustomDomain
+    domainControlValidation: customDomainValidationMethod
+  }
+  dependsOn: [
+    codex
   ]
 }
 

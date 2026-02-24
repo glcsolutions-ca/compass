@@ -6,9 +6,8 @@ param registryServer string
 param registryIdentityResourceId string
 param apiBaseUrl string
 param customDomainName string = ''
-param customDomainCertificateId string = ''
 
-resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
+resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
   name: containerAppName
   location: location
   identity: {
@@ -27,13 +26,12 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         targetPort: 3000
         allowInsecure: false
         transport: 'auto'
-        customDomains: empty(customDomainName) || empty(customDomainCertificateId)
+        customDomains: empty(customDomainName)
           ? []
           : [
               {
                 name: customDomainName
-                bindingType: 'SniEnabled'
-                certificateId: customDomainCertificateId
+                bindingType: 'Auto'
               }
             ]
       }

@@ -22,12 +22,14 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl tar \
   && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL -o /tmp/codex.tgz \
+RUN CODEX_BIN_NAME="${CODEX_ASSET%.tar.gz}" \
+  && curl -fsSL -o /tmp/codex.tgz \
   "https://github.com/openai/codex/releases/download/${CODEX_TAG}/${CODEX_ASSET}" \
   && echo "${CODEX_SHA256}  /tmp/codex.tgz" | sha256sum -c - \
   && tar -xzf /tmp/codex.tgz -C /tmp \
-  && install -m 0755 /tmp/codex /usr/local/bin/codex \
-  && rm -f /tmp/codex.tgz /tmp/codex
+  && test -f "/tmp/${CODEX_BIN_NAME}" \
+  && install -m 0755 "/tmp/${CODEX_BIN_NAME}" /usr/local/bin/codex \
+  && rm -f /tmp/codex.tgz "/tmp/${CODEX_BIN_NAME}"
 
 COPY --from=build /workspace/apps/codex-app-server/dist ./dist
 COPY --from=build /workspace/apps/codex-app-server/package.json ./package.json

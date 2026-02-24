@@ -32,7 +32,7 @@ variable "api_identifier_uri" {
   default     = "api://compass-api"
 
   validation {
-    condition = can(regex("^api://[A-Za-z0-9][A-Za-z0-9._:/-]*$", var.api_identifier_uri))
+    condition     = can(regex("^api://[A-Za-z0-9][A-Za-z0-9._:/-]*$", var.api_identifier_uri))
     error_message = "api_identifier_uri must start with 'api://' and contain only URI-safe path characters."
   }
 }

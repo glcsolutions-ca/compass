@@ -9,6 +9,7 @@ const command = process.argv[2];
 const extraArgs = process.argv.slice(3);
 const migrationsDir = path.resolve("db/migrations");
 const databaseUrl = resolveDatabaseUrl();
+// Scratch-drill trigger marker: intentionally non-functional.
 const supportedCommands = new Set(["create", "up", "down", "redo"]);
 
 if (!command || !supportedCommands.has(command)) {

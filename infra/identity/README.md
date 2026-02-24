@@ -78,6 +78,7 @@ Bootstrap steps:
 4. Create/prepare Terraform state storage and grant `Storage Blob Data Contributor` on the tfstate container scope.
 5. Set GitHub `production` secret `AZURE_IDENTITY_CLIENT_ID` to the bootstrap app client ID.
 6. Run Cloud Delivery Pipeline with identity scope to confirm non-mutating auth and backend access.
+7. Scratch-drill marker (2026-02-24 post-cert-order-fix): non-functional docs touch to force identity scope.
 
 ## Bootstrap Identity Rotation
 

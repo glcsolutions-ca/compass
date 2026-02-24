@@ -137,3 +137,4 @@ Use replay when you need to rerun delivery for an existing release package SHA w
 - Final-proof reruns follow the same trigger pattern after fix-forward merges to preserve a true clean-slate guarantee.
 - Managed certificate resources are defined in `infra/azure/main.bicep` with explicit dependencies on the corresponding container app modules so custom hostnames exist before certificate issuance.
 - Post-fix proof reruns continue to use non-functional scope markers so acceptance and deploy gates execute deterministically.
+- Post-cert-order-fix reruns add one more non-functional marker to keep runtime + infra + identity scopes explicit.

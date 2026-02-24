@@ -6,8 +6,8 @@
 - Environment parameter template: `infra/azure/environments/prod.bicepparam`
 - Reusable resource modules: `infra/azure/modules/*.bicep`
 - Pipeline stages:
-  - `.github/workflows/cloud-deployment-pipeline.yml` (`infra-readonly-acceptance`, validate only)
-  - `.github/workflows/cloud-deployment-pipeline.yml` (`deploy-approved-candidate`, apply)
+  - `.github/workflows/cloud-delivery-pipeline.yml` (`infra-readonly-acceptance`, validate only)
+  - `.github/workflows/cloud-delivery-pipeline.yml` (`deploy-release-package`, apply)
 
 ## Resource Topology
 
@@ -21,7 +21,7 @@
 6. `AcrPull` role assignment at ACR scope for the pull identity.
 7. API Container App.
 8. Web Container App.
-9. Codex gateway Container App.
+9. Codex Container App.
 10. Manual-trigger migration ACA Job pinned to API image.
 
 ## Module Contract
@@ -34,7 +34,7 @@
 | `modules/postgres-flex.bicep`            | Creates private Postgres Flexible Server and database.                                                    |
 | `modules/containerapp-api.bicep`         | Creates API Container App with managed-identity registry pull and secure DB secret wiring.                |
 | `modules/containerapp-web.bicep`         | Creates Web Container App with managed-identity registry pull and API base URL wiring.                    |
-| `modules/containerapp-codex.bicep`       | Creates Codex gateway Container App with managed-identity registry pull and DB secret wiring.             |
+| `modules/containerapp-codex.bicep`       | Creates Codex Container App with managed-identity registry pull and secure DB secret wiring.              |
 | `modules/containerapp-job-migrate.bicep` | Creates manual migration job that runs DB migrations using the API image.                                 |
 
 ## Parameter Model
@@ -44,7 +44,7 @@ Tracked files stay organization-neutral:
 - `main.bicep` and `environments/prod.bicepparam` use placeholders for concrete production values.
 - Acceptance/production workflows materialize runtime parameters into `.artifacts/infra/<sha>/runtime.parameters.json`.
 - `POSTGRES_ADMIN_PASSWORD` is injected at runtime from GitHub environment secrets.
-- `apiImage`, `webImage`, and `codexImage` must be ACR digest refs from accepted candidate evidence.
+- `apiImage`, `webImage`, and `codexImage` must be ACR digest refs from accepted release package evidence.
 
 ## Required Production Variables
 
@@ -130,6 +130,7 @@ Key outputs from `main.bicep` for operators and downstream validation:
 
 - `containerAppsEnvironmentName` / `containerAppsEnvironmentId` / `containerAppsDefaultDomain`
 - `apiBaseUrlOutput`
+- `codexBaseUrlOutput`
 - `acrId` / `acrNameOutput` / `acrLoginServer`
 - `acrPullIdentityId` / `acrPullIdentityPrincipalId`
 - `apiContainerAppName` / `apiLatestRevision` / `apiLatestRevisionFqdn`
@@ -152,22 +153,22 @@ ACA_WEB_APP_NAME="<web-app-name>" \
 ACA_CODEX_APP_NAME="<codex-app-name>" \
 ACA_API_CUSTOM_DOMAIN="<api-domain>" \
 ACA_WEB_CUSTOM_DOMAIN="<web-domain>" \
-ACA_CODEX_CUSTOM_DOMAIN="<codex-domain-optional>" \
+ACA_CODEX_CUSTOM_DOMAIN="<codex-domain>" \
 pnpm deploy:custom-domain:dns
 ```
 
 3. Publish emitted `CNAME`/`TXT` records at your DNS provider.
-4. Run `cloud-deployment-pipeline.yml` for accepted candidate.
+4. Run `cloud-delivery-pipeline.yml` for the accepted release package.
 5. Verify bindings with `az containerapp hostname list`.
 
 ### Replay guidance
 
-- Re-run `cloud-deployment-pipeline.yml` with the same `candidate_sha` to verify deterministic convergence.
+- Run `cloud-delivery-replay.yml` with the same `release_package_sha` to verify deterministic convergence.
 - Use artifact diffs under `.artifacts/infra/<sha>/` to investigate drift or transient retries.
 
-### Rollback by candidate SHA
+### Rollback by release package SHA
 
-- Trigger manual `.github/workflows/cloud-deployment-pipeline.yml` with `candidate_sha=<known-good-sha>`.
+- Trigger manual `.github/workflows/cloud-delivery-replay.yml` with `release_package_sha=<known-good-sha>`.
 - Production stage deploys the accepted digest refs for that SHA.
 
 ### Artifact locations
@@ -181,8 +182,9 @@ pnpm deploy:custom-domain:dns
 
 ## References
 
-- `.github/workflows/cloud-deployment-pipeline.yml`
+- `.github/workflows/cloud-delivery-pipeline.yml`
+- `.github/workflows/cloud-delivery-replay.yml`
 - `scripts/pipeline/cloud/production/apply-infra.mjs`
 - `scripts/pipeline/cloud/production/assert-managed-certificate-contract.mjs`
 - `scripts/pipeline/cloud/production/custom-domain-dns.mjs`
-- `docs/runbooks/production-stage.md`
+- `docs/runbooks/cloud-delivery-pipeline.md`

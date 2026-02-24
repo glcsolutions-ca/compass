@@ -116,7 +116,7 @@ Runs when the change is `standard`/`high` risk:
 - Integration tests (real Postgres)
 - E2E UI evidence (only when UI/high-risk demands it)
 
-### `main` release candidate
+### `main` release package
 
 We do **not** re-run the whole PR suite.
 `main` focuses on promotion + verification:

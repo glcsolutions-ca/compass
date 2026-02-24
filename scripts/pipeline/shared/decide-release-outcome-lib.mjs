@@ -42,7 +42,7 @@ function parseBoolean(value, fallback) {
 export function evaluateReleaseOutcome(input) {
   const replayMode = parseBoolean(input.replayMode, false);
   const commitStageResult = String(input.commitStageResult || "unknown");
-  const loadReleaseCandidateResult = String(input.loadReleaseCandidateResult || "unknown");
+  const loadReleasePackageResult = String(input.loadReleasePackageResult || "unknown");
   const acceptanceStageResult = String(input.acceptanceStageResult || "unknown");
   const productionStageResult = String(input.productionStageResult || "unknown");
 
@@ -64,8 +64,8 @@ export function evaluateReleaseOutcome(input) {
   if (!replayMode && commitStageResult !== "success") {
     reasonCodes.add("COMMIT_STAGE_FAILED");
   }
-  if (loadReleaseCandidateResult !== "success") {
-    reasonCodes.add("LOAD_RELEASE_CANDIDATE_NOT_SUCCESS");
+  if (loadReleasePackageResult !== "success") {
+    reasonCodes.add("LOAD_RELEASE_PACKAGE_NOT_SUCCESS");
   }
 
   if (acceptanceStageResult !== "success" && acceptanceReasonCodes.length === 0) {

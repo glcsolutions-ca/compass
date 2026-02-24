@@ -21,10 +21,12 @@ General documentation and architecture records live here.
 - `adr/TDR-001-initial-stack-baseline.md`
 - `adr/TDR-002-production-container-registry-strategy.md`
 - `adr/TDR-003-cloud-deployment-pipeline-visualization-model.md`
+- `adr/TDR-004-cloud-delivery-pipeline-and-desktop-naming-followup.md`
 
 ## Runbooks
 
 - `runbooks/README.md`
+- `runbooks/cloud-delivery-pipeline.md`
 - `runbooks/postgres-local.md`
 - `runbooks/desktop-deployment-pipeline.md`
 - `runbooks/production-stage.md`

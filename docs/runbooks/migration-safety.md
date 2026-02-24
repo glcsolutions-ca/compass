@@ -43,7 +43,7 @@ Run contract-only changes after full traffic cutover and stability period.
 
 ## Concurrency Controls
 
-- Production mutation is serialized by `concurrency: production-mutation` in `.github/workflows/cloud-deployment-pipeline.yml`.
+- Production mutation is serialized by `concurrency: production-mutation` in `.github/workflows/cloud-delivery-pipeline.yml`.
 - Migration execution is single-run via ACA Job manual trigger config (`parallelism=1`, `replicaCompletionCount=1`).
 
 ## Diagnostics Contract
@@ -61,5 +61,5 @@ Run contract-only changes after full traffic cutover and stability period.
 
 ## Recovery
 
-- First response: replay a previously accepted candidate SHA via `cloud-deployment-pipeline.yml`.
+- First response: replay a previously accepted release package SHA via `cloud-delivery-replay.yml`.
 - Database disaster recovery: use Azure PostgreSQL backup/PITR procedures.

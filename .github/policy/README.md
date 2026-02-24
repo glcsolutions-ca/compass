@@ -1,38 +1,37 @@
 # Pipeline Policy Contract
 
-This directory is the machine source of truth for delivery stage control.
+This directory is the machine source of truth for delivery policy.
 
 - Canonical contract: `.github/policy/pipeline-policy.json`
-- Enforced by workflows: `.github/workflows/commit-stage.yml`, `.github/workflows/cloud-deployment-pipeline.yml`, `.github/workflows/desktop-deployment-pipeline.yml`
-- Required branch-protection check context: `commit-stage`
+- Enforced by workflows:
+  - `.github/workflows/commit-stage.yml`
+  - `.github/workflows/cloud-delivery-pipeline.yml`
+  - `.github/workflows/cloud-delivery-replay.yml`
+  - `.github/workflows/desktop-deployment-pipeline.yml`
+- Required branch-protection context: `commit-stage`
 
-`commit-stage` is the single merge-blocking check context. Acceptance and production are post-merge stages inside the Cloud Deployment Pipeline (`cloud-deployment-pipeline.yml`).
+`commit-stage` is the single merge-blocking check. Acceptance and production are post-merge stages.
 
 ## Policy Sections
 
 - `scopeRules`: file-to-scope classification (`runtime`, `desktop`, `infra`, `identity`, `docsOnly`, rollout flags)
-- `commitStage`: required commit checks plus timing SLO policy (`targetSeconds`, `mode`)
-- `commitStage.requiredChecks` are interpreted with scope-aware semantics in workflow gate logic.
+- `commitStage`: required commit checks + commit SLO policy (`targetSeconds`, `mode`)
 - `acceptanceStage`: required acceptance jobs by scope
 - `productionStage`: production promotion safety toggles
-- `cloudDeploymentPipeline`: post-merge cloud stage timing SLO targets (`acceptance`, `production`)
-- `desktopPipeline`: desktop deployment pipeline checks, artifacts, and stage timing SLOs
-- `docsDriftRules`: control-plane/docs-critical drift enforcement
-
-`docsOnly` paths are subtracted from mutable scope classification so documentation updates fail closed only through policy checks, not production mutation paths.
+- `cloudDeliveryPipeline`: cloud delivery timing SLO targets (`acceptance`, `production`)
+- `desktopPipeline`: desktop delivery checks, artifact contracts, and stage timing SLOs
+- `docsDriftRules`: delivery-config/docs-critical drift rules
 
 ## Commit-Stage SLO Mode
 
 `commitStage.slo.mode` values:
 
-- `observe`: timing breaches warn only, no merge block
+- `observe`: timing breaches warn only
 - `enforce`: timing breaches fail `commit-stage`
 
-Current mode is `enforce`.
+## High-Risk Coverage
 
-## Control-Plane Coverage
-
-`pipeline-policy.json` treats delivery-control paths as high-risk control plane, including:
+`pipeline-policy.json` treats delivery-config paths as high-risk, including:
 
 - `.github/workflows/**`
 - `.github/policy/**`
@@ -40,10 +39,3 @@ Current mode is `enforce`.
 - `infra/azure/**`
 - `infra/identity/**`
 - `deploy/**`
-
-## Trusted Review
-
-Secret-backed Codex review is not part of the blocking merge contract.
-
-- Use `.github/workflows/codex-review-trusted.yml` with manual `workflow_dispatch` for trusted-context review.
-- Treat trusted review findings as advisory unless an explicit blocking policy is added later.

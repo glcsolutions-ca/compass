@@ -1,0 +1,1158 @@
+name: Cloud Delivery Replay
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_package_sha:
+        description: Release package SHA to replay
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  deployments: write
+  id-token: write
+  pull-requests: read
+
+env:
+  EXPECTED_ENTRYPOINT: /
+
+jobs:
+  resolve_replay_source:
+    name: resolve-replay-source
+    runs-on: ubuntu-latest
+    outputs:
+      release_package_sha: ${{ steps.source.outputs.release_package_sha }}
+      source_run_id: ${{ steps.resolve_run.outputs.run_id }}
+    steps:
+      - name: Resolve release package SHA
+        id: source
+        env:
+          RELEASE_PACKAGE_SHA: ${{ inputs.release_package_sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RELEASE_PACKAGE_SHA:-}" ]; then
+            echo "release_package_sha input is required" >&2
+            exit 1
+          fi
+          echo "release_package_sha=$RELEASE_PACKAGE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve source run id
+        id: resolve_run
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          WORKFLOW_FILE: cloud-delivery-pipeline.yml
+          HEAD_SHA: ${{ steps.source.outputs.release_package_sha }}
+          RUN_EVENT: push
+          RUN_STATUS: success
+          RUN_STATUS_FALLBACK: completed
+        run: node scripts/pipeline/shared/resolve-triggered-run-id.mjs
+
+  load_release_package:
+    name: load-release-package
+    needs:
+      - resolve_replay_source
+    if: ${{ always() && needs.resolve_replay_source.result == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      head_sha: ${{ steps.manifest.outputs.head_sha }}
+      change_class: ${{ steps.manifest.outputs.change_class }}
+      runtime_changed: ${{ steps.manifest.outputs.runtime_changed }}
+      desktop_changed: ${{ steps.manifest.outputs.desktop_changed }}
+      infra_changed: ${{ steps.manifest.outputs.infra_changed }}
+      identity_changed: ${{ steps.manifest.outputs.identity_changed }}
+      docs_only_changed: ${{ steps.manifest.outputs.docs_only_changed }}
+      requires_infra_convergence: ${{ steps.manifest.outputs.requires_infra_convergence }}
+      requires_migrations: ${{ steps.manifest.outputs.requires_migrations }}
+      release_package_api_ref: ${{ steps.manifest.outputs.release_package_api_ref }}
+      release_package_web_ref: ${{ steps.manifest.outputs.release_package_web_ref }}
+      release_package_codex_ref: ${{ steps.manifest.outputs.release_package_codex_ref }}
+      commit_run_id: ${{ steps.manifest.outputs.commit_run_id }}
+      release_package_ref_contract_status: ${{ steps.manifest.outputs.release_package_ref_contract_status }}
+      release_package_ref_contract_reason_codes_json: ${{ steps.manifest.outputs.release_package_ref_contract_reason_codes_json }}
+      source_release_package_sha: ${{ needs.resolve_replay_source.outputs.release_package_sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download release package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-package-${{ needs.resolve_replay_source.outputs.release_package_sha }}
+          path: .artifacts/release-package/${{ needs.resolve_replay_source.outputs.release_package_sha }}
+          run-id: ${{ needs.resolve_replay_source.outputs.source_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Parse release package manifest
+        id: manifest
+        env:
+          RELEASE_PACKAGE_MANIFEST_PATH: .artifacts/release-package/${{ needs.resolve_replay_source.outputs.release_package_sha }}/manifest.json
+          RUN_ID: ${{ needs.resolve_replay_source.outputs.source_run_id }}
+        run: node scripts/pipeline/shared/load-release-package-contract.mjs
+
+      - name: Upload release package manifest copy
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-pipeline-release-package-${{ steps.manifest.outputs.head_sha }}
+          path: ${{ steps.manifest.outputs.release_package_manifest_copy_path }}
+          if-no-files-found: error
+
+  runtime_api_system_acceptance:
+    name: runtime-api-system-acceptance
+    needs:
+      - load_release_package
+    if: ${{ always() && needs.load_release_package.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: acceptance
+    env:
+      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+      TESTED_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+      RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
+      RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
+      RELEASE_PACKAGE_CODEX_REF: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
+      RELEASE_PACKAGE_REF_CONTRACT_STATUS: ${{ needs.load_release_package.outputs.release_package_ref_contract_status }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      JOB_REQUIRED: ${{ needs.load_release_package.outputs.runtime_changed == 'true' && needs.load_release_package.outputs.docs_only_changed != 'true' }}
+    steps:
+      - name: Record not-required runtime API/system acceptance
+        if: ${{ env.JOB_REQUIRED != 'true' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/runtime-api-system/$HEAD_SHA"
+          cat > ".artifacts/runtime-api-system/$HEAD_SHA/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "status": "not-required",
+            "reasonCode": "RUNTIME_API_SYSTEM_NOT_REQUIRED"
+          }
+          JSON
+
+      - name: Checkout
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node + pnpm
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Azure login for runtime release package pull
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_ACCEPTANCE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run API/system acceptance against release package API image
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        run: node scripts/pipeline/cloud/acceptance/run-runtime-api-system-acceptance.mjs
+
+      - name: Upload runtime API/system acceptance artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-api-system-acceptance-${{ env.HEAD_SHA }}
+          path: |
+            .artifacts/runtime-api-system/${{ env.HEAD_SHA }}
+            .artifacts/harness-smoke/${{ env.TESTED_SHA }}/result.json
+            .artifacts/codex-smoke/${{ env.TESTED_SHA }}/result.json
+            .artifacts/deploy/${{ env.TESTED_SHA }}/api-smoke.json
+          if-no-files-found: warn
+
+  runtime_browser_acceptance:
+    name: runtime-browser-acceptance
+    needs:
+      - load_release_package
+    if: ${{ always() && needs.load_release_package.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: acceptance
+    strategy:
+      matrix:
+        flow_id:
+          - compass-smoke
+      fail-fast: false
+    env:
+      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+      TESTED_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+      EVIDENCE_FLOW_ID: ${{ matrix.flow_id }}
+      RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
+      RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
+      RELEASE_PACKAGE_REF_CONTRACT_STATUS: ${{ needs.load_release_package.outputs.release_package_ref_contract_status }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      JOB_REQUIRED: ${{ needs.load_release_package.outputs.runtime_changed == 'true' && needs.load_release_package.outputs.docs_only_changed != 'true' }}
+    steps:
+      - name: Record not-required runtime browser acceptance
+        if: ${{ env.JOB_REQUIRED != 'true' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/runtime-browser/$HEAD_SHA"
+          cat > ".artifacts/runtime-browser/$HEAD_SHA/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "flowId": "$EVIDENCE_FLOW_ID",
+            "status": "not-required",
+            "reasonCode": "RUNTIME_BROWSER_NOT_REQUIRED"
+          }
+          JSON
+
+      - name: Checkout
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node + pnpm
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install Playwright browser
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Azure login for runtime release package pull
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_ACCEPTANCE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run browser acceptance against release package Web image
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        run: node scripts/pipeline/cloud/acceptance/run-runtime-browser-acceptance.mjs
+
+      - name: Upload runtime browser acceptance artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-browser-acceptance-${{ env.HEAD_SHA }}-${{ matrix.flow_id }}
+          path: |
+            .artifacts/runtime-browser/${{ env.HEAD_SHA }}
+            .artifacts/browser-evidence/${{ env.TESTED_SHA }}
+          if-no-files-found: warn
+
+  runtime_migration_image_acceptance:
+    name: runtime-migration-image-acceptance
+    needs:
+      - load_release_package
+    if: ${{ always() && needs.load_release_package.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: acceptance
+    env:
+      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+      RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
+      RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
+      RELEASE_PACKAGE_REF_CONTRACT_STATUS: ${{ needs.load_release_package.outputs.release_package_ref_contract_status }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      JOB_REQUIRED: ${{ needs.load_release_package.outputs.runtime_changed == 'true' && needs.load_release_package.outputs.docs_only_changed != 'true' }}
+    steps:
+      - name: Record not-required runtime migration acceptance
+        if: ${{ env.JOB_REQUIRED != 'true' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/migration-image-smoke/$HEAD_SHA"
+          cat > ".artifacts/migration-image-smoke/$HEAD_SHA/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "status": "not-required",
+            "reasonCode": "RUNTIME_MIGRATION_IMAGE_NOT_REQUIRED"
+          }
+          JSON
+
+      - name: Checkout
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Azure login for runtime release package pull
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_ACCEPTANCE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run migration-image acceptance against release package API image
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        run: node scripts/pipeline/cloud/acceptance/run-runtime-migration-image-acceptance.mjs
+
+      - name: Upload migration-image acceptance artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-migration-image-acceptance-${{ env.HEAD_SHA }}
+          path: .artifacts/migration-image-smoke/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
+
+  infra_readonly_acceptance:
+    name: infra-readonly-acceptance
+    needs:
+      - load_release_package
+    if: ${{ always() && needs.load_release_package.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: acceptance
+    env:
+      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+      API_IMAGE: ${{ needs.load_release_package.outputs.release_package_api_ref }}
+      WEB_IMAGE: ${{ needs.load_release_package.outputs.release_package_web_ref }}
+      CODEX_IMAGE: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
+      RELEASE_PACKAGE_REF_CONTRACT_STATUS: ${{ needs.load_release_package.outputs.release_package_ref_contract_status }}
+      RELEASE_PACKAGE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_release_package.outputs.release_package_ref_contract_reason_codes_json }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_VNET_NAME: ${{ vars.AZURE_VNET_NAME }}
+      AZURE_ACA_SUBNET_NAME: ${{ vars.AZURE_ACA_SUBNET_NAME }}
+      AZURE_POSTGRES_SUBNET_NAME: ${{ vars.AZURE_POSTGRES_SUBNET_NAME }}
+      AZURE_PRIVATE_DNS_ZONE_NAME: ${{ vars.AZURE_PRIVATE_DNS_ZONE_NAME }}
+      ACA_ENVIRONMENT_NAME: ${{ vars.ACA_ENVIRONMENT_NAME }}
+      AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
+      ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
+      ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+      ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
+      ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+      ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACR_SKU: ${{ vars.ACR_SKU }}
+      POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
+      POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
+      POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
+      POSTGRES_VERSION: ${{ vars.POSTGRES_VERSION }}
+      POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
+      POSTGRES_SKU_TIER: ${{ vars.POSTGRES_SKU_TIER }}
+      POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
+      POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+      ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
+      ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
+      ACA_CODEX_CUSTOM_DOMAIN: ${{ vars.ACA_CODEX_CUSTOM_DOMAIN }}
+      ACA_API_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_API_MANAGED_CERTIFICATE_NAME }}
+      ACA_WEB_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_WEB_MANAGED_CERTIFICATE_NAME }}
+      ACA_CODEX_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_CODEX_MANAGED_CERTIFICATE_NAME }}
+      ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
+      JOB_REQUIRED: ${{ (needs.load_release_package.outputs.infra_changed == 'true' || needs.load_release_package.outputs.requires_infra_convergence == 'true') && needs.load_release_package.outputs.docs_only_changed != 'true' }}
+      API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
+      ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
+      AUTH_AUDIENCE: ${{ vars.AUTH_AUDIENCE }}
+      AUTH_ISSUER: ${{ vars.ENTRA_ISSUER }}
+      AUTH_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
+      AUTH_ALLOWED_CLIENT_IDS: ${{ vars.AUTH_ALLOWED_CLIENT_IDS }}
+      AUTH_ACTIVE_TENANT_IDS: ${{ vars.AUTH_ACTIVE_TENANT_IDS }}
+      OAUTH_TOKEN_ISSUER: ${{ vars.OAUTH_TOKEN_ISSUER }}
+      OAUTH_TOKEN_AUDIENCE: ${{ vars.OAUTH_TOKEN_AUDIENCE }}
+      OAUTH_TOKEN_SIGNING_SECRET: ${{ secrets.OAUTH_TOKEN_SIGNING_SECRET }}
+      AUTH_BOOTSTRAP_ALLOWED_TENANT_ID: ${{ vars.API_SMOKE_ALLOWED_TENANT_ID }}
+      AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_ID }}
+      AUTH_BOOTSTRAP_DELEGATED_USER_OID: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_OID }}
+      AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL }}
+    steps:
+      - name: Record not-required infra acceptance
+        if: ${{ env.JOB_REQUIRED != 'true' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/infra/$HEAD_SHA"
+          cat > ".artifacts/infra/$HEAD_SHA/acceptance-not-required.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "status": "not-required",
+            "reasonCode": "INFRA_READONLY_ACCEPTANCE_NOT_REQUIRED"
+          }
+          JSON
+
+      - name: Checkout
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        uses: actions/checkout@v4
+
+      - name: Validate release package references for infra acceptance
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        run: |
+          set -euo pipefail
+
+          if [ "${RELEASE_PACKAGE_REF_CONTRACT_STATUS:-unknown}" != "pass" ]; then
+            echo "Release package ref contract status is ${RELEASE_PACKAGE_REF_CONTRACT_STATUS:-unknown}" >&2
+            echo "Reason codes: ${RELEASE_PACKAGE_REF_CONTRACT_REASON_CODES_JSON:-[]}" >&2
+            exit 1
+          fi
+
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$CODEX_IMAGE"; do
+            if [ -z "$image" ]; then
+              echo "Release package image reference is missing for infra acceptance" >&2
+              exit 1
+            fi
+            if [[ "$image" != *"@sha256:"* ]]; then
+              echo "Release package image is not a digest reference: $image" >&2
+              exit 1
+            fi
+          done
+
+      - name: Azure login (OIDC)
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_ACCEPTANCE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate required environment configuration
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        run: node scripts/pipeline/shared/validate-infra-acceptance-config.mjs
+
+      - name: Validate managed certificate contract
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        run: node scripts/pipeline/cloud/production/assert-managed-certificate-contract.mjs
+
+      - name: Render infra parameters
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        env:
+          ARM_PARAMETERS_FILE: .artifacts/infra/${{ env.HEAD_SHA }}/runtime.parameters.json
+        run: |
+          mkdir -p ".artifacts/infra/$HEAD_SHA"
+          node scripts/pipeline/shared/render-infra-parameters.mjs
+
+      - name: Validate infra template
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        run: |
+          az deployment group validate \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "acceptance-$HEAD_SHA" \
+            --template-file infra/azure/main.bicep \
+            --parameters @".artifacts/infra/$HEAD_SHA/runtime.parameters.json" \
+            --output json > ".artifacts/infra/$HEAD_SHA/validate.json"
+
+      - name: Upload infra acceptance artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-readonly-acceptance-${{ env.HEAD_SHA }}
+          path: .artifacts/infra/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
+
+  identity_readonly_acceptance:
+    name: identity-readonly-acceptance
+    needs:
+      - load_release_package
+    if: ${{ always() && needs.load_release_package.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: acceptance
+    outputs:
+      identity_config_contract_status: ${{ steps.identity_config.outputs.config_contract_status }}
+      identity_config_contract_reason_codes_json: ${{ steps.identity_config.outputs.config_contract_reason_codes_json }}
+    env:
+      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+      ARM_USE_OIDC: "true"
+      ARM_USE_AZUREAD: "true"
+      ARM_CLIENT_ID: ${{ secrets.AZURE_ACCEPTANCE_IDENTITY_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+      TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+      TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
+      TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
+      GH_ORGANIZATION: ${{ vars.GH_ORGANIZATION }}
+      GH_REPOSITORY_NAME: ${{ vars.GH_REPOSITORY_NAME }}
+      API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
+      ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
+      IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
+      GITHUB_ENVIRONMENT_NAME: production
+      JOB_REQUIRED: ${{ needs.load_release_package.outputs.identity_changed == 'true' && needs.load_release_package.outputs.docs_only_changed != 'true' }}
+    steps:
+      - name: Record not-required identity acceptance
+        if: ${{ env.JOB_REQUIRED != 'true' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/identity/$HEAD_SHA"
+          cat > ".artifacts/identity/$HEAD_SHA/acceptance-not-required.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "status": "not-required",
+            "reasonCode": "IDENTITY_READONLY_ACCEPTANCE_NOT_REQUIRED"
+          }
+          JSON
+
+      - name: Checkout
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Validate identity config contract
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        id: identity_config
+        env:
+          IDENTITY_CONFIG_MODE: acceptance
+          REQUIRED_ENV_NAMES: ARM_CLIENT_ID,ARM_TENANT_ID,ARM_SUBSCRIPTION_ID,TFSTATE_RESOURCE_GROUP,TFSTATE_STORAGE_ACCOUNT,TFSTATE_CONTAINER,TFSTATE_KEY,GH_ORGANIZATION,GH_REPOSITORY_NAME,IDENTITY_OWNER_OBJECT_IDS_JSON
+        run: node scripts/pipeline/shared/validate-identity-config.mjs
+
+      - name: Azure login (OIDC)
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Terraform format check
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        run: terraform -chdir=infra/identity fmt -check -recursive
+
+      - name: Terraform init
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        run: |
+          terraform -chdir=infra/identity init \
+            -input=false \
+            -backend-config="resource_group_name=${TFSTATE_RESOURCE_GROUP}" \
+            -backend-config="storage_account_name=${TFSTATE_STORAGE_ACCOUNT}" \
+            -backend-config="container_name=${TFSTATE_CONTAINER}" \
+            -backend-config="key=${TFSTATE_KEY}" \
+            -backend-config="use_oidc=true" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="tenant_id=${ARM_TENANT_ID}" \
+            -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}" \
+            -backend-config="client_id=${ARM_CLIENT_ID}"
+
+      - name: Terraform validate
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        run: terraform -chdir=infra/identity validate
+
+      - name: Terraform plan
+        if: ${{ env.JOB_REQUIRED == 'true' }}
+        run: |
+          mkdir -p ".artifacts/identity/$HEAD_SHA"
+          terraform -chdir=infra/identity plan \
+            -input=false \
+            -lock=false \
+            -var-file=env/prod.tfvars \
+            -var "github_organization=${GH_ORGANIZATION}" \
+            -var "github_repository=${GH_REPOSITORY_NAME}" \
+            -var "github_environment_name=${GITHUB_ENVIRONMENT_NAME}" \
+            -var "api_identifier_uri=${{ steps.identity_config.outputs.api_identifier_uri }}" \
+            -var "owners=${IDENTITY_OWNER_OBJECT_IDS_JSON}" \
+            -out=tfplan
+          terraform -chdir=infra/identity show -json tfplan > ".artifacts/identity/$HEAD_SHA/plan.json"
+
+      - name: Upload identity acceptance artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: identity-readonly-acceptance-${{ env.HEAD_SHA }}
+          path: |
+            .artifacts/identity/${{ env.HEAD_SHA }}/plan.json
+            .artifacts/identity/${{ env.HEAD_SHA }}/config-validation.json
+          if-no-files-found: warn
+
+  acceptance_stage:
+    name: acceptance-stage
+    needs:
+      - load_release_package
+      - runtime_api_system_acceptance
+      - runtime_browser_acceptance
+      - runtime_migration_image_acceptance
+      - infra_readonly_acceptance
+      - identity_readonly_acceptance
+    if: ${{ always() && needs.load_release_package.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      acceptance_decision: ${{ steps.finalize.outputs.acceptance_decision }}
+      deploy_required: ${{ steps.scope.outputs.deploy_required }}
+      delivery_config_required: ${{ steps.scope.outputs.delivery_config_required }}
+      deploy_skip_reason_code: ${{ steps.scope.outputs.deploy_skip_reason_code }}
+      reason_codes_json: ${{ steps.finalize.outputs.reason_codes_json }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Resolve acceptance scope
+        id: scope
+        env:
+          STAGE_ELIGIBILITY_MODE: acceptance
+          CHANGE_CLASS: ${{ needs.load_release_package.outputs.change_class }}
+          INFRA_CHANGED: ${{ needs.load_release_package.outputs.infra_changed }}
+          IDENTITY_CHANGED: ${{ needs.load_release_package.outputs.identity_changed }}
+          DOCS_ONLY_CHANGED: ${{ needs.load_release_package.outputs.docs_only_changed }}
+          REQUIRES_INFRA_CONVERGENCE: ${{ needs.load_release_package.outputs.requires_infra_convergence }}
+        run: node scripts/pipeline/shared/resolve-stage-eligibility.mjs
+
+      - name: Decide acceptance stage
+        id: decide
+        if: ${{ steps.scope.outputs.deploy_required == 'true' }}
+        continue-on-error: true
+        env:
+          HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+          RUNTIME_REQUIRED: ${{ needs.load_release_package.outputs.runtime_changed }}
+          INFRA_REQUIRED: ${{ needs.load_release_package.outputs.infra_changed == 'true' || needs.load_release_package.outputs.requires_infra_convergence == 'true' }}
+          IDENTITY_REQUIRED: ${{ needs.load_release_package.outputs.identity_changed }}
+          RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
+          RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
+          RELEASE_PACKAGE_REF_CONTRACT_STATUS: ${{ needs.load_release_package.outputs.release_package_ref_contract_status }}
+          RELEASE_PACKAGE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_release_package.outputs.release_package_ref_contract_reason_codes_json }}
+          IDENTITY_CONFIG_CONTRACT_STATUS: ${{ needs.identity_readonly_acceptance.outputs.identity_config_contract_status }}
+          IDENTITY_CONFIG_CONTRACT_REASON_CODES_JSON: ${{ needs.identity_readonly_acceptance.outputs.identity_config_contract_reason_codes_json }}
+          CHECK_RESULTS_JSON: ${{ format('{{"load-release-package":"{0}","runtime-api-system-acceptance":"{1}","runtime-browser-acceptance":"{2}","runtime-migration-image-acceptance":"{3}","infra-readonly-acceptance":"{4}","identity-readonly-acceptance":"{5}"}}', needs.load_release_package.result, needs.runtime_api_system_acceptance.result, needs.runtime_browser_acceptance.result, needs.runtime_migration_image_acceptance.result, needs.infra_readonly_acceptance.result, needs.identity_readonly_acceptance.result) }}
+        run: node scripts/pipeline/cloud/acceptance/decide-acceptance-stage.mjs
+
+      - name: Finalize acceptance decision
+        id: finalize
+        env:
+          DEPLOY_REQUIRED: ${{ steps.scope.outputs.deploy_required }}
+          DEPLOY_SKIP_REASON_CODE: ${{ steps.scope.outputs.deploy_skip_reason_code }}
+          HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+          DECIDE_OUTCOME: ${{ steps.decide.outcome }}
+        run: node scripts/pipeline/cloud/acceptance/finalize-acceptance-stage.mjs
+
+      - name: Upload acceptance artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-stage-${{ needs.load_release_package.outputs.head_sha }}
+          path: .artifacts/acceptance/${{ needs.load_release_package.outputs.head_sha }}
+          if-no-files-found: warn
+
+      - name: Fail acceptance on NO
+        if: ${{ steps.finalize.outputs.acceptance_decision == 'NO' }}
+        run: |
+          echo "Acceptance stage decision is NO" >&2
+          exit 1
+
+  deploy_release_package:
+    name: deploy-release-package
+    needs:
+      - load_release_package
+      - acceptance_stage
+    if: ${{ always() && needs.load_release_package.result == 'success' && needs.acceptance_stage.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' }}
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 75
+    concurrency:
+      group: production-mutation
+      cancel-in-progress: false
+    outputs:
+      api_prod_url: ${{ steps.current_state.outputs.api_prod_url }}
+      web_prod_url: ${{ steps.current_state.outputs.web_prod_url }}
+      codex_prod_url: ${{ steps.current_state.outputs.codex_prod_url }}
+      deployment_id: ${{ steps.record_release.outputs.deployment_id }}
+    env:
+      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+      CHANGE_CLASS: ${{ needs.load_release_package.outputs.change_class }}
+      RUNTIME_CHANGED: ${{ needs.load_release_package.outputs.runtime_changed }}
+      INFRA_CHANGED: ${{ needs.load_release_package.outputs.infra_changed }}
+      IDENTITY_CHANGED: ${{ needs.load_release_package.outputs.identity_changed }}
+      REQUIRES_INFRA_CONVERGENCE: ${{ needs.load_release_package.outputs.requires_infra_convergence }}
+      REQUIRES_MIGRATIONS: ${{ needs.load_release_package.outputs.requires_migrations }}
+      RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
+      RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
+      RELEASE_PACKAGE_CODEX_REF: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_VNET_NAME: ${{ vars.AZURE_VNET_NAME }}
+      AZURE_ACA_SUBNET_NAME: ${{ vars.AZURE_ACA_SUBNET_NAME }}
+      AZURE_POSTGRES_SUBNET_NAME: ${{ vars.AZURE_POSTGRES_SUBNET_NAME }}
+      AZURE_PRIVATE_DNS_ZONE_NAME: ${{ vars.AZURE_PRIVATE_DNS_ZONE_NAME }}
+      ACA_ENVIRONMENT_NAME: ${{ vars.ACA_ENVIRONMENT_NAME }}
+      AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
+      ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
+      ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+      ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
+      ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+      ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACR_SKU: ${{ vars.ACR_SKU }}
+      POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
+      POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
+      POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
+      POSTGRES_VERSION: ${{ vars.POSTGRES_VERSION }}
+      POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
+      POSTGRES_SKU_TIER: ${{ vars.POSTGRES_SKU_TIER }}
+      POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
+      ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
+      ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
+      ACA_CODEX_CUSTOM_DOMAIN: ${{ vars.ACA_CODEX_CUSTOM_DOMAIN }}
+      ACA_API_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_API_MANAGED_CERTIFICATE_NAME }}
+      ACA_WEB_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_WEB_MANAGED_CERTIFICATE_NAME }}
+      ACA_CODEX_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_CODEX_MANAGED_CERTIFICATE_NAME }}
+      ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
+      API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
+      ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
+      AUTH_AUDIENCE: ${{ vars.AUTH_AUDIENCE }}
+      AUTH_ISSUER: ${{ vars.ENTRA_ISSUER }}
+      AUTH_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
+      AUTH_ALLOWED_CLIENT_IDS: ${{ vars.AUTH_ALLOWED_CLIENT_IDS }}
+      AUTH_ACTIVE_TENANT_IDS: ${{ vars.AUTH_ACTIVE_TENANT_IDS }}
+      OAUTH_TOKEN_ISSUER: ${{ vars.OAUTH_TOKEN_ISSUER }}
+      OAUTH_TOKEN_AUDIENCE: ${{ vars.OAUTH_TOKEN_AUDIENCE }}
+      OAUTH_TOKEN_SIGNING_SECRET: ${{ secrets.OAUTH_TOKEN_SIGNING_SECRET }}
+      AUTH_BOOTSTRAP_ALLOWED_TENANT_ID: ${{ vars.API_SMOKE_ALLOWED_TENANT_ID }}
+      AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_ID }}
+      AUTH_BOOTSTRAP_DELEGATED_USER_OID: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_OID }}
+      AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL }}
+      POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+      ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        if: ${{ env.IDENTITY_CHANGED == 'true' }}
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Validate identity config contract
+        if: ${{ env.IDENTITY_CHANGED == 'true' }}
+        id: identity_config
+        env:
+          HEAD_SHA: ${{ env.HEAD_SHA }}
+          IDENTITY_CONFIG_MODE: production
+          API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
+          ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
+          ARM_CLIENT_ID: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+          TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+          TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
+          TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
+          GH_ORGANIZATION: ${{ vars.GH_ORGANIZATION }}
+          GH_REPOSITORY_NAME: ${{ vars.GH_REPOSITORY_NAME }}
+          IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
+          REQUIRED_ENV_NAMES: ARM_CLIENT_ID,ARM_TENANT_ID,ARM_SUBSCRIPTION_ID,TFSTATE_RESOURCE_GROUP,TFSTATE_STORAGE_ACCOUNT,TFSTATE_CONTAINER,TFSTATE_KEY,GH_ORGANIZATION,GH_REPOSITORY_NAME,IDENTITY_OWNER_OBJECT_IDS_JSON
+        run: node scripts/pipeline/shared/validate-identity-config.mjs
+
+      - name: Azure login for identity apply
+        if: ${{ env.IDENTITY_CHANGED == 'true' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Apply identity infrastructure
+        if: ${{ env.IDENTITY_CHANGED == 'true' }}
+        env:
+          ARM_USE_OIDC: "true"
+          ARM_USE_AZUREAD: "true"
+          ARM_CLIENT_ID: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+          TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+          TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
+          TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
+          GH_ORGANIZATION: ${{ vars.GH_ORGANIZATION }}
+          GH_REPOSITORY_NAME: ${{ vars.GH_REPOSITORY_NAME }}
+          API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
+          ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
+          IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
+          GITHUB_ENVIRONMENT_NAME: production
+        run: |
+          set -euo pipefail
+
+          terraform -chdir=infra/identity init \
+            -input=false \
+            -backend-config="resource_group_name=${TFSTATE_RESOURCE_GROUP}" \
+            -backend-config="storage_account_name=${TFSTATE_STORAGE_ACCOUNT}" \
+            -backend-config="container_name=${TFSTATE_CONTAINER}" \
+            -backend-config="key=${TFSTATE_KEY}" \
+            -backend-config="use_oidc=true" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="tenant_id=${ARM_TENANT_ID}" \
+            -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}" \
+            -backend-config="client_id=${ARM_CLIENT_ID}"
+
+          terraform -chdir=infra/identity apply \
+            -input=false \
+            -auto-approve \
+            -var-file=env/prod.tfvars \
+            -var "github_organization=${GH_ORGANIZATION}" \
+            -var "github_repository=${GH_REPOSITORY_NAME}" \
+            -var "github_environment_name=${GITHUB_ENVIRONMENT_NAME}" \
+            -var "api_identifier_uri=${{ steps.identity_config.outputs.api_identifier_uri }}" \
+            -var "owners=${IDENTITY_OWNER_OBJECT_IDS_JSON}"
+
+          mkdir -p ".artifacts/identity/$HEAD_SHA"
+          terraform -chdir=infra/identity output -json > ".artifacts/identity/$HEAD_SHA/outputs.json"
+
+      - name: Azure login for infra/runtime
+        if: ${{ env.INFRA_CHANGED == 'true' || env.RUNTIME_CHANGED == 'true' || env.REQUIRES_INFRA_CONVERGENCE == 'true' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate deployment release package refs
+        if: ${{ env.INFRA_CHANGED == 'true' || env.RUNTIME_CHANGED == 'true' || env.REQUIRES_INFRA_CONVERGENCE == 'true' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${RELEASE_PACKAGE_API_REF:-}" ] || [ -z "${RELEASE_PACKAGE_WEB_REF:-}" ] || [ -z "${RELEASE_PACKAGE_CODEX_REF:-}" ]; then
+            echo "Release package refs are required for infra/runtime production stage" >&2
+            exit 1
+          fi
+
+          for image in "$RELEASE_PACKAGE_API_REF" "$RELEASE_PACKAGE_WEB_REF" "$RELEASE_PACKAGE_CODEX_REF"; do
+            if [[ "$image" != "${ACR_REGISTRY}/"*"@sha256:"* ]]; then
+              echo "Release package ref must be an ACR digest ref: $image" >&2
+              exit 1
+            fi
+          done
+
+      - name: Apply infra (when needed)
+        if: ${{ env.INFRA_CHANGED == 'true' || env.REQUIRES_INFRA_CONVERGENCE == 'true' }}
+        env:
+          API_IMAGE: ${{ env.RELEASE_PACKAGE_API_REF }}
+          WEB_IMAGE: ${{ env.RELEASE_PACKAGE_WEB_REF }}
+          CODEX_IMAGE: ${{ env.RELEASE_PACKAGE_CODEX_REF }}
+          ARM_PARAMETERS_FILE: .artifacts/infra/${{ env.HEAD_SHA }}/runtime.parameters.json
+        run: |
+          set -euo pipefail
+
+          mkdir -p ".artifacts/infra/$HEAD_SHA"
+          node scripts/pipeline/cloud/production/assert-managed-certificate-contract.mjs
+          node scripts/pipeline/shared/render-infra-parameters.mjs
+
+          export ARM_TEMPLATE_FILE="infra/azure/main.bicep"
+          export ARM_ARTIFACT_DIR=".artifacts/infra/$HEAD_SHA"
+
+          node scripts/pipeline/cloud/production/apply-infra.mjs
+
+      - name: Update migration job image
+        if: ${{ env.RUNTIME_CHANGED == 'true' }}
+        run: |
+          az containerapp job update \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_MIGRATE_JOB_NAME" \
+            --image "$RELEASE_PACKAGE_API_REF" \
+            --output none
+
+      - name: Run migration job
+        if: ${{ env.RUNTIME_CHANGED == 'true' && env.REQUIRES_MIGRATIONS == 'true' }}
+        id: migration_start
+        env:
+          AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
+          ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
+        run: node scripts/pipeline/cloud/production/start-migration-job.mjs
+
+      - name: Wait for migration completion
+        if: ${{ env.RUNTIME_CHANGED == 'true' && env.REQUIRES_MIGRATIONS == 'true' }}
+        env:
+          AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
+          ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
+          MIGRATION_EXECUTION_NAME: ${{ steps.migration_start.outputs.migration_execution_name }}
+          MIGRATION_TIMEOUT_SECONDS: 900
+        run: node scripts/pipeline/cloud/production/wait-migration-job.mjs
+
+      - name: Deploy API
+        if: ${{ env.RUNTIME_CHANGED == 'true' }}
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          imageToDeploy: ${{ env.RELEASE_PACKAGE_API_REF }}
+          containerAppName: ${{ env.ACA_API_APP_NAME }}
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          disableTelemetry: true
+
+      - name: Deploy Web
+        if: ${{ env.RUNTIME_CHANGED == 'true' }}
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          imageToDeploy: ${{ env.RELEASE_PACKAGE_WEB_REF }}
+          containerAppName: ${{ env.ACA_WEB_APP_NAME }}
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          disableTelemetry: true
+
+      - name: Deploy Codex
+        if: ${{ env.RUNTIME_CHANGED == 'true' }}
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          imageToDeploy: ${{ env.RELEASE_PACKAGE_CODEX_REF }}
+          containerAppName: ${{ env.ACA_CODEX_APP_NAME }}
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          disableTelemetry: true
+
+      - name: Resolve current production URLs
+        id: current_state
+        if: ${{ env.RUNTIME_CHANGED == 'true' || env.INFRA_CHANGED == 'true' || env.REQUIRES_INFRA_CONVERGENCE == 'true' }}
+        run: |
+          set -euo pipefail
+
+          api_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_API_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
+          web_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_WEB_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
+          codex_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_CODEX_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
+
+          echo "api_prod_url=$api_prod_url" >> "$GITHUB_OUTPUT"
+          echo "web_prod_url=$web_prod_url" >> "$GITHUB_OUTPUT"
+          echo "codex_prod_url=$codex_prod_url" >> "$GITHUB_OUTPUT"
+
+      - name: Record successful production deployment
+        id: record_release
+        if: ${{ success() }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TARGET_ENVIRONMENT: production
+          HEAD_SHA: ${{ env.HEAD_SHA }}
+          DEPLOY_LOG_URL: ${{ format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          DEPLOY_ENVIRONMENT_URL: ${{ steps.current_state.outputs.web_prod_url }}
+          RELEASE_PACKAGE_API_REF: ${{ env.RELEASE_PACKAGE_API_REF }}
+          RELEASE_PACKAGE_WEB_REF: ${{ env.RELEASE_PACKAGE_WEB_REF }}
+          RELEASE_PACKAGE_CODEX_REF: ${{ env.RELEASE_PACKAGE_CODEX_REF }}
+          CHANGE_CLASS: ${{ env.CHANGE_CLASS }}
+        run: node scripts/pipeline/cloud/production/record-release.mjs
+
+      - name: Write deployment record artifact
+        if: ${{ always() }}
+        run: |
+          mkdir -p ".artifacts/production/$HEAD_SHA"
+          cat > ".artifacts/production/$HEAD_SHA/deployment-record.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "changeClass": "$CHANGE_CLASS",
+            "deploymentId": "${{ steps.record_release.outputs.deployment_id || '' }}",
+            "releasePackage": {
+              "api": "$RELEASE_PACKAGE_API_REF",
+              "web": "$RELEASE_PACKAGE_WEB_REF",
+              "codex": "$RELEASE_PACKAGE_CODEX_REF"
+            }
+          }
+          JSON
+
+      - name: Upload mutation artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-release-package-${{ env.HEAD_SHA }}
+          path: |
+            .artifacts/production/${{ env.HEAD_SHA }}/deployment-record.json
+            .artifacts/deploy/${{ env.HEAD_SHA }}
+            .artifacts/infra/${{ env.HEAD_SHA }}
+            .artifacts/identity/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
+
+  production_blackbox_verify:
+    name: production-blackbox-verify
+    needs:
+      - load_release_package
+      - acceptance_stage
+      - deploy_release_package
+    if: ${{ always() && needs.deploy_release_package.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && (needs.load_release_package.outputs.runtime_changed == 'true' || needs.load_release_package.outputs.infra_changed == 'true' || needs.load_release_package.outputs.requires_infra_convergence == 'true') }}
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    env:
+      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+      TARGET_API_BASE_URL: ${{ needs.deploy_release_package.outputs.api_prod_url }}
+      WEB_BASE_URL: ${{ needs.deploy_release_package.outputs.web_prod_url }}
+      EXPECTED_ENTRYPOINT: /
+      REQUIRED_FLOW_IDS_JSON: '["compass-smoke"]'
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      AUTH_CANARY_WORKFLOW_FILE: auth-entra-canary.yml
+      AUTH_CANARY_MAX_AGE_HOURS: "24"
+      DELEGATED_SMOKE_WORKFLOW_FILE: auth-delegated-smoke.yml
+      DELEGATED_SMOKE_MAX_AGE_HOURS: "24"
+      API_SMOKE_ALLOWED_TENANT_ID: ${{ vars.API_SMOKE_ALLOWED_TENANT_ID }}
+      API_SMOKE_ALLOWED_CLIENT_ID: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_ID }}
+      API_SMOKE_ALLOWED_CLIENT_SECRET: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_SECRET }}
+      API_SMOKE_ALLOWED_SCOPE: ${{ vars.API_SMOKE_ALLOWED_SCOPE }}
+      API_SMOKE_DENIED_TENANT_ID: ${{ vars.API_SMOKE_DENIED_TENANT_ID }}
+      API_SMOKE_DENIED_CLIENT_ID: ${{ secrets.API_SMOKE_DENIED_CLIENT_ID }}
+      API_SMOKE_DENIED_CLIENT_SECRET: ${{ secrets.API_SMOKE_DENIED_CLIENT_SECRET }}
+      API_SMOKE_DENIED_SCOPE: ${{ vars.API_SMOKE_DENIED_SCOPE }}
+      API_SMOKE_DENIED_EXPECTED_CODE: ${{ vars.API_SMOKE_DENIED_EXPECTED_CODE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Verify auth canary freshness
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/pipeline/cloud/production/verify-auth-canary-freshness.mjs
+
+      - name: Verify delegated pre-deploy probe freshness
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AUTH_CANARY_WORKFLOW_FILE: ${{ env.DELEGATED_SMOKE_WORKFLOW_FILE }}
+          AUTH_CANARY_MAX_AGE_HOURS: ${{ env.DELEGATED_SMOKE_MAX_AGE_HOURS }}
+          AUTH_CANARY_ARTIFACT_NAME: delegated-smoke-freshness
+          AUTH_CANARY_REQUIRED_ARTIFACT_NAME: auth-delegated-smoke-${{ env.HEAD_SHA }}
+        run: node scripts/pipeline/cloud/production/verify-auth-canary-freshness.mjs
+
+      - name: API smoke verification
+        run: node scripts/pipeline/cloud/production/verify-api-smoke.mjs
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser smoke verification
+        env:
+          PR_NUMBER: 0
+        run: pnpm acceptance:browser-evidence
+
+      - name: Upload post-deploy artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-blackbox-verify-${{ env.HEAD_SHA }}
+          path: |
+            .artifacts/deploy/${{ env.HEAD_SHA }}/auth-canary-freshness.json
+            .artifacts/deploy/${{ env.HEAD_SHA }}/api-smoke.json
+            .artifacts/deploy/${{ env.HEAD_SHA }}/delegated-smoke-freshness.json
+            .artifacts/deploy/${{ env.HEAD_SHA }}/delegated-smoke.json
+            .artifacts/browser-evidence/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
+
+  production_stage:
+    name: production-stage
+    needs:
+      - load_release_package
+      - acceptance_stage
+      - deploy_release_package
+      - production_blackbox_verify
+    if: ${{ always() && needs.load_release_package.result == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      production_decision: ${{ steps.result.outputs.production_decision }}
+      reason_codes_json: ${{ steps.result.outputs.reason_codes_json }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Write production stage result
+        id: result
+        env:
+          HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+          ACCEPTANCE_DECISION: ${{ needs.acceptance_stage.outputs.acceptance_decision }}
+          ACCEPTANCE_REASON_CODES_JSON: ${{ needs.acceptance_stage.outputs.reason_codes_json }}
+          DEPLOY_REQUIRED: ${{ needs.acceptance_stage.outputs.deploy_required }}
+          RUNTIME_CHANGED: ${{ needs.load_release_package.outputs.runtime_changed }}
+          DESKTOP_CHANGED: ${{ needs.load_release_package.outputs.desktop_changed }}
+          INFRA_CHANGED: ${{ needs.load_release_package.outputs.infra_changed }}
+          IDENTITY_CHANGED: ${{ needs.load_release_package.outputs.identity_changed }}
+          REQUIRES_INFRA_CONVERGENCE: ${{ needs.load_release_package.outputs.requires_infra_convergence }}
+          CHANGE_CLASS: ${{ needs.load_release_package.outputs.change_class }}
+          RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
+          RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
+          RELEASE_PACKAGE_CODEX_REF: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
+          DEPLOY_RESULT: ${{ needs.deploy_release_package.result }}
+          VERIFY_RESULT: ${{ needs.production_blackbox_verify.result }}
+          DEPLOYMENT_ID: ${{ needs.deploy_release_package.outputs.deployment_id }}
+        run: node scripts/pipeline/cloud/production/decide-production-stage.mjs
+
+      - name: Upload production result artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-stage-${{ needs.load_release_package.outputs.head_sha }}
+          path: .artifacts/production/${{ needs.load_release_package.outputs.head_sha }}
+          if-no-files-found: warn
+
+  release_decision:
+    name: release-decision
+    needs:
+      - resolve_replay_source
+      - load_release_package
+      - acceptance_stage
+      - production_stage
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Collect cloud delivery stage timing
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha || needs.resolve_replay_source.outputs.release_package_sha }}
+        run: node scripts/pipeline/shared/collect-cloud-delivery-stage-timing.mjs
+
+      - name: Upload cloud delivery timing artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloud-delivery-replay-timing-${{ needs.load_release_package.outputs.head_sha || needs.resolve_replay_source.outputs.release_package_sha }}
+          path: .artifacts/pipeline/${{ needs.load_release_package.outputs.head_sha || needs.resolve_replay_source.outputs.release_package_sha }}/timing.json
+          if-no-files-found: warn
+
+      - name: Write release decision artifact
+        env:
+          RELEASE_PACKAGE_SHA: ${{ needs.resolve_replay_source.outputs.release_package_sha }}
+          REPLAY_MODE: "true"
+          COMMIT_STAGE_RESULT: "replay"
+          LOAD_RELEASE_PACKAGE_RESULT: ${{ needs.load_release_package.result }}
+          ACCEPTANCE_STAGE_RESULT: ${{ needs.acceptance_stage.result }}
+          PRODUCTION_STAGE_RESULT: ${{ needs.production_stage.result }}
+          HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha || needs.resolve_replay_source.outputs.release_package_sha }}
+          ACCEPTANCE_DECISION: ${{ needs.acceptance_stage.outputs.acceptance_decision || '' }}
+          ACCEPTANCE_REASON_CODES_JSON: ${{ needs.acceptance_stage.outputs.reason_codes_json || '[]' }}
+          PRODUCTION_DECISION: ${{ needs.production_stage.outputs.production_decision || '' }}
+          PRODUCTION_REASON_CODES_JSON: ${{ needs.production_stage.outputs.reason_codes_json || '[]' }}
+          DEPLOY_REQUIRED: ${{ needs.acceptance_stage.outputs.deploy_required || '' }}
+          RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
+          RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
+          RELEASE_PACKAGE_CODEX_REF: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
+        run: node scripts/pipeline/shared/decide-release-outcome.mjs
+
+      - name: Upload release decision artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-decision-${{ needs.load_release_package.outputs.head_sha || needs.resolve_replay_source.outputs.release_package_sha }}
+          path: .artifacts/release/${{ needs.load_release_package.outputs.head_sha || needs.resolve_replay_source.outputs.release_package_sha }}/decision.json
+          if-no-files-found: warn

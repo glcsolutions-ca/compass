@@ -22,12 +22,12 @@ gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/req
   --input /tmp/required-status-checks.json
 ```
 
-## Required Cloud Deployment Pipeline Safety Controls
+## Required Cloud Delivery Pipeline Safety Controls
 
 - Enforce admins (`main` has no admin bypass in normal flow).
 - Require merge queue on `main`.
 - Require `.github/workflows/commit-stage.yml` to run on `pull_request` and `merge_group`.
-- Require `.github/workflows/cloud-deployment-pipeline.yml` to run on `push` to `main` for post-merge acceptance/production gating.
+- Require `.github/workflows/cloud-delivery-pipeline.yml` to run on `push` to `main` for post-merge acceptance/production gating.
 - Require PR-only integration into `main` (no direct pushes).
 - Keep force-push and deletion blocked.
 - Keep strict status checks enabled.
@@ -36,7 +36,7 @@ gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/req
 
 - Branch protection stays static and simple.
 - Commit stage remains the single merge decision point.
-- Acceptance/production stay decoupled as post-merge release-candidate gates.
+- Acceptance/production stay decoupled as post-merge release-package gates.
 - Merge queue and PR runs use the same required gate context.
 
 ## Triage notes

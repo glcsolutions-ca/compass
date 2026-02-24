@@ -29,7 +29,7 @@ async function main() {
   const docsDrift = evaluateDocsDrift(policy, changedFiles);
 
   const docsDriftBlocking = docsDrift.shouldBlock;
-  const controlPlaneChanged = docsDrift.touchesBlockingPaths;
+  const deliveryConfigChanged = docsDrift.touchesBlockingPaths;
   const requiresInfraConvergence = scope.runtime && scope.infra;
   const requiresMigrations = scope.runtime && scope.migration;
 
@@ -47,7 +47,7 @@ async function main() {
     changedFiles,
     changeClass,
     scope,
-    controlPlaneChanged,
+    deliveryConfigChanged,
     requiresInfraConvergence,
     requiresMigrations,
     docsDriftBlocking,
@@ -70,7 +70,7 @@ async function main() {
     migration_changed: String(scope.migration),
     infra_rollout_changed: String(scope.infraRollout),
     docs_only_changed: String(scope.docsOnly),
-    control_plane_changed: String(controlPlaneChanged),
+    delivery_config_changed: String(deliveryConfigChanged),
     requires_infra_convergence: String(requiresInfraConvergence),
     requires_migrations: String(requiresMigrations),
     changed_files_json: JSON.stringify(changedFiles),
@@ -91,7 +91,7 @@ async function main() {
       `- Infra changed: \`${scope.infra}\``,
       `- Identity changed: \`${scope.identity}\``,
       `- Docs only: \`${scope.docsOnly}\``,
-      `- Control-plane changed: \`${controlPlaneChanged}\``,
+      `- Delivery config changed: \`${deliveryConfigChanged}\``,
       `- Requires infra convergence: \`${requiresInfraConvergence}\``,
       `- Requires migrations: \`${requiresMigrations}\``,
       `- Docs drift blocking: \`${docsDriftBlocking}\``
@@ -99,7 +99,7 @@ async function main() {
   );
 
   console.info(
-    `Scope resolved: changeClass=${changeClass}, runtime=${scope.runtime}, desktop=${scope.desktop}, infra=${scope.infra}, identity=${scope.identity}, controlPlaneChanged=${controlPlaneChanged}`
+    `Scope resolved: changeClass=${changeClass}, runtime=${scope.runtime}, desktop=${scope.desktop}, infra=${scope.infra}, identity=${scope.identity}, deliveryConfigChanged=${deliveryConfigChanged}`
   );
 }
 

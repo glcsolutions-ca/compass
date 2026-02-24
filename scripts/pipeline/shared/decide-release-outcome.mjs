@@ -3,13 +3,13 @@ import { evaluateReleaseOutcome } from "./decide-release-outcome-lib.mjs";
 import { appendGithubOutput, requireEnv, writeJsonFile } from "./pipeline-utils.mjs";
 
 async function main() {
-  const headSha = process.env.HEAD_SHA?.trim() || requireEnv("CANDIDATE_SHA");
-  const candidateSha = requireEnv("CANDIDATE_SHA");
+  const headSha = process.env.HEAD_SHA?.trim() || requireEnv("RELEASE_PACKAGE_SHA");
+  const releasePackageSha = requireEnv("RELEASE_PACKAGE_SHA");
 
   const result = evaluateReleaseOutcome({
     replayMode: process.env.REPLAY_MODE,
     commitStageResult: process.env.COMMIT_STAGE_RESULT,
-    loadReleaseCandidateResult: process.env.LOAD_RELEASE_CANDIDATE_RESULT,
+    loadReleasePackageResult: process.env.LOAD_RELEASE_PACKAGE_RESULT,
     acceptanceStageResult: process.env.ACCEPTANCE_STAGE_RESULT,
     productionStageResult: process.env.PRODUCTION_STAGE_RESULT,
     acceptanceDecision: process.env.ACCEPTANCE_DECISION,
@@ -25,7 +25,7 @@ async function main() {
     schemaVersion: "1",
     generatedAt: new Date().toISOString(),
     headSha,
-    candidateSha,
+    releasePackageSha,
     replayMode: result.replayMode,
     commitStage: result.commitStageDecision,
     acceptance: result.acceptanceDecision,
@@ -33,10 +33,10 @@ async function main() {
     deployRequired: result.deployRequired,
     releaseable: result.releaseable,
     reasonCodes: result.reasonCodes,
-    candidate: {
-      apiRef: process.env.CANDIDATE_API_REF || "",
-      webRef: process.env.CANDIDATE_WEB_REF || "",
-      codexRef: process.env.CANDIDATE_CODEX_REF || ""
+    releasePackage: {
+      apiRef: process.env.RELEASE_PACKAGE_API_REF || "",
+      webRef: process.env.RELEASE_PACKAGE_WEB_REF || "",
+      codexRef: process.env.RELEASE_PACKAGE_CODEX_REF || ""
     }
   });
 

@@ -11,7 +11,7 @@ Every PR to `main` must pass fast, reliable, merge-blocking evidence:
 3. Merge is allowed only when `commit-stage` passes.
 
 `commit-stage.yml` runs for both `pull_request` and `merge_group` so the same commit-stage contract applies before merge and in queue execution.
-Post-merge deployment pipelines (`cloud-deployment-pipeline.yml` for cloud, `desktop-deployment-pipeline.yml` for desktop) run on `push` to `main`.
+Post-merge deployment pipelines (`cloud-delivery-pipeline.yml` for cloud, `desktop-deployment-pipeline.yml` for desktop) run on `push` to `main`.
 
 ## Source of truth precedence
 
@@ -32,7 +32,7 @@ Branch protection requires only:
 ## Commit-stage checks
 
 - `determine-scope` (always)
-- `fast-feedback` (when runtime/infra/identity is true, or when control-plane blocking paths changed)
+- `fast-feedback` (when runtime/infra/identity is true, or when delivery config blocking paths changed)
 - `desktop-fast-feedback` (when `desktop` scope is true and change is not docs-only)
 - `infra-static-check` (only when `infra` scope is true)
 - `identity-static-check` (only when `identity` scope is true)
@@ -50,7 +50,7 @@ Branch protection requires only:
 - plus rollout flags (`migration`, `infraRollout`) used downstream
 
 Scope evaluation excludes files matching `scopeRules.docsOnly` before computing mutable scopes
-(`runtime`, `desktop`, `infra`, `identity`) so documentation-only updates do not trigger control-plane mutation paths.
+(`runtime`, `desktop`, `infra`, `identity`) so documentation-only updates do not trigger delivery config mutation paths.
 
 `changeClass` is derived in priority order: `runtime` -> `infra` -> `identity` -> `desktop` -> `checks`.
 
@@ -59,7 +59,7 @@ Scope evaluation excludes files matching `scopeRules.docsOnly` before computing 
 `docs-drift` is always evaluated.
 
 - Blocking: docs-critical paths changed without matching docs target updates.
-- Advisory: control-plane blocking paths changed without docs target updates.
+- Advisory: delivery config blocking paths changed without docs target updates.
 - Infra auth runtime wiring changes (for example `OAUTH_TOKEN_SIGNING_SECRET` convergence) must include one of the configured docs-target updates.
 
 Result artifact path:
@@ -96,7 +96,7 @@ Timing keys:
 `commit-stage` makes merge decisions from required job outcomes (`needs.*.result`) plus docs-drift state.
 
 - `determine-scope` must succeed.
-- `fast-feedback` must succeed when runtime/infra/identity commit evidence is required, or when control-plane paths changed.
+- `fast-feedback` must succeed when runtime/infra/identity commit evidence is required, or when delivery config paths changed.
 - `desktop-fast-feedback` must succeed when desktop commit evidence is required.
 - `infra-static-check` must succeed when `infra` is required.
 - `identity-static-check` must succeed when `identity` is required.
@@ -105,12 +105,12 @@ Timing keys:
 
 ## Runtime baseline
 
-Control-plane scripts use Node's built-in `path.posix.matchesGlob` for deterministic pattern behavior.
+Delivery-config scripts use Node's built-in `path.posix.matchesGlob` for deterministic pattern behavior.
 
 - Node baseline: `22.x` (`.nvmrc`)
 - Engine contract: `>=22 <23`
 
-## Control-plane high-risk paths
+## Delivery-Config High-Risk Paths
 
 `docsDriftRules` and `scopeRules` in `.github/policy/pipeline-policy.json` are authoritative.
 

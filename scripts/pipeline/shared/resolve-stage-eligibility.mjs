@@ -17,7 +17,7 @@ async function resolveAcceptanceEligibility() {
 
   let deployRequired = true;
   let deploySkipReasonCode = "";
-  let controlPlaneRequired = false;
+  let deliveryConfigRequired = false;
 
   if (docsOnlyChanged) {
     deployRequired = false;
@@ -31,12 +31,12 @@ async function resolveAcceptanceEligibility() {
   }
 
   if (infraChanged || identityChanged || requiresInfraConvergence) {
-    controlPlaneRequired = true;
+    deliveryConfigRequired = true;
   }
 
   await appendGithubOutput({
     deploy_required: String(deployRequired),
-    control_plane_required: String(controlPlaneRequired),
+    delivery_config_required: String(deliveryConfigRequired),
     deploy_skip_reason_code: deploySkipReasonCode
   });
 }

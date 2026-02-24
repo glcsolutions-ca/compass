@@ -2,29 +2,10 @@
 
 ## Runbook Index
 
-- [`production-stage.md`](./production-stage.md): production stage promotion and release-candidate operations.
-- [`desktop-deployment-pipeline.md`](./desktop-deployment-pipeline.md): desktop deployment pipeline operations for signed installer promotion.
-- [`github-governance-verification.md`](./github-governance-verification.md): governance and GitHub policy verification checks.
+- [`cloud-delivery-pipeline.md`](./cloud-delivery-pipeline.md): canonical cloud delivery flow (commit stage -> build once -> acceptance -> production verification -> release decision).
+- [`production-stage.md`](./production-stage.md): compatibility pointer for older links.
+- [`desktop-deployment-pipeline.md`](./desktop-deployment-pipeline.md): desktop installer delivery operations.
+- [`github-governance-verification.md`](./github-governance-verification.md): governance and branch-protection verification.
 - [`migration-safety.md`](./migration-safety.md): migration rollout and rollback safety practices.
 - [`postgres-local.md`](./postgres-local.md): local Postgres startup, migration, and seed operations.
 - [`prod-closeout-2026-02-22.md`](./prod-closeout-2026-02-22.md): historical production closeout evidence snapshot.
-
-## When To Use Each Runbook
-
-| Situation                                                         | Runbook                             |
-| ----------------------------------------------------------------- | ----------------------------------- |
-| You need to understand or troubleshoot production release flow    | `production-stage.md`               |
-| You need to publish signed desktop installers                     | `desktop-deployment-pipeline.md`    |
-| You need to validate branch protection and merge governance setup | `github-governance-verification.md` |
-| You are planning or validating migration safety boundaries        | `migration-safety.md`               |
-| You are setting up local database dependencies                    | `postgres-local.md`                 |
-| You need historical evidence from a prior production closeout     | `prod-closeout-2026-02-22.md`       |
-
-## Cross-Links To Code-Area READMEs
-
-- Apps index: [`../../apps/README.md`](../../apps/README.md)
-- Packages index: [`../../packages/README.md`](../../packages/README.md)
-- Contracts package: [`../../packages/contracts/README.md`](../../packages/contracts/README.md)
-- SDK package: [`../../packages/sdk/README.md`](../../packages/sdk/README.md)
-- Scripts index: [`../../scripts/README.md`](../../scripts/README.md)
-- Infra index: [`../../infra/README.md`](../../infra/README.md)

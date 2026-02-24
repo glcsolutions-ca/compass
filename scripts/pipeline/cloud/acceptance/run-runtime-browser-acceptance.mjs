@@ -1,14 +1,14 @@
 import { requireEnv, writeJsonFile } from "../../shared/pipeline-utils.mjs";
-import { requireCandidateRefs, runShell } from "./runtime-acceptance-lib.mjs";
+import { requireReleasePackageRefs, runShell } from "./runtime-acceptance-lib.mjs";
 
 async function main() {
   const headSha = requireEnv("HEAD_SHA");
   const testedSha = process.env.TESTED_SHA?.trim() || headSha;
   const acrName = requireEnv("ACR_NAME");
   const flowId = process.env.EVIDENCE_FLOW_ID?.trim() || "compass-smoke";
-  const { apiRef, webRef } = requireCandidateRefs();
+  const { apiRef, webRef } = requireReleasePackageRefs();
   if (!webRef) {
-    throw new Error("CANDIDATE_WEB_REF is required for browser acceptance");
+    throw new Error("RELEASE_PACKAGE_WEB_REF is required for browser acceptance");
   }
 
   const artifactPath = `.artifacts/runtime-browser/${headSha}/result.json`;
@@ -98,7 +98,7 @@ for i in $(seq 1 90); do
     break
   fi
   if [ "$i" -eq 90 ]; then
-    echo "Timed out waiting for candidate API readiness (browser path)" >&2
+    echo "Timed out waiting for release package API readiness (browser path)" >&2
     echo "=== Capturing API logs ===" >&2
     docker logs "$api_container" >&2 || true
     exit 1
@@ -118,7 +118,7 @@ for i in $(seq 1 90); do
     break
   fi
   if [ "$i" -eq 90 ]; then
-    echo "Timed out waiting for candidate Web readiness" >&2
+    echo "Timed out waiting for release package Web readiness" >&2
     exit 1
   fi
   sleep 1
@@ -138,7 +138,7 @@ pnpm acceptance:browser-evidence
       testedSha,
       status: "pass",
       evidenceFlowId: flowId,
-      candidate: { apiRef, webRef }
+      releasePackage: { apiRef, webRef }
     });
   } catch (error) {
     await writeJsonFile(artifactPath, {
@@ -148,7 +148,7 @@ pnpm acceptance:browser-evidence
       testedSha,
       status: "fail",
       evidenceFlowId: flowId,
-      candidate: { apiRef, webRef },
+      releasePackage: { apiRef, webRef },
       error: error instanceof Error ? error.message : String(error)
     });
     throw error;

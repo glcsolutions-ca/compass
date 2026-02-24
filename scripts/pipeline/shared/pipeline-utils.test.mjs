@@ -71,7 +71,7 @@ const policy = loadPipelinePolicyObject({
   productionStage: {
     requireFreshHeadOnAuto: true
   },
-  cloudDeploymentPipeline: {
+  cloudDeliveryPipeline: {
     slo: {
       mode: "observe",
       acceptanceTargetSeconds: 900,
@@ -174,7 +174,7 @@ describe("scope resolution", () => {
 });
 
 describe("docs drift", () => {
-  it("records advisory reason codes for control-plane changes outside docs-critical paths", () => {
+  it("records advisory reason codes for delivery config changes outside docs-critical paths", () => {
     const result = evaluateDocsDrift(policy, [".github/workflows/commit-stage.yml"]);
     expect(result.shouldBlock).toBe(false);
     expect(result.reasonCodes).toEqual(["DOCS_DRIFT_ADVISORY_DOC_TARGET_MISSING"]);
@@ -205,7 +205,7 @@ describe("docs drift", () => {
 });
 
 describe("glob matching engine", () => {
-  it("matches control-plane patterns for dot-prefixed directories", () => {
+  it("matches delivery config patterns for dot-prefixed directories", () => {
     expect(matchesAnyPattern(".github/workflows/commit-stage.yml", [".github/workflows/**"])).toBe(
       true
     );

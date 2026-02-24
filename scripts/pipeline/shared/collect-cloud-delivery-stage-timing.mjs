@@ -28,7 +28,7 @@ async function githubRequest(token, pathname) {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${token}`,
       "X-GitHub-Api-Version": GITHUB_API_VERSION,
-      "User-Agent": "compass-cloud-deployment-stage-timing"
+      "User-Agent": "compass-cloud-delivery-stage-timing"
     }
   });
 
@@ -152,34 +152,28 @@ async function main() {
   const policyPath =
     process.env.PIPELINE_POLICY_PATH ?? path.join(".github", "policy", "pipeline-policy.json");
   const policy = await loadPipelinePolicy(policyPath);
-  const cloudDeploymentSlo = policy.cloudDeploymentPipeline?.slo ?? {};
-  const sloMode = String(cloudDeploymentSlo.mode || "observe")
+  const cloudDeliverySlo = policy.cloudDeliveryPipeline?.slo ?? {};
+  const sloMode = String(cloudDeliverySlo.mode || "observe")
     .trim()
     .toLowerCase();
-  const acceptanceTarget = parseTarget(cloudDeploymentSlo.acceptanceTargetSeconds);
-  const productionTarget = parseTarget(cloudDeploymentSlo.productionTargetSeconds);
+  const acceptanceTarget = parseTarget(cloudDeliverySlo.acceptanceTargetSeconds);
+  const productionTarget = parseTarget(cloudDeliverySlo.productionTargetSeconds);
 
   const { run, jobs } = await fetchRunAndJobs({ token, repository, runId });
 
-  const commitStart = earliestStartEpoch(jobs, [
-    "determine-scope",
-    "fast-feedback",
-    "desktop-fast-feedback",
-    "infra-static-check",
-    "identity-static-check"
-  ]);
-  const commitEnd = latestEndEpoch(jobs, ["commit-stage"]);
+  const commitStart = earliestStartEpoch(jobs, ["verify-commit-stage-evidence", "determine-scope"]);
+  const commitEnd = latestEndEpoch(jobs, ["determine-scope"]);
 
-  const candidateStart = earliestStartEpoch(jobs, [
-    "freeze-candidate-api-image",
-    "freeze-candidate-web-image",
-    "freeze-current-runtime-refs",
-    "freeze-release-candidate-images"
+  const releasePackageStart = earliestStartEpoch(jobs, [
+    "build-release-package-api-image",
+    "build-release-package-web-image",
+    "capture-current-runtime-refs",
+    "freeze-release-package-images"
   ]);
-  const candidateEnd = latestEndEpoch(jobs, ["publish-release-candidate"]);
+  const releasePackageEnd = latestEndEpoch(jobs, ["publish-release-package"]);
 
   const acceptanceStart = earliestStartEpoch(jobs, [
-    "load-release-candidate",
+    "load-release-package",
     "runtime-api-system-acceptance",
     "runtime-browser-acceptance",
     "runtime-migration-image-acceptance",
@@ -189,8 +183,7 @@ async function main() {
   const acceptanceEnd = latestEndEpoch(jobs, ["acceptance-stage"]);
 
   const productionStart = earliestStartEpoch(jobs, [
-    "approve-control-plane",
-    "deploy-approved-candidate",
+    "deploy-release-package",
     "production-blackbox-verify"
   ]);
   const productionEnd = latestEndEpoch(jobs, ["production-stage"]);
@@ -205,7 +198,7 @@ async function main() {
   const queueDelaySeconds = durationFromRange(runCreatedAt, overallStart);
 
   const commitDuration = durationFromRange(commitStart, commitEnd);
-  const candidateDuration = durationFromRange(candidateStart, candidateEnd);
+  const releasePackageDuration = durationFromRange(releasePackageStart, releasePackageEnd);
   const acceptanceDuration = durationFromRange(acceptanceStart, acceptanceEnd);
   const productionDuration = durationFromRange(productionStart, productionEnd);
 
@@ -220,7 +213,7 @@ async function main() {
       queueDelaySeconds,
       overallExecutionSeconds,
       commitStageSeconds: commitDuration,
-      candidateFreezeSeconds: candidateDuration,
+      releasePackageBuildSeconds: releasePackageDuration,
       acceptanceStageSeconds: acceptanceDuration,
       productionStageSeconds: productionDuration
     },
@@ -239,19 +232,18 @@ async function main() {
 
   await appendGithubOutput({
     pipeline_timing_path: artifactPath,
-    cloud_deployment_acceptance_seconds:
+    cloud_delivery_acceptance_seconds:
       acceptanceDuration === null ? "" : String(acceptanceDuration),
-    cloud_deployment_production_seconds:
-      productionDuration === null ? "" : String(productionDuration)
+    cloud_delivery_production_seconds: productionDuration === null ? "" : String(productionDuration)
   });
 
   await appendGithubStepSummary(
     [
-      "### Cloud Deployment Pipeline Timing",
+      "### Cloud Delivery Pipeline Timing",
       `- queue delay (non-SLO): ${formatMetric(queueDelaySeconds)}`,
       `- overall execution: ${formatMetric(overallExecutionSeconds)}`,
       `- commit stage: ${formatMetric(commitDuration)}`,
-      `- candidate freeze: ${formatMetric(candidateDuration)}`,
+      `- release package build: ${formatMetric(releasePackageDuration)}`,
       `- acceptance stage: ${formatMetric(acceptanceDuration)}`,
       `- production stage: ${formatMetric(productionDuration)}`,
       `- SLO mode: \`${sloMode}\``,

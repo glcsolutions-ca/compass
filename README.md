@@ -58,6 +58,7 @@ pnpm dev
 - Branch protection: `docs/branch-protection.md`
 - Machine policy: `.github/policy/pipeline-policy.json`
 - Commit stage workflow: `.github/workflows/commit-stage.yml`
-- Cloud deployment pipeline workflow: `.github/workflows/cloud-deployment-pipeline.yml`
+- Cloud delivery pipeline workflow: `.github/workflows/cloud-delivery-pipeline.yml`
+- Cloud delivery replay workflow: `.github/workflows/cloud-delivery-replay.yml`
 - Desktop deployment pipeline workflow: `.github/workflows/desktop-deployment-pipeline.yml`
 - Runbooks: `docs/runbooks/`

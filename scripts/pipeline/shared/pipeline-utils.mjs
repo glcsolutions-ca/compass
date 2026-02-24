@@ -191,26 +191,26 @@ export function assertPipelinePolicyShape(policy) {
     throw new Error("productionStage.requireFreshHeadOnAuto must be a boolean");
   }
 
-  const cloudDeploymentPipelineSlo = policy.cloudDeploymentPipeline?.slo;
-  if (cloudDeploymentPipelineSlo !== undefined) {
-    if (!cloudDeploymentPipelineSlo || typeof cloudDeploymentPipelineSlo !== "object") {
-      throw new Error("cloudDeploymentPipeline.slo must be an object when provided");
+  const cloudDeliveryPipelineSlo = policy.cloudDeliveryPipeline?.slo;
+  if (cloudDeliveryPipelineSlo !== undefined) {
+    if (!cloudDeliveryPipelineSlo || typeof cloudDeliveryPipelineSlo !== "object") {
+      throw new Error("cloudDeliveryPipeline.slo must be an object when provided");
     }
 
-    if (!["observe", "enforce"].includes(String(cloudDeploymentPipelineSlo.mode || "").trim())) {
-      throw new Error("cloudDeploymentPipeline.slo.mode must be one of: observe, enforce");
+    if (!["observe", "enforce"].includes(String(cloudDeliveryPipelineSlo.mode || "").trim())) {
+      throw new Error("cloudDeliveryPipeline.slo.mode must be one of: observe, enforce");
     }
 
-    const acceptanceTarget = cloudDeploymentPipelineSlo.acceptanceTargetSeconds;
-    const productionTarget = cloudDeploymentPipelineSlo.productionTargetSeconds;
+    const acceptanceTarget = cloudDeliveryPipelineSlo.acceptanceTargetSeconds;
+    const productionTarget = cloudDeliveryPipelineSlo.productionTargetSeconds;
     if (!Number.isInteger(acceptanceTarget) || acceptanceTarget <= 0) {
       throw new Error(
-        "cloudDeploymentPipeline.slo.acceptanceTargetSeconds must be a positive integer"
+        "cloudDeliveryPipeline.slo.acceptanceTargetSeconds must be a positive integer"
       );
     }
     if (!Number.isInteger(productionTarget) || productionTarget <= 0) {
       throw new Error(
-        "cloudDeploymentPipeline.slo.productionTargetSeconds must be a positive integer"
+        "cloudDeliveryPipeline.slo.productionTargetSeconds must be a positive integer"
       );
     }
   }

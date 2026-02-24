@@ -5,7 +5,7 @@ function base(overrides = {}) {
   return {
     replayMode: false,
     commitStageResult: "success",
-    loadReleaseCandidateResult: "success",
+    loadReleasePackageResult: "success",
     acceptanceStageResult: "success",
     productionStageResult: "success",
     acceptanceDecision: "YES",
@@ -33,17 +33,17 @@ describe("evaluateReleaseOutcome", () => {
     expect(result.reasonCodes).toContain("DOCS_ONLY_CHANGE");
   });
 
-  it("fails closed when load release candidate is not successful", () => {
+  it("fails closed when load release package is not successful", () => {
     const result = evaluateReleaseOutcome(
       base({
-        loadReleaseCandidateResult: "skipped",
+        loadReleasePackageResult: "skipped",
         acceptanceDecision: "NO",
         productionDecision: "NO"
       })
     );
 
     expect(result.releaseable).toBe(false);
-    expect(result.reasonCodes).toContain("LOAD_RELEASE_CANDIDATE_NOT_SUCCESS");
+    expect(result.reasonCodes).toContain("LOAD_RELEASE_PACKAGE_NOT_SUCCESS");
   });
 
   it("propagates explicit acceptance and production reason codes", () => {
@@ -52,12 +52,12 @@ describe("evaluateReleaseOutcome", () => {
         acceptanceDecision: "NO",
         productionDecision: "NO",
         acceptanceReasonCodes: '["ACCEPTANCE_GATE_FAILED"]',
-        productionReasonCodes: '["DEPLOY_APPROVED_CANDIDATE_FAILED"]'
+        productionReasonCodes: '["DEPLOY_RELEASE_PACKAGE_FAILED"]'
       })
     );
 
     expect(result.releaseable).toBe(false);
     expect(result.reasonCodes).toContain("ACCEPTANCE_GATE_FAILED");
-    expect(result.reasonCodes).toContain("DEPLOY_APPROVED_CANDIDATE_FAILED");
+    expect(result.reasonCodes).toContain("DEPLOY_RELEASE_PACKAGE_FAILED");
   });
 });

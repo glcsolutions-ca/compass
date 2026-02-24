@@ -1,10 +1,10 @@
 import { requireEnv, writeJsonFile } from "../../shared/pipeline-utils.mjs";
-import { requireCandidateRefs, runShell } from "./runtime-acceptance-lib.mjs";
+import { requireReleasePackageRefs, runShell } from "./runtime-acceptance-lib.mjs";
 
 async function main() {
   const headSha = requireEnv("HEAD_SHA");
   const acrName = requireEnv("ACR_NAME");
-  const { apiRef } = requireCandidateRefs();
+  const { apiRef } = requireReleasePackageRefs();
   const artifactPath = `.artifacts/migration-image-smoke/${headSha}/result.json`;
 
   try {
@@ -59,7 +59,7 @@ docker run --rm \
       headSha,
       status: "pass",
       reasonCode: "",
-      candidateApiRef: apiRef
+      releasePackageApiRef: apiRef
     });
   } catch (error) {
     await writeJsonFile(artifactPath, {
@@ -68,7 +68,7 @@ docker run --rm \
       headSha,
       status: "fail",
       reasonCode: "MIGRATION_IMAGE_SMOKE_FAILED",
-      candidateApiRef: apiRef,
+      releasePackageApiRef: apiRef,
       error: error instanceof Error ? error.message : String(error)
     });
     throw error;

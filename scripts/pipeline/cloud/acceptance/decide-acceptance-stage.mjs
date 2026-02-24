@@ -41,7 +41,7 @@ function parseCheckResults() {
   }
 
   const expectedChecks = [
-    "load-release-candidate",
+    "load-release-package",
     "runtime-api-system-acceptance",
     "runtime-browser-acceptance",
     "runtime-migration-image-acceptance",
@@ -64,10 +64,10 @@ async function main() {
   const runtimeRequired = parseBooleanEnv("RUNTIME_REQUIRED", false);
   const infraRequired = parseBooleanEnv("INFRA_REQUIRED", false);
   const identityRequired = parseBooleanEnv("IDENTITY_REQUIRED", false);
-  const candidateRefContractStatus =
-    process.env.CANDIDATE_REF_CONTRACT_STATUS?.trim().toLowerCase() || "unknown";
-  const candidateRefContractReasonCodes = parseJsonArrayEnv(
-    "CANDIDATE_REF_CONTRACT_REASON_CODES_JSON"
+  const releasePackageRefContractStatus =
+    process.env.RELEASE_PACKAGE_REF_CONTRACT_STATUS?.trim().toLowerCase() || "unknown";
+  const releasePackageRefContractReasonCodes = parseJsonArrayEnv(
+    "RELEASE_PACKAGE_REF_CONTRACT_REASON_CODES_JSON"
   );
   const identityConfigContractStatus =
     process.env.IDENTITY_CONFIG_CONTRACT_STATUS?.trim().toLowerCase() || "unknown";
@@ -81,8 +81,8 @@ async function main() {
     runtimeRequired,
     infraRequired,
     identityRequired,
-    candidateRefContractStatus,
-    candidateRefContractReasonCodes,
+    releasePackageRefContractStatus,
+    releasePackageRefContractReasonCodes,
     identityConfigContractStatus,
     identityConfigContractReasonCodes
   });
@@ -95,8 +95,8 @@ async function main() {
     runtimeRequired,
     infraRequired,
     identityRequired,
-    candidateRefContractStatus,
-    candidateRefContractReasonCodes,
+    releasePackageRefContractStatus,
+    releasePackageRefContractReasonCodes,
     identityConfigContractStatus,
     identityConfigContractReasonCodes,
     checkResults,

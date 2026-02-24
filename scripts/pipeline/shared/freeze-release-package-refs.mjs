@@ -80,12 +80,12 @@ async function freezeApiImage() {
   await run("docker", ["build", "-f", "apps/api/Dockerfile", "-t", image, "."]);
   await run("docker", ["push", image]);
 
-  const candidateApiRef = await capture("docker", [
+  const releasePackageApiRef = await capture("docker", [
     "inspect",
     "--format={{index .RepoDigests 0}}",
     image
   ]);
-  await appendGithubOutput({ candidate_api_ref: candidateApiRef });
+  await appendGithubOutput({ release_package_api_ref: releasePackageApiRef });
 }
 
 async function freezeWebImage() {
@@ -98,12 +98,12 @@ async function freezeWebImage() {
   await run("docker", ["build", "-f", "apps/web/Dockerfile", "-t", image, "."]);
   await run("docker", ["push", image]);
 
-  const candidateWebRef = await capture("docker", [
+  const releasePackageWebRef = await capture("docker", [
     "inspect",
     "--format={{index .RepoDigests 0}}",
     image
   ]);
-  await appendGithubOutput({ candidate_web_ref: candidateWebRef });
+  await appendGithubOutput({ release_package_web_ref: releasePackageWebRef });
 }
 
 async function freezeCodexImage() {
@@ -116,12 +116,12 @@ async function freezeCodexImage() {
   await run("docker", ["build", "-f", "apps/codex-app-server/Dockerfile", "-t", image, "."]);
   await run("docker", ["push", image]);
 
-  const candidateCodexRef = await capture("docker", [
+  const releasePackageCodexRef = await capture("docker", [
     "inspect",
     "--format={{index .RepoDigests 0}}",
     image
   ]);
-  await appendGithubOutput({ candidate_codex_ref: candidateCodexRef });
+  await appendGithubOutput({ release_package_codex_ref: releasePackageCodexRef });
 }
 
 async function freezeCurrentRuntimeRefs() {
@@ -168,14 +168,14 @@ async function freezeCurrentRuntimeRefs() {
     "tsv"
   ]);
 
-  const candidateApiRef = await resolveToDigestRef(acrName, apiImage);
-  const candidateWebRef = await resolveToDigestRef(acrName, webImage);
-  const candidateCodexRef = await resolveToDigestRef(acrName, codexImage);
+  const releasePackageApiRef = await resolveToDigestRef(acrName, apiImage);
+  const releasePackageWebRef = await resolveToDigestRef(acrName, webImage);
+  const releasePackageCodexRef = await resolveToDigestRef(acrName, codexImage);
 
   await appendGithubOutput({
-    candidate_api_ref: candidateApiRef,
-    candidate_web_ref: candidateWebRef,
-    candidate_codex_ref: candidateCodexRef
+    release_package_api_ref: releasePackageApiRef,
+    release_package_web_ref: releasePackageWebRef,
+    release_package_codex_ref: releasePackageCodexRef
   });
 }
 

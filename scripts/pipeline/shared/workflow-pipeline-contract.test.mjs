@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const commitStageWorkflowPath = ".github/workflows/commit-stage.yml";
-const cloudDeploymentPipelineWorkflowPath = ".github/workflows/cloud-deployment-pipeline.yml";
+const cloudDeliveryPipelineWorkflowPath = ".github/workflows/cloud-delivery-pipeline.yml";
+const cloudDeliveryReplayWorkflowPath = ".github/workflows/cloud-delivery-replay.yml";
 const desktopDeploymentPipelineWorkflowPath = ".github/workflows/desktop-deployment-pipeline.yml";
 const desktopReleaseCompatibilityWorkflowPath = ".github/workflows/desktop-release.yml";
 const authCanaryWorkflowPath = ".github/workflows/auth-entra-canary.yml";
@@ -54,10 +55,10 @@ function extractConcurrencySettings(jobBlock) {
 
 describe("workflow pipeline contract", () => {
   it("keeps production mutation under a serialized lock with cancel disabled", () => {
-    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+    const workflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
 
     const concurrency = extractConcurrencySettings(
-      extractJobBlock(workflow, "deploy_approved_candidate")
+      extractJobBlock(workflow, "deploy_release_package")
     );
 
     expect(concurrency.group).toBe("production-mutation");
@@ -65,21 +66,21 @@ describe("workflow pipeline contract", () => {
   });
 
   it("uses shared infra apply script and deterministic run-scoped ARM deployment name", () => {
-    const productionWorkflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+    const productionWorkflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
 
     expect(productionWorkflow).toContain("node scripts/pipeline/cloud/production/apply-infra.mjs");
   });
 
   it("keeps production stage deploy-only with no docker build commands", () => {
-    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
-    const deployJob = extractJobBlock(workflow, "deploy_approved_candidate");
+    const workflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
+    const deployJob = extractJobBlock(workflow, "deploy_release_package");
 
     expect(deployJob).not.toContain("docker build");
     expect(deployJob).not.toContain("docker push");
   });
 
-  it("keeps acceptance runtime candidate-fidelity contract", () => {
-    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+  it("keeps acceptance runtime release-package fidelity contract", () => {
+    const workflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
 
     expect(workflow).toContain("name: runtime-api-system-acceptance");
     expect(workflow).toContain("name: runtime-browser-acceptance");
@@ -95,13 +96,13 @@ describe("workflow pipeline contract", () => {
     );
   });
 
-  it("keeps candidate freeze jobs parallelized by artifact type", () => {
-    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
-    expect(workflow).toContain("name: freeze-candidate-api-image");
-    expect(workflow).toContain("name: freeze-candidate-web-image");
-    expect(workflow).toContain("name: freeze-candidate-codex-image");
-    expect(workflow).toContain("name: freeze-current-runtime-refs");
-    expect(workflow).toContain("node scripts/pipeline/shared/freeze-release-candidate-refs.mjs");
+  it("keeps release package build jobs parallelized by artifact type", () => {
+    const workflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
+    expect(workflow).toContain("name: build-release-package-api-image");
+    expect(workflow).toContain("name: build-release-package-web-image");
+    expect(workflow).toContain("name: build-release-package-codex-image");
+    expect(workflow).toContain("name: capture-current-runtime-refs");
+    expect(workflow).toContain("node scripts/pipeline/shared/freeze-release-package-refs.mjs");
   });
 
   it("keeps commit stage merge-blocking gate context", () => {
@@ -113,19 +114,14 @@ describe("workflow pipeline contract", () => {
     const workflow = readUtf8(commitStageWorkflowPath);
     const runtimeFastFeedbackJob = extractJobBlock(workflow, "fast_feedback");
     const desktopFastFeedbackJob = extractJobBlock(workflow, "desktop_fast_feedback");
-    const deploymentWorkflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
-    const deploymentFastFeedbackJob = extractJobBlock(deploymentWorkflow, "fast_feedback");
 
     expect(runtimeFastFeedbackJob).toContain(
-      "if: ${{ needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.control_plane_changed == 'true' }}"
+      "if: ${{ needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true' }}"
     );
     expect(desktopFastFeedbackJob).toContain(
       "if: ${{ needs.determine_scope.outputs.desktop_changed == 'true' && needs.determine_scope.outputs.docs_only_changed != 'true' }}"
     );
     expect(desktopFastFeedbackJob).toContain("Run desktop fast feedback suite");
-    expect(deploymentFastFeedbackJob).toContain(
-      "if: ${{ needs.candidate_context.outputs.replay_mode != 'true' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.control_plane_changed == 'true') }}"
-    );
   });
 
   it("keeps commit-stage workflow as PR and merge queue only", () => {
@@ -135,23 +131,47 @@ describe("workflow pipeline contract", () => {
     expect(workflow).not.toContain("\n  push:");
   });
 
-  it("keeps deployment pipeline as push/dispatch and removes cross-workflow chaining", () => {
-    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+  it("keeps main cloud delivery workflow as push-only and removes replay branching", () => {
+    const workflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
     expect(workflow).toContain("push:");
+    expect(workflow).not.toContain("workflow_dispatch:");
+    expect(workflow).not.toContain("workflow_run:");
+    expect(workflow).toContain("name: verify-commit-stage-evidence");
+    expect(workflow).toContain("node scripts/pipeline/shared/verify-commit-stage-evidence.mjs");
+    expect(workflow).not.toContain("  fast_feedback:");
+    expect(workflow).not.toContain("  candidate_context:");
+  });
+
+  it("keeps replay workflow manual-only with release_package_sha input", () => {
+    const workflow = readUtf8(cloudDeliveryReplayWorkflowPath);
     expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("release_package_sha:");
+    expect(workflow).not.toContain("\n  push:");
     expect(workflow).not.toContain("workflow_run:");
   });
 
-  it("loads release candidate with always guard to avoid skipped-needs false negatives", () => {
-    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
-    const loadCandidateJob = extractJobBlock(workflow, "load_release_candidate");
-    expect(loadCandidateJob).toContain(
-      "if: ${{ always() && (needs.candidate_context.outputs.replay_mode == 'true' || needs.publish_release_candidate.result == 'success') }}"
+  it("replay workflow resolves source run and reuses existing release package artifact", () => {
+    const workflow = readUtf8(cloudDeliveryReplayWorkflowPath);
+    expect(workflow).toContain("name: resolve-replay-source");
+    expect(workflow).toContain("WORKFLOW_FILE: cloud-delivery-pipeline.yml");
+    expect(workflow).toContain(
+      "name: release-package-${{ needs.resolve_replay_source.outputs.release_package_sha }}"
+    );
+    expect(workflow).toContain("run-id: ${{ needs.resolve_replay_source.outputs.source_run_id }}");
+    expect(workflow).not.toContain("  build_release_package_api_image:");
+    expect(workflow).not.toContain("  build_release_package_web_image:");
+  });
+
+  it("loads release package with always guard to avoid skipped-needs false negatives", () => {
+    const workflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
+    const loadReleasePackageJob = extractJobBlock(workflow, "load_release_package");
+    expect(loadReleasePackageJob).toContain(
+      "if: ${{ always() && needs.publish_release_package.result == 'success' }}"
     );
   });
 
-  it("keeps production deploy path fully automated without a control-plane approval job", () => {
-    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+  it("keeps production deploy path fully automated without a human approval job", () => {
+    const workflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
     expect(workflow).not.toContain("name: approve-control-plane");
     expect(workflow).not.toContain("production-control-plane");
     expect(workflow).toContain("environment: production");
@@ -159,13 +179,13 @@ describe("workflow pipeline contract", () => {
   });
 
   it("runs production only after acceptance YES and deploy-required true", () => {
-    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+    const workflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
     expect(workflow).toContain("needs.acceptance_stage.outputs.acceptance_decision == 'YES'");
     expect(workflow).toContain("needs.acceptance_stage.outputs.deploy_required == 'true'");
   });
 
   it("requires fresh auth canary evidence before production smoke checks", () => {
-    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+    const workflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
     expect(workflow).toContain("Verify auth canary freshness");
     expect(workflow).toContain("Verify delegated pre-deploy probe freshness");
     expect(workflow).toContain(
@@ -190,7 +210,7 @@ describe("workflow pipeline contract", () => {
   });
 
   it("uses runtime client credentials for production api smoke", () => {
-    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+    const workflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
     expect(workflow).toContain("AUTH_AUDIENCE: ${{ vars.AUTH_AUDIENCE }}");
     expect(workflow).toContain("API_SMOKE_ALLOWED_TENANT_ID");
     expect(workflow).toContain("API_SMOKE_ALLOWED_CLIENT_ID");
@@ -202,20 +222,29 @@ describe("workflow pipeline contract", () => {
   });
 
   it("keeps acceptance and production result jobs running with always() for deterministic reason codes", () => {
-    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+    const workflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
+    const replayWorkflow = readUtf8(cloudDeliveryReplayWorkflowPath);
     const acceptanceStageJob = extractJobBlock(workflow, "acceptance_stage");
     const productionStageJob = extractJobBlock(workflow, "production_stage");
+    const replayAcceptanceStageJob = extractJobBlock(replayWorkflow, "acceptance_stage");
+    const replayProductionStageJob = extractJobBlock(replayWorkflow, "production_stage");
 
     expect(acceptanceStageJob).toContain(
-      "if: ${{ always() && needs.load_release_candidate.result == 'success' }}"
+      "if: ${{ always() && needs.load_release_package.result == 'success' }}"
     );
     expect(productionStageJob).toContain(
-      "if: ${{ always() && needs.load_release_candidate.result == 'success' }}"
+      "if: ${{ always() && needs.load_release_package.result == 'success' }}"
+    );
+    expect(replayAcceptanceStageJob).toContain(
+      "if: ${{ always() && needs.load_release_package.result == 'success' }}"
+    );
+    expect(replayProductionStageJob).toContain(
+      "if: ${{ always() && needs.load_release_package.result == 'success' }}"
     );
   });
 
   it("boots workspace before production-stage decision script execution", () => {
-    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+    const workflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
     const productionStageJob = extractJobBlock(workflow, "production_stage");
 
     expect(productionStageJob).toContain("- name: Checkout");
@@ -228,36 +257,42 @@ describe("workflow pipeline contract", () => {
   });
 
   it("keeps required acceptance jobs deterministic via always() and JOB_REQUIRED guards", () => {
-    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+    const workflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
     const infraAcceptanceJob = extractJobBlock(workflow, "infra_readonly_acceptance");
     const identityAcceptanceJob = extractJobBlock(workflow, "identity_readonly_acceptance");
     const runtimeApiAcceptanceJob = extractJobBlock(workflow, "runtime_api_system_acceptance");
 
     expect(infraAcceptanceJob).toContain(
-      "if: ${{ always() && needs.load_release_candidate.result == 'success' }}"
+      "if: ${{ always() && needs.load_release_package.result == 'success' }}"
     );
     expect(infraAcceptanceJob).toContain("JOB_REQUIRED:");
     expect(infraAcceptanceJob).toContain("Record not-required infra acceptance");
 
     expect(identityAcceptanceJob).toContain(
-      "if: ${{ always() && needs.load_release_candidate.result == 'success' }}"
+      "if: ${{ always() && needs.load_release_package.result == 'success' }}"
     );
     expect(identityAcceptanceJob).toContain("JOB_REQUIRED:");
     expect(identityAcceptanceJob).toContain("Record not-required identity acceptance");
 
     expect(runtimeApiAcceptanceJob).toContain(
-      "if: ${{ always() && needs.load_release_candidate.result == 'success' }}"
+      "if: ${{ always() && needs.load_release_package.result == 'success' }}"
     );
     expect(runtimeApiAcceptanceJob).toContain("JOB_REQUIRED:");
   });
 
-  it("keeps release decision logic in shared script and accepts docs-only non-deploy path", () => {
-    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+  it("keeps release decision logic in shared scripts and accepts docs-only non-deploy path", () => {
+    const workflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
+    const replayWorkflow = readUtf8(cloudDeliveryReplayWorkflowPath);
     const stageEligibilityScript = readUtf8(stageEligibilityScriptPath);
+
     expect(workflow).toContain(
-      "node scripts/pipeline/shared/collect-cloud-deployment-stage-timing.mjs"
+      "node scripts/pipeline/shared/collect-cloud-delivery-stage-timing.mjs"
+    );
+    expect(replayWorkflow).toContain(
+      "node scripts/pipeline/shared/collect-cloud-delivery-stage-timing.mjs"
     );
     expect(workflow).toContain("node scripts/pipeline/shared/decide-release-outcome.mjs");
+    expect(replayWorkflow).toContain("node scripts/pipeline/shared/decide-release-outcome.mjs");
     expect(stageEligibilityScript).toContain("DOCS_ONLY_CHANGE");
     expect(stageEligibilityScript).toContain("CHECKS_ONLY_CHANGE");
     expect(stageEligibilityScript).toContain("DESKTOP_ONLY_CHANGE");

@@ -57,7 +57,7 @@ async function main() {
   } else {
     if (deployResult !== "success") {
       productionDecision = "NO";
-      reasonCodes = ["DEPLOY_APPROVED_CANDIDATE_FAILED"];
+      reasonCodes = ["DEPLOY_RELEASE_PACKAGE_FAILED"];
     } else if (
       (runtimeChanged || infraChanged || requiresInfraConvergence) &&
       verifyResult !== "success"
@@ -83,13 +83,13 @@ async function main() {
       identity: identityChanged
     },
     checks: {
-      deployApprovedCandidateResult: deployResult,
+      deployReleasePackageResult: deployResult,
       productionBlackboxVerifyResult: verifyResult
     },
-    candidate: {
-      apiRef: process.env.CANDIDATE_API_REF || "",
-      webRef: process.env.CANDIDATE_WEB_REF || "",
-      codexRef: process.env.CANDIDATE_CODEX_REF || ""
+    releasePackage: {
+      apiRef: process.env.RELEASE_PACKAGE_API_REF || "",
+      webRef: process.env.RELEASE_PACKAGE_WEB_REF || "",
+      codexRef: process.env.RELEASE_PACKAGE_CODEX_REF || ""
     },
     deploymentId
   });

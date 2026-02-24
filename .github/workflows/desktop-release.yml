@@ -77,7 +77,7 @@ jobs:
 
           (async () => {
             const data = await request(
-              `/repos/${repository}/actions/workflows/cloud-deployment-pipeline.yml/runs?status=success&per_page=100`
+              `/repos/${repository}/actions/workflows/cloud-delivery-pipeline.yml/runs?status=success&per_page=100`
             );
 
             const run = (data.workflow_runs || []).find(

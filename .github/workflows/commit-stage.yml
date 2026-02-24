@@ -40,7 +40,7 @@ jobs:
       migration_changed: ${{ steps.scope.outputs.migration_changed }}
       infra_rollout_changed: ${{ steps.scope.outputs.infra_rollout_changed }}
       docs_only_changed: ${{ steps.scope.outputs.docs_only_changed }}
-      control_plane_changed: ${{ steps.scope.outputs.control_plane_changed }}
+      delivery_config_changed: ${{ steps.scope.outputs.delivery_config_changed }}
       requires_infra_convergence: ${{ steps.scope.outputs.requires_infra_convergence }}
       requires_migrations: ${{ steps.scope.outputs.requires_migrations }}
       changed_files_json: ${{ steps.scope.outputs.changed_files_json }}
@@ -95,7 +95,7 @@ jobs:
     name: fast-feedback
     needs:
       - determine_scope
-    if: ${{ needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.control_plane_changed == 'true' }}
+    if: ${{ needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -204,7 +204,7 @@ jobs:
         env:
           HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
           TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
-          RUNTIME_REQUIRED: ${{ needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.control_plane_changed == 'true' }}
+          RUNTIME_REQUIRED: ${{ needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true' }}
           DESKTOP_REQUIRED: ${{ needs.determine_scope.outputs.desktop_changed == 'true' && needs.determine_scope.outputs.docs_only_changed != 'true' }}
           INFRA_REQUIRED: ${{ needs.determine_scope.outputs.infra_changed }}
           IDENTITY_REQUIRED: ${{ needs.determine_scope.outputs.identity_changed }}

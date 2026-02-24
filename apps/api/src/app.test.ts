@@ -106,7 +106,7 @@ async function signAppToken(input: {
     .sign(secret);
 }
 
-async function signAmbiguousToken() {
+async function signMixedClaimsToken() {
   const secret = new TextEncoder().encode(testConfig.authLocalJwtSecret);
   return new SignJWT({
     tid: "tenant-a",
@@ -236,9 +236,9 @@ describe("API", () => {
     await app.close();
   });
 
-  it("rejects ambiguous token classification", async () => {
+  it("accepts delegated tokens that include both scopes and roles", async () => {
     const app = buildApiApp({ config: testConfig });
-    const token = await signAmbiguousToken();
+    const token = await signMixedClaimsToken();
 
     const response = await app.inject({
       method: "GET",
@@ -248,10 +248,15 @@ describe("API", () => {
       }
     });
 
-    expect(response.statusCode).toBe(401);
+    expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
-      code: "token_unclassified",
-      message: "Token must be unambiguously delegated or app-only"
+      caller: {
+        tenantId: "tenant-a",
+        tokenType: "delegated",
+        subjectType: "user",
+        subjectId: "user-oid-1",
+        actorClientId: "web-client"
+      }
     });
 
     await app.close();

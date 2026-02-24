@@ -14,9 +14,9 @@ import type {
   ScimTokenContext
 } from "./types.js";
 
-function hasAny(values: Set<string>, required: readonly string[]) {
+function hasAnyRequired(values: Set<string>, required: readonly string[]) {
   if (required.length === 0) {
-    return true;
+    return false;
   }
 
   return required.some((value) => values.has(value));
@@ -84,12 +84,10 @@ export function buildAuthPreHandler(
         throw permissionDenied(`Missing required permission: ${policy.permission}`);
       }
 
-      if (verified.tokenType === "delegated" && !hasAny(verified.scopes, policy.delegatedScopes)) {
-        throw permissionDenied("Delegated scope requirement not satisfied");
-      }
-
-      if (verified.tokenType === "app" && !hasAny(verified.appRoles, policy.appRoles)) {
-        throw permissionDenied("Application role requirement not satisfied");
+      const scopeSatisfied = hasAnyRequired(verified.scopes, policy.delegatedScopes);
+      const appRoleSatisfied = hasAnyRequired(verified.appRoles, policy.appRoles);
+      if (!scopeSatisfied && !appRoleSatisfied) {
+        throw permissionDenied("Token claims do not satisfy endpoint authorization requirements");
       }
 
       if (policy.tenantParam) {

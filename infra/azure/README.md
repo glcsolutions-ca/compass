@@ -72,8 +72,8 @@ Tracked files stay organization-neutral:
 - `POSTGRES_SKU_NAME`
 - `POSTGRES_SKU_TIER`
 - `POSTGRES_STORAGE_MB`
-- `ENTRA_ISSUER`
-- `ENTRA_JWKS_URI`
+- `AUTH_ISSUER`
+- `AUTH_JWKS_URI`
 - `AUTH_AUDIENCE` (runtime token audience override; preferred for API token validation)
 - `API_IDENTIFIER_URI` (preferred) or `ENTRA_AUDIENCE` (legacy fallback)
 - `AUTH_ALLOWED_CLIENT_IDS`

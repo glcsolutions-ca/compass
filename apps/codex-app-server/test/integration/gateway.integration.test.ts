@@ -39,7 +39,13 @@ function createConfig(startOnBoot = true): CodexAppConfig {
     serviceApiKey: undefined,
     clientName: "compass_codex_gateway_test",
     clientVersion: "0.1.0",
-    startOnBoot
+    startOnBoot,
+    entraClientId: undefined,
+    entraClientSecret: undefined,
+    entraRedirectUri: undefined,
+    entraAllowedTenantIds: [],
+    entraLoginEnabled: false,
+    authDevFallbackEnabled: false
   };
 }
 

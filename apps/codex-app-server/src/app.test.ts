@@ -16,7 +16,13 @@ describe("codex gateway app", () => {
         serviceApiKey: undefined,
         clientName: "compass_codex_gateway",
         clientVersion: "0.1.0",
-        startOnBoot: false
+        startOnBoot: false,
+        entraClientId: undefined,
+        entraClientSecret: undefined,
+        entraRedirectUri: undefined,
+        entraAllowedTenantIds: [],
+        entraLoginEnabled: false,
+        authDevFallbackEnabled: false
       },
       repository: new InMemoryRepository()
     });

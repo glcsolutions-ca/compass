@@ -3,14 +3,21 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
+const COMMAND_MAX_BUFFER = 1024 * 1024 * 50;
 
 async function capture(cmd, args) {
-  const { stdout } = await execFileAsync(cmd, args, { encoding: "utf8" });
+  const { stdout } = await execFileAsync(cmd, args, {
+    encoding: "utf8",
+    maxBuffer: COMMAND_MAX_BUFFER
+  });
   return stdout.trim();
 }
 
 async function run(cmd, args) {
-  await execFileAsync(cmd, args, { encoding: "utf8" });
+  await execFileAsync(cmd, args, {
+    encoding: "utf8",
+    maxBuffer: COMMAND_MAX_BUFFER
+  });
 }
 
 async function resolveToDigestRef(acrName, image) {

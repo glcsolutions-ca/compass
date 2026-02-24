@@ -48,6 +48,9 @@ Branch protection requires only:
 - `docsOnly`
 - plus rollout flags (`migration`, `infraRollout`) used downstream
 
+Scope evaluation excludes files matching `scopeRules.docsOnly` before computing mutable scopes
+(`runtime`, `desktop`, `infra`, `identity`) so documentation-only updates do not trigger control-plane mutation paths.
+
 `changeClass` is derived in priority order: `runtime` -> `infra` -> `identity` -> `desktop` -> `checks`.
 
 ## Docs drift

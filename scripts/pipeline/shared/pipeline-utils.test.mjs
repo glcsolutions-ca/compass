@@ -102,6 +102,16 @@ describe("scope resolution", () => {
     expect(classifyCandidateKind(scope)).toBe("checks");
   });
 
+  it("treats infra README changes as docs-only (not infra mutation scope)", () => {
+    const scope = resolveChangeScope(policy, ["infra/azure/README.md"]);
+    expect(scope.docsOnly).toBe(true);
+    expect(scope.infra).toBe(false);
+    expect(scope.identity).toBe(false);
+    expect(scope.runtime).toBe(false);
+    expect(scope.desktop).toBe(false);
+    expect(classifyCandidateKind(scope)).toBe("checks");
+  });
+
   it("classifies desktop-only changes", () => {
     const scope = resolveChangeScope(policy, ["apps/desktop/src/main.ts"]);
     expect(scope.runtime).toBe(false);
@@ -110,6 +120,16 @@ describe("scope resolution", () => {
     expect(scope.identity).toBe(false);
     expect(scope.docsOnly).toBe(false);
     expect(classifyCandidateKind(scope)).toBe("desktop");
+  });
+
+  it("treats desktop README changes as docs-only (not desktop runtime scope)", () => {
+    const scope = resolveChangeScope(policy, ["apps/desktop/README.md"]);
+    expect(scope.docsOnly).toBe(true);
+    expect(scope.desktop).toBe(false);
+    expect(scope.runtime).toBe(false);
+    expect(scope.infra).toBe(false);
+    expect(scope.identity).toBe(false);
+    expect(classifyCandidateKind(scope)).toBe("checks");
   });
 
   it("flags migration changes", () => {

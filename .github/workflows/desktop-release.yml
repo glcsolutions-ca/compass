@@ -190,7 +190,7 @@ jobs:
       - name: Install dependencies
         env:
           npm_config_node_linker: hoisted
-          npm_config_allow_build_scripts: esbuild,sharp,electron,fs-xattr,macos-alias,@bitdisaster/exe-icon-extractor
+          npm_config_allow_build_scripts: esbuild,sharp,electron,fs-xattr,macos-alias
         run: pnpm install --frozen-lockfile
 
       - name: Decode signing assets
@@ -336,7 +336,7 @@ jobs:
       - name: Install dependencies
         env:
           npm_config_node_linker: hoisted
-          npm_config_allow_build_scripts: esbuild,sharp,electron,fs-xattr,macos-alias,@bitdisaster/exe-icon-extractor
+          npm_config_allow_build_scripts: esbuild,sharp,electron,fs-xattr,macos-alias
         run: pnpm install --frozen-lockfile
 
       - name: Install WiX toolset
@@ -532,16 +532,30 @@ jobs:
 
           case "$SIGNING_MODE" in
             signed)
-              notes="${notes}\n\nSigning mode: signed (macOS signed/notarized, Windows signed)."
+              notes="$notes"$'\n\n'"Signing mode: signed (macOS signed/notarized, Windows signed)."
               ;;
             unsigned)
-              notes="${notes}\n\nSigning mode: unsigned (macOS unsigned, Windows unsigned) for internal testing."
+              notes="$notes"$'\n\n'"Signing mode: unsigned (macOS unsigned, Windows unsigned) for internal testing."
+              notes="$notes"$'\n\n'"macOS unsigned install:"
+              notes="$notes"$'\n'"1. Copy Compass.app from the DMG into /Applications."
+              notes="$notes"$'\n'"2. Run: xattr -dr com.apple.quarantine \"/Applications/Compass.app\""
+              notes="$notes"$'\n'"3. Launch Compass.app."
+              notes="$notes"$'\n\n'"Windows unsigned install:"
+              notes="$notes"$'\n'"1. Run the MSI."
+              notes="$notes"$'\n'"2. If SmartScreen warns, select More info, then Run anyway."
               ;;
             unsigned-macos)
-              notes="${notes}\n\nSigning mode: unsigned-macos (macOS unsigned, Windows signed) for internal testing."
+              notes="$notes"$'\n\n'"Signing mode: unsigned-macos (macOS unsigned, Windows signed) for internal testing."
+              notes="$notes"$'\n\n'"macOS unsigned install:"
+              notes="$notes"$'\n'"1. Copy Compass.app from the DMG into /Applications."
+              notes="$notes"$'\n'"2. Run: xattr -dr com.apple.quarantine \"/Applications/Compass.app\""
+              notes="$notes"$'\n'"3. Launch Compass.app."
               ;;
             unsigned-windows)
-              notes="${notes}\n\nSigning mode: unsigned-windows (macOS signed/notarized, Windows unsigned) for internal testing."
+              notes="$notes"$'\n\n'"Signing mode: unsigned-windows (macOS signed/notarized, Windows unsigned) for internal testing."
+              notes="$notes"$'\n\n'"Windows unsigned install:"
+              notes="$notes"$'\n'"1. Run the MSI."
+              notes="$notes"$'\n'"2. If SmartScreen warns, select More info, then Run anyway."
               ;;
             *)
               echo "Unsupported signing mode: $SIGNING_MODE" >&2

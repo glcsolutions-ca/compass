@@ -1035,7 +1035,7 @@ jobs:
       - runtime_blackbox_acceptance
       - infra_readonly_acceptance
       - identity_readonly_acceptance
-    if: ${{ needs.load_release_candidate.result == 'success' }}
+    if: ${{ always() && needs.load_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -1547,7 +1547,7 @@ jobs:
       - acceptance_stage
       - deploy_approved_candidate
       - production_blackbox_verify
-    if: ${{ needs.load_release_candidate.result == 'success' }}
+    if: ${{ always() && needs.load_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     outputs:
       production_decision: ${{ steps.result.outputs.production_decision }}
@@ -1650,6 +1650,9 @@ jobs:
           CANDIDATE_SHA: ${{ needs.candidate_context.outputs.candidate_sha }}
           REPLAY_MODE: ${{ needs.candidate_context.outputs.replay_mode }}
           COMMIT_STAGE_RESULT: ${{ needs.commit_stage.result }}
+          LOAD_RELEASE_CANDIDATE_RESULT: ${{ needs.load_release_candidate.result }}
+          ACCEPTANCE_STAGE_RESULT: ${{ needs.acceptance_stage.result }}
+          PRODUCTION_STAGE_RESULT: ${{ needs.production_stage.result }}
           HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha || needs.candidate_context.outputs.candidate_sha }}
           ACCEPTANCE_DECISION: ${{ needs.acceptance_stage.outputs.acceptance_decision || 'NO' }}
           ACCEPTANCE_REASON_CODES_JSON: ${{ needs.acceptance_stage.outputs.reason_codes_json || '[]' }}
@@ -1671,10 +1674,20 @@ jobs:
           combined_reason_codes="$(jq -c -n \
             --arg replay_mode "$REPLAY_MODE" \
             --arg commit_result "$COMMIT_STAGE_RESULT" \
+            --arg load_result "$LOAD_RELEASE_CANDIDATE_RESULT" \
+            --arg acceptance_stage_result "$ACCEPTANCE_STAGE_RESULT" \
+            --arg production_stage_result "$PRODUCTION_STAGE_RESULT" \
+            --arg acceptance_decision "$ACCEPTANCE_DECISION" \
+            --arg production_decision "$PRODUCTION_DECISION" \
             --argjson acceptance "$ACCEPTANCE_REASON_CODES_JSON" \
             --argjson production "$PRODUCTION_REASON_CODES_JSON" \
             '[]
              + (if $replay_mode != "true" and $commit_result != "success" then ["COMMIT_STAGE_FAILED"] else [] end)
+             + (if $load_result != "success" then ["LOAD_RELEASE_CANDIDATE_NOT_SUCCESS"] else [] end)
+             + (if $acceptance_stage_result != "success" and (($acceptance // []) | length) == 0 then ["ACCEPTANCE_STAGE_NOT_SUCCESS"] else [] end)
+             + (if $acceptance_decision != "YES" and (($acceptance // []) | length) == 0 then ["ACCEPTANCE_DECISION_NOT_YES"] else [] end)
+             + (if $production_stage_result != "success" and (($production // []) | length) == 0 then ["PRODUCTION_STAGE_NOT_SUCCESS"] else [] end)
+             + (if $production_decision != "YES" and (($production // []) | length) == 0 then ["PRODUCTION_DECISION_NOT_YES"] else [] end)
              + ($acceptance // [])
              + ($production // [])
              | unique')"

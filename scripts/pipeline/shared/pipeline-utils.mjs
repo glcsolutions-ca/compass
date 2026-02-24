@@ -192,29 +192,35 @@ export function assertPipelinePolicyShape(policy) {
 }
 
 export function resolveChangeScope(policy, changedFiles) {
-  const runtime = changedFiles.some((filePath) =>
-    matchesAnyPattern(filePath, policy.scopeRules.runtime)
-  );
-  const desktop = changedFiles.some((filePath) =>
-    matchesAnyPattern(filePath, policy.scopeRules.desktop)
-  );
-  const infra = changedFiles.some((filePath) =>
-    matchesAnyPattern(filePath, policy.scopeRules.infra)
-  );
-  const identity = changedFiles.some((filePath) =>
-    matchesAnyPattern(filePath, policy.scopeRules.identity)
-  );
-  const migration = changedFiles.some((filePath) =>
-    matchesAnyPattern(filePath, policy.scopeRules.migration)
-  );
-  const infraRollout = changedFiles.some((filePath) =>
-    matchesAnyPattern(filePath, policy.scopeRules.infraRollout)
-  );
-
   const docsOnlyCandidate =
     changedFiles.length > 0 &&
     changedFiles.every((filePath) => matchesAnyPattern(filePath, policy.scopeRules.docsOnly));
-  const docsOnly = docsOnlyCandidate && !runtime && !desktop && !infra && !identity;
+
+  // Scope booleans represent mutable system surfaces, so documentation-only files
+  // are excluded before runtime/desktop/infra/identity classification.
+  const nonDocsChangedFiles = changedFiles.filter(
+    (filePath) => !matchesAnyPattern(filePath, policy.scopeRules.docsOnly)
+  );
+
+  const runtime = nonDocsChangedFiles.some((filePath) =>
+    matchesAnyPattern(filePath, policy.scopeRules.runtime)
+  );
+  const desktop = nonDocsChangedFiles.some((filePath) =>
+    matchesAnyPattern(filePath, policy.scopeRules.desktop)
+  );
+  const infra = nonDocsChangedFiles.some((filePath) =>
+    matchesAnyPattern(filePath, policy.scopeRules.infra)
+  );
+  const identity = nonDocsChangedFiles.some((filePath) =>
+    matchesAnyPattern(filePath, policy.scopeRules.identity)
+  );
+  const migration = nonDocsChangedFiles.some((filePath) =>
+    matchesAnyPattern(filePath, policy.scopeRules.migration)
+  );
+  const infraRollout = nonDocsChangedFiles.some((filePath) =>
+    matchesAnyPattern(filePath, policy.scopeRules.infraRollout)
+  );
+  const docsOnly = docsOnlyCandidate;
 
   return {
     runtime,

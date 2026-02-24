@@ -2,7 +2,14 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    "disableSourceOfProjectReferenceRedirect": true
   },
+  "references": [
+    {
+      "path": "../contracts/tsconfig.build.json"
+    }
+  ],
+  "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]
 }

@@ -189,6 +189,7 @@ module api './modules/containerapp-api.bicep' = {
     authActiveTenantIds: authActiveTenantIds
     oauthTokenIssuer: oauthTokenIssuer
     oauthTokenAudience: oauthTokenAudience
+    // Required at runtime for OAuth token issuance; keep this managed via infra convergence.
     oauthTokenSigningSecret: oauthTokenSigningSecret
     customDomainName: apiCustomDomain
     customDomainCertificateId: empty(apiCustomDomain) ? '' : apiManagedCertificate.id

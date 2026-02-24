@@ -10,7 +10,7 @@ This directory is the machine source of truth for delivery stage control.
 
 ## Policy Sections
 
-- `scopeRules`: file-to-scope classification (`runtime`, `infra`, `identity`, `docsOnly`, rollout flags)
+- `scopeRules`: file-to-scope classification (`runtime`, `desktop`, `infra`, `identity`, `docsOnly`, rollout flags)
 - `commitStage`: required commit checks plus timing SLO policy (`targetSeconds`, `mode`)
 - `acceptanceStage`: required acceptance jobs by scope
 - `productionStage`: production promotion safety toggles

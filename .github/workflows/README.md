@@ -5,9 +5,10 @@
 1. PRs run `commit-stage.yml` and must pass `commit-stage`.
 2. Merge queue runs the same commit gate on `merge_group` before integrating to `main`.
 3. Commits on `main` run `deployment-pipeline.yml`.
-4. Mainline pipeline performs commit checks, freezes candidate refs, runs acceptance, then runs production.
+4. Deployment pipeline performs commit checks, freezes candidate refs, runs acceptance, then runs production.
 5. Production deploys accepted candidate digests only (no runtime image rebuild).
-6. Mainline pipeline emits one canonical release decision artifact (`YES` or `NO`).
+6. Deployment pipeline emits one canonical release decision artifact (`YES` or `NO`).
+7. Docs-only, checks-only, and desktop-only commits return acceptance `YES` with no cloud production mutation.
 
 ## Workflow Index
 

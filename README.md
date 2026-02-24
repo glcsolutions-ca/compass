@@ -58,5 +58,5 @@ pnpm dev
 - Branch protection: `docs/branch-protection.md`
 - Machine policy: `.github/policy/pipeline-policy.json`
 - Commit stage workflow: `.github/workflows/commit-stage.yml`
-- Mainline pipeline workflow: `.github/workflows/deployment-pipeline.yml`
+- Deployment pipeline workflow: `.github/workflows/deployment-pipeline.yml`
 - Runbooks: `docs/runbooks/`

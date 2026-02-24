@@ -66,6 +66,7 @@ jobs:
       pr_number: ${{ steps.scope.outputs.pr_number }}
       change_class: ${{ steps.scope.outputs.change_class }}
       runtime_changed: ${{ steps.scope.outputs.runtime_changed }}
+      desktop_changed: ${{ steps.scope.outputs.desktop_changed }}
       infra_changed: ${{ steps.scope.outputs.infra_changed }}
       identity_changed: ${{ steps.scope.outputs.identity_changed }}
       migration_changed: ${{ steps.scope.outputs.migration_changed }}
@@ -391,6 +392,7 @@ jobs:
       TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
       CHANGE_CLASS: ${{ needs.determine_scope.outputs.change_class }}
       RUNTIME_CHANGED: ${{ needs.determine_scope.outputs.runtime_changed }}
+      DESKTOP_CHANGED: ${{ needs.determine_scope.outputs.desktop_changed }}
       INFRA_CHANGED: ${{ needs.determine_scope.outputs.infra_changed }}
       IDENTITY_CHANGED: ${{ needs.determine_scope.outputs.identity_changed }}
       DOCS_ONLY_CHANGED: ${{ needs.determine_scope.outputs.docs_only_changed }}
@@ -435,6 +437,7 @@ jobs:
             "buildRunId": "${GITHUB_RUN_ID}",
             "scope": {
               "runtime": ${RUNTIME_CHANGED},
+              "desktop": ${DESKTOP_CHANGED},
               "infra": ${INFRA_CHANGED},
               "identity": ${IDENTITY_CHANGED},
               "docsOnly": ${DOCS_ONLY_CHANGED}
@@ -468,6 +471,7 @@ jobs:
       head_sha: ${{ steps.manifest.outputs.head_sha }}
       change_class: ${{ steps.manifest.outputs.change_class }}
       runtime_changed: ${{ steps.manifest.outputs.runtime_changed }}
+      desktop_changed: ${{ steps.manifest.outputs.desktop_changed }}
       infra_changed: ${{ steps.manifest.outputs.infra_changed }}
       identity_changed: ${{ steps.manifest.outputs.identity_changed }}
       docs_only_changed: ${{ steps.manifest.outputs.docs_only_changed }}
@@ -1038,6 +1042,7 @@ jobs:
       acceptance_decision: ${{ steps.finalize.outputs.acceptance_decision }}
       deploy_required: ${{ steps.scope.outputs.deploy_required }}
       control_plane_required: ${{ steps.scope.outputs.control_plane_required }}
+      deploy_skip_reason_code: ${{ steps.scope.outputs.deploy_skip_reason_code }}
       reason_codes_json: ${{ steps.finalize.outputs.reason_codes_json }}
     steps:
       - name: Checkout
@@ -1051,6 +1056,7 @@ jobs:
       - name: Resolve acceptance scope
         id: scope
         env:
+          CHANGE_CLASS: ${{ needs.load_release_candidate.outputs.change_class }}
           INFRA_CHANGED: ${{ needs.load_release_candidate.outputs.infra_changed }}
           IDENTITY_CHANGED: ${{ needs.load_release_candidate.outputs.identity_changed }}
           DOCS_ONLY_CHANGED: ${{ needs.load_release_candidate.outputs.docs_only_changed }}
@@ -1059,10 +1065,18 @@ jobs:
           set -euo pipefail
 
           deploy_required="true"
+          deploy_skip_reason_code=""
           control_plane_required="false"
 
           if [ "$DOCS_ONLY_CHANGED" = "true" ]; then
             deploy_required="false"
+            deploy_skip_reason_code="DOCS_ONLY_CHANGE"
+          elif [ "$CHANGE_CLASS" = "checks" ]; then
+            deploy_required="false"
+            deploy_skip_reason_code="CHECKS_ONLY_CHANGE"
+          elif [ "$CHANGE_CLASS" = "desktop" ]; then
+            deploy_required="false"
+            deploy_skip_reason_code="DESKTOP_ONLY_CHANGE"
           fi
 
           if [ "$INFRA_CHANGED" = "true" ] || [ "$IDENTITY_CHANGED" = "true" ] || [ "$REQUIRES_INFRA_CONVERGENCE" = "true" ]; then
@@ -1072,6 +1086,7 @@ jobs:
           {
             echo "deploy_required=$deploy_required"
             echo "control_plane_required=$control_plane_required"
+            echo "deploy_skip_reason_code=$deploy_skip_reason_code"
           } >> "$GITHUB_OUTPUT"
 
       - name: Decide acceptance stage
@@ -1092,12 +1107,22 @@ jobs:
           CHECK_RESULTS_JSON: ${{ format('{{"load-release-candidate":"{0}","runtime-blackbox-acceptance":"{1}","infra-readonly-acceptance":"{2}","identity-readonly-acceptance":"{3}"}}', needs.load_release_candidate.result, needs.runtime_blackbox_acceptance.result, needs.infra_readonly_acceptance.result, needs.identity_readonly_acceptance.result) }}
         run: node scripts/pipeline/acceptance/decide-acceptance-stage.mjs
 
-      - name: Write docs-only acceptance result
+      - name: Write non-deploy acceptance result
         if: ${{ steps.scope.outputs.deploy_required != 'true' }}
         env:
           HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+          DEPLOY_SKIP_REASON_CODE: ${{ steps.scope.outputs.deploy_skip_reason_code }}
         run: |
           set -euo pipefail
+
+          reason_message="No deployment required for this candidate."
+          if [ "$DEPLOY_SKIP_REASON_CODE" = "DOCS_ONLY_CHANGE" ]; then
+            reason_message="Docs-only candidate; deployment not required."
+          elif [ "$DEPLOY_SKIP_REASON_CODE" = "CHECKS_ONLY_CHANGE" ]; then
+            reason_message="Checks-only candidate; deployment not required."
+          elif [ "$DEPLOY_SKIP_REASON_CODE" = "DESKTOP_ONLY_CHANGE" ]; then
+            reason_message="Desktop-only candidate; cloud deployment not required."
+          fi
 
           mkdir -p ".artifacts/acceptance/$HEAD_SHA"
           cat > ".artifacts/acceptance/$HEAD_SHA/result.json" <<JSON
@@ -1107,8 +1132,8 @@ jobs:
             "headSha": "$HEAD_SHA",
             "pass": true,
             "decision": "YES",
-            "reasonCodes": ["DOCS_ONLY_CHANGE"],
-            "reasons": ["Docs-only candidate; deployment not required."]
+            "reasonCodes": ["$DEPLOY_SKIP_REASON_CODE"],
+            "reasons": ["$reason_message"]
           }
           JSON
 
@@ -1116,6 +1141,7 @@ jobs:
         id: finalize
         env:
           DEPLOY_REQUIRED: ${{ steps.scope.outputs.deploy_required }}
+          DEPLOY_SKIP_REASON_CODE: ${{ steps.scope.outputs.deploy_skip_reason_code }}
           HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
           DECIDE_OUTCOME: ${{ steps.decide.outcome }}
         run: |
@@ -1141,7 +1167,8 @@ jobs:
               reason_codes_json='["ACCEPTANCE_GATE_FAILED"]'
             fi
           else
-            reason_codes_json='["DOCS_ONLY_CHANGE"]'
+            reason="${DEPLOY_SKIP_REASON_CODE:-NO_DEPLOY_REQUIRED}"
+            reason_codes_json="$(jq -cn --arg reason "$reason" '[$reason]')"
           fi
 
           {
@@ -1534,6 +1561,7 @@ jobs:
           ACCEPTANCE_REASON_CODES_JSON: ${{ needs.acceptance_stage.outputs.reason_codes_json }}
           DEPLOY_REQUIRED: ${{ needs.acceptance_stage.outputs.deploy_required }}
           RUNTIME_CHANGED: ${{ needs.load_release_candidate.outputs.runtime_changed }}
+          DESKTOP_CHANGED: ${{ needs.load_release_candidate.outputs.desktop_changed }}
           INFRA_CHANGED: ${{ needs.load_release_candidate.outputs.infra_changed }}
           IDENTITY_CHANGED: ${{ needs.load_release_candidate.outputs.identity_changed }}
           REQUIRES_INFRA_CONVERGENCE: ${{ needs.load_release_candidate.outputs.requires_infra_convergence }}
@@ -1554,7 +1582,7 @@ jobs:
             reason_codes_json="${ACCEPTANCE_REASON_CODES_JSON:-[\"ACCEPTANCE_DECISION_NOT_YES\"]}"
           elif [ "$DEPLOY_REQUIRED" != "true" ]; then
             production_decision="YES"
-            reason_codes_json='["DOCS_ONLY_CHANGE"]'
+            reason_codes_json="${ACCEPTANCE_REASON_CODES_JSON:-[\"NO_DEPLOY_REQUIRED\"]}"
           else
             if [ "$DEPLOY_RESULT" != "success" ]; then
               production_decision="NO"
@@ -1577,6 +1605,7 @@ jobs:
             "reasonCodes": $reason_codes_json,
             "scope": {
               "runtime": $RUNTIME_CHANGED,
+              "desktop": $DESKTOP_CHANGED,
               "infra": $INFRA_CHANGED,
               "identity": $IDENTITY_CHANGED
             },

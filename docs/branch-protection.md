@@ -22,7 +22,7 @@ gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/req
   --input /tmp/required-status-checks.json
 ```
 
-## Required Mainline Safety Controls
+## Required Deployment Pipeline Safety Controls
 
 - Enforce admins (`main` has no admin bypass in normal flow).
 - Require merge queue on `main`.

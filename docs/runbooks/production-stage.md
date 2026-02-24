@@ -71,7 +71,7 @@ Required acceptance environment secrets (read-only):
 
 ## Candidate and Config Contracts
 
-Mainline pipeline loads candidate manifest contract from:
+Deployment pipeline loads candidate manifest contract from:
 
 - `.artifacts/candidate/<sha>/manifest.json`
 

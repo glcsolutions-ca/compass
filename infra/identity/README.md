@@ -30,14 +30,14 @@
 
 - Backend is `azurerm` (remote state in Azure Storage).
 - Authentication model is OIDC + Azure AD auth (`use_oidc=true`, `use_azuread_auth=true`).
-- Mainline acceptance stage runs non-mutating Terraform plan evidence.
-- Mainline production stage runs guarded Terraform apply for accepted candidates.
+- Deployment pipeline acceptance stage runs non-mutating Terraform plan evidence.
+- Deployment pipeline production stage runs guarded Terraform apply for accepted candidates.
 
 ## Acceptance vs Production Credential Boundary
 
 - Acceptance identity plan uses read-only identity credentials in `acceptance` environment.
 - Production identity apply uses mutating credentials in `production` environment.
-- Mainline pipeline enforces this split with `AZURE_ACCEPTANCE_IDENTITY_CLIENT_ID` for acceptance and `AZURE_IDENTITY_CLIENT_ID` for production.
+- Deployment pipeline enforces this split with `AZURE_ACCEPTANCE_IDENTITY_CLIENT_ID` for acceptance and `AZURE_IDENTITY_CLIENT_ID` for production.
 
 ## Required Production Variables (identity acceptance/apply)
 
@@ -92,9 +92,9 @@ Rotate bootstrap identity with explicit handoff:
 
 ## Workflow Evidence
 
-- Mainline acceptance stage writes `.artifacts/identity/<sha>/plan.json`.
-- Mainline acceptance stage writes config-contract results to `.artifacts/identity/<sha>/config-validation.json`.
-- Mainline production stage writes `.artifacts/identity/<sha>/outputs.json`.
+- Deployment pipeline acceptance stage writes `.artifacts/identity/<sha>/plan.json`.
+- Deployment pipeline acceptance stage writes config-contract results to `.artifacts/identity/<sha>/config-validation.json`.
+- Deployment pipeline production stage writes `.artifacts/identity/<sha>/outputs.json`.
 
 ## Outputs Contract and Downstream Mapping
 

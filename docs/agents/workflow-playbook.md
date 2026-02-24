@@ -27,10 +27,10 @@ pnpm commit:docs-drift
 3. `commit-stage` is the merge-blocking decision.
 4. Merge queue runs the same commit-stage gate on `merge_group`.
 5. Merge to `main` triggers `deployment-pipeline.yml`.
-6. Mainline pipeline runs commit checks, freezes candidate digest refs, and loads candidate contract.
-7. Mainline acceptance stage validates the same candidate and emits one yes/no decision.
-8. Mainline production stage promotes accepted candidate refs with production lock.
-9. Mainline release decision writes `.artifacts/release/<sha>/decision.json` as canonical release verdict.
+6. Deployment pipeline runs commit checks, freezes candidate digest refs, and loads candidate contract.
+7. Deployment pipeline acceptance stage validates the same candidate and emits one yes/no decision.
+8. Deployment pipeline production stage promotes accepted candidate refs with production lock.
+9. Deployment pipeline release decision writes `.artifacts/release/<sha>/decision.json` as canonical release verdict.
 
 ## Governance Invariant
 

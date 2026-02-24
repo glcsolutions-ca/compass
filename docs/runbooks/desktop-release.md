@@ -7,7 +7,7 @@ Release signed Compass desktop installers for:
 - macOS arm64 (`.dmg`)
 - Windows x64 (`.msi`)
 
-Installers are built from an already accepted `main` candidate and published to GitHub Releases.
+Installers are built from a `main` candidate that already passed the deployment pipeline and are published to GitHub Releases.
 
 ## Workflow
 
@@ -60,7 +60,7 @@ Desktop packaging requires native modules used by Electron and DMG/MSI makers.
 
 ## Execution Steps
 
-1. Confirm acceptance success for the `candidate_sha` on `main`.
+1. Confirm deployment pipeline success for the `candidate_sha` on `main`.
 2. Start `Desktop Release` workflow with target inputs.
 3. Wait for both build jobs:
    - `build-macos`: signs + notarizes app, emits renamed DMG.
@@ -80,7 +80,7 @@ Desktop packaging requires native modules used by Electron and DMG/MSI makers.
 ## Failure Recovery
 
 - If candidate validation fails:
-  - Re-run Acceptance Stage for the target SHA on `main`.
+  - Re-run deployment pipeline for the target SHA on `main`.
   - Retry desktop release workflow.
 - If macOS signing/notarization fails:
   - Verify Apple cert/password/API key secrets.

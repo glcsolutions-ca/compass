@@ -6,7 +6,7 @@ This repository enforces a deterministic commit-stage contract defined in `.gith
 
 Every PR to `main` must pass fast, reliable, merge-blocking evidence:
 
-1. Change scope is resolved (`runtime`, `infra`, `identity`, `docsOnly`).
+1. Change scope is resolved (`runtime`, `desktop`, `infra`, `identity`, `docsOnly`).
 2. Required fast checks run based on scope.
 3. Merge is allowed only when `commit-stage` passes.
 
@@ -42,12 +42,13 @@ Branch protection requires only:
 `pipeline-policy.json` classifies changed files into:
 
 - `runtime`
+- `desktop`
 - `infra`
 - `identity`
 - `docsOnly`
 - plus rollout flags (`migration`, `infraRollout`) used downstream
 
-`changeClass` is derived in priority order: `runtime` -> `infra` -> `identity` -> `checks`.
+`changeClass` is derived in priority order: `runtime` -> `infra` -> `identity` -> `desktop` -> `checks`.
 
 ## Docs drift
 

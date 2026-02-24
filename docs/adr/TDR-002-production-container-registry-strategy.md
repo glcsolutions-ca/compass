@@ -53,7 +53,7 @@ All were rejected for current production posture due to security or control-plan
 
 ## Test Cases and Scenarios
 
-1. Mainline pipeline runtime/infra stages run without GHCR production credentials configured.
+1. Deployment pipeline runtime/infra stages run without GHCR production credentials configured.
 2. Runtime image references remain digest-pinned and resolved through ACR.
 3. ACA API/Web/Job resources continue to use managed identity pull configuration with no registry password secret references.
 4. Non-prod canary prerequisite for any future GHCR reconsideration:

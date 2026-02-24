@@ -34,6 +34,7 @@ jobs:
       pr_number: ${{ steps.scope.outputs.pr_number }}
       change_class: ${{ steps.scope.outputs.change_class }}
       runtime_changed: ${{ steps.scope.outputs.runtime_changed }}
+      desktop_changed: ${{ steps.scope.outputs.desktop_changed }}
       infra_changed: ${{ steps.scope.outputs.infra_changed }}
       identity_changed: ${{ steps.scope.outputs.identity_changed }}
       migration_changed: ${{ steps.scope.outputs.migration_changed }}

@@ -5,6 +5,8 @@ const commitStageWorkflowPath = ".github/workflows/commit-stage.yml";
 const cloudDeploymentPipelineWorkflowPath = ".github/workflows/cloud-deployment-pipeline.yml";
 const desktopDeploymentPipelineWorkflowPath = ".github/workflows/desktop-deployment-pipeline.yml";
 const desktopReleaseCompatibilityWorkflowPath = ".github/workflows/desktop-release.yml";
+const authCanaryWorkflowPath = ".github/workflows/auth-entra-canary.yml";
+const authDelegatedWorkflowPath = ".github/workflows/auth-delegated-smoke.yml";
 const sharedApplyScriptPath = "scripts/pipeline/cloud/production/apply-infra.mjs";
 const stageEligibilityScriptPath = "scripts/pipeline/shared/resolve-stage-eligibility.mjs";
 
@@ -158,6 +160,43 @@ describe("workflow pipeline contract", () => {
     const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
     expect(workflow).toContain("needs.acceptance_stage.outputs.acceptance_decision == 'YES'");
     expect(workflow).toContain("needs.acceptance_stage.outputs.deploy_required == 'true'");
+  });
+
+  it("requires fresh auth canary evidence before production smoke checks", () => {
+    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+    expect(workflow).toContain("Verify auth canary freshness");
+    expect(workflow).toContain("Verify delegated pre-deploy probe freshness");
+    expect(workflow).toContain(
+      "node scripts/pipeline/cloud/production/verify-auth-canary-freshness.mjs"
+    );
+    expect(workflow).toContain("AUTH_CANARY_ARTIFACT_NAME: delegated-smoke-freshness");
+    expect(workflow).toContain("AUTH_CANARY_REQUIRED_ARTIFACT_NAME: auth-delegated-smoke-");
+  });
+
+  it("defines nightly auth entra canary workflow", () => {
+    const workflow = readUtf8(authCanaryWorkflowPath);
+    expect(workflow).toContain("schedule:");
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("node scripts/pipeline/cloud/acceptance/run-auth-entra-canary.mjs");
+  });
+
+  it("defines manual delegated auth smoke workflow", () => {
+    const workflow = readUtf8(authDelegatedWorkflowPath);
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("AUTH_DELEGATED_PROBE_TOKEN");
+    expect(workflow).toContain("node scripts/pipeline/cloud/production/verify-delegated-smoke.mjs");
+  });
+
+  it("uses runtime client credentials for production api smoke", () => {
+    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+    expect(workflow).toContain("AUTH_AUDIENCE: ${{ vars.AUTH_AUDIENCE }}");
+    expect(workflow).toContain("API_SMOKE_ALLOWED_TENANT_ID");
+    expect(workflow).toContain("API_SMOKE_ALLOWED_CLIENT_ID");
+    expect(workflow).toContain("API_SMOKE_DENIED_TENANT_ID");
+    expect(workflow).toContain("API_SMOKE_DENIED_CLIENT_ID");
+    expect(workflow).toContain("API_SMOKE_DENIED_EXPECTED_CODE");
+    expect(workflow).not.toContain("API_SMOKE_AUTH_TOKEN");
+    expect(workflow).not.toContain("API_SMOKE_APP_TOKEN");
   });
 
   it("keeps acceptance and production result jobs running with always() for deterministic reason codes", () => {

@@ -16,15 +16,15 @@
 
 `main.tf` provisions these Entra resources:
 
-| Object                                                            | Purpose                                                                          |
-| ----------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `azuread_application.api` + `azuread_service_principal.api`       | Compass API app registration, delegated scope, and `TimeSync.Admin` app role.    |
-| `azuread_application.web` + `azuread_service_principal.web`       | Compass Web app registration with redirect URI and required API delegated scope. |
-| `azuread_application.deploy` + `azuread_service_principal.deploy` | Deploy identity used by production workflows via OIDC federation.                |
-| `azuread_application.smoke` + `azuread_service_principal.smoke`   | Smoke identity granted API application role access.                              |
-| `azuread_application_federated_identity_credential.deploy_main`   | GitHub Actions OIDC trust for deploy identity (`environment: production`).       |
-| `azuread_application_federated_identity_credential.smoke_main`    | GitHub Actions OIDC trust for smoke identity (`environment: production`).        |
-| `azuread_app_role_assignment.smoke_timesync_admin`                | Binds smoke service principal to API `TimeSync.Admin` role.                      |
+| Object                                                            | Purpose                                                                                                                                                                                              |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `azuread_application.api` + `azuread_service_principal.api`       | Compass API app registration (`AzureADMultipleOrgs`), delegated scopes (`compass.user`, `compass.admin`), and app roles (`Compass.Integration.Read`, `Compass.Integration.Write`, `TimeSync.Admin`). |
+| `azuread_application.web` + `azuread_service_principal.web`       | Compass Web app registration with redirect URI and required API delegated scope.                                                                                                                     |
+| `azuread_application.deploy` + `azuread_service_principal.deploy` | Deploy identity used by production workflows via OIDC federation.                                                                                                                                    |
+| `azuread_application.smoke` + `azuread_service_principal.smoke`   | Smoke identity granted API application role access (`Compass.Integration.Read`, `TimeSync.Admin`).                                                                                                   |
+| `azuread_application_federated_identity_credential.deploy_main`   | GitHub Actions OIDC trust for deploy identity (`environment: production`).                                                                                                                           |
+| `azuread_application_federated_identity_credential.smoke_main`    | GitHub Actions OIDC trust for smoke identity (`environment: production`).                                                                                                                            |
+| `azuread_app_role_assignment.smoke_timesync_admin`                | Binds smoke service principal to API `TimeSync.Admin` role.                                                                                                                                          |
 
 ## Backend and Auth Model
 

@@ -441,7 +441,7 @@ export async function runTestingPolicy(options = {}) {
             "- apps/**/src/**/*.test.ts(x) or packages/**/src/**/*.test.ts(x) for commit-stage",
             "- apps/**/test/integration/**/*.test.ts for integration",
             "- tests/e2e/**/*.spec.ts for Playwright",
-            "- tests/smoke/**/*.ts for smoke/system"
+            "- tests/system/**/*.ts or tests/smoke/**/*.ts for smoke/system"
           ],
           see: policy.docs.directoryConventions
         })

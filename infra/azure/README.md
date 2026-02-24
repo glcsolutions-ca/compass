@@ -69,11 +69,24 @@ Tracked files stay organization-neutral:
 - `POSTGRES_SKU_NAME`
 - `POSTGRES_SKU_TIER`
 - `POSTGRES_STORAGE_MB`
+- `ENTRA_ISSUER`
+- `ENTRA_JWKS_URI`
+- `AUTH_AUDIENCE` (runtime token audience override; preferred for API token validation)
+- `API_IDENTIFIER_URI` (preferred) or `ENTRA_AUDIENCE` (legacy fallback)
+- `AUTH_ALLOWED_CLIENT_IDS`
+- `AUTH_ACTIVE_TENANT_IDS`
+- `OAUTH_TOKEN_ISSUER`
+- `OAUTH_TOKEN_AUDIENCE`
+- `AUTH_BOOTSTRAP_DELEGATED_USER_OID`
+- `AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL`
+- `API_SMOKE_ALLOWED_TENANT_ID`
 
 ## Required Production Secrets
 
 - `AZURE_DEPLOY_CLIENT_ID`
 - `POSTGRES_ADMIN_PASSWORD`
+- `OAUTH_TOKEN_SIGNING_SECRET`
+- `API_SMOKE_ALLOWED_CLIENT_ID`
 
 ## Optional Custom Domain Variables
 

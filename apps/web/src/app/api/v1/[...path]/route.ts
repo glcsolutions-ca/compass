@@ -1,7 +1,12 @@
 import type { NextRequest } from "next/server";
+import { parseSessionCookie, serializeSession, type SessionPayload } from "./session-cookie";
+
+export const runtime = "nodejs";
 
 const DEFAULT_API_BASE_URL = "http://localhost:3001";
 const UPSTREAM_TIMEOUT_MS = 10_000;
+const SESSION_COOKIE_NAME = "__Host-compass_session";
+const CSRF_COOKIE_NAME = "__Host-compass_csrf";
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "keep-alive",
@@ -15,7 +20,6 @@ const HOP_BY_HOP_HEADERS = new Set([
 const FORWARDED_REQUEST_HEADERS = new Set([
   "accept",
   "accept-language",
-  "authorization",
   "content-type",
   "if-match",
   "if-none-match",
@@ -27,6 +31,7 @@ const FORWARDED_REQUEST_HEADERS = new Set([
   "x-correlation-id",
   "x-request-id"
 ]);
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 interface RouteContext {
   params: Promise<{
@@ -47,14 +52,27 @@ function resolveApiBaseUrl() {
   return DEFAULT_API_BASE_URL;
 }
 
+function resolveSessionSecret() {
+  const configured = process.env.WEB_SESSION_SECRET?.trim();
+  if (configured && configured.length >= 16) {
+    return configured;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    return null;
+  }
+
+  return "compass-web-session-dev-secret";
+}
+
 function toUpstreamUrl(baseUrl: string, requestUrl: string, pathSegments: string[] = []) {
   const incomingUrl = new URL(requestUrl);
   const encodedPath = pathSegments.map((segment) => encodeURIComponent(segment)).join("/");
   const suffix = encodedPath.length > 0 ? `/${encodedPath}` : "";
-  return `${baseUrl}/api/v1${suffix}${incomingUrl.search}`;
+  return `${baseUrl}/v1${suffix}${incomingUrl.search}`;
 }
 
-function buildUpstreamRequestHeaders(requestHeaders: Headers) {
+function buildUpstreamRequestHeaders(requestHeaders: Headers, accessToken: string | null) {
   const headers = new Headers();
 
   for (const [name, value] of requestHeaders.entries()) {
@@ -68,6 +86,9 @@ function buildUpstreamRequestHeaders(requestHeaders: Headers) {
     headers.set(name, value);
   }
 
+  if (accessToken) {
+    headers.set("authorization", `Bearer ${accessToken}`);
+  }
   return headers;
 }
 
@@ -84,26 +105,135 @@ function buildDownstreamResponseHeaders(upstreamHeaders: Headers) {
   return headers;
 }
 
+function isMutatingMethod(method: string) {
+  return MUTATING_METHODS.has(method.toUpperCase());
+}
+
+function isHighRiskPath(path: string[]) {
+  if (path.length >= 3 && path[0] === "tenants" && path[2] === "roles") {
+    return true;
+  }
+
+  return path.length > 0 && path[0] === "scim";
+}
+
+function requiresSession(path: string[]) {
+  return !(path[0] === "oauth" && path[1] === "token");
+}
+
+function allowedOrigins(requestUrl: string) {
+  const incoming = new URL(requestUrl);
+  const sameOrigin = `${incoming.protocol}//${incoming.host}`;
+  const configured = process.env.WEB_ALLOWED_ORIGINS?.trim();
+  if (!configured) {
+    return new Set([sameOrigin]);
+  }
+
+  return new Set(
+    configured
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+      .concat(sameOrigin)
+  );
+}
+
+function hasValidBrowserOrigin(request: NextRequest) {
+  const origins = allowedOrigins(request.url);
+  const origin = request.headers.get("origin");
+  if (origin && origins.has(origin)) {
+    return true;
+  }
+
+  const referer = request.headers.get("referer");
+  if (!referer) {
+    return false;
+  }
+
+  try {
+    const refererOrigin = new URL(referer).origin;
+    return origins.has(refererOrigin);
+  } catch {
+    return false;
+  }
+}
+
+function jsonError(
+  status: number,
+  payload: {
+    error: string;
+    code: string;
+  }
+) {
+  return Response.json(payload, {
+    status,
+    headers: {
+      "cache-control": "no-store"
+    }
+  });
+}
+
+function sessionCookieValue(payload: SessionPayload, secret: string) {
+  return `${SESSION_COOKIE_NAME}=${serializeSession(payload, secret)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=43200`;
+}
+
 async function proxyRequest(request: NextRequest, context: RouteContext) {
   const apiBaseUrl = resolveApiBaseUrl();
   if (!apiBaseUrl) {
-    return Response.json(
-      {
-        error: "API base URL is not configured",
-        code: "API_BASE_URL_REQUIRED"
-      },
-      {
-        status: 500,
-        headers: {
-          "cache-control": "no-store"
-        }
-      }
-    );
+    return jsonError(500, {
+      error: "API base URL is not configured",
+      code: "API_BASE_URL_REQUIRED"
+    });
   }
 
   const { path } = await context.params;
+  const secret = resolveSessionSecret();
+  if (!secret) {
+    return jsonError(500, {
+      error: "WEB_SESSION_SECRET is not configured",
+      code: "SESSION_SECRET_REQUIRED"
+    });
+  }
+
+  let session: SessionPayload | null = null;
+  if (requiresSession(path)) {
+    const rawSessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    session = parseSessionCookie(rawSessionCookie, secret);
+    if (!session) {
+      return jsonError(401, {
+        error: "Valid session is required",
+        code: "SESSION_REQUIRED"
+      });
+    }
+
+    if (isMutatingMethod(request.method)) {
+      const csrfCookie = request.cookies.get(CSRF_COOKIE_NAME)?.value;
+      const csrfHeader = request.headers.get("x-csrf-token");
+      if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
+        return jsonError(403, {
+          error: "CSRF token validation failed",
+          code: "CSRF_VALIDATION_FAILED"
+        });
+      }
+
+      if (!hasValidBrowserOrigin(request)) {
+        return jsonError(403, {
+          error: "Origin validation failed",
+          code: "ORIGIN_VALIDATION_FAILED"
+        });
+      }
+
+      if (isHighRiskPath(path) && request.headers.get("x-compass-step-up") !== "true") {
+        return jsonError(403, {
+          error: "Step-up authentication required",
+          code: "STEP_UP_REQUIRED"
+        });
+      }
+    }
+  }
+
   const upstreamUrl = toUpstreamUrl(apiBaseUrl, request.url, path);
-  const headers = buildUpstreamRequestHeaders(request.headers);
+  const headers = buildUpstreamRequestHeaders(request.headers, session?.token ?? null);
 
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
   const body = hasBody ? await request.arrayBuffer() : undefined;
@@ -119,23 +249,23 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
     });
 
     const responseHeaders = buildDownstreamResponseHeaders(upstreamResponse.headers);
+    if (session) {
+      const refreshed: SessionPayload = {
+        ...session,
+        lastSeenAtMs: Date.now()
+      };
+      responseHeaders.append("set-cookie", sessionCookieValue(refreshed, secret));
+    }
+
     return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
       headers: responseHeaders
     });
   } catch {
-    return Response.json(
-      {
-        error: "Upstream API request failed",
-        code: "UPSTREAM_UNAVAILABLE"
-      },
-      {
-        status: 502,
-        headers: {
-          "cache-control": "no-store"
-        }
-      }
-    );
+    return jsonError(502, {
+      error: "Upstream API request failed",
+      code: "UPSTREAM_UNAVAILABLE"
+    });
   }
 }
 

@@ -27,7 +27,12 @@ function createValidPolicy() {
         "apps/*/test/integration/**/*.test.tsx"
       ],
       e2e: ["tests/e2e/**/*.spec.ts", "tests/e2e/**/*.spec.tsx"],
-      smoke: ["tests/smoke/**/*.ts", "tests/smoke/**/*.tsx"]
+      smoke: [
+        "tests/system/**/*.ts",
+        "tests/system/**/*.tsx",
+        "tests/smoke/**/*.ts",
+        "tests/smoke/**/*.tsx"
+      ]
     },
     imports: {
       playwrightModules: ["@playwright/test"],

@@ -21,6 +21,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get authenticated caller context */
+        get: operations["getMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get effective permissions for authenticated caller */
+        get: operations["getMyPermissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenantId}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List tenant role definitions */
+        get: operations["listRoles"];
+        put?: never;
+        /** Create a tenant custom role */
+        post: operations["createRole"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/oauth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue OAuth2 client credentials token for SCIM and integrations */
+        post: operations["issueOAuthToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scim/v2/Users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create or upsert SCIM user */
+        post: operations["scimCreateUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scim/v2/Users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update SCIM user */
+        put: operations["scimUpsertUser"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scim/v2/Groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create or upsert SCIM group */
+        post: operations["scimCreateGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scim/v2/Groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update SCIM group */
+        put: operations["scimUpsertGroup"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -30,6 +167,104 @@ export interface components {
             status: "ok";
             /** Format: date-time */
             timestamp: string;
+        };
+        ApiError: {
+            code: string;
+            message: string;
+        };
+        UnauthorizedError: {
+            /** @enum {string} */
+            code: "invalid_token" | "token_unclassified";
+            message: string;
+        };
+        ForbiddenError: {
+            /** @enum {string} */
+            code: "tenant_denied" | "assignment_denied" | "permission_denied";
+            message: string;
+        };
+        MeResponse: {
+            caller: {
+                tenantId: string;
+                /** @enum {string} */
+                tokenType: "delegated" | "app";
+                /** @enum {string} */
+                subjectType: "user" | "app";
+                subjectId: string;
+                actorClientId: string;
+            };
+        };
+        MePermissionsResponse: {
+            caller: {
+                tenantId: string;
+                /** @enum {string} */
+                tokenType: "delegated" | "app";
+                /** @enum {string} */
+                subjectType: "user" | "app";
+                subjectId: string;
+                actorClientId: string;
+            };
+            permissions: string[];
+        };
+        RolesResponse: {
+            items: {
+                id: string;
+                tenantId: string;
+                name: string;
+                description: string;
+                isSystem: boolean;
+                permissions: string[];
+            }[];
+        };
+        CreateRoleRequest: {
+            name: string;
+            /** @default  */
+            description: string;
+            permissions: string[];
+        };
+        OAuthTokenRequest: {
+            /** @enum {string} */
+            grant_type: "client_credentials";
+            client_id: string;
+            client_secret: string;
+            scope?: string;
+        };
+        OAuthTokenResponse: {
+            access_token: string;
+            /** @enum {string} */
+            token_type: "Bearer";
+            expires_in: number;
+            scope?: string;
+        };
+        ScimUser: {
+            id?: string;
+            externalId: string;
+            userName: string;
+            /** @default true */
+            active: boolean;
+            displayName?: string;
+            name?: {
+                givenName?: string;
+                familyName?: string;
+            };
+            emails?: {
+                /** Format: email */
+                value: string;
+                primary?: boolean;
+            }[];
+        };
+        ScimGroup: {
+            id?: string;
+            externalId: string;
+            displayName: string;
+            /** @default [] */
+            members: {
+                value: string;
+            }[];
+        };
+        ScimOkResponse: {
+            id: string;
+            externalId: string;
+            active?: boolean;
         };
     };
     responses: never;
@@ -60,6 +295,557 @@ export interface operations {
                         status: "ok";
                         /** Format: date-time */
                         timestamp: string;
+                    };
+                };
+            };
+        };
+    };
+    getMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authenticated caller context */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        caller: {
+                            tenantId: string;
+                            /** @enum {string} */
+                            tokenType: "delegated" | "app";
+                            /** @enum {string} */
+                            subjectType: "user" | "app";
+                            subjectId: string;
+                            actorClientId: string;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication failed */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "invalid_token" | "token_unclassified";
+                        message: string;
+                    };
+                };
+            };
+            /** @description Authorization failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "tenant_denied" | "assignment_denied" | "permission_denied";
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getMyPermissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Caller permissions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        caller: {
+                            tenantId: string;
+                            /** @enum {string} */
+                            tokenType: "delegated" | "app";
+                            /** @enum {string} */
+                            subjectType: "user" | "app";
+                            subjectId: string;
+                            actorClientId: string;
+                        };
+                        permissions: string[];
+                    };
+                };
+            };
+            /** @description Authentication failed */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "invalid_token" | "token_unclassified";
+                        message: string;
+                    };
+                };
+            };
+            /** @description Authorization failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "tenant_denied" | "assignment_denied" | "permission_denied";
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    listRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tenant roles */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            id: string;
+                            tenantId: string;
+                            name: string;
+                            description: string;
+                            isSystem: boolean;
+                            permissions: string[];
+                        }[];
+                    };
+                };
+            };
+            /** @description Authentication failed */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "invalid_token" | "token_unclassified";
+                        message: string;
+                    };
+                };
+            };
+            /** @description Authorization failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "tenant_denied" | "assignment_denied" | "permission_denied";
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    createRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    /** @default  */
+                    description?: string;
+                    permissions: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Role created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        tenantId: string;
+                        name: string;
+                        description: string;
+                        isSystem: boolean;
+                        permissions: string[];
+                    };
+                };
+            };
+            /** @description Authentication failed */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "invalid_token" | "token_unclassified";
+                        message: string;
+                    };
+                };
+            };
+            /** @description Authorization failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "tenant_denied" | "assignment_denied" | "permission_denied";
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    issueOAuthToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    /** @enum {string} */
+                    grant_type: "client_credentials";
+                    client_id: string;
+                    client_secret: string;
+                    scope?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Issued access token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        access_token: string;
+                        /** @enum {string} */
+                        token_type: "Bearer";
+                        expires_in: number;
+                        scope?: string;
+                    };
+                };
+            };
+            /** @description Invalid client credentials */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "invalid_token" | "token_unclassified";
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    scimCreateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id?: string;
+                    externalId: string;
+                    userName: string;
+                    /** @default true */
+                    active?: boolean;
+                    displayName?: string;
+                    name?: {
+                        givenName?: string;
+                        familyName?: string;
+                    };
+                    emails?: {
+                        /** Format: email */
+                        value: string;
+                        primary?: boolean;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description SCIM user accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        externalId: string;
+                        active?: boolean;
+                    };
+                };
+            };
+            /** @description Authentication failed */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "invalid_token" | "token_unclassified";
+                        message: string;
+                    };
+                };
+            };
+            /** @description Authorization failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "tenant_denied" | "assignment_denied" | "permission_denied";
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    scimUpsertUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id?: string;
+                    externalId: string;
+                    userName: string;
+                    /** @default true */
+                    active?: boolean;
+                    displayName?: string;
+                    name?: {
+                        givenName?: string;
+                        familyName?: string;
+                    };
+                    emails?: {
+                        /** Format: email */
+                        value: string;
+                        primary?: boolean;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description SCIM user updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        externalId: string;
+                        active?: boolean;
+                    };
+                };
+            };
+            /** @description Authentication failed */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "invalid_token" | "token_unclassified";
+                        message: string;
+                    };
+                };
+            };
+            /** @description Authorization failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "tenant_denied" | "assignment_denied" | "permission_denied";
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    scimCreateGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id?: string;
+                    externalId: string;
+                    displayName: string;
+                    /** @default [] */
+                    members?: {
+                        value: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description SCIM group accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        externalId: string;
+                        active?: boolean;
+                    };
+                };
+            };
+            /** @description Authentication failed */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "invalid_token" | "token_unclassified";
+                        message: string;
+                    };
+                };
+            };
+            /** @description Authorization failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "tenant_denied" | "assignment_denied" | "permission_denied";
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    scimUpsertGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id?: string;
+                    externalId: string;
+                    displayName: string;
+                    /** @default [] */
+                    members?: {
+                        value: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description SCIM group updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        externalId: string;
+                        active?: boolean;
+                    };
+                };
+            };
+            /** @description Authentication failed */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "invalid_token" | "token_unclassified";
+                        message: string;
+                    };
+                };
+            };
+            /** @description Authorization failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "tenant_denied" | "assignment_denied" | "permission_denied";
+                        message: string;
                     };
                 };
             };

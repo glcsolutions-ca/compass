@@ -6,6 +6,10 @@ param registryServer string
 param registryIdentityResourceId string
 @secure()
 param databaseUrl string
+param authBootstrapAllowedTenantId string
+param authBootstrapAllowedAppClientId string
+param authBootstrapDelegatedUserOid string
+param authBootstrapDelegatedUserEmail string
 
 resource migrateJob 'Microsoft.App/jobs@2024-03-01' = {
   name: jobName
@@ -45,9 +49,9 @@ resource migrateJob 'Microsoft.App/jobs@2024-03-01' = {
           name: 'migrate'
           image: image
           command: [
-            'node'
-            'db/scripts/migrate.mjs'
-            'up'
+            'sh'
+            '-c'
+            'node db/scripts/migrate.mjs up && node db/scripts/seed-postgres.mjs'
           ]
           env: [
             {
@@ -61,6 +65,22 @@ resource migrateJob 'Microsoft.App/jobs@2024-03-01' = {
             {
               name: 'DB_SSL_REJECT_UNAUTHORIZED'
               value: 'true'
+            }
+            {
+              name: 'AUTH_BOOTSTRAP_ALLOWED_TENANT_ID'
+              value: authBootstrapAllowedTenantId
+            }
+            {
+              name: 'AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID'
+              value: authBootstrapAllowedAppClientId
+            }
+            {
+              name: 'AUTH_BOOTSTRAP_DELEGATED_USER_OID'
+              value: authBootstrapDelegatedUserOid
+            }
+            {
+              name: 'AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL'
+              value: authBootstrapDelegatedUserEmail
             }
           ]
           resources: {

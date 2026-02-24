@@ -4,6 +4,17 @@ function readOptional(name) {
   return process.env[name]?.trim() || "";
 }
 
+function requireOneOfEnv(names) {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  throw new Error(`Missing required environment variable: one of [${names.join(", ")}]`);
+}
+
 function normalizeCustomDomainValidationMethod(value) {
   const normalized = (value || "CNAME").trim().toUpperCase();
   if (!["CNAME", "HTTP", "TXT"].includes(normalized)) {
@@ -44,6 +55,24 @@ async function main() {
         value: normalizeCustomDomainValidationMethod(
           process.env.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD
         )
+      },
+      authIssuer: { value: requireEnv("AUTH_ISSUER") },
+      authJwksUri: { value: requireEnv("AUTH_JWKS_URI") },
+      authAudience: {
+        value: requireOneOfEnv(["AUTH_AUDIENCE", "API_IDENTIFIER_URI", "ENTRA_AUDIENCE"])
+      },
+      authAllowedClientIds: { value: requireEnv("AUTH_ALLOWED_CLIENT_IDS") },
+      authActiveTenantIds: { value: requireEnv("AUTH_ACTIVE_TENANT_IDS") },
+      oauthTokenIssuer: { value: requireEnv("OAUTH_TOKEN_ISSUER") },
+      oauthTokenAudience: { value: requireEnv("OAUTH_TOKEN_AUDIENCE") },
+      oauthTokenSigningSecret: { value: requireEnv("OAUTH_TOKEN_SIGNING_SECRET") },
+      authBootstrapAllowedTenantId: { value: requireEnv("AUTH_BOOTSTRAP_ALLOWED_TENANT_ID") },
+      authBootstrapAllowedAppClientId: {
+        value: requireEnv("AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID")
+      },
+      authBootstrapDelegatedUserOid: { value: requireEnv("AUTH_BOOTSTRAP_DELEGATED_USER_OID") },
+      authBootstrapDelegatedUserEmail: {
+        value: requireEnv("AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL")
       },
       migrationJobName: { value: requireEnv("ACA_MIGRATE_JOB_NAME") },
       acrPullIdentityName: { value: requireEnv("ACR_PULL_IDENTITY_NAME") },

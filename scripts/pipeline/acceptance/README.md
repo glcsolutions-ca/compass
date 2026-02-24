@@ -6,10 +6,10 @@
 
 ## Script Map
 
-| Script                          | Role                                                                         |
-| ------------------------------- | ---------------------------------------------------------------------------- |
-| `acceptance-stage-gate.mjs`     | Produces YES/NO acceptance decision from required acceptance check outcomes. |
-| `acceptance-stage-gate-lib.mjs` | Pure evaluator for required acceptance checks by scope.                      |
+| Script                            | Role                                                                         |
+| --------------------------------- | ---------------------------------------------------------------------------- |
+| `decide-acceptance-stage.mjs`     | Produces YES/NO acceptance decision from required acceptance check outcomes. |
+| `decide-acceptance-stage-lib.mjs` | Pure evaluator for required acceptance checks by scope.                      |
 
 ## Artifact Contract
 

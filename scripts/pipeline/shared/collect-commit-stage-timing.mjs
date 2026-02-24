@@ -146,8 +146,8 @@ async function main() {
   const runCreatedAt = parseIsoToEpochSeconds(run?.created_at);
   const runUpdatedAt = parseIsoToEpochSeconds(run?.updated_at);
 
-  const quickFeedbackJob = jobs.find((job) => job.name === "quick-feedback");
-  const gateJob = jobs.find((job) => job.name === "commit-stage-gate");
+  const quickFeedbackJob = jobs.find((job) => job.name === "fast-feedback");
+  const gateJob = jobs.find((job) => job.name === "commit-stage");
 
   const quickFeedbackSeconds = durationSeconds(quickFeedbackJob);
   const timeToCommitGateSeconds = calculateTimeToCommitGate({

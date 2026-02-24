@@ -52,7 +52,9 @@ describe("workflow pipeline contract", () => {
   it("keeps production mutation under a serialized lock with cancel disabled", () => {
     const workflow = readUtf8(productionStageWorkflowPath);
 
-    const concurrency = extractConcurrencySettings(extractJobBlock(workflow, "production_mutate"));
+    const concurrency = extractConcurrencySettings(
+      extractJobBlock(workflow, "deploy_approved_candidate")
+    );
 
     expect(concurrency.group).toBe("production-mutation");
     expect(concurrency.cancelInProgress).toBe("false");
@@ -71,11 +73,11 @@ describe("workflow pipeline contract", () => {
     expect(workflow).not.toContain("docker push");
   });
 
-  it("keeps workflow_dispatch replay path executable when stale-guard is skipped", () => {
+  it("keeps workflow_dispatch replay path executable when freshness-check is skipped", () => {
     const workflow = readUtf8(productionStageWorkflowPath);
 
     expect(workflow).toContain(
-      "if: ${{ always() && needs.load_accepted_candidate.result == 'success' && (github.event_name == 'workflow_dispatch' || needs.stale_guard.result == 'success') }}"
+      "if: ${{ needs.production_eligibility.outputs.eligible == 'true' && needs.load_approved_candidate.outputs.docs_only_changed != 'true' && (github.event_name == 'workflow_dispatch' || needs.freshness_check.result == 'success') }}"
     );
   });
 
@@ -91,7 +93,7 @@ describe("workflow pipeline contract", () => {
 
   it("keeps commit stage merge-blocking gate context", () => {
     const workflow = readUtf8(commitStageWorkflowPath);
-    expect(workflow).toContain("name: commit-stage-gate");
+    expect(workflow).toContain("name: commit-stage");
   });
 
   it("keeps ARM validate and create commands using explicit --name in shared apply script", () => {

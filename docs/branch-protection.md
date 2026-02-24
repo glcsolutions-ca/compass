@@ -2,7 +2,7 @@
 
 Configure branch protection for `main` with one required status check:
 
-- `commit-stage-gate`
+- `commit-stage`
 
 Do not require acceptance or production checks directly. Those are post-merge stage gates.
 
@@ -14,7 +14,7 @@ If required checks drift, reset the `main` required status checks to this baseli
 cat > /tmp/required-status-checks.json <<'JSON'
 {
   "strict": true,
-  "contexts": ["commit-stage-gate"]
+  "contexts": ["commit-stage"]
 }
 JSON
 
@@ -40,7 +40,7 @@ gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/req
 
 ## Triage notes
 
-- `commit-stage-gate` artifacts include `reasonCodes` and `reasonDetails` for direct remediation.
+- `commit-stage` artifacts include `reasonCodes` and `reasonDetails` for direct remediation.
 - `docs-drift` artifacts include changed blocking paths, docs-critical paths, and expected doc targets.
 
 ## Verification runbook

@@ -424,6 +424,8 @@ export async function runTestingPolicy(options = {}) {
 
   const dbImportPattern = buildModuleImportPattern(policy.imports.dbModules);
   const playwrightImportPattern = buildModuleImportPattern(policy.imports.playwrightModules);
+  const appInternalImportPattern =
+    /(?:from\s*["'][^"']*(?:^|\/)apps\/|require\(\s*["'][^"']*(?:^|\/)apps\/)/;
 
   for (const filePath of candidateTestFiles) {
     const layers = classifyLayer(filePath, layerGlobs);
@@ -502,6 +504,24 @@ export async function runTestingPolicy(options = {}) {
             see: policy.docs.integrationLayer
           })
         );
+      }
+
+      if (matchesAnyGlob(filePath, ["tests/system/**/*.ts", "tests/system/**/*.tsx"])) {
+        if (appInternalImportPattern.test(content)) {
+          violations.push(
+            createViolation({
+              ruleId: "TC020",
+              title: "System acceptance smoke must be black-box",
+              file: filePath,
+              why: "Acceptance smoke must validate release candidates through external interfaces only.",
+              fix: [
+                "Remove imports from apps/** internals.",
+                "Use BASE_URL or TARGET_API_BASE_URL and HTTP requests for system smoke assertions."
+              ],
+              see: policy.docs.integrationLayer
+            })
+          );
+        }
       }
     }
   }

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { evaluateAcceptanceStageResults } from "./acceptance-stage-gate-lib.mjs";
+import { evaluateAcceptanceStageResults } from "./decide-acceptance-stage-lib.mjs";
 
 function base(overrides = {}) {
   return {
     checkResults: {
-      "load-candidate": "success",
-      "runtime-acceptance": "skipped",
-      "infra-acceptance": "skipped",
-      "identity-acceptance": "skipped"
+      "load-release-candidate": "success",
+      "runtime-blackbox-acceptance": "skipped",
+      "infra-readonly-acceptance": "skipped",
+      "identity-readonly-acceptance": "skipped"
     },
     runtimeRequired: false,
     infraRequired: false,
@@ -21,22 +21,22 @@ function base(overrides = {}) {
 }
 
 describe("evaluateAcceptanceStageResults", () => {
-  it("always requires load-candidate", () => {
+  it("always requires load-release-candidate", () => {
     const reasons = evaluateAcceptanceStageResults(
       base({
         checkResults: {
-          "load-candidate": "failure",
-          "runtime-acceptance": "skipped",
-          "infra-acceptance": "skipped",
-          "identity-acceptance": "skipped"
+          "load-release-candidate": "failure",
+          "runtime-blackbox-acceptance": "skipped",
+          "infra-readonly-acceptance": "skipped",
+          "identity-readonly-acceptance": "skipped"
         }
       })
     );
 
     expect(reasons).toEqual([
       {
-        code: "CHECK_LOAD_CANDIDATE_NOT_SUCCESS",
-        message: "load-candidate result is failure"
+        code: "CHECK_LOAD_RELEASE_CANDIDATE_NOT_SUCCESS",
+        message: "load-release-candidate result is failure"
       }
     ]);
   });
@@ -48,26 +48,26 @@ describe("evaluateAcceptanceStageResults", () => {
         infraRequired: true,
         identityRequired: true,
         checkResults: {
-          "load-candidate": "success",
-          "runtime-acceptance": "failure",
-          "infra-acceptance": "cancelled",
-          "identity-acceptance": "timed_out"
+          "load-release-candidate": "success",
+          "runtime-blackbox-acceptance": "failure",
+          "infra-readonly-acceptance": "cancelled",
+          "identity-readonly-acceptance": "timed_out"
         }
       })
     );
 
     expect(reasons).toEqual([
       {
-        code: "CHECK_RUNTIME_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
-        message: "runtime-acceptance required but result is failure"
+        code: "CHECK_RUNTIME_BLACKBOX_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
+        message: "runtime-blackbox-acceptance required but result is failure"
       },
       {
-        code: "CHECK_INFRA_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
-        message: "infra-acceptance required but result is cancelled"
+        code: "CHECK_INFRA_READONLY_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
+        message: "infra-readonly-acceptance required but result is cancelled"
       },
       {
-        code: "CHECK_IDENTITY_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
-        message: "identity-acceptance required but result is timed_out"
+        code: "CHECK_IDENTITY_READONLY_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
+        message: "identity-readonly-acceptance required but result is timed_out"
       }
     ]);
   });
@@ -78,10 +78,10 @@ describe("evaluateAcceptanceStageResults", () => {
         runtimeRequired: true,
         identityRequired: true,
         checkResults: {
-          "load-candidate": "success",
-          "runtime-acceptance": "success",
-          "infra-acceptance": "skipped",
-          "identity-acceptance": "success"
+          "load-release-candidate": "success",
+          "runtime-blackbox-acceptance": "success",
+          "infra-readonly-acceptance": "skipped",
+          "identity-readonly-acceptance": "success"
         },
         candidateRefContractStatus: "fail",
         candidateRefContractReasonCodes: ["CANDIDATE_API_REF_MISSING"],

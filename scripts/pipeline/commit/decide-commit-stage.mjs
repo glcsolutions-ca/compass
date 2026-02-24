@@ -1,5 +1,5 @@
 import path from "node:path";
-import { evaluateCommitStageResults } from "./commit-stage-gate-lib.mjs";
+import { evaluateCommitStageResults } from "./decide-commit-stage-lib.mjs";
 import { appendGithubOutput, requireEnv, writeJsonFile } from "../shared/pipeline-utils.mjs";
 
 function parseBooleanEnv(name, fallback = false) {
@@ -54,7 +54,12 @@ function parseCheckResults() {
     throw new Error("CHECK_RESULTS_JSON must be a JSON object");
   }
 
-  const expectedChecks = ["scope", "quick-feedback", "infra-quick-check", "identity-quick-check"];
+  const expectedChecks = [
+    "determine-scope",
+    "fast-feedback",
+    "infra-static-check",
+    "identity-static-check"
+  ];
 
   const checkResults = {};
   for (const checkName of expectedChecks) {
@@ -118,14 +123,14 @@ async function main() {
   await appendGithubOutput({ gate_path: gatePath, gate_pass: String(reasons.length === 0) });
 
   if (reasons.length > 0) {
-    console.error("commit-stage-gate blocking reasons:");
+    console.error("commit-stage blocking reasons:");
     for (const reason of reasons) {
       console.error(`- [${reason.code}] ${reason.message}`);
     }
     process.exit(1);
   }
 
-  console.info(`commit-stage-gate passed for head=${headSha} tested=${testedSha}`);
+  console.info(`commit-stage passed for head=${headSha} tested=${testedSha}`);
 }
 
 void main();

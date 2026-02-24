@@ -2,12 +2,12 @@
 
 ## Scope
 
-`tests/system/` contains in-process harness smoke checks used for high-risk merge gate evidence.
+`tests/system/` contains black-box system smoke checks used by acceptance and production verification paths.
 
 ## Run Command
 
 ```bash
-pnpm acceptance:harness-smoke
+pnpm acceptance:system-smoke
 ```
 
 Equivalent direct command:
@@ -20,11 +20,10 @@ tsx tests/system/smoke.ts
 
 `tests/system/smoke.ts`:
 
-1. Builds the API app in-process (`buildApiApp()`).
-2. Waits for app readiness.
-3. Injects requests to `GET /health` and `GET /openapi.json`.
-4. Verifies OpenAPI includes `/health`.
-5. Writes pass/fail artifact and appends `harness_smoke_path` output when running in CI.
+1. Resolves `BASE_URL` or `TARGET_API_BASE_URL` (defaults to `http://127.0.0.1:3001`).
+2. Sends HTTP requests to `GET /health` and `GET /openapi.json`.
+3. Verifies OpenAPI includes `/health`.
+4. Writes pass/fail artifact and appends `system_smoke_path` output when running in CI.
 
 ## Output Artifact
 

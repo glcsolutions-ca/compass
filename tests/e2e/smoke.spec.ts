@@ -38,7 +38,6 @@ function parseRequiredFlowIds() {
 test("compass smoke flow", async ({ page }) => {
   const headSha = process.env.HEAD_SHA ?? "local";
   const testedSha = process.env.TESTED_SHA ?? headSha;
-  const tier = process.env.RISK_TIER ?? "standard";
   const prNumber = Number(process.env.PR_NUMBER ?? "0");
   const baseUrl = process.env.WEB_BASE_URL ?? "http://127.0.0.1:3000";
   const expectedEntrypoint = process.env.EXPECTED_ENTRYPOINT ?? "/";
@@ -157,7 +156,6 @@ test("compass smoke flow", async ({ page }) => {
     schemaVersion: "1",
     headSha,
     testedSha,
-    tier,
     prNumber,
     generatedAt: new Date().toISOString(),
     flows,

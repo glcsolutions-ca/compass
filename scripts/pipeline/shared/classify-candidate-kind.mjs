@@ -22,25 +22,25 @@ async function main() {
   const policy = await loadPipelinePolicy(policyPath);
   const changedFiles = await getChangedFiles(baseSha, headSha);
   const scope = resolveChangeScope(policy, changedFiles);
-  const kind = classifyCandidateKind(scope);
-  const needsInfra = scope.runtime && scope.infra;
-  const needsMigrations = scope.runtime && scope.migration;
+  const changeClass = classifyCandidateKind(scope);
+  const requiresInfraConvergence = scope.runtime && scope.infra;
+  const requiresMigrations = scope.runtime && scope.migration;
 
   await appendGithubOutput({
     base_sha: baseSha,
-    kind,
+    change_class: changeClass,
     runtime_changed: String(scope.runtime),
     infra_changed: String(scope.infra),
     identity_changed: String(scope.identity),
     docs_only_changed: String(scope.docsOnly),
-    needs_infra: String(needsInfra),
-    needs_migrations: String(needsMigrations),
+    requires_infra_convergence: String(requiresInfraConvergence),
+    requires_migrations: String(requiresMigrations),
     rollout: String(scope.infraRollout),
     changed_files_json: JSON.stringify(changedFiles)
   });
 
   console.info(
-    `candidate-kind: kind=${kind} runtime=${scope.runtime} infra=${scope.infra} identity=${scope.identity} docsOnly=${scope.docsOnly} changed=${changedFiles.length}`
+    `candidate-kind: changeClass=${changeClass} runtime=${scope.runtime} infra=${scope.infra} identity=${scope.identity} docsOnly=${scope.docsOnly} changed=${changedFiles.length}`
   );
 }
 

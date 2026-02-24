@@ -10,31 +10,31 @@ export function evaluateAcceptanceStageResults({
 }) {
   const reasons = [];
 
-  if (checkResults["load-candidate"] !== "success") {
+  if (checkResults["load-release-candidate"] !== "success") {
     reasons.push({
-      code: "CHECK_LOAD_CANDIDATE_NOT_SUCCESS",
-      message: `load-candidate result is ${checkResults["load-candidate"]}`
+      code: "CHECK_LOAD_RELEASE_CANDIDATE_NOT_SUCCESS",
+      message: `load-release-candidate result is ${checkResults["load-release-candidate"]}`
     });
   }
 
-  if (runtimeRequired && checkResults["runtime-acceptance"] !== "success") {
+  if (runtimeRequired && checkResults["runtime-blackbox-acceptance"] !== "success") {
     reasons.push({
-      code: "CHECK_RUNTIME_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
-      message: `runtime-acceptance required but result is ${checkResults["runtime-acceptance"]}`
+      code: "CHECK_RUNTIME_BLACKBOX_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
+      message: `runtime-blackbox-acceptance required but result is ${checkResults["runtime-blackbox-acceptance"]}`
     });
   }
 
-  if (infraRequired && checkResults["infra-acceptance"] !== "success") {
+  if (infraRequired && checkResults["infra-readonly-acceptance"] !== "success") {
     reasons.push({
-      code: "CHECK_INFRA_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
-      message: `infra-acceptance required but result is ${checkResults["infra-acceptance"]}`
+      code: "CHECK_INFRA_READONLY_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
+      message: `infra-readonly-acceptance required but result is ${checkResults["infra-readonly-acceptance"]}`
     });
   }
 
-  if (identityRequired && checkResults["identity-acceptance"] !== "success") {
+  if (identityRequired && checkResults["identity-readonly-acceptance"] !== "success") {
     reasons.push({
-      code: "CHECK_IDENTITY_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
-      message: `identity-acceptance required but result is ${checkResults["identity-acceptance"]}`
+      code: "CHECK_IDENTITY_READONLY_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
+      message: `identity-readonly-acceptance required but result is ${checkResults["identity-readonly-acceptance"]}`
     });
   }
 

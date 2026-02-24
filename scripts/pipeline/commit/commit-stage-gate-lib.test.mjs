@@ -13,6 +13,10 @@ function makeBaseInput(overrides = {}) {
     identityRequired: false,
     docsDriftBlocking: false,
     docsDriftStatus: "pass",
+    commitStageSloMode: "observe",
+    commitStageSloPass: true,
+    timeToCommitGateSeconds: 0,
+    commitStageSloTargetSeconds: 300,
     ...overrides
   };
 }
@@ -86,5 +90,34 @@ describe("evaluateCommitStageResults", () => {
       })
     );
     expect(advisoryReasons).toEqual([]);
+  });
+
+  it("enforces commit-stage timing SLO only in enforce mode", () => {
+    const enforceReasons = evaluateCommitStageResults(
+      makeBaseInput({
+        commitStageSloMode: "enforce",
+        commitStageSloPass: false,
+        timeToCommitGateSeconds: 342,
+        commitStageSloTargetSeconds: 300
+      })
+    );
+
+    expect(enforceReasons).toEqual([
+      {
+        code: "COMMIT_STAGE_SLO_NOT_MET",
+        message: "commit-stage timing SLO enforce mode requires <= 300s; observed 342s"
+      }
+    ]);
+
+    const observeReasons = evaluateCommitStageResults(
+      makeBaseInput({
+        commitStageSloMode: "observe",
+        commitStageSloPass: false,
+        timeToCommitGateSeconds: 342,
+        commitStageSloTargetSeconds: 300
+      })
+    );
+
+    expect(observeReasons).toEqual([]);
   });
 });

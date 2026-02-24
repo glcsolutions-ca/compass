@@ -19,6 +19,6 @@ Compass uses a deterministic 3-stage delivery pipeline.
 
 1. `commit-stage.yml` runs `scope`, `quick-feedback`, optional infra/identity quick checks, then `commit-stage-gate`.
 2. Successful commit stage on `main` emits `.artifacts/candidate/<sha>/manifest.json`.
-3. `acceptance-stage.yml` loads that candidate and runs required scope-based acceptance jobs.
+3. `acceptance-stage.yml` loads that candidate, runs required scope-based acceptance jobs, and enforces candidate/config contracts.
 4. `acceptance-stage-gate` is the acceptance yes/no decision.
 5. `production-stage.yml` loads accepted evidence, runs stale guard, mutates production, then verifies and records release evidence.

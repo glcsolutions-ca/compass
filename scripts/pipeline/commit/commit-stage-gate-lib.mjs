@@ -3,7 +3,11 @@ export function evaluateCommitStageResults({
   infraRequired,
   identityRequired,
   docsDriftBlocking,
-  docsDriftStatus
+  docsDriftStatus,
+  commitStageSloMode,
+  commitStageSloPass,
+  timeToCommitGateSeconds,
+  commitStageSloTargetSeconds
 }) {
   const reasons = [];
 
@@ -39,6 +43,19 @@ export function evaluateCommitStageResults({
     reasons.push({
       code: "DOCS_DRIFT_BLOCKING_NOT_PASS",
       message: `docs-drift blocking is true but docs_drift_status is ${docsDriftStatus}`
+    });
+  }
+
+  if (commitStageSloMode === "enforce" && !commitStageSloPass) {
+    const observed = Number.isFinite(timeToCommitGateSeconds)
+      ? `${timeToCommitGateSeconds}s`
+      : "unknown";
+    const target = Number.isFinite(commitStageSloTargetSeconds)
+      ? `${commitStageSloTargetSeconds}s`
+      : "unknown";
+    reasons.push({
+      code: "COMMIT_STAGE_SLO_NOT_MET",
+      message: `commit-stage timing SLO enforce mode requires <= ${target}; observed ${observed}`
     });
   }
 

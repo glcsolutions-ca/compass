@@ -19,6 +19,20 @@ function parseBooleanEnv(name, fallback = false) {
   throw new Error(`${name} must be 'true' or 'false'`);
 }
 
+function parseJsonArrayEnv(name) {
+  const raw = process.env[name];
+  if (!raw || raw.trim().length === 0) {
+    return [];
+  }
+
+  const parsed = JSON.parse(raw);
+  if (!Array.isArray(parsed)) {
+    throw new Error(`${name} must be a JSON array when provided`);
+  }
+
+  return parsed.map((value) => String(value));
+}
+
 function parseCheckResults() {
   const raw = requireEnv("CHECK_RESULTS_JSON");
   const parsed = JSON.parse(raw);
@@ -48,13 +62,27 @@ async function main() {
   const runtimeRequired = parseBooleanEnv("RUNTIME_REQUIRED", false);
   const infraRequired = parseBooleanEnv("INFRA_REQUIRED", false);
   const identityRequired = parseBooleanEnv("IDENTITY_REQUIRED", false);
+  const candidateRefContractStatus =
+    process.env.CANDIDATE_REF_CONTRACT_STATUS?.trim().toLowerCase() || "unknown";
+  const candidateRefContractReasonCodes = parseJsonArrayEnv(
+    "CANDIDATE_REF_CONTRACT_REASON_CODES_JSON"
+  );
+  const identityConfigContractStatus =
+    process.env.IDENTITY_CONFIG_CONTRACT_STATUS?.trim().toLowerCase() || "unknown";
+  const identityConfigContractReasonCodes = parseJsonArrayEnv(
+    "IDENTITY_CONFIG_CONTRACT_REASON_CODES_JSON"
+  );
 
   const checkResults = parseCheckResults();
   const reasons = evaluateAcceptanceStageResults({
     checkResults,
     runtimeRequired,
     infraRequired,
-    identityRequired
+    identityRequired,
+    candidateRefContractStatus,
+    candidateRefContractReasonCodes,
+    identityConfigContractStatus,
+    identityConfigContractReasonCodes
   });
 
   const resultPath = path.join(".artifacts", "acceptance", headSha, "result.json");
@@ -65,6 +93,10 @@ async function main() {
     runtimeRequired,
     infraRequired,
     identityRequired,
+    candidateRefContractStatus,
+    candidateRefContractReasonCodes,
+    identityConfigContractStatus,
+    identityConfigContractReasonCodes,
     checkResults,
     pass: reasons.length === 0,
     reasonCodes: reasons.map((reason) => reason.code),

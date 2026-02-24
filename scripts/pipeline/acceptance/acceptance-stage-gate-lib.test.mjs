@@ -12,6 +12,10 @@ function base(overrides = {}) {
     runtimeRequired: false,
     infraRequired: false,
     identityRequired: false,
+    candidateRefContractStatus: "pass",
+    candidateRefContractReasonCodes: [],
+    identityConfigContractStatus: "pass",
+    identityConfigContractReasonCodes: [],
     ...overrides
   };
 }
@@ -64,6 +68,38 @@ describe("evaluateAcceptanceStageResults", () => {
       {
         code: "CHECK_IDENTITY_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
         message: "identity-acceptance required but result is timed_out"
+      }
+    ]);
+  });
+
+  it("reports explicit config contract violations", () => {
+    const reasons = evaluateAcceptanceStageResults(
+      base({
+        runtimeRequired: true,
+        identityRequired: true,
+        checkResults: {
+          "load-candidate": "success",
+          "runtime-acceptance": "success",
+          "infra-acceptance": "skipped",
+          "identity-acceptance": "success"
+        },
+        candidateRefContractStatus: "fail",
+        candidateRefContractReasonCodes: ["CANDIDATE_API_REF_MISSING"],
+        identityConfigContractStatus: "fail",
+        identityConfigContractReasonCodes: ["IDENTITY_API_IDENTIFIER_URI_INVALID_FORMAT"]
+      })
+    );
+
+    expect(reasons).toEqual([
+      {
+        code: "CONFIG_CONTRACT_CANDIDATE_REFS_NOT_PASS",
+        message:
+          "candidate ref contract required for runtime/infra acceptance but status is fail (CANDIDATE_API_REF_MISSING)"
+      },
+      {
+        code: "CONFIG_CONTRACT_IDENTITY_NOT_PASS",
+        message:
+          "identity config contract required for acceptance but status is fail (IDENTITY_API_IDENTIFIER_URI_INVALID_FORMAT)"
       }
     ]);
   });

@@ -33,22 +33,32 @@
 - Acceptance stage runs non-mutating Terraform plan evidence.
 - Production stage runs guarded Terraform apply for accepted candidates.
 
+## Acceptance vs Production Credential Boundary
+
+- Acceptance identity plan should use read-only identity credentials where possible.
+- Production identity apply must use the production mutating credential.
+- Workflows support this split by preferring `AZURE_ACCEPTANCE_IDENTITY_CLIENT_ID` in acceptance and `AZURE_IDENTITY_CLIENT_ID` in production.
+
 ## Required Production Variables (identity acceptance/apply)
 
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
 - `GH_ORGANIZATION`
 - `GH_REPOSITORY_NAME`
-- `ENTRA_AUDIENCE`
+- `API_IDENTIFIER_URI` (canonical)
+- `ENTRA_AUDIENCE` (legacy fallback during transition)
 - `IDENTITY_OWNER_OBJECT_IDS_JSON`
 - `TFSTATE_RESOURCE_GROUP`
 - `TFSTATE_STORAGE_ACCOUNT`
 - `TFSTATE_CONTAINER`
 - `TFSTATE_KEY`
 
+`API_IDENTIFIER_URI` must use `api://...` format. If both `API_IDENTIFIER_URI` and `ENTRA_AUDIENCE` are set, they must be identical.
+
 ## Required Production Secrets (identity acceptance/apply)
 
-- `AZURE_IDENTITY_CLIENT_ID`
+- `AZURE_IDENTITY_CLIENT_ID` (required for production identity apply)
+- `AZURE_ACCEPTANCE_IDENTITY_CLIENT_ID` (optional but recommended for acceptance read-only identity plan)
 
 ## Bootstrap Trust Anchor (One-Time Manual)
 
@@ -83,6 +93,7 @@ Rotate bootstrap identity with explicit handoff:
 ## Workflow Evidence
 
 - Acceptance stage writes `.artifacts/identity/<sha>/plan.json`.
+- Acceptance stage writes config-contract results to `.artifacts/identity/<sha>/config-validation.json`.
 - Production stage writes `.artifacts/identity/<sha>/outputs.json`.
 
 ## Outputs Contract and Downstream Mapping
@@ -102,7 +113,8 @@ Terraform outputs from `outputs.tf`:
 Expected production mapping:
 
 - `deploy_application_client_id` -> GitHub `production` secret `AZURE_DEPLOY_CLIENT_ID`
-- `entra_audience` -> GitHub `production` variable `ENTRA_AUDIENCE`
+- `entra_audience` -> GitHub `production` variable `API_IDENTIFIER_URI` (canonical)
+- `entra_audience` -> GitHub `production` variable `ENTRA_AUDIENCE` (legacy transition only)
 - `entra_issuer` and `entra_jwks_uri` -> tracked in production environment config contract for token validation consumers
 - `smoke_application_client_id` -> tracked in production environment config contract for smoke identity consumers
 
@@ -111,6 +123,8 @@ Expected production mapping:
 Use these commands when validating identity changes locally with the same backend/auth model as CI:
 
 ```bash
+API_IDENTIFIER_URI="${API_IDENTIFIER_URI:-$ENTRA_AUDIENCE}"
+
 terraform -chdir=infra/identity init \
   -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \
   -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \
@@ -127,7 +141,7 @@ terraform -chdir=infra/identity plan \
   -var "github_organization=$GH_ORGANIZATION" \
   -var "github_repository=$GH_REPOSITORY_NAME" \
   -var "github_environment_name=production" \
-  -var "api_identifier_uri=$ENTRA_AUDIENCE" \
+  -var "api_identifier_uri=$API_IDENTIFIER_URI" \
   -var "owners=$IDENTITY_OWNER_OBJECT_IDS_JSON"
 
 terraform -chdir=infra/identity apply \
@@ -135,7 +149,7 @@ terraform -chdir=infra/identity apply \
   -var "github_organization=$GH_ORGANIZATION" \
   -var "github_repository=$GH_REPOSITORY_NAME" \
   -var "github_environment_name=production" \
-  -var "api_identifier_uri=$ENTRA_AUDIENCE" \
+  -var "api_identifier_uri=$API_IDENTIFIER_URI" \
   -var "owners=$IDENTITY_OWNER_OBJECT_IDS_JSON"
 ```
 

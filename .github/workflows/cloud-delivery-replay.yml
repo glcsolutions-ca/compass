@@ -862,14 +862,36 @@ jobs:
         run: |
           set -euo pipefail
 
-          if az containerapp show \
+          if ! az containerapp show \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "$ACA_CODEX_APP_NAME" \
             --query id \
             --output tsv >/dev/null 2>&1; then
-            echo "codex_app_exists=true" >> "$GITHUB_OUTPUT"
-          else
             echo "codex_app_exists=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          codex_identity_type="$(az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_CODEX_APP_NAME" \
+            --query 'identity.type' \
+            --output tsv)"
+          codex_registry_identity="$(az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_CODEX_APP_NAME" \
+            --query 'properties.configuration.registries[0].identity' \
+            --output tsv)"
+          codex_registry_server="$(az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_CODEX_APP_NAME" \
+            --query 'properties.configuration.registries[0].server' \
+            --output tsv)"
+
+          if [ "$codex_identity_type" != "UserAssigned" ] || [ -z "$codex_registry_identity" ] || [ "$codex_registry_server" != "$ACR_REGISTRY" ] || [[ "$codex_registry_identity" != *"/$ACR_PULL_IDENTITY_NAME" ]]; then
+            echo "Codex app exists but registry identity config is not converged. Forcing infra convergence."
+            echo "codex_app_exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "codex_app_exists=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Apply infra (when needed)

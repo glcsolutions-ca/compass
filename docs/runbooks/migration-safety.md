@@ -43,7 +43,7 @@ Run contract-only changes after full traffic cutover and stability period.
 
 ## Concurrency Controls
 
-- Production mutation is serialized by `concurrency: production-mutation` in `.github/workflows/production-stage.yml`.
+- Production mutation is serialized by `concurrency: production-mutation` in `.github/workflows/deployment-pipeline.yml`.
 - Migration execution is single-run via ACA Job manual trigger config (`parallelism=1`, `replicaCompletionCount=1`).
 
 ## Diagnostics Contract
@@ -61,5 +61,5 @@ Run contract-only changes after full traffic cutover and stability period.
 
 ## Recovery
 
-- First response: replay a previously accepted candidate SHA via `production-stage.yml`.
+- First response: replay a previously accepted candidate SHA via `deployment-pipeline.yml`.
 - Database disaster recovery: use Azure PostgreSQL backup/PITR procedures.

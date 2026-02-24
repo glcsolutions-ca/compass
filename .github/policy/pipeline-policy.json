@@ -2,7 +2,9 @@
   "version": "1",
   "scopeRules": {
     "runtime": [
-      "apps/**",
+      "apps/api/**",
+      "apps/web/**",
+      "apps/worker/**",
       "packages/**",
       "db/migrations/**",
       "db/scripts/**",
@@ -13,6 +15,7 @@
       "pnpm-workspace.yaml",
       "**/package.json"
     ],
+    "desktop": ["apps/desktop/**", ".github/workflows/desktop-release.yml"],
     "infra": ["infra/azure/**"],
     "identity": ["infra/identity/**"],
     "migration": ["db/migrations/**", "db/scripts/**"],

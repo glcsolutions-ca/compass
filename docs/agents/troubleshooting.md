@@ -19,9 +19,9 @@
 ## `acceptance-stage` Failure
 
 - Cause: required acceptance check outcomes did not succeed for the candidate scope, candidate digest contract failed, or identity config contract failed.
-- Fix: inspect `.artifacts/acceptance/<sha>/result.json` and rerun acceptance after fix-forward.
+- Fix: inspect `.artifacts/acceptance/<sha>/result.json` and rerun `deployment-pipeline.yml` after fix-forward.
 
-## Freshness Check Failure in Production Stage
+## `production-stage` Failure
 
-- Cause: candidate SHA was no longer current `main` when auto promotion started.
-- Fix: allow next accepted candidate to promote, or run a manual replay with explicit `candidate_sha` when appropriate.
+- Cause: production mutation or post-deploy black-box verification failed for the accepted candidate.
+- Fix: inspect `.artifacts/production/<sha>/result.json` and `.artifacts/release/<sha>/decision.json`, then fix-forward or replay with `candidate_sha`.

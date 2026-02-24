@@ -22,11 +22,12 @@ gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/req
   --input /tmp/required-status-checks.json
 ```
 
-## Required Mainline Safety Controls
+## Required Deployment Pipeline Safety Controls
 
 - Enforce admins (`main` has no admin bypass in normal flow).
 - Require merge queue on `main`.
 - Require `.github/workflows/commit-stage.yml` to run on `pull_request` and `merge_group`.
+- Require `.github/workflows/deployment-pipeline.yml` to run on `push` to `main` for post-merge acceptance/production gating.
 - Require PR-only integration into `main` (no direct pushes).
 - Keep force-push and deletion blocked.
 - Keep strict status checks enabled.

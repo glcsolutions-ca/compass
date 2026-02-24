@@ -17,6 +17,7 @@ async function main() {
   }
 
   const runtimeChanged = asBoolean(manifest?.scope?.runtime);
+  const desktopChanged = asBoolean(manifest?.scope?.desktop);
   const infraChanged = asBoolean(manifest?.scope?.infra);
   const identityChanged = asBoolean(manifest?.scope?.identity);
   const docsOnlyChanged = asBoolean(manifest?.scope?.docsOnly);
@@ -69,6 +70,7 @@ async function main() {
     head_sha: headSha,
     change_class: changeClass,
     runtime_changed: String(runtimeChanged),
+    desktop_changed: String(desktopChanged),
     infra_changed: String(infraChanged),
     identity_changed: String(identityChanged),
     docs_only_changed: String(docsOnlyChanged),

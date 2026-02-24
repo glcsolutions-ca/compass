@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`scripts/pipeline/acceptance/` contains acceptance-stage gate logic used by `acceptance-stage.yml`.
+`scripts/pipeline/acceptance/` contains acceptance-stage gate logic used by `deployment-pipeline.yml`.
 
 ## Script Map
 
@@ -14,7 +14,6 @@
 ## Artifact Contract
 
 - `.artifacts/acceptance/<sha>/result.json`
-- `.artifacts/acceptance/<sha>/evidence-manifest.json`
 
 Result payload includes:
 

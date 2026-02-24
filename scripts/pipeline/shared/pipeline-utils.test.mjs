@@ -58,6 +58,16 @@ const policy = loadPipelinePolicyObject({
       mode: "enforce"
     }
   },
+  mergeQueueGate: {
+    requiredChecks: [
+      "determine-scope",
+      "build-compile",
+      "migration-safety",
+      "auth-critical-smoke",
+      "minimal-integration-smoke",
+      "merge-queue-gate"
+    ]
+  },
   acceptanceStage: {
     requiredFlowIds: ["compass-smoke"],
     runtimeRequiredChecks: [

@@ -176,6 +176,20 @@ export function assertPipelinePolicyShape(policy) {
     throw new Error("commitStage.slo.mode must be one of: observe, enforce");
   }
 
+  const mergeQueueGate = policy.mergeQueueGate;
+  if (mergeQueueGate !== undefined) {
+    if (!mergeQueueGate || typeof mergeQueueGate !== "object") {
+      throw new Error("mergeQueueGate must be an object when provided");
+    }
+
+    if (
+      !Array.isArray(mergeQueueGate.requiredChecks) ||
+      mergeQueueGate.requiredChecks.length === 0
+    ) {
+      throw new Error("mergeQueueGate.requiredChecks must be a non-empty array");
+    }
+  }
+
   if (
     !Array.isArray(policy.acceptanceStage?.runtimeRequiredChecks) ||
     !Array.isArray(policy.acceptanceStage?.infraRequiredChecks) ||

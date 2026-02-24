@@ -16,7 +16,7 @@ Keep the production release path in one authoritative workflow instead of introd
 
 - GitHub Actions visualization is a job DAG and does not support true nested/collapsible stage groups inside one workflow run.
 - The current delivery model already uses Farley-aligned stage language and sequencing:
-  - PR/merge-queue gate in `commit-stage.yml`
+  - PR gate in `commit-stage.yml` and exact merge gate in `merge-queue-gate.yml`
   - `main` release flow in the cloud delivery workflow with commit, acceptance, and production jobs
 - Previous cross-workflow chaining produced ambiguous outcomes and troubleshooting overhead.
 - The team requested clearer stage legibility without reintroducing orchestration complexity.
@@ -24,7 +24,7 @@ Keep the production release path in one authoritative workflow instead of introd
 ## Decision
 
 - Keep a single authoritative cloud push workflow as the main release workflow.
-- Keep `commit-stage.yml` as the only PR/merge-queue required merge gate.
+- Keep explicit merge gates: `commit-stage.yml` for PR and `merge-queue-gate.yml` for merge queue exact-merge checks.
 - Do not add reusable-workflow wrappers solely for visual grouping at this time.
 - Continue to improve readability through:
   - stable stage job naming (`commit-stage`, `acceptance-stage`, `production-stage`, `release-decision`)
@@ -34,7 +34,7 @@ Keep the production release path in one authoritative workflow instead of introd
 ## Public APIs / Interfaces / Types
 
 - No application API or package contract changes.
-- No branch protection contract changes (required context remains `commit-stage`).
+- Branch protection contract uses required contexts `commit-stage` and `merge-queue-gate`.
 - No deployment artifact schema changes from this decision.
 
 ## Alternatives Considered
@@ -66,6 +66,7 @@ Reconsider reusable stage wrappers only if both conditions are true:
 
 - `.github/workflows/commit-stage.yml`
 - `.github/workflows/cloud-delivery-pipeline.yml`
+- `.github/workflows/merge-queue-gate.yml`
 - `.github/workflows/cloud-delivery-replay.yml`
 - `.github/workflows/README.md`
 - `docs/commit-stage-policy.md`

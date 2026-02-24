@@ -21,7 +21,7 @@ Expected:
 
 - `enforce_admins.enabled=true`
 - `required_status_checks.strict=true`
-- required check context includes only `commit-stage`
+- required check contexts include `commit-stage` and `merge-queue-gate`
 - `required_pull_request_reviews.required_approving_review_count=0`
 - `allow_force_pushes.enabled=false`
 - `allow_deletions.enabled=false`
@@ -32,7 +32,7 @@ If the required check context differs, apply the baseline:
 cat > /tmp/required-status-checks.json <<'JSON'
 {
   "strict": true,
-  "contexts": ["commit-stage"]
+  "contexts": ["commit-stage", "merge-queue-gate"]
 }
 JSON
 

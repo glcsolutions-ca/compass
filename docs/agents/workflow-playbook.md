@@ -24,14 +24,14 @@ pnpm commit:docs-drift
 
 1. Open PR from a short-lived branch.
 2. `commit-stage.yml` computes scope and runs fast required checks.
-3. `commit-stage` is the merge-blocking decision.
-4. Merge queue runs the same gate on `merge_group`.
+3. `commit-stage` is the PR merge-readiness gate.
+4. Merge queue runs `merge-queue-gate.yml` on `merge_group` for exact merge confidence.
 5. Merge to `main` triggers:
 
 - `cloud-delivery-pipeline.yml` (cloud runtime/infra/identity)
 - `desktop-deployment-pipeline.yml` (desktop installers)
 
-6. Cloud pipeline verifies commit-stage evidence, builds release package refs, and publishes release package manifest.
+6. Cloud pipeline verifies merge-queue-gate evidence, builds release package refs, and publishes release package manifest.
 7. Cloud acceptance validates that same release package and emits one YES/NO decision.
 8. Cloud production promotes the accepted release package under the production lock.
 9. Cloud release decision writes `.artifacts/release/<sha>/decision.json`.
@@ -39,7 +39,7 @@ pnpm commit:docs-drift
 
 ## Governance Invariant
 
-- `main` required check context is only `commit-stage`.
+- Required gate contexts are `commit-stage` and `merge-queue-gate`.
 - Acceptance and production checks are post-merge release controls, not branch-protection required checks.
 
 ## High-Risk Paths

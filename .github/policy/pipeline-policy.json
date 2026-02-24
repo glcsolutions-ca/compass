@@ -125,5 +125,15 @@
       "docs/contracts/**",
       "docs/runbooks/**"
     ]
+  },
+  "mergeQueueGate": {
+    "requiredChecks": [
+      "determine-scope",
+      "build-compile",
+      "migration-safety",
+      "auth-critical-smoke",
+      "minimal-integration-smoke",
+      "merge-queue-gate"
+    ]
   }
 }

@@ -6,10 +6,16 @@
 
 ## Script Map
 
-| Script                            | Role                                                                         |
-| --------------------------------- | ---------------------------------------------------------------------------- |
-| `decide-acceptance-stage.mjs`     | Produces YES/NO acceptance decision from required acceptance check outcomes. |
-| `decide-acceptance-stage-lib.mjs` | Pure evaluator for required acceptance checks by scope.                      |
+| Script                                       | Role                                                                         |
+| -------------------------------------------- | ---------------------------------------------------------------------------- |
+| `decide-acceptance-stage.mjs`                | Produces YES/NO acceptance decision from required acceptance check outcomes. |
+| `decide-acceptance-stage-lib.mjs`            | Pure evaluator for required acceptance checks by scope.                      |
+| `finalize-acceptance-stage.mjs`              | Finalizes acceptance decision and non-deploy reason/result artifacts.        |
+| `runtime-acceptance-lib.mjs`                 | Shared candidate contract checks and shell runner for runtime acceptance.    |
+| `run-runtime-api-system-acceptance.mjs`      | Candidate API smoke + system smoke black-box execution.                      |
+| `run-runtime-browser-acceptance.mjs`         | Candidate browser evidence execution (flow-id aware).                        |
+| `run-runtime-migration-image-acceptance.mjs` | Candidate migration-image smoke execution.                                   |
+| `acceptance-blackbox-contract.test.mjs`      | Prevents acceptance smoke tests from importing `apps/**` internals.          |
 
 ## Artifact Contract
 

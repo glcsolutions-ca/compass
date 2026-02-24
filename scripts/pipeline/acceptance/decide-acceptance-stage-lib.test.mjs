@@ -5,7 +5,9 @@ function base(overrides = {}) {
   return {
     checkResults: {
       "load-release-candidate": "success",
-      "runtime-blackbox-acceptance": "skipped",
+      "runtime-api-system-acceptance": "skipped",
+      "runtime-browser-acceptance": "skipped",
+      "runtime-migration-image-acceptance": "skipped",
       "infra-readonly-acceptance": "skipped",
       "identity-readonly-acceptance": "skipped"
     },
@@ -26,7 +28,9 @@ describe("evaluateAcceptanceStageResults", () => {
       base({
         checkResults: {
           "load-release-candidate": "failure",
-          "runtime-blackbox-acceptance": "skipped",
+          "runtime-api-system-acceptance": "skipped",
+          "runtime-browser-acceptance": "skipped",
+          "runtime-migration-image-acceptance": "skipped",
           "infra-readonly-acceptance": "skipped",
           "identity-readonly-acceptance": "skipped"
         }
@@ -49,7 +53,9 @@ describe("evaluateAcceptanceStageResults", () => {
         identityRequired: true,
         checkResults: {
           "load-release-candidate": "success",
-          "runtime-blackbox-acceptance": "failure",
+          "runtime-api-system-acceptance": "failure",
+          "runtime-browser-acceptance": "cancelled",
+          "runtime-migration-image-acceptance": "timed_out",
           "infra-readonly-acceptance": "cancelled",
           "identity-readonly-acceptance": "timed_out"
         }
@@ -58,8 +64,16 @@ describe("evaluateAcceptanceStageResults", () => {
 
     expect(reasons).toEqual([
       {
-        code: "CHECK_RUNTIME_BLACKBOX_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
-        message: "runtime-blackbox-acceptance required but result is failure"
+        code: "CHECK_RUNTIME_API_SYSTEM_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
+        message: "runtime-api-system-acceptance required but result is failure"
+      },
+      {
+        code: "CHECK_RUNTIME_BROWSER_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
+        message: "runtime-browser-acceptance required but result is cancelled"
+      },
+      {
+        code: "CHECK_RUNTIME_MIGRATION_IMAGE_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
+        message: "runtime-migration-image-acceptance required but result is timed_out"
       },
       {
         code: "CHECK_INFRA_READONLY_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
@@ -79,7 +93,9 @@ describe("evaluateAcceptanceStageResults", () => {
         identityRequired: true,
         checkResults: {
           "load-release-candidate": "success",
-          "runtime-blackbox-acceptance": "success",
+          "runtime-api-system-acceptance": "success",
+          "runtime-browser-acceptance": "success",
+          "runtime-migration-image-acceptance": "success",
           "infra-readonly-acceptance": "skipped",
           "identity-readonly-acceptance": "success"
         },

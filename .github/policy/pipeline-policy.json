@@ -50,12 +50,23 @@
   },
   "acceptanceStage": {
     "requiredFlowIds": ["compass-smoke"],
-    "runtimeRequiredChecks": ["runtime-blackbox-acceptance"],
+    "runtimeRequiredChecks": [
+      "runtime-api-system-acceptance",
+      "runtime-browser-acceptance",
+      "runtime-migration-image-acceptance"
+    ],
     "infraRequiredChecks": ["infra-readonly-acceptance"],
     "identityRequiredChecks": ["identity-readonly-acceptance"]
   },
   "productionStage": {
     "requireFreshHeadOnAuto": true
+  },
+  "deploymentPipeline": {
+    "slo": {
+      "mode": "observe",
+      "acceptanceTargetSeconds": 900,
+      "productionTargetSeconds": 1200
+    }
   },
   "docsDriftRules": {
     "blockingPaths": [

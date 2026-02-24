@@ -42,7 +42,9 @@ function parseCheckResults() {
 
   const expectedChecks = [
     "load-release-candidate",
-    "runtime-blackbox-acceptance",
+    "runtime-api-system-acceptance",
+    "runtime-browser-acceptance",
+    "runtime-migration-image-acceptance",
     "infra-readonly-acceptance",
     "identity-readonly-acceptance"
   ];

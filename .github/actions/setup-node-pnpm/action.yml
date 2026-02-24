@@ -1,0 +1,40 @@
+name: setup-node-pnpm
+description: Setup pnpm and Node, then optionally install workspace dependencies.
+
+inputs:
+  pnpm-version:
+    description: pnpm version
+    required: false
+    default: "10.30.1"
+  node-version-file:
+    description: Node version file path
+    required: false
+    default: ".nvmrc"
+  cache-dependency-path:
+    description: Dependency lock file path for Node cache
+    required: false
+    default: "pnpm-lock.yaml"
+  install:
+    description: Whether to run pnpm install --frozen-lockfile
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: ${{ inputs.pnpm-version }}
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version-file: ${{ inputs.node-version-file }}
+        cache: pnpm
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+
+    - name: Install dependencies
+      if: ${{ inputs.install == 'true' }}
+      shell: bash
+      run: pnpm install --frozen-lockfile

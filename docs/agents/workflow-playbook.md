@@ -26,11 +26,14 @@ pnpm commit:docs-drift
 2. `commit-stage.yml` computes scope and runs fast required checks.
 3. `commit-stage` is the merge-blocking decision.
 4. Merge queue runs the same commit-stage gate on `merge_group`.
-5. Merge to `main` triggers `deployment-pipeline.yml`.
-6. Deployment pipeline runs commit checks, freezes candidate digest refs, and loads candidate contract.
-7. Deployment pipeline acceptance stage validates the same candidate and emits one yes/no decision.
-8. Deployment pipeline production stage promotes accepted candidate refs with production lock.
-9. Deployment pipeline release decision writes `.artifacts/release/<sha>/decision.json` as canonical release verdict.
+5. Merge to `main` triggers both deployment pipelines:
+   - `deployment-pipeline.yml` for cloud runtime/infra/identity
+   - `desktop-deployment-pipeline.yml` for desktop installers
+6. Cloud pipeline runs commit checks, freezes candidate digest refs, and loads candidate contract.
+7. Cloud acceptance stage validates the same candidate and emits one yes/no decision.
+8. Cloud production stage promotes accepted candidate refs with production lock.
+9. Cloud release decision writes `.artifacts/release/<sha>/decision.json` as canonical cloud release verdict.
+10. Desktop release decision writes `.artifacts/desktop-release/<sha>/decision.json` as canonical desktop release verdict.
 
 ## Governance Invariant
 

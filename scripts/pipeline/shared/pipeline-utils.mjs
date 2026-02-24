@@ -114,6 +114,7 @@ export function assertPipelinePolicyShape(policy) {
     "commitStage",
     "acceptanceStage",
     "productionStage",
+    "desktopPipeline",
     "docsDriftRules"
   ];
 
@@ -207,6 +208,63 @@ export function assertPipelinePolicyShape(policy) {
     }
     if (!Number.isInteger(productionTarget) || productionTarget <= 0) {
       throw new Error("deploymentPipeline.slo.productionTargetSeconds must be a positive integer");
+    }
+  }
+
+  const desktopPipeline = policy.desktopPipeline;
+  if (desktopPipeline !== undefined) {
+    if (!desktopPipeline || typeof desktopPipeline !== "object") {
+      throw new Error("desktopPipeline must be an object when provided");
+    }
+
+    if (
+      !Array.isArray(desktopPipeline.requiredChecks) ||
+      desktopPipeline.requiredChecks.length === 0
+    ) {
+      throw new Error("desktopPipeline.requiredChecks must be a non-empty array");
+    }
+
+    if (
+      !desktopPipeline.artifactContracts ||
+      typeof desktopPipeline.artifactContracts !== "object"
+    ) {
+      throw new Error("desktopPipeline.artifactContracts must be an object");
+    }
+
+    const artifactContractKeys = [
+      "candidateManifestPath",
+      "acceptanceResultPath",
+      "productionResultPath",
+      "releaseDecisionPath"
+    ];
+    for (const key of artifactContractKeys) {
+      const value = String(desktopPipeline.artifactContracts[key] || "").trim();
+      if (value.length === 0) {
+        throw new Error(`desktopPipeline.artifactContracts.${key} must be a non-empty string`);
+      }
+    }
+
+    const desktopPipelineSlo = desktopPipeline.slo;
+    if (!desktopPipelineSlo || typeof desktopPipelineSlo !== "object") {
+      throw new Error("desktopPipeline.slo must be an object");
+    }
+
+    if (!["observe", "enforce"].includes(String(desktopPipelineSlo.mode || "").trim())) {
+      throw new Error("desktopPipeline.slo.mode must be one of: observe, enforce");
+    }
+
+    if (
+      !Number.isInteger(desktopPipelineSlo.acceptanceTargetSeconds) ||
+      desktopPipelineSlo.acceptanceTargetSeconds <= 0
+    ) {
+      throw new Error("desktopPipeline.slo.acceptanceTargetSeconds must be a positive integer");
+    }
+
+    if (
+      !Number.isInteger(desktopPipelineSlo.productionTargetSeconds) ||
+      desktopPipelineSlo.productionTargetSeconds <= 0
+    ) {
+      throw new Error("desktopPipeline.slo.productionTargetSeconds must be a positive integer");
     }
   }
 }

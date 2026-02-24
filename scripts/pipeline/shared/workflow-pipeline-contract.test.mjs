@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 const commitStageWorkflowPath = ".github/workflows/commit-stage.yml";
 const deploymentPipelineWorkflowPath = ".github/workflows/deployment-pipeline.yml";
+const desktopDeploymentPipelineWorkflowPath = ".github/workflows/desktop-deployment-pipeline.yml";
+const desktopReleaseCompatibilityWorkflowPath = ".github/workflows/desktop-release.yml";
 const sharedApplyScriptPath = "scripts/pipeline/production/apply-infra.mjs";
 const stageEligibilityScriptPath = "scripts/pipeline/shared/resolve-stage-eligibility.mjs";
 
@@ -152,6 +154,43 @@ describe("workflow pipeline contract", () => {
     );
   });
 
+  it("boots workspace before production-stage decision script execution", () => {
+    const workflow = readUtf8(deploymentPipelineWorkflowPath);
+    const productionStageJob = extractJobBlock(workflow, "production_stage");
+
+    expect(productionStageJob).toContain("- name: Checkout");
+    expect(productionStageJob).toContain("uses: actions/checkout@v4");
+    expect(productionStageJob).toContain("- name: Setup Node");
+    expect(productionStageJob).toContain("uses: actions/setup-node@v4");
+    expect(productionStageJob).toContain(
+      "run: node scripts/pipeline/production/decide-production-stage.mjs"
+    );
+  });
+
+  it("keeps required acceptance jobs deterministic via always() and JOB_REQUIRED guards", () => {
+    const workflow = readUtf8(deploymentPipelineWorkflowPath);
+    const infraAcceptanceJob = extractJobBlock(workflow, "infra_readonly_acceptance");
+    const identityAcceptanceJob = extractJobBlock(workflow, "identity_readonly_acceptance");
+    const runtimeApiAcceptanceJob = extractJobBlock(workflow, "runtime_api_system_acceptance");
+
+    expect(infraAcceptanceJob).toContain(
+      "if: ${{ always() && needs.load_release_candidate.result == 'success' }}"
+    );
+    expect(infraAcceptanceJob).toContain("JOB_REQUIRED:");
+    expect(infraAcceptanceJob).toContain("Record not-required infra acceptance");
+
+    expect(identityAcceptanceJob).toContain(
+      "if: ${{ always() && needs.load_release_candidate.result == 'success' }}"
+    );
+    expect(identityAcceptanceJob).toContain("JOB_REQUIRED:");
+    expect(identityAcceptanceJob).toContain("Record not-required identity acceptance");
+
+    expect(runtimeApiAcceptanceJob).toContain(
+      "if: ${{ always() && needs.load_release_candidate.result == 'success' }}"
+    );
+    expect(runtimeApiAcceptanceJob).toContain("JOB_REQUIRED:");
+  });
+
   it("keeps release decision logic in shared script and accepts docs-only non-deploy path", () => {
     const workflow = readUtf8(deploymentPipelineWorkflowPath);
     const stageEligibilityScript = readUtf8(stageEligibilityScriptPath);
@@ -168,5 +207,37 @@ describe("workflow pipeline contract", () => {
     expect(script).toMatch(/["']--name["'],\s*deploymentName/);
     expect(script).toContain('"validate"');
     expect(script).toContain('"create"');
+  });
+
+  it("keeps desktop deployable under a dedicated deployment pipeline", () => {
+    const workflow = readUtf8(desktopDeploymentPipelineWorkflowPath);
+    expect(workflow).toContain("name: Desktop Deployment Pipeline");
+    expect(workflow).toContain("desktop-determine-scope");
+    expect(workflow).toContain("desktop-fast-feedback");
+    expect(workflow).toContain("desktop-commit-stage");
+    expect(workflow).toContain("build-signed-macos");
+    expect(workflow).toContain("build-signed-windows");
+    expect(workflow).toContain("desktop-acceptance-stage");
+    expect(workflow).toContain("publish-desktop-release");
+    expect(workflow).toContain("desktop-production-stage");
+    expect(workflow).toContain("desktop-release-decision");
+    expect(workflow).toContain(".artifacts/desktop-release/");
+  });
+
+  it("keeps desktop canonical path signed-only and removes legacy signing mode forks", () => {
+    const workflow = readUtf8(desktopDeploymentPipelineWorkflowPath);
+    expect(workflow).not.toContain("signing_mode");
+    expect(workflow).not.toContain("candidate_validation");
+    expect(workflow).toContain("Sign MSI with Azure Artifact Signing");
+    expect(workflow).toContain("Verify macOS signing and notarization");
+  });
+
+  it("keeps desktop-release workflow as manual compatibility lane only", () => {
+    const workflow = readUtf8(desktopReleaseCompatibilityWorkflowPath);
+    expect(workflow).toContain("name: Desktop Release (Compatibility)");
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).not.toContain("\n  push:");
+    expect(workflow).not.toContain("signing_mode");
+    expect(workflow).not.toContain("candidate_validation");
   });
 });

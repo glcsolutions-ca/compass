@@ -86,6 +86,29 @@ describe("evaluateAcceptanceStageResults", () => {
     ]);
   });
 
+  it("emits explicit reason code when a required check is skipped", () => {
+    const reasons = evaluateAcceptanceStageResults(
+      base({
+        infraRequired: true,
+        checkResults: {
+          "load-release-candidate": "success",
+          "runtime-api-system-acceptance": "skipped",
+          "runtime-browser-acceptance": "skipped",
+          "runtime-migration-image-acceptance": "skipped",
+          "infra-readonly-acceptance": "skipped",
+          "identity-readonly-acceptance": "skipped"
+        }
+      })
+    );
+
+    expect(reasons).toEqual([
+      {
+        code: "REQUIRED_CHECK_SKIPPED_UNEXPECTEDLY",
+        message: "infra-readonly-acceptance required but result is skipped"
+      }
+    ]);
+  });
+
   it("reports explicit config contract violations", () => {
     const reasons = evaluateAcceptanceStageResults(
       base({

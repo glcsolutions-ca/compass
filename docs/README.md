@@ -26,7 +26,7 @@ General documentation and architecture records live here.
 
 - `runbooks/README.md`
 - `runbooks/postgres-local.md`
-- `runbooks/desktop-release.md`
+- `runbooks/desktop-deployment-pipeline.md`
 - `runbooks/production-stage.md`
 - `runbooks/migration-safety.md`
 

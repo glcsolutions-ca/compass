@@ -102,7 +102,7 @@ for i in $(seq 1 90); do
   sleep 1
 done
 
-read -r delegated_smoke_token app_smoke_token < <(ACCEPTANCE_AUTH_SECRET="$auth_secret" node --input-type=module - <<'NODE'
+smoke_tokens="$(ACCEPTANCE_AUTH_SECRET="$auth_secret" node --input-type=module - <<'NODE'
 import { createHmac } from "node:crypto";
 
 function encodeJson(value) {
@@ -159,7 +159,8 @@ const app = signJwt(
 console.log(delegated);
 console.log(app);
 NODE
-) | paste -sd' ' -
+)"; smoke_tokens="$(printf '%s\n' "$smoke_tokens" | paste -sd' ' -)"
+read -r delegated_smoke_token app_smoke_token <<<"$smoke_tokens"
 if [ -z "$delegated_smoke_token" ] || [ -z "$app_smoke_token" ]; then
   echo "Failed to generate acceptance smoke auth tokens" >&2
   exit 1

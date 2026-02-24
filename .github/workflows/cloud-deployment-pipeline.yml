@@ -1445,7 +1445,6 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           AUTH_CANARY_WORKFLOW_FILE: ${{ env.DELEGATED_SMOKE_WORKFLOW_FILE }}
           AUTH_CANARY_MAX_AGE_HOURS: ${{ env.DELEGATED_SMOKE_MAX_AGE_HOURS }}
-          AUTH_CANARY_REQUIRED_HEAD_SHA: ${{ env.HEAD_SHA }}
           AUTH_CANARY_ARTIFACT_NAME: delegated-smoke-freshness
           AUTH_CANARY_REQUIRED_ARTIFACT_NAME: auth-delegated-smoke-${{ env.HEAD_SHA }}
         run: node scripts/pipeline/cloud/production/verify-auth-canary-freshness.mjs

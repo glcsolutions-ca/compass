@@ -21,7 +21,7 @@ Expected:
 
 - `enforce_admins.enabled=true`
 - `required_status_checks.strict=true`
-- required check context includes only `risk-policy-gate`
+- required check context includes only `commit-stage-gate`
 - `required_pull_request_reviews.required_approving_review_count=0`
 - `allow_force_pushes.enabled=false`
 - `allow_deletions.enabled=false`

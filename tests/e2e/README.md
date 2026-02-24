@@ -26,12 +26,11 @@ playwright test tests/e2e/smoke.spec.ts --config tests/e2e/playwright.config.ts 
 - `EXPECTED_ENTRYPOINT` (default `/`)
 - `HEAD_SHA` (default `local`)
 - `TESTED_SHA` (default `HEAD_SHA`)
-- `RISK_TIER` (default `standard`)
 - `PR_NUMBER` (default `0`)
 
 ### Required
 
-No variable is strictly required for local execution, but CI normally supplies SHA/tier metadata for evidence traceability.
+No variable is strictly required for local execution, but CI normally supplies SHA metadata for evidence traceability.
 
 ## Output Artifact
 

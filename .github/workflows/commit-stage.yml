@@ -1,0 +1,353 @@
+name: Commit Stage
+
+permissions:
+  contents: read
+  pull-requests: read
+  id-token: write
+
+env:
+  EXPECTED_ENTRYPOINT: /
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    branches:
+      - main
+  merge_group:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  scope:
+    name: scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      scope_path: ${{ steps.scope.outputs.scope_path }}
+      base_sha: ${{ steps.scope.outputs.base_sha }}
+      head_sha: ${{ steps.scope.outputs.head_sha }}
+      tested_sha: ${{ steps.scope.outputs.tested_sha }}
+      pr_number: ${{ steps.scope.outputs.pr_number }}
+      kind: ${{ steps.scope.outputs.kind }}
+      runtime_changed: ${{ steps.scope.outputs.runtime_changed }}
+      infra_changed: ${{ steps.scope.outputs.infra_changed }}
+      identity_changed: ${{ steps.scope.outputs.identity_changed }}
+      migration_changed: ${{ steps.scope.outputs.migration_changed }}
+      infra_rollout_changed: ${{ steps.scope.outputs.infra_rollout_changed }}
+      docs_only_changed: ${{ steps.scope.outputs.docs_only_changed }}
+      needs_infra: ${{ steps.scope.outputs.needs_infra }}
+      needs_migrations: ${{ steps.scope.outputs.needs_migrations }}
+      changed_files_json: ${{ steps.scope.outputs.changed_files_json }}
+      required_flow_ids_json: ${{ steps.scope.outputs.required_flow_ids_json }}
+      docs_drift_blocking: ${{ steps.scope.outputs.docs_drift_blocking }}
+      docs_drift_path: ${{ steps.docs_drift.outputs.docs_drift_path }}
+      docs_drift_status: ${{ steps.docs_drift.outputs.docs_drift_status }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Resolve commit scope
+        id: scope
+        env:
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_TESTED_SHA: ${{ github.sha }}
+        run: node scripts/pipeline/commit/resolve-scope.mjs
+
+      - name: Upload scope artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-scope-${{ steps.scope.outputs.tested_sha }}
+          path: ${{ steps.scope.outputs.scope_path }}
+          if-no-files-found: warn
+
+      - name: Evaluate docs drift
+        id: docs_drift
+        env:
+          HEAD_SHA: ${{ steps.scope.outputs.head_sha }}
+          TESTED_SHA: ${{ steps.scope.outputs.tested_sha }}
+          CHANGED_FILES_JSON: ${{ steps.scope.outputs.changed_files_json }}
+        run: node scripts/pipeline/commit/check-docs-drift.mjs
+
+      - name: Upload docs-drift artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-drift-${{ steps.scope.outputs.tested_sha }}
+          path: .artifacts/docs-drift/${{ steps.scope.outputs.tested_sha }}/result.json
+          if-no-files-found: warn
+
+  quick_feedback:
+    name: quick-feedback
+    needs:
+      - scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run quick feedback suite
+        run: pnpm test
+
+  infra_quick_check:
+    name: infra-quick-check
+    needs:
+      - scope
+    if: ${{ needs.scope.outputs.infra_changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compile Bicep entrypoint
+        run: az bicep build --file infra/azure/main.bicep --stdout >/dev/null
+
+  identity_quick_check:
+    name: identity-quick-check
+    needs:
+      - scope
+    if: ${{ needs.scope.outputs.identity_changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform fmt check
+        run: terraform -chdir=infra/identity fmt -check -recursive
+
+      - name: Terraform init (no backend)
+        run: terraform -chdir=infra/identity init -backend=false -input=false
+
+      - name: Terraform validate
+        run: terraform -chdir=infra/identity validate
+
+  candidate_build:
+    name: candidate-build
+    needs:
+      - scope
+      - quick_feedback
+      - infra_quick_check
+      - identity_quick_check
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    env:
+      HEAD_SHA: ${{ needs.scope.outputs.head_sha }}
+      TESTED_SHA: ${{ needs.scope.outputs.tested_sha }}
+      KIND: ${{ needs.scope.outputs.kind }}
+      RUNTIME_CHANGED: ${{ needs.scope.outputs.runtime_changed }}
+      INFRA_CHANGED: ${{ needs.scope.outputs.infra_changed }}
+      IDENTITY_CHANGED: ${{ needs.scope.outputs.identity_changed }}
+      DOCS_ONLY_CHANGED: ${{ needs.scope.outputs.docs_only_changed }}
+      NEEDS_INFRA: ${{ needs.scope.outputs.needs_infra }}
+      NEEDS_MIGRATIONS: ${{ needs.scope.outputs.needs_migrations }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
+      ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        if: ${{ env.RUNTIME_CHANGED == 'true' }}
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        if: ${{ env.RUNTIME_CHANGED == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        if: ${{ env.RUNTIME_CHANGED == 'true' }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Azure login (OIDC)
+        if: ${{ env.RUNTIME_CHANGED == 'true' || env.INFRA_CHANGED == 'true' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build/freeze candidate refs
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          artifact_dir=".artifacts/candidate/$HEAD_SHA"
+          mkdir -p "$artifact_dir"
+
+          resolve_to_digest_ref() {
+            local image="$1"
+            local acr_registry="${ACR_NAME}.azurecr.io"
+
+            if [[ "$image" != "$acr_registry/"* ]]; then
+              echo "Image is not in expected ACR registry: $image" >&2
+              return 1
+            fi
+
+            local repo_ref="${image#${acr_registry}/}"
+            local repo
+            local digest
+
+            if [[ "$repo_ref" == *@sha256:* ]]; then
+              repo="${repo_ref%%@*}"
+              digest="${repo_ref#*@}"
+              local resolved_digest
+              resolved_digest="$(az acr repository show --name "$ACR_NAME" --image "$repo@$digest" --query digest --output tsv 2>/dev/null || true)"
+              if [ -z "$resolved_digest" ]; then
+                echo "Image digest was not found in ACR: $image" >&2
+                return 1
+              fi
+              echo "$acr_registry/$repo@$resolved_digest"
+              return
+            fi
+
+            repo="${repo_ref%%:*}"
+            digest="$(az acr repository show --name "$ACR_NAME" --image "$repo_ref" --query digest --output tsv 2>/dev/null || true)"
+            if [ -z "$digest" ]; then
+              echo "Image tag was not found in ACR: $image" >&2
+              return 1
+            fi
+
+            echo "$acr_registry/$repo@$digest"
+          }
+
+          api_ref=""
+          web_ref=""
+
+          if [ "$RUNTIME_CHANGED" = "true" ]; then
+            az acr login --name "$ACR_NAME" --only-show-errors
+
+            api_tag="$ACR_REGISTRY/compass-api:$HEAD_SHA"
+            web_tag="$ACR_REGISTRY/compass-web:$HEAD_SHA"
+
+            docker build -f apps/api/Dockerfile -t "$api_tag" .
+            docker push "$api_tag"
+
+            docker build -f apps/web/Dockerfile -t "$web_tag" .
+            docker push "$web_tag"
+
+            api_ref="$(docker inspect --format='{{index .RepoDigests 0}}' "$api_tag")"
+            web_ref="$(docker inspect --format='{{index .RepoDigests 0}}' "$web_tag")"
+          elif [ "$INFRA_CHANGED" = "true" ]; then
+            api_image="$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_API_APP_NAME" --query 'properties.template.containers[0].image' --output tsv)"
+            web_image="$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_WEB_APP_NAME" --query 'properties.template.containers[0].image' --output tsv)"
+
+            api_ref="$(resolve_to_digest_ref "$api_image")"
+            web_ref="$(resolve_to_digest_ref "$web_image")"
+          fi
+
+          cat > "$artifact_dir/manifest.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "testedSha": "$TESTED_SHA",
+            "kind": "$KIND",
+            "buildRunId": "$GITHUB_RUN_ID",
+            "scope": {
+              "runtime": ${RUNTIME_CHANGED},
+              "infra": ${INFRA_CHANGED},
+              "identity": ${IDENTITY_CHANGED},
+              "docsOnly": ${DOCS_ONLY_CHANGED}
+            },
+            "needsInfra": ${NEEDS_INFRA},
+            "needsMigrations": ${NEEDS_MIGRATIONS},
+            "candidate": {
+              "apiRef": "$api_ref",
+              "webRef": "$web_ref"
+            }
+          }
+          JSON
+
+      - name: Upload candidate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-${{ env.HEAD_SHA }}
+          path: .artifacts/candidate/${{ env.HEAD_SHA }}/manifest.json
+          if-no-files-found: error
+
+  commit_stage_gate:
+    name: commit-stage-gate
+    if: ${{ always() }}
+    needs:
+      - scope
+      - quick_feedback
+      - infra_quick_check
+      - identity_quick_check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Enforce commit stage gate
+        env:
+          HEAD_SHA: ${{ needs.scope.outputs.head_sha }}
+          TESTED_SHA: ${{ needs.scope.outputs.tested_sha }}
+          INFRA_REQUIRED: ${{ needs.scope.outputs.infra_changed }}
+          IDENTITY_REQUIRED: ${{ needs.scope.outputs.identity_changed }}
+          DOCS_DRIFT_BLOCKING: ${{ needs.scope.outputs.docs_drift_blocking }}
+          DOCS_DRIFT_STATUS: ${{ needs.scope.outputs.docs_drift_status }}
+          CHECK_RESULTS_JSON: ${{ format('{{"scope":"{0}","quick-feedback":"{1}","infra-quick-check":"{2}","identity-quick-check":"{3}"}}', needs.scope.result, needs.quick_feedback.result, needs.infra_quick_check.result, needs.identity_quick_check.result) }}
+        run: node scripts/pipeline/commit/commit-stage-gate.mjs
+
+      - name: Upload commit-stage artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-stage-${{ needs.scope.outputs.tested_sha }}
+          path: .artifacts/commit-stage/${{ needs.scope.outputs.tested_sha }}/result.json
+          if-no-files-found: warn

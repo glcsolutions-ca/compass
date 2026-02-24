@@ -13,39 +13,26 @@ pnpm build
 3. For control-plane changes, run contract-focused commands:
 
 ```bash
-pnpm ci:preflight
-pnpm ci:pipeline
-pnpm ci:gate
+pnpm commit:scope
+pnpm commit:testing-policy
+pnpm commit:docs-drift
 ```
-
-`pnpm ci:preflight` includes docs-drift enforcement. Use `pnpm ci:docs-drift` only for focused debugging.
 
 4. Confirm docs are updated when policy/workflow/scripting behavior changes.
 
 ## CI/CD Cycle (Plain-English)
 
 1. Open PR from a short-lived branch.
-2. CI computes tier from changed paths.
-3. CI runs required checks in parallel after preflight.
-4. `ci-pipeline` check name is fixed; mode is tier-driven:
-   - `fast` for `low` (`pnpm test`)
-   - `full` for `standard` and `high` (`pnpm test:full` + `pnpm build`)
-   - target: `low` PRs should not start Postgres containers
-5. `risk-policy-gate` blocks merge unless required evidence is complete and valid for both `headSha` and `testedSha`.
-6. `merge-contract.yml` runs on `pull_request` and `merge_group` so queue execution uses the same gate.
-7. Merge queue converges `main`; direct admin bypass is not part of normal flow.
-8. Merge to `main` runs one release pipeline: `classify`, `checks`, `promote`, `report`.
-9. `classify` diffs `base_sha` (last successful production deployment SHA) to `head_sha`.
-10. Production mutation uses a shared lock (`concurrency: production-mutation`) across `deploy.yml` (`promote`) and `infra-apply.yml` (`bicep_apply`), both in `environment: production`.
-11. Stale guards run only before infra and before migration+deploy boundary.
-12. Runtime releases build once, promote digest refs, run migration+deploy atomically, then run smoke + browser evidence.
-13. Successful promotions are recorded in GitHub Deployments (`production`) and become the next `base_sha`.
+2. `commit-stage.yml` computes scope and runs fast required checks.
+3. `commit-stage-gate` is the merge-blocking decision.
+4. Merge queue runs the same commit-stage gate on `merge_group`.
+5. Merge to `main` reruns commit stage and emits a frozen candidate manifest.
+6. `acceptance-stage.yml` validates the same candidate and emits one yes/no gate.
+7. `production-stage.yml` promotes accepted candidate refs with production lock and stale guard.
+8. Production stage runs smoke verification and records deployment evidence.
 
 ## High-Risk Paths
 
-When tier resolves to `high`, expect additional required evidence:
-
-- `harness-smoke`
-- `actionlint` when workflow files changed
+When scope includes `infra` or `identity`, expect additional acceptance and production work under `environment: production`.
 
 Trusted Codex review remains available through manual `codex-review-trusted.yml` runs and does not block merges.

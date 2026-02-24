@@ -7,7 +7,7 @@
 ## Run Command
 
 ```bash
-pnpm ci:harness-smoke
+pnpm acceptance:harness-smoke
 ```
 
 Equivalent direct command:
@@ -34,4 +34,3 @@ Metadata defaults when env is unset:
 
 - `HEAD_SHA=local`
 - `TESTED_SHA=HEAD_SHA`
-- `RISK_TIER=high`

@@ -8,7 +8,9 @@
 - Provider + caller identity data: `infra/identity/providers.tf`
 - Terraform + provider versions/backend declaration: `infra/identity/versions.tf`
 - Environment variable template: `infra/identity/env/prod.tfvars`
-- Workflows: `.github/workflows/identity-plan.yml`, `.github/workflows/identity-apply.yml`
+- Pipeline stages:
+  - `.github/workflows/acceptance-stage.yml` (`identity-acceptance`, plan)
+  - `.github/workflows/production-stage.yml` (`production-mutate`, apply)
 
 ## Provisioned Identity Objects
 
@@ -28,11 +30,10 @@
 
 - Backend is `azurerm` (remote state in Azure Storage).
 - Authentication model is OIDC + Azure AD auth (`use_oidc=true`, `use_azuread_auth=true`).
-- Workflows log in with `azure/login@v2` and pass backend config via environment variables.
-- `identity-plan` is non-mutating and emits plan evidence.
-- `identity-apply` is manual and mutates Entra state.
+- Acceptance stage runs non-mutating Terraform plan evidence.
+- Production stage runs guarded Terraform apply for accepted candidates.
 
-## Required Production Variables (identity-plan/apply)
+## Required Production Variables (identity acceptance/apply)
 
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
@@ -45,13 +46,13 @@
 - `TFSTATE_CONTAINER`
 - `TFSTATE_KEY`
 
-## Required Production Secrets (identity-plan/apply)
+## Required Production Secrets (identity acceptance/apply)
 
 - `AZURE_IDENTITY_CLIENT_ID`
 
 ## Bootstrap Trust Anchor (One-Time Manual)
 
-Bootstrap is manual once, then identity workflows own repeatable convergence.
+Bootstrap is manual once, then stage workflows own repeatable convergence.
 
 Required operator permissions:
 
@@ -66,7 +67,7 @@ Bootstrap steps:
 3. Assign `Application Administrator` to the bootstrap service principal.
 4. Create/prepare Terraform state storage and grant `Storage Blob Data Contributor` on the tfstate container scope.
 5. Set GitHub `production` secret `AZURE_IDENTITY_CLIENT_ID` to the bootstrap app client ID.
-6. Run `identity-plan` to confirm non-mutating auth and backend access.
+6. Run acceptance stage with identity scope to confirm non-mutating auth and backend access.
 
 ## Bootstrap Identity Rotation
 
@@ -76,13 +77,13 @@ Rotate bootstrap identity with explicit handoff:
 2. Add the same federated credential subject (`repo:<org>/<repo>:environment:production`).
 3. Grant the same Entra role assignments and Azure RBAC access used by the previous bootstrap identity.
 4. Update GitHub `production` secret `AZURE_IDENTITY_CLIENT_ID` to the new client ID.
-5. Run `identity-plan` to verify authentication and backend access.
-6. Remove old role assignments and old bootstrap app only after replacement is verified.
+5. Run acceptance stage (identity scope) to verify auth and backend access.
+6. Remove old role assignments and old bootstrap app after replacement is verified.
 
 ## Workflow Evidence
 
-- `identity-plan` writes `.artifacts/identity/<sha>/plan.json`.
-- `identity-apply` writes `.artifacts/identity/<sha>/outputs.json`.
+- Acceptance stage writes `.artifacts/identity/<sha>/plan.json`.
+- Production stage writes `.artifacts/identity/<sha>/outputs.json`.
 
 ## Outputs Contract and Downstream Mapping
 
@@ -102,8 +103,8 @@ Expected production mapping:
 
 - `deploy_application_client_id` -> GitHub `production` secret `AZURE_DEPLOY_CLIENT_ID`
 - `entra_audience` -> GitHub `production` variable `ENTRA_AUDIENCE`
-- `entra_issuer` and `entra_jwks_uri` -> tracked in your production environment configuration contract for token validation consumers
-- `smoke_application_client_id` -> tracked in your production environment configuration contract for smoke identity consumers
+- `entra_issuer` and `entra_jwks_uri` -> tracked in production environment config contract for token validation consumers
+- `smoke_application_client_id` -> tracked in production environment config contract for smoke identity consumers
 
 ## Local Terraform Commands
 
@@ -140,8 +141,8 @@ terraform -chdir=infra/identity apply \
 
 ## References
 
-- `.github/workflows/identity-plan.yml`
-- `.github/workflows/identity-apply.yml`
-- `.github/workflows/deploy.yml`
+- `.github/workflows/acceptance-stage.yml`
+- `.github/workflows/production-stage.yml`
 - `infra/README.md`
 - `infra/azure/README.md`
+- `docs/runbooks/production-stage.md`

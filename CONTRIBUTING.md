@@ -1,6 +1,6 @@
 # Contributing
 
-Keep changes small, testable, and easy to review. `main` stays releasable through PRs and CI gates.
+Keep changes small, testable, and easy to review. `main` stays releasable through PRs and stage gates.
 
 ## Prerequisites
 
@@ -27,7 +27,7 @@ Testing commands:
 
 - `pnpm test` - commit-stage checks (static + unit/component + contract)
 - `pnpm test:full` - commit-stage + integration tests
-- `pnpm test:unit` - workspace unit/component tests + CI policy helper tests
+- `pnpm test:unit` - workspace unit/component tests + pipeline contract tests
 - `pnpm test:integration` - integration tests only
 - `pnpm test:e2e` - Playwright smoke flow only
 - `pnpm check` - alias to `pnpm test` (transitional)
@@ -52,10 +52,10 @@ The API uses PostgreSQL when `DATABASE_URL` is set in `apps/api/.env` (see `apps
 
 ## Quality and safety checks
 
-- CI is the merge source of truth; `risk-policy-gate` is required.
+- CI is the merge source of truth; `commit-stage-gate` is required.
 - Keep one intent per PR and avoid unrelated file changes.
 - For behavior changes, update docs in `docs/` and/or policy checks.
-- Treat `migrations/`, `infra/`, `auth`, and deploy workflows as high risk: keep rollout and rollback explicit.
+- Treat `migrations/`, `infra/`, `auth`, and pipeline workflows as high risk: keep rollout and rollback explicit.
 
 ## References
 
@@ -63,8 +63,8 @@ The API uses PostgreSQL when `DATABASE_URL` is set in `apps/api/.env` (see `apps
 - Agent and repo conventions: `AGENTS.md`
 - Testing philosophy: `tests/README.md`
 - Testing policy and enforcement (layers 1-3): `tests/policy/README.md`
-- Human merge policy: `docs/merge-policy.md`
-- Machine merge policy: `.github/policy/merge-policy.json`
-- Merge workflow: `.github/workflows/merge-contract.yml`
-- Deploy workflow: `.github/workflows/deploy.yml`
-- Infra and identity workflows: `.github/workflows/infra-apply.yml`, `.github/workflows/identity-plan.yml`, `.github/workflows/identity-apply.yml`
+- Human commit-stage policy: `docs/commit-stage-policy.md`
+- Machine pipeline policy: `.github/policy/pipeline-policy.json`
+- Commit stage workflow: `.github/workflows/commit-stage.yml`
+- Acceptance stage workflow: `.github/workflows/acceptance-stage.yml`
+- Production stage workflow: `.github/workflows/production-stage.yml`

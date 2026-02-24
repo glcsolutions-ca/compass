@@ -2,26 +2,30 @@
 
 ## Purpose
 
-The `scripts/` directory contains control-plane automation for CI policy enforcement and production release orchestration.
+The `scripts/` directory contains delivery pipeline control-plane automation.
 
-## CI vs Deploy Boundaries
+## Pipeline Stage Boundaries
 
-- `scripts/ci/`: merge gating, risk classification, docs drift checks, and test-policy enforcement.
-- `scripts/deploy/`: deployment/infra helpers, stale candidate guards, migration orchestration, and release evidence capture.
+- `scripts/pipeline/commit/`: fast, merge-blocking checks and scope/docs/testing policy gate logic.
+- `scripts/pipeline/acceptance/`: post-merge acceptance gate logic and release-candidate validation helpers.
+- `scripts/pipeline/production/`: production mutation helpers (infra apply, migration orchestration, smoke verification, release recording).
+- `scripts/pipeline/shared/`: shared pipeline utilities and workflow contract tests.
 
-CI scripts should be non-production-mutating. Deploy scripts are allowed to mutate production when invoked by guarded workflows.
+Commit and acceptance scripts must be non-production-mutating. Production scripts are allowed to mutate production only from guarded workflows.
 
 ## Artifact Conventions
 
-- CI artifacts are written under `.artifacts/merge/`, `.artifacts/testing-contract/`, `.artifacts/docs-drift/`, `.artifacts/risk-policy-gate/`.
-- Deploy/runtime artifacts are written under `.artifacts/deploy/` and `.artifacts/infra/`.
+- Commit stage artifacts: `.artifacts/commit-stage/`, `.artifacts/docs-drift/`, `.artifacts/testing-policy/`, `.artifacts/candidate/`.
+- Acceptance stage artifacts: `.artifacts/acceptance/`, plus runtime evidence under `.artifacts/browser-evidence/`, `.artifacts/harness-smoke/`, `.artifacts/migration-image-smoke/`.
+- Production stage artifacts: `.artifacts/production/`, `.artifacts/deploy/`, `.artifacts/infra/`, `.artifacts/identity/`.
 
 ## Safety Notes
 
-- Changes under `scripts/ci/**` and `scripts/deploy/**` are treated as high-risk control-plane changes by merge policy.
-- Keep script changes small, add/update tests where available, and preserve fail-closed behavior.
+- Changes under `scripts/pipeline/**` are high-risk control-plane changes by policy.
+- Keep changes small, preserve fail-closed behavior, and maintain machine-readable artifacts.
 
 ## Child READMEs
 
-- CI scripts: [`scripts/ci/README.md`](./ci/README.md)
-- Deploy scripts: [`scripts/deploy/README.md`](./deploy/README.md)
+- Commit stage scripts: [`scripts/pipeline/commit/README.md`](./pipeline/commit/README.md)
+- Acceptance stage scripts: [`scripts/pipeline/acceptance/README.md`](./pipeline/acceptance/README.md)
+- Production stage scripts: [`scripts/pipeline/production/README.md`](./pipeline/production/README.md)

@@ -1,0 +1,86 @@
+{
+  "version": "1",
+  "scopeRules": {
+    "runtime": [
+      "apps/**",
+      "packages/**",
+      "db/migrations/**",
+      "db/scripts/**",
+      "apps/api/Dockerfile",
+      "apps/web/Dockerfile",
+      "package.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "**/package.json"
+    ],
+    "infra": ["infra/azure/**"],
+    "identity": ["infra/identity/**"],
+    "migration": ["db/migrations/**", "db/scripts/**"],
+    "infraRollout": [
+      "infra/azure/main.bicep",
+      "infra/azure/modules/containerapp-*.bicep",
+      "infra/azure/modules/containerapps-env.bicep",
+      "infra/azure/environments/*.bicepparam",
+      "infra/azure/environments/**"
+    ],
+    "docsOnly": [
+      "docs/**",
+      "README.md",
+      "CONTRIBUTING.md",
+      "AGENTS.md",
+      ".github/workflows/**",
+      ".github/policy/**",
+      "scripts/pipeline/**",
+      "apps/**/README.md",
+      "packages/**/README.md",
+      "scripts/**/README.md",
+      "tests/**/README.md",
+      "infra/**/README.md"
+    ]
+  },
+  "commitStage": {
+    "requiredChecks": ["scope", "quick-feedback", "commit-stage-gate"]
+  },
+  "acceptanceStage": {
+    "requiredFlowIds": ["compass-smoke"],
+    "runtimeRequiredChecks": ["runtime-acceptance"],
+    "infraRequiredChecks": ["infra-acceptance"],
+    "identityRequiredChecks": ["identity-acceptance"]
+  },
+  "productionStage": {
+    "requireFreshHeadOnAuto": true
+  },
+  "docsDriftRules": {
+    "blockingPaths": [
+      ".github/workflows/*.yml",
+      ".github/workflows/*.yaml",
+      ".github/policy/**",
+      "scripts/pipeline/**",
+      "infra/azure/**",
+      "infra/identity/**",
+      "deploy/**"
+    ],
+    "docsCriticalPaths": [
+      "contracts/**",
+      "schemas/**",
+      "openapi/**",
+      "proto/**",
+      "db/migrations/**",
+      "db/scripts/**",
+      "config/**",
+      "infra/**",
+      "infra/azure/**",
+      "infra/identity/**",
+      "packages/contracts/**",
+      "packages/contracts/openapi/**"
+    ],
+    "docTargets": [
+      "docs/commit-stage-policy.md",
+      "docs/branch-protection.md",
+      ".github/policy/README.md",
+      ".github/workflows/README.md",
+      "docs/contracts/**",
+      "docs/runbooks/**"
+    ]
+  }
+}

@@ -1,10 +1,4 @@
-import {
-  appendGithubOutput,
-  getHeadSha,
-  getTier,
-  requireEnv,
-  writeDeployArtifact
-} from "./utils.mjs";
+import { appendGithubOutput, getHeadSha, requireEnv, writeDeployArtifact } from "./utils.mjs";
 
 const targetBaseUrl = requireEnv("TARGET_API_BASE_URL").replace(/\/$/, "");
 const verifyShaHeader = process.env.VERIFY_SHA_HEADER?.trim() === "true";
@@ -105,7 +99,6 @@ async function main() {
     schemaVersion: "2",
     generatedAt: new Date().toISOString(),
     headSha: getHeadSha(),
-    tier: getTier(),
     status,
     reasonCode,
     reason,

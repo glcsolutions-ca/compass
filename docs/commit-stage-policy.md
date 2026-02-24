@@ -7,8 +7,8 @@ This repository enforces a deterministic commit-stage contract defined in `.gith
 Every PR to `main` must pass fast, reliable, merge-blocking evidence:
 
 1. Change scope is resolved (`runtime`, `infra`, `identity`, `docsOnly`).
-2. Required quick checks run based on scope.
-3. Merge is allowed only when `commit-stage-gate` passes.
+2. Required fast checks run based on scope.
+3. Merge is allowed only when `commit-stage` passes.
 
 `commit-stage.yml` runs for both `pull_request` and `merge_group` so the same commit-stage contract applies before merge and in queue execution.
 
@@ -17,23 +17,23 @@ Every PR to `main` must pass fast, reliable, merge-blocking evidence:
 When this doc and implementation differ, implementation wins:
 
 - Policy truth: `.github/policy/pipeline-policy.json`
-- Enforcement truth: `.github/workflows/commit-stage.yml` and `scripts/pipeline/commit/commit-stage-gate.mjs`
+- Enforcement truth: `.github/workflows/commit-stage.yml` and `scripts/pipeline/commit/decide-commit-stage.mjs`
 - This doc is explanatory and must be kept aligned with those files.
 
 ## Single required branch-protection check
 
 Branch protection requires only:
 
-- `commit-stage-gate`
+- `commit-stage`
 
-`commit-stage-gate` enforces required commit checks for the tested merge result on both PR and merge queue runs.
+`commit-stage` enforces required commit checks for the tested merge result on both PR and merge queue runs.
 
 ## Commit-stage checks
 
-- `scope` (always)
-- `quick-feedback` (always)
-- `infra-quick-check` (only when `infra` scope is true)
-- `identity-quick-check` (only when `identity` scope is true)
+- `determine-scope` (always)
+- `fast-feedback` (always)
+- `infra-static-check` (only when `infra` scope is true)
+- `identity-static-check` (only when `identity` scope is true)
 - `docs-drift` is always evaluated and can block merge for docs-critical drift
 
 ## Scope model
@@ -46,7 +46,7 @@ Branch protection requires only:
 - `docsOnly`
 - plus rollout flags (`migration`, `infraRollout`) used downstream
 
-`kind` is derived in priority order: `runtime` -> `infra` -> `identity` -> `checks`.
+`changeClass` is derived in priority order: `runtime` -> `infra` -> `identity` -> `checks`.
 
 ## Docs drift
 
@@ -66,10 +66,10 @@ Policy fields:
 - `commitStage.slo.targetSeconds` (current target: `300`)
 - `commitStage.slo.mode` (`observe` or `enforce`)
 
-Current default is `observe`.
+Current mode is `enforce`.
 
-- Over-target runs emit warnings and timing evidence.
-- They do not block merge until mode changes to `enforce`.
+- Over-target runs fail `commit-stage`.
+- Timing evidence is still emitted for every run.
 
 Timing artifact path:
 
@@ -83,12 +83,12 @@ Timing keys:
 
 ## Gate semantics
 
-`commit-stage-gate` makes merge decisions from required job outcomes (`needs.*.result`) plus docs-drift state.
+`commit-stage` makes merge decisions from required job outcomes (`needs.*.result`) plus docs-drift state.
 
-- `scope` must succeed.
-- `quick-feedback` must succeed.
-- `infra-quick-check` must succeed when `infra` is required.
-- `identity-quick-check` must succeed when `identity` is required.
+- `determine-scope` must succeed.
+- `fast-feedback` must succeed.
+- `infra-static-check` must succeed when `infra` is required.
+- `identity-static-check` must succeed when `identity` is required.
 - If docs-drift blocking is true, docs-drift status must be `pass`.
 - If `commitStage.slo.mode = enforce`, gate fails when timing SLO is not met.
 

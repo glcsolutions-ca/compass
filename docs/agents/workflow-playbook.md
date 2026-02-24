@@ -24,17 +24,17 @@ pnpm commit:docs-drift
 
 1. Open PR from a short-lived branch.
 2. `commit-stage.yml` computes scope and runs fast required checks.
-3. `commit-stage-gate` is the merge-blocking decision.
+3. `commit-stage` is the merge-blocking decision.
 4. Merge queue runs the same commit-stage gate on `merge_group`.
 5. Merge to `main` reruns commit stage and emits a frozen candidate manifest.
 6. `acceptance-stage.yml` validates the same candidate and emits one yes/no gate.
 7. Acceptance runtime evidence pulls and executes candidate digest refs (no candidate rebuild in acceptance).
-8. `production-stage.yml` promotes accepted candidate refs with production lock and stale guard.
+8. `production-stage.yml` promotes accepted candidate refs with production lock and freshness check.
 9. Production stage runs smoke verification and records deployment evidence.
 
 ## Governance Invariant
 
-- `main` required check context is only `commit-stage-gate` with strict checks enabled.
+- `main` required check context is only `commit-stage` with strict checks enabled.
 - Acceptance and production checks are never configured as branch-protection required contexts.
 
 ## High-Risk Paths

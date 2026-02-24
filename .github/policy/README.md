@@ -4,9 +4,9 @@ This directory is the machine source of truth for delivery stage control.
 
 - Canonical contract: `.github/policy/pipeline-policy.json`
 - Enforced by workflows: `.github/workflows/commit-stage.yml`, `.github/workflows/acceptance-stage.yml`, `.github/workflows/production-stage.yml`
-- Required branch-protection check context: `commit-stage-gate`
+- Required branch-protection check context: `commit-stage`
 
-`commit-stage-gate` is the single merge-blocking check context. Acceptance and production are post-merge stage gates.
+`commit-stage` is the single merge-blocking check context. Acceptance and production are post-merge stage gates.
 
 ## Policy Sections
 
@@ -21,9 +21,9 @@ This directory is the machine source of truth for delivery stage control.
 `commitStage.slo.mode` values:
 
 - `observe`: timing breaches warn only, no merge block
-- `enforce`: timing breaches fail `commit-stage-gate`
+- `enforce`: timing breaches fail `commit-stage`
 
-Current default is `observe`.
+Current mode is `enforce`.
 
 ## Control-Plane Coverage
 

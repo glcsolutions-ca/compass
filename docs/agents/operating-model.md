@@ -7,7 +7,7 @@ Compass uses a deterministic 3-stage delivery pipeline.
 1. Commit stage is fast and merge-blocking.
 2. Acceptance stage validates the frozen candidate and returns a single yes/no result.
 3. Production stage deploys the accepted candidate only (no runtime rebuilds).
-4. `commit-stage-gate` is the single required branch-protection check.
+4. `commit-stage` is the single required branch-protection check.
 
 ## Key Terms
 
@@ -17,8 +17,8 @@ Compass uses a deterministic 3-stage delivery pipeline.
 
 ## Canonical Stage Dependencies
 
-1. `commit-stage.yml` runs `scope`, `quick-feedback`, optional infra/identity quick checks, then `commit-stage-gate`.
+1. `commit-stage.yml` runs `determine-scope`, `fast-feedback`, optional infra/identity static checks, then `commit-stage`.
 2. Successful commit stage on `main` emits `.artifacts/candidate/<sha>/manifest.json`.
 3. `acceptance-stage.yml` loads that candidate, runs required scope-based acceptance jobs, and enforces candidate/config contracts.
-4. `acceptance-stage-gate` is the acceptance yes/no decision.
-5. `production-stage.yml` loads accepted evidence, runs stale guard, mutates production, then verifies and records release evidence.
+4. `acceptance-stage` is the acceptance yes/no decision.
+5. `production-stage.yml` loads accepted evidence, runs freshness check, mutates production, then verifies and records release evidence.

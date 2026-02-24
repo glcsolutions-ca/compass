@@ -14,6 +14,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
   id-token: write
 
@@ -21,19 +22,85 @@ env:
   EXPECTED_ENTRYPOINT: /
 
 jobs:
-  load_candidate:
-    name: load-candidate
-    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || github.event_name == 'workflow_dispatch' }}
+  acceptance_eligibility:
+    name: acceptance-eligibility
+    runs-on: ubuntu-latest
+    outputs:
+      eligible: ${{ steps.evaluate.outputs.eligible }}
+      reason_code: ${{ steps.evaluate.outputs.reason_code }}
+      candidate_sha: ${{ steps.evaluate.outputs.candidate_sha }}
+      commit_run_id: ${{ steps.evaluate.outputs.commit_run_id }}
+    steps:
+      - name: Evaluate acceptance eligibility
+        id: evaluate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_WORKFLOW: ${{ github.event.workflow_run.name }}
+          EVENT_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          EVENT_SOURCE_EVENT: ${{ github.event.workflow_run.event }}
+          EVENT_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          EVENT_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          INPUT_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+
+          eligible="false"
+          reason_code=""
+          candidate_sha=""
+          commit_run_id=""
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            eligible="true"
+            reason_code="MANUAL_REPLAY"
+            candidate_sha="$INPUT_CANDIDATE_SHA"
+          elif [ "$EVENT_NAME" = "workflow_run" ]; then
+            candidate_sha="$EVENT_HEAD_SHA"
+            commit_run_id="$EVENT_RUN_ID"
+
+            if [ "$EVENT_WORKFLOW" != "Commit Stage" ]; then
+              reason_code="SOURCE_WORKFLOW_NOT_COMMIT_STAGE"
+            elif [ "$EVENT_CONCLUSION" != "success" ]; then
+              reason_code="SOURCE_CONCLUSION_NOT_SUCCESS"
+            elif [ "$EVENT_SOURCE_EVENT" != "push" ]; then
+              reason_code="SOURCE_EVENT_NOT_PUSH"
+            elif [ "$EVENT_HEAD_BRANCH" != "main" ]; then
+              reason_code="SOURCE_BRANCH_NOT_MAIN"
+            else
+              eligible="true"
+              reason_code=""
+            fi
+          else
+            reason_code="UNSUPPORTED_EVENT"
+          fi
+
+          if [ -z "$candidate_sha" ]; then
+            echo "Unable to resolve candidate sha for acceptance eligibility" >&2
+            exit 1
+          fi
+
+          {
+            echo "eligible=$eligible"
+            echo "reason_code=$reason_code"
+            echo "candidate_sha=$candidate_sha"
+            echo "commit_run_id=$commit_run_id"
+          } >> "$GITHUB_OUTPUT"
+
+  load_release_candidate:
+    name: load-release-candidate
+    needs:
+      - acceptance_eligibility
+    if: ${{ needs.acceptance_eligibility.outputs.eligible == 'true' }}
     runs-on: ubuntu-latest
     outputs:
       head_sha: ${{ steps.manifest.outputs.head_sha }}
-      kind: ${{ steps.manifest.outputs.kind }}
+      change_class: ${{ steps.manifest.outputs.change_class }}
       runtime_changed: ${{ steps.manifest.outputs.runtime_changed }}
       infra_changed: ${{ steps.manifest.outputs.infra_changed }}
       identity_changed: ${{ steps.manifest.outputs.identity_changed }}
       docs_only_changed: ${{ steps.manifest.outputs.docs_only_changed }}
-      needs_infra: ${{ steps.manifest.outputs.needs_infra }}
-      needs_migrations: ${{ steps.manifest.outputs.needs_migrations }}
+      requires_infra_convergence: ${{ steps.manifest.outputs.requires_infra_convergence }}
+      requires_migrations: ${{ steps.manifest.outputs.requires_migrations }}
       candidate_api_ref: ${{ steps.manifest.outputs.candidate_api_ref }}
       candidate_web_ref: ${{ steps.manifest.outputs.candidate_web_ref }}
       commit_run_id: ${{ steps.manifest.outputs.commit_run_id }}
@@ -46,178 +113,51 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
-        run: |
-          node <<'NODE'
-          const fs = require('node:fs');
+          WORKFLOW_FILE: commit-stage.yml
+          HEAD_SHA: ${{ needs.acceptance_eligibility.outputs.candidate_sha }}
+          RUN_EVENT: push
+          RUN_STATUS: success
+        run: node scripts/pipeline/shared/resolve-triggered-run-id.mjs
 
-          const token = process.env.GITHUB_TOKEN;
-          const repository = process.env.GITHUB_REPOSITORY;
-          const candidateSha = process.env.CANDIDATE_SHA;
-          const outputPath = process.env.GITHUB_OUTPUT;
-
-          async function request(pathname) {
-            const response = await fetch(`https://api.github.com${pathname}`, {
-              headers: {
-                Accept: 'application/vnd.github+json',
-                Authorization: `Bearer ${token}`,
-                'X-GitHub-Api-Version': '2022-11-28'
-              }
-            });
-
-            if (!response.ok) {
-              const body = await response.text();
-              throw new Error(`GitHub API request failed (${response.status}): ${pathname}\n${body}`);
-            }
-
-            return response.json();
-          }
-
-          (async () => {
-            const data = await request(`/repos/${repository}/actions/workflows/commit-stage.yml/runs?event=push&status=success&per_page=50`);
-            const run = (data.workflow_runs || []).find((entry) => entry.head_sha === candidateSha);
-            if (!run) {
-              throw new Error(`No successful Commit Stage run found for ${candidateSha}`);
-            }
-            fs.appendFileSync(outputPath, `run_id=${run.id}\n`);
-          })().catch((error) => {
-            console.error(error instanceof Error ? error.message : String(error));
-            process.exit(1);
-          });
-          NODE
-
-      - name: Download candidate artifact (workflow_run)
-        if: ${{ github.event_name == 'workflow_run' }}
+      - name: Download release candidate artifact
         uses: actions/download-artifact@v4
         with:
-          name: candidate-${{ github.event.workflow_run.head_sha }}
-          path: .artifacts/candidate/${{ github.event.workflow_run.head_sha }}
-          run-id: ${{ github.event.workflow_run.id }}
+          name: candidate-${{ needs.acceptance_eligibility.outputs.candidate_sha }}
+          path: .artifacts/candidate/${{ needs.acceptance_eligibility.outputs.candidate_sha }}
+          run-id: ${{ github.event_name == 'workflow_dispatch' && steps.resolve_run.outputs.run_id || needs.acceptance_eligibility.outputs.commit_run_id }}
           github-token: ${{ github.token }}
 
-      - name: Download candidate artifact (workflow_dispatch)
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: actions/download-artifact@v4
-        with:
-          name: candidate-${{ inputs.candidate_sha }}
-          path: .artifacts/candidate/${{ inputs.candidate_sha }}
-          run-id: ${{ steps.resolve_run.outputs.run_id }}
-          github-token: ${{ github.token }}
-
-      - name: Parse candidate manifest
+      - name: Parse release candidate manifest
         id: manifest
         env:
-          WORKFLOW_EVENT_SHA: ${{ github.event.workflow_run.head_sha }}
-          DISPATCH_SHA: ${{ inputs.candidate_sha }}
-          WORKFLOW_EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
-          DISPATCH_RUN_ID: ${{ steps.resolve_run.outputs.run_id }}
-        run: |
-          set -euo pipefail
+          CANDIDATE_MANIFEST_PATH: .artifacts/candidate/${{ needs.acceptance_eligibility.outputs.candidate_sha }}/manifest.json
+          RUN_ID: ${{ github.event_name == 'workflow_dispatch' && steps.resolve_run.outputs.run_id || needs.acceptance_eligibility.outputs.commit_run_id }}
+        run: node scripts/pipeline/shared/load-release-candidate-contract.mjs
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            sha="$DISPATCH_SHA"
-            run_id="$DISPATCH_RUN_ID"
-          else
-            sha="$WORKFLOW_EVENT_SHA"
-            run_id="$WORKFLOW_EVENT_RUN_ID"
-          fi
-
-          manifest_path=".artifacts/candidate/$sha/manifest.json"
-          if [ ! -f "$manifest_path" ]; then
-            echo "Candidate manifest not found: $manifest_path" >&2
-            exit 1
-          fi
-
-          mkdir -p ".artifacts/acceptance/$sha"
-          cp "$manifest_path" ".artifacts/acceptance/$sha/candidate-manifest.json"
-
-          MANIFEST_PATH="$manifest_path" RUN_ID="$run_id" node <<'NODE'
-          const fs = require('node:fs');
-
-          const manifestPath = process.env.MANIFEST_PATH;
-          const runId = process.env.RUN_ID;
-          const outputPath = process.env.GITHUB_OUTPUT;
-
-          const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-
-          if (manifest.schemaVersion !== '1') {
-            throw new Error(`Unsupported candidate manifest schemaVersion: ${manifest.schemaVersion}`);
-          }
-
-          const runtimeChanged = Boolean(manifest.scope?.runtime);
-          const infraChanged = Boolean(manifest.scope?.infra);
-          const needsInfra = Boolean(manifest.needsInfra);
-          const requiresCandidateRefs = runtimeChanged || infraChanged || needsInfra;
-          const candidateApiRef = String(manifest.candidate?.apiRef || '');
-          const candidateWebRef = String(manifest.candidate?.webRef || '');
-          const candidateContractReasonCodes = [];
-
-          if (requiresCandidateRefs) {
-            if (!candidateApiRef) {
-              candidateContractReasonCodes.push('CANDIDATE_API_REF_MISSING');
-            }
-            if (!candidateWebRef) {
-              candidateContractReasonCodes.push('CANDIDATE_WEB_REF_MISSING');
-            }
-
-            const digestPattern = /^.+@sha256:[a-fA-F0-9]{64}$/;
-            if (candidateApiRef && !digestPattern.test(candidateApiRef)) {
-              candidateContractReasonCodes.push('CANDIDATE_API_REF_NOT_DIGEST');
-            }
-            if (candidateWebRef && !digestPattern.test(candidateWebRef)) {
-              candidateContractReasonCodes.push('CANDIDATE_WEB_REF_NOT_DIGEST');
-            }
-          }
-
-          const candidateRefContractStatus =
-            candidateContractReasonCodes.length === 0 ? 'pass' : 'fail';
-
-          const entries = {
-            head_sha: String(manifest.headSha || ''),
-            kind: String(manifest.kind || 'checks'),
-            runtime_changed: String(runtimeChanged),
-            infra_changed: String(infraChanged),
-            identity_changed: String(Boolean(manifest.scope?.identity)),
-            docs_only_changed: String(Boolean(manifest.scope?.docsOnly)),
-            needs_infra: String(needsInfra),
-            needs_migrations: String(Boolean(manifest.needsMigrations)),
-            candidate_api_ref: candidateApiRef,
-            candidate_web_ref: candidateWebRef,
-            commit_run_id: String(runId || ''),
-            candidate_ref_contract_status: candidateRefContractStatus,
-            candidate_ref_contract_reason_codes_json: JSON.stringify(candidateContractReasonCodes)
-          };
-
-          for (const [key, value] of Object.entries(entries)) {
-            fs.appendFileSync(outputPath, `${key}=${value}\n`);
-          }
-          NODE
-
-      - name: Upload candidate manifest copy
+      - name: Upload release candidate manifest copy
         uses: actions/upload-artifact@v4
         with:
           name: acceptance-candidate-${{ steps.manifest.outputs.head_sha }}
-          path: .artifacts/acceptance/${{ steps.manifest.outputs.head_sha }}/candidate-manifest.json
+          path: ${{ steps.manifest.outputs.release_candidate_manifest_copy_path }}
           if-no-files-found: error
 
-  runtime_acceptance:
-    name: runtime-acceptance
+  runtime_blackbox_acceptance:
+    name: runtime-blackbox-acceptance
     needs:
-      - load_candidate
-    if: ${{ needs.load_candidate.outputs.runtime_changed == 'true' }}
+      - load_release_candidate
+    if: ${{ needs.load_release_candidate.outputs.runtime_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 70
     environment: production
     env:
-      HEAD_SHA: ${{ needs.load_candidate.outputs.head_sha }}
-      TESTED_SHA: ${{ needs.load_candidate.outputs.head_sha }}
-      CANDIDATE_API_REF: ${{ needs.load_candidate.outputs.candidate_api_ref }}
-      CANDIDATE_WEB_REF: ${{ needs.load_candidate.outputs.candidate_web_ref }}
-      CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_candidate.outputs.candidate_ref_contract_status }}
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      TESTED_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.candidate_api_ref }}
+      CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.candidate_web_ref }}
+      CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.candidate_ref_contract_status }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       ACR_NAME: ${{ vars.ACR_NAME }}
-      DATABASE_URL: postgres://compass:compass@127.0.0.1:5432/compass
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -238,26 +178,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Start Postgres
-        run: |
-          docker run -d \
-            --name acceptance-postgres \
-            -e POSTGRES_DB=compass \
-            -e POSTGRES_USER=compass \
-            -e POSTGRES_PASSWORD=compass \
-            -p 5432:5432 \
-            postgres:16-alpine
-
-      - name: Run full test suite
-        run: |
-          pnpm db:postgres:wait
-          pnpm db:migrate:up
-          pnpm db:seed
-          pnpm test:full
-
-      - name: Harness smoke
-        run: pnpm acceptance:harness-smoke
 
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
@@ -416,7 +336,12 @@ jobs:
           TARGET_API_BASE_URL: http://127.0.0.1:3001
         run: pnpm deploy:smoke
 
-      - name: Browser evidence
+      - name: System smoke against candidate API
+        env:
+          BASE_URL: http://127.0.0.1:3001
+        run: pnpm acceptance:system-smoke
+
+      - name: Browser evidence against candidate Web
         env:
           PR_NUMBER: 0
           WEB_BASE_URL: http://127.0.0.1:3000
@@ -428,7 +353,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: runtime-acceptance-${{ env.HEAD_SHA }}
+          name: runtime-blackbox-acceptance-${{ env.HEAD_SHA }}
           path: |
             .artifacts/browser-evidence/${{ env.HEAD_SHA }}
             .artifacts/harness-smoke/${{ env.HEAD_SHA }}/result.json
@@ -444,22 +369,50 @@ jobs:
           docker rm -f acceptance-candidate-api >/dev/null 2>&1 || true
           docker rm -f acceptance-candidate-postgres >/dev/null 2>&1 || true
           docker network rm acceptance-candidate-net >/dev/null 2>&1 || true
-          docker rm -f acceptance-postgres >/dev/null 2>&1 || true
 
-  infra_acceptance:
-    name: infra-acceptance
+  infra_readonly_acceptance:
+    name: infra-readonly-acceptance
     needs:
-      - load_candidate
-    if: ${{ needs.load_candidate.outputs.infra_changed == 'true' || needs.load_candidate.outputs.needs_infra == 'true' }}
+      - load_release_candidate
+    if: ${{ (needs.load_release_candidate.outputs.infra_changed == 'true' || needs.load_release_candidate.outputs.requires_infra_convergence == 'true') && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
     env:
-      HEAD_SHA: ${{ needs.load_candidate.outputs.head_sha }}
-      API_IMAGE: ${{ needs.load_candidate.outputs.candidate_api_ref }}
-      WEB_IMAGE: ${{ needs.load_candidate.outputs.candidate_web_ref }}
-      CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_candidate.outputs.candidate_ref_contract_status }}
-      CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_candidate.outputs.candidate_ref_contract_reason_codes_json }}
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      API_IMAGE: ${{ needs.load_release_candidate.outputs.candidate_api_ref }}
+      WEB_IMAGE: ${{ needs.load_release_candidate.outputs.candidate_web_ref }}
+      CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.candidate_ref_contract_status }}
+      CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_release_candidate.outputs.candidate_ref_contract_reason_codes_json }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_VNET_NAME: ${{ vars.AZURE_VNET_NAME }}
+      AZURE_ACA_SUBNET_NAME: ${{ vars.AZURE_ACA_SUBNET_NAME }}
+      AZURE_POSTGRES_SUBNET_NAME: ${{ vars.AZURE_POSTGRES_SUBNET_NAME }}
+      AZURE_PRIVATE_DNS_ZONE_NAME: ${{ vars.AZURE_PRIVATE_DNS_ZONE_NAME }}
+      ACA_ENVIRONMENT_NAME: ${{ vars.ACA_ENVIRONMENT_NAME }}
+      AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
+      ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
+      ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+      ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+      ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACR_SKU: ${{ vars.ACR_SKU }}
+      POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
+      POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
+      POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
+      POSTGRES_VERSION: ${{ vars.POSTGRES_VERSION }}
+      POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
+      POSTGRES_SKU_TIER: ${{ vars.POSTGRES_SKU_TIER }}
+      POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
+      POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+      ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
+      ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
+      ACA_API_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_API_MANAGED_CERTIFICATE_NAME }}
+      ACA_WEB_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_WEB_MANAGED_CERTIFICATE_NAME }}
+      ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -493,36 +446,6 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Validate required environment configuration
-        env:
-          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
-          AZURE_VNET_NAME: ${{ vars.AZURE_VNET_NAME }}
-          AZURE_ACA_SUBNET_NAME: ${{ vars.AZURE_ACA_SUBNET_NAME }}
-          AZURE_POSTGRES_SUBNET_NAME: ${{ vars.AZURE_POSTGRES_SUBNET_NAME }}
-          AZURE_PRIVATE_DNS_ZONE_NAME: ${{ vars.AZURE_PRIVATE_DNS_ZONE_NAME }}
-          ACA_ENVIRONMENT_NAME: ${{ vars.ACA_ENVIRONMENT_NAME }}
-          AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
-          ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
-          ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
-          ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
-          ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
-          ACR_NAME: ${{ vars.ACR_NAME }}
-          ACR_SKU: ${{ vars.ACR_SKU }}
-          POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
-          POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
-          POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
-          POSTGRES_VERSION: ${{ vars.POSTGRES_VERSION }}
-          POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
-          POSTGRES_SKU_TIER: ${{ vars.POSTGRES_SKU_TIER }}
-          POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
-          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
-          ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
-          ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
-          ACA_API_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_API_MANAGED_CERTIFICATE_NAME }}
-          ACA_WEB_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_WEB_MANAGED_CERTIFICATE_NAME }}
-          ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
         run: |
           set -euo pipefail
 
@@ -590,82 +513,18 @@ jobs:
             exit 1
           fi
 
-          custom_domain_validation_method="$(echo "${ACA_CUSTOM_DOMAIN_VALIDATION_METHOD:-CNAME}" | tr '[:lower:]' '[:upper:]')"
-          case "$custom_domain_validation_method" in
-            CNAME|HTTP|TXT) ;;
-            *)
-              echo "ACA_CUSTOM_DOMAIN_VALIDATION_METHOD must be one of CNAME, HTTP, TXT" >&2
-              exit 1
-              ;;
-          esac
+      - name: Validate managed certificate contract
+        run: node scripts/pipeline/production/assert-managed-certificate-contract.mjs
 
-          node scripts/pipeline/production/assert-managed-certificate-contract.mjs
-
+      - name: Render infra parameters
+        env:
+          ARM_PARAMETERS_FILE: .artifacts/infra/${{ env.HEAD_SHA }}/runtime.parameters.json
+        run: |
           mkdir -p ".artifacts/infra/$HEAD_SHA"
-          jq -n \
-            --arg location "$AZURE_LOCATION" \
-            --arg vnetName "$AZURE_VNET_NAME" \
-            --arg acaSubnetName "$AZURE_ACA_SUBNET_NAME" \
-            --arg postgresSubnetName "$AZURE_POSTGRES_SUBNET_NAME" \
-            --arg privateDnsZoneName "$AZURE_PRIVATE_DNS_ZONE_NAME" \
-            --arg environmentName "$ACA_ENVIRONMENT_NAME" \
-            --arg logAnalyticsWorkspaceName "$AZURE_LOG_ANALYTICS_WORKSPACE_NAME" \
-            --arg apiAppName "$ACA_API_APP_NAME" \
-            --arg webAppName "$ACA_WEB_APP_NAME" \
-            --arg apiCustomDomain "${ACA_API_CUSTOM_DOMAIN:-}" \
-            --arg webCustomDomain "${ACA_WEB_CUSTOM_DOMAIN:-}" \
-            --arg apiManagedCertificateName "${ACA_API_MANAGED_CERTIFICATE_NAME:-}" \
-            --arg webManagedCertificateName "${ACA_WEB_MANAGED_CERTIFICATE_NAME:-}" \
-            --arg customDomainValidationMethod "${ACA_CUSTOM_DOMAIN_VALIDATION_METHOD:-CNAME}" \
-            --arg migrationJobName "$ACA_MIGRATE_JOB_NAME" \
-            --arg acrPullIdentityName "$ACR_PULL_IDENTITY_NAME" \
-            --arg acrName "$ACR_NAME" \
-            --arg acrSku "$ACR_SKU" \
-            --arg postgresServerName "$POSTGRES_SERVER_NAME" \
-            --arg postgresDatabaseName "$POSTGRES_DATABASE_NAME" \
-            --arg postgresAdminUsername "$POSTGRES_ADMIN_USERNAME" \
-            --arg postgresVersion "$POSTGRES_VERSION" \
-            --arg postgresSkuName "$POSTGRES_SKU_NAME" \
-            --arg postgresSkuTier "$POSTGRES_SKU_TIER" \
-            --arg postgresStorageMb "$POSTGRES_STORAGE_MB" \
-            --arg postgresAdminPassword "$POSTGRES_ADMIN_PASSWORD" \
-            --arg apiImage "$API_IMAGE" \
-            --arg webImage "$WEB_IMAGE" \
-            '{
-              "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
-              "contentVersion": "1.0.0.0",
-              "parameters": {
-                "location": {"value": $location},
-                "vnetName": {"value": $vnetName},
-                "acaSubnetName": {"value": $acaSubnetName},
-                "postgresSubnetName": {"value": $postgresSubnetName},
-                "privateDnsZoneName": {"value": $privateDnsZoneName},
-                "environmentName": {"value": $environmentName},
-                "logAnalyticsWorkspaceName": {"value": $logAnalyticsWorkspaceName},
-                "apiAppName": {"value": $apiAppName},
-                "webAppName": {"value": $webAppName},
-                "apiCustomDomain": {"value": $apiCustomDomain},
-                "webCustomDomain": {"value": $webCustomDomain},
-                "apiManagedCertificateName": {"value": $apiManagedCertificateName},
-                "webManagedCertificateName": {"value": $webManagedCertificateName},
-                "customDomainValidationMethod": {"value": $customDomainValidationMethod},
-                "migrationJobName": {"value": $migrationJobName},
-                "acrPullIdentityName": {"value": $acrPullIdentityName},
-                "acrName": {"value": $acrName},
-                "acrSku": {"value": $acrSku},
-                "postgresServerName": {"value": $postgresServerName},
-                "postgresDatabaseName": {"value": $postgresDatabaseName},
-                "postgresAdminUsername": {"value": $postgresAdminUsername},
-                "postgresVersion": {"value": $postgresVersion},
-                "postgresSkuName": {"value": $postgresSkuName},
-                "postgresSkuTier": {"value": $postgresSkuTier},
-                "postgresStorageMb": {"value": ($postgresStorageMb | tonumber)},
-                "postgresAdminPassword": {"value": $postgresAdminPassword},
-                "apiImage": {"value": $apiImage},
-                "webImage": {"value": $webImage}
-              }
-            }' > ".artifacts/infra/$HEAD_SHA/runtime.parameters.json"
+          node scripts/pipeline/shared/render-infra-parameters.mjs
 
+      - name: Validate infra template
+        run: |
           az deployment group validate \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "acceptance-$HEAD_SHA" \
@@ -677,15 +536,15 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: infra-acceptance-${{ env.HEAD_SHA }}
+          name: infra-readonly-acceptance-${{ env.HEAD_SHA }}
           path: .artifacts/infra/${{ env.HEAD_SHA }}
           if-no-files-found: warn
 
-  identity_acceptance:
-    name: identity-acceptance
+  identity_readonly_acceptance:
+    name: identity-readonly-acceptance
     needs:
-      - load_candidate
-    if: ${{ needs.load_candidate.outputs.identity_changed == 'true' }}
+      - load_release_candidate
+    if: ${{ needs.load_release_candidate.outputs.identity_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
@@ -693,7 +552,7 @@ jobs:
       identity_config_contract_status: ${{ steps.identity_config.outputs.config_contract_status }}
       identity_config_contract_reason_codes_json: ${{ steps.identity_config.outputs.config_contract_reason_codes_json }}
     env:
-      HEAD_SHA: ${{ needs.load_candidate.outputs.head_sha }}
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
       ARM_USE_OIDC: "true"
       ARM_USE_AZUREAD: "true"
       ARM_CLIENT_ID: ${{ secrets.AZURE_ACCEPTANCE_IDENTITY_CLIENT_ID || secrets.AZURE_IDENTITY_CLIENT_ID }}
@@ -769,22 +628,23 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: identity-acceptance-${{ env.HEAD_SHA }}
+          name: identity-readonly-acceptance-${{ env.HEAD_SHA }}
           path: |
             .artifacts/identity/${{ env.HEAD_SHA }}/plan.json
             .artifacts/identity/${{ env.HEAD_SHA }}/config-validation.json
           if-no-files-found: warn
 
-  acceptance_stage_gate:
-    name: acceptance-stage-gate
-    if: ${{ always() }}
+  acceptance_stage:
+    name: acceptance-stage
     needs:
-      - load_candidate
-      - runtime_acceptance
-      - infra_acceptance
-      - identity_acceptance
+      - acceptance_eligibility
+      - load_release_candidate
+      - runtime_blackbox_acceptance
+      - infra_readonly_acceptance
+      - identity_readonly_acceptance
+    if: ${{ always() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -794,114 +654,116 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Enforce acceptance stage gate
+      - name: Resolve stage mode
+        id: stage_mode
         env:
-          HEAD_SHA: ${{ needs.load_candidate.outputs.head_sha }}
-          RUNTIME_REQUIRED: ${{ needs.load_candidate.outputs.runtime_changed }}
-          INFRA_REQUIRED: ${{ needs.load_candidate.outputs.infra_changed == 'true' || needs.load_candidate.outputs.needs_infra == 'true' }}
-          IDENTITY_REQUIRED: ${{ needs.load_candidate.outputs.identity_changed }}
-          CANDIDATE_API_REF: ${{ needs.load_candidate.outputs.candidate_api_ref }}
-          CANDIDATE_WEB_REF: ${{ needs.load_candidate.outputs.candidate_web_ref }}
-          CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_candidate.outputs.candidate_ref_contract_status }}
-          CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_candidate.outputs.candidate_ref_contract_reason_codes_json }}
-          IDENTITY_CONFIG_CONTRACT_STATUS: ${{ needs.identity_acceptance.outputs.identity_config_contract_status }}
-          IDENTITY_CONFIG_CONTRACT_REASON_CODES_JSON: ${{ needs.identity_acceptance.outputs.identity_config_contract_reason_codes_json }}
-          CHECK_RESULTS_JSON: ${{ format('{{"load-candidate":"{0}","runtime-acceptance":"{1}","infra-acceptance":"{2}","identity-acceptance":"{3}"}}', needs.load_candidate.result, needs.runtime_acceptance.result, needs.infra_acceptance.result, needs.identity_acceptance.result) }}
-        run: node scripts/pipeline/acceptance/acceptance-stage-gate.mjs
+          ELIGIBLE: ${{ needs.acceptance_eligibility.outputs.eligible }}
+          ELIGIBILITY_REASON: ${{ needs.acceptance_eligibility.outputs.reason_code }}
+          DOCS_ONLY_CHANGED: ${{ needs.load_release_candidate.outputs.docs_only_changed }}
+        run: |
+          set -euo pipefail
 
-      - name: Write acceptance evidence manifest
+          stage_required="true"
+          eligibility_status="required"
+          eligibility_reason=""
+
+          if [ "$ELIGIBLE" != "true" ]; then
+            stage_required="false"
+            eligibility_status="not-required"
+            eligibility_reason="${ELIGIBILITY_REASON:-ACCEPTANCE_NOT_ELIGIBLE}"
+          elif [ "$DOCS_ONLY_CHANGED" = "true" ]; then
+            stage_required="false"
+            eligibility_status="not-required"
+            eligibility_reason="DOCS_ONLY_CHANGE"
+          fi
+
+          {
+            echo "stage_required=$stage_required"
+            echo "eligibility_status=$eligibility_status"
+            echo "eligibility_reason_code=$eligibility_reason"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Decide acceptance stage
+        id: decide
+        if: ${{ steps.stage_mode.outputs.stage_required == 'true' }}
+        continue-on-error: true
         env:
-          HEAD_SHA: ${{ needs.load_candidate.outputs.head_sha }}
-          KIND: ${{ needs.load_candidate.outputs.kind }}
-          RUNTIME_CHANGED: ${{ needs.load_candidate.outputs.runtime_changed }}
-          INFRA_CHANGED: ${{ needs.load_candidate.outputs.infra_changed }}
-          IDENTITY_CHANGED: ${{ needs.load_candidate.outputs.identity_changed }}
-          DOCS_ONLY_CHANGED: ${{ needs.load_candidate.outputs.docs_only_changed }}
-          NEEDS_INFRA: ${{ needs.load_candidate.outputs.needs_infra }}
-          NEEDS_MIGRATIONS: ${{ needs.load_candidate.outputs.needs_migrations }}
-          CANDIDATE_API_REF: ${{ needs.load_candidate.outputs.candidate_api_ref }}
-          CANDIDATE_WEB_REF: ${{ needs.load_candidate.outputs.candidate_web_ref }}
-          COMMIT_RUN_ID: ${{ needs.load_candidate.outputs.commit_run_id }}
-          CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_candidate.outputs.candidate_ref_contract_status }}
-          CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_candidate.outputs.candidate_ref_contract_reason_codes_json }}
-          IDENTITY_CONFIG_CONTRACT_STATUS: ${{ needs.identity_acceptance.outputs.identity_config_contract_status }}
-          IDENTITY_CONFIG_CONTRACT_REASON_CODES_JSON: ${{ needs.identity_acceptance.outputs.identity_config_contract_reason_codes_json }}
-          RUNTIME_RESULT: ${{ needs.runtime_acceptance.result }}
-          INFRA_RESULT: ${{ needs.infra_acceptance.result }}
-          IDENTITY_RESULT: ${{ needs.identity_acceptance.result }}
-          GATE_RESULT: ${{ job.status }}
+          HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+          RUNTIME_REQUIRED: ${{ needs.load_release_candidate.outputs.runtime_changed }}
+          INFRA_REQUIRED: ${{ needs.load_release_candidate.outputs.infra_changed == 'true' || needs.load_release_candidate.outputs.requires_infra_convergence == 'true' }}
+          IDENTITY_REQUIRED: ${{ needs.load_release_candidate.outputs.identity_changed }}
+          CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.candidate_api_ref }}
+          CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.candidate_web_ref }}
+          CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.candidate_ref_contract_status }}
+          CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_release_candidate.outputs.candidate_ref_contract_reason_codes_json }}
+          IDENTITY_CONFIG_CONTRACT_STATUS: ${{ needs.identity_readonly_acceptance.outputs.identity_config_contract_status }}
+          IDENTITY_CONFIG_CONTRACT_REASON_CODES_JSON: ${{ needs.identity_readonly_acceptance.outputs.identity_config_contract_reason_codes_json }}
+          CHECK_RESULTS_JSON: ${{ format('{{"load-release-candidate":"{0}","runtime-blackbox-acceptance":"{1}","infra-readonly-acceptance":"{2}","identity-readonly-acceptance":"{3}"}}', needs.load_release_candidate.result, needs.runtime_blackbox_acceptance.result, needs.infra_readonly_acceptance.result, needs.identity_readonly_acceptance.result) }}
+        run: node scripts/pipeline/acceptance/decide-acceptance-stage.mjs
+
+      - name: Write not-required acceptance result
+        if: ${{ steps.stage_mode.outputs.stage_required != 'true' }}
+        env:
+          HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha || needs.acceptance_eligibility.outputs.candidate_sha }}
+          REASON_CODE: ${{ steps.stage_mode.outputs.eligibility_reason_code }}
         run: |
           set -euo pipefail
           mkdir -p ".artifacts/acceptance/$HEAD_SHA"
-          candidate_ref_reason_codes_json="${CANDIDATE_REF_CONTRACT_REASON_CODES_JSON:-[]}"
-          identity_config_reason_codes_json="${IDENTITY_CONFIG_CONTRACT_REASON_CODES_JSON:-[]}"
-          jq -n \
-            --arg generatedAt "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-            --arg headSha "$HEAD_SHA" \
-            --arg kind "$KIND" \
-            --arg commitRunId "$COMMIT_RUN_ID" \
-            --arg runtimeResult "$RUNTIME_RESULT" \
-            --arg infraResult "$INFRA_RESULT" \
-            --arg identityResult "$IDENTITY_RESULT" \
-            --arg gateResult "$GATE_RESULT" \
-            --arg apiRef "$CANDIDATE_API_REF" \
-            --arg webRef "$CANDIDATE_WEB_REF" \
-            --arg candidateRefContractStatus "${CANDIDATE_REF_CONTRACT_STATUS:-unknown}" \
-            --arg candidateRefReasonCodesJson "$candidate_ref_reason_codes_json" \
-            --arg identityConfigContractStatus "${IDENTITY_CONFIG_CONTRACT_STATUS:-unknown}" \
-            --arg identityConfigReasonCodesJson "$identity_config_reason_codes_json" \
-            --argjson runtimeChanged "$RUNTIME_CHANGED" \
-            --argjson infraChanged "$INFRA_CHANGED" \
-            --argjson identityChanged "$IDENTITY_CHANGED" \
-            --argjson docsOnlyChanged "$DOCS_ONLY_CHANGED" \
-            --argjson needsInfra "$NEEDS_INFRA" \
-            --argjson needsMigrations "$NEEDS_MIGRATIONS" \
-            '{
-              schemaVersion: "1",
-              generatedAt: $generatedAt,
-              headSha: $headSha,
-              kind: $kind,
-              source: {
-                commitRunId: $commitRunId
-              },
-              scope: {
-                runtime: $runtimeChanged,
-                infra: $infraChanged,
-                identity: $identityChanged,
-                docsOnly: $docsOnlyChanged
-              },
-              needsInfra: $needsInfra,
-              needsMigrations: $needsMigrations,
-              candidate: {
-                apiRef: $apiRef,
-                webRef: $webRef
-              },
-              configContracts: {
-                candidateRefs: {
-                  status: $candidateRefContractStatus,
-                  reasonCodes: ($candidateRefReasonCodesJson | fromjson)
-                },
-                identity: {
-                  status: $identityConfigContractStatus,
-                  reasonCodes: ($identityConfigReasonCodesJson | fromjson)
-                }
-              },
-              candidateFidelity: {
-                runtimeCandidateRefsRequired: ($runtimeChanged or $infraChanged or $needsInfra),
-                status: (if ($runtimeChanged or $infraChanged or $needsInfra) then $candidateRefContractStatus else "not-required" end)
-              },
-              checks: {
-                runtimeAcceptance: $runtimeResult,
-                infraAcceptance: $infraResult,
-                identityAcceptance: $identityResult,
-                acceptanceStageGate: $gateResult
+          cat > ".artifacts/acceptance/$HEAD_SHA/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "pass": true,
+            "status": "not-required",
+            "reasonCodes": ["$REASON_CODE"],
+            "reasonDetails": [
+              {
+                "code": "$REASON_CODE",
+                "message": "Acceptance stage not required for this trigger/candidate."
               }
-            }' > ".artifacts/acceptance/$HEAD_SHA/evidence-manifest.json"
+            ],
+            "reasons": ["Acceptance stage not required for this trigger/candidate."],
+            "checkResults": {}
+          }
+          JSON
+
+      - name: Write acceptance evidence manifest
+        env:
+          HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha || needs.acceptance_eligibility.outputs.candidate_sha }}
+          CHANGE_CLASS: ${{ needs.load_release_candidate.outputs.change_class }}
+          COMMIT_RUN_ID: ${{ needs.load_release_candidate.outputs.commit_run_id || needs.acceptance_eligibility.outputs.commit_run_id }}
+          RUNTIME_CHANGED: ${{ needs.load_release_candidate.outputs.runtime_changed || 'false' }}
+          INFRA_CHANGED: ${{ needs.load_release_candidate.outputs.infra_changed || 'false' }}
+          IDENTITY_CHANGED: ${{ needs.load_release_candidate.outputs.identity_changed || 'false' }}
+          DOCS_ONLY_CHANGED: ${{ needs.load_release_candidate.outputs.docs_only_changed || 'false' }}
+          REQUIRES_INFRA_CONVERGENCE: ${{ needs.load_release_candidate.outputs.requires_infra_convergence || 'false' }}
+          REQUIRES_MIGRATIONS: ${{ needs.load_release_candidate.outputs.requires_migrations || 'false' }}
+          CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.candidate_api_ref }}
+          CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.candidate_web_ref }}
+          ELIGIBILITY_STATUS: ${{ steps.stage_mode.outputs.eligibility_status }}
+          ELIGIBILITY_REASON_CODE: ${{ steps.stage_mode.outputs.eligibility_reason_code }}
+          CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.candidate_ref_contract_status || 'unknown' }}
+          CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_release_candidate.outputs.candidate_ref_contract_reason_codes_json || '[]' }}
+          IDENTITY_CONFIG_CONTRACT_STATUS: ${{ needs.identity_readonly_acceptance.outputs.identity_config_contract_status || 'unknown' }}
+          IDENTITY_CONFIG_CONTRACT_REASON_CODES_JSON: ${{ needs.identity_readonly_acceptance.outputs.identity_config_contract_reason_codes_json || '[]' }}
+          CANDIDATE_FIDELITY_STATUS: ${{ steps.stage_mode.outputs.stage_required == 'true' && needs.load_release_candidate.outputs.candidate_ref_contract_status || 'not-required' }}
+          RUNTIME_RESULT: ${{ needs.runtime_blackbox_acceptance.result }}
+          INFRA_RESULT: ${{ needs.infra_readonly_acceptance.result }}
+          IDENTITY_RESULT: ${{ needs.identity_readonly_acceptance.result }}
+          ACCEPTANCE_STAGE_RESULT: ${{ steps.stage_mode.outputs.stage_required == 'true' && steps.decide.outcome || 'not-required' }}
+        run: node scripts/pipeline/shared/write-acceptance-evidence.mjs
 
       - name: Upload acceptance artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: acceptance-evidence-${{ needs.load_candidate.outputs.head_sha }}
-          path: .artifacts/acceptance/${{ needs.load_candidate.outputs.head_sha }}
+          name: acceptance-evidence-${{ needs.load_release_candidate.outputs.head_sha || needs.acceptance_eligibility.outputs.candidate_sha }}
+          path: .artifacts/acceptance/${{ needs.load_release_candidate.outputs.head_sha || needs.acceptance_eligibility.outputs.candidate_sha }}
           if-no-files-found: warn
+
+      - name: Fail when required acceptance decision fails
+        if: ${{ steps.stage_mode.outputs.stage_required == 'true' && steps.decide.outcome != 'success' }}
+        run: |
+          echo "Acceptance stage decision failed" >&2
+          exit 1

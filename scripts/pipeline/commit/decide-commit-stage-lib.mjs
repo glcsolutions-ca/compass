@@ -11,31 +11,31 @@ export function evaluateCommitStageResults({
 }) {
   const reasons = [];
 
-  if (checkResults.scope !== "success") {
+  if (checkResults["determine-scope"] !== "success") {
     reasons.push({
-      code: "CHECK_SCOPE_NOT_SUCCESS",
-      message: `scope result is ${checkResults.scope}`
+      code: "CHECK_DETERMINE_SCOPE_NOT_SUCCESS",
+      message: `determine-scope result is ${checkResults["determine-scope"]}`
     });
   }
 
-  if (checkResults["quick-feedback"] !== "success") {
+  if (checkResults["fast-feedback"] !== "success") {
     reasons.push({
-      code: "CHECK_QUICK_FEEDBACK_NOT_SUCCESS",
-      message: `quick-feedback result is ${checkResults["quick-feedback"]}`
+      code: "CHECK_FAST_FEEDBACK_NOT_SUCCESS",
+      message: `fast-feedback result is ${checkResults["fast-feedback"]}`
     });
   }
 
-  if (infraRequired && checkResults["infra-quick-check"] !== "success") {
+  if (infraRequired && checkResults["infra-static-check"] !== "success") {
     reasons.push({
-      code: "CHECK_INFRA_QUICK_CHECK_REQUIRED_NOT_SUCCESS",
-      message: `infra-quick-check required but result is ${checkResults["infra-quick-check"]}`
+      code: "CHECK_INFRA_STATIC_CHECK_REQUIRED_NOT_SUCCESS",
+      message: `infra-static-check required but result is ${checkResults["infra-static-check"]}`
     });
   }
 
-  if (identityRequired && checkResults["identity-quick-check"] !== "success") {
+  if (identityRequired && checkResults["identity-static-check"] !== "success") {
     reasons.push({
-      code: "CHECK_IDENTITY_QUICK_CHECK_REQUIRED_NOT_SUCCESS",
-      message: `identity-quick-check required but result is ${checkResults["identity-quick-check"]}`
+      code: "CHECK_IDENTITY_STATIC_CHECK_REQUIRED_NOT_SUCCESS",
+      message: `identity-static-check required but result is ${checkResults["identity-static-check"]}`
     });
   }
 

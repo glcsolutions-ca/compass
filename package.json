@@ -50,10 +50,11 @@
     "commit:docs-drift": "node scripts/pipeline/commit/check-docs-drift.mjs",
     "commit:testing-policy": "node scripts/pipeline/commit/check-testing-policy.mjs",
     "acceptance:browser-evidence": "playwright test tests/e2e/smoke.spec.ts --config tests/e2e/playwright.config.ts --reporter=line --workers=1",
-    "acceptance:harness-smoke": "tsx tests/system/smoke.ts",
-    "commit:gate": "node scripts/pipeline/commit/commit-stage-gate.mjs",
-    "test:pipeline-contract": "vitest run scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/commit-stage-gate-lib.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/acceptance/acceptance-stage-gate-lib.test.mjs scripts/pipeline/production/managed-certificate-contract.test.mjs scripts/pipeline/production/apply-infra.test.mjs",
-    "commit:quick-feedback": "pnpm test"
+    "acceptance:system-smoke": "tsx tests/system/smoke.ts",
+    "commit:system-smoke": "tsx tests/commit/smoke.inproc.ts",
+    "commit:stage": "node scripts/pipeline/commit/decide-commit-stage.mjs",
+    "test:pipeline-contract": "vitest run scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/acceptance/decide-acceptance-stage-lib.test.mjs scripts/pipeline/production/managed-certificate-contract.test.mjs scripts/pipeline/production/apply-infra.test.mjs",
+    "commit:fast-feedback": "pnpm test && pnpm commit:system-smoke"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

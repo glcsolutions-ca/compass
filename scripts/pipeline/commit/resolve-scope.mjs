@@ -25,12 +25,12 @@ async function main() {
   const policy = await loadPipelinePolicy(policyPath);
   const changedFiles = await getChangedFiles(baseSha, headSha);
   const scope = resolveChangeScope(policy, changedFiles);
-  const kind = classifyCandidateKind(scope);
+  const changeClass = classifyCandidateKind(scope);
   const docsDrift = evaluateDocsDrift(policy, changedFiles);
 
   const docsDriftBlocking = docsDrift.shouldBlock;
-  const needsInfra = scope.runtime && scope.infra;
-  const needsMigrations = scope.runtime && scope.migration;
+  const requiresInfraConvergence = scope.runtime && scope.infra;
+  const requiresMigrations = scope.runtime && scope.migration;
 
   const scopePath = path.join(".artifacts", "commit-stage", testedSha, "scope.json");
   const prNumber = await getPrNumberFromEvent();
@@ -44,10 +44,10 @@ async function main() {
     testedSha,
     prNumber,
     changedFiles,
-    kind,
+    changeClass,
     scope,
-    needsInfra,
-    needsMigrations,
+    requiresInfraConvergence,
+    requiresMigrations,
     docsDriftBlocking,
     requiredFlowIds: policy.acceptanceStage.requiredFlowIds
   };
@@ -60,15 +60,15 @@ async function main() {
     head_sha: headSha,
     tested_sha: testedSha,
     pr_number: prNumber ? String(prNumber) : "",
-    kind,
+    change_class: changeClass,
     runtime_changed: String(scope.runtime),
     infra_changed: String(scope.infra),
     identity_changed: String(scope.identity),
     migration_changed: String(scope.migration),
     infra_rollout_changed: String(scope.infraRollout),
     docs_only_changed: String(scope.docsOnly),
-    needs_infra: String(needsInfra),
-    needs_migrations: String(needsMigrations),
+    requires_infra_convergence: String(requiresInfraConvergence),
+    requires_migrations: String(requiresMigrations),
     changed_files_json: JSON.stringify(changedFiles),
     required_flow_ids_json: JSON.stringify(policy.acceptanceStage.requiredFlowIds),
     docs_drift_blocking: String(docsDriftBlocking)
@@ -80,20 +80,20 @@ async function main() {
       `- Base SHA: \`${baseSha}\``,
       `- Head SHA: \`${headSha}\``,
       `- Tested SHA: \`${testedSha}\``,
-      `- Kind: \`${kind}\``,
+      `- Change class: \`${changeClass}\``,
       `- Changed files: ${changedFiles.length}`,
       `- Runtime changed: \`${scope.runtime}\``,
       `- Infra changed: \`${scope.infra}\``,
       `- Identity changed: \`${scope.identity}\``,
       `- Docs only: \`${scope.docsOnly}\``,
-      `- Needs infra convergence: \`${needsInfra}\``,
-      `- Needs migrations: \`${needsMigrations}\``,
+      `- Requires infra convergence: \`${requiresInfraConvergence}\``,
+      `- Requires migrations: \`${requiresMigrations}\``,
       `- Docs drift blocking: \`${docsDriftBlocking}\``
     ].join("\n")
   );
 
   console.info(
-    `Scope resolved: kind=${kind}, runtime=${scope.runtime}, infra=${scope.infra}, identity=${scope.identity}`
+    `Scope resolved: changeClass=${changeClass}, runtime=${scope.runtime}, infra=${scope.infra}, identity=${scope.identity}`
   );
 }
 

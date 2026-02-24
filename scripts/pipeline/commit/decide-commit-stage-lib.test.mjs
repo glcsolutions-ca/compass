@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { evaluateCommitStageResults } from "./commit-stage-gate-lib.mjs";
+import { evaluateCommitStageResults } from "./decide-commit-stage-lib.mjs";
 
 function makeBaseInput(overrides = {}) {
   return {
     checkResults: {
-      scope: "success",
-      "quick-feedback": "success",
-      "infra-quick-check": "skipped",
-      "identity-quick-check": "skipped"
+      "determine-scope": "success",
+      "fast-feedback": "success",
+      "infra-static-check": "skipped",
+      "identity-static-check": "skipped"
     },
     infraRequired: false,
     identityRequired: false,
@@ -22,23 +22,26 @@ function makeBaseInput(overrides = {}) {
 }
 
 describe("evaluateCommitStageResults", () => {
-  it("always requires scope and quick-feedback success", () => {
+  it("always requires determine-scope and fast-feedback success", () => {
     const reasons = evaluateCommitStageResults(
       makeBaseInput({
         checkResults: {
-          scope: "failure",
-          "quick-feedback": "cancelled",
-          "infra-quick-check": "skipped",
-          "identity-quick-check": "skipped"
+          "determine-scope": "failure",
+          "fast-feedback": "cancelled",
+          "infra-static-check": "skipped",
+          "identity-static-check": "skipped"
         }
       })
     );
 
     expect(reasons).toEqual([
-      { code: "CHECK_SCOPE_NOT_SUCCESS", message: "scope result is failure" },
       {
-        code: "CHECK_QUICK_FEEDBACK_NOT_SUCCESS",
-        message: "quick-feedback result is cancelled"
+        code: "CHECK_DETERMINE_SCOPE_NOT_SUCCESS",
+        message: "determine-scope result is failure"
+      },
+      {
+        code: "CHECK_FAST_FEEDBACK_NOT_SUCCESS",
+        message: "fast-feedback result is cancelled"
       }
     ]);
   });
@@ -49,22 +52,22 @@ describe("evaluateCommitStageResults", () => {
         infraRequired: true,
         identityRequired: true,
         checkResults: {
-          scope: "success",
-          "quick-feedback": "success",
-          "infra-quick-check": "failure",
-          "identity-quick-check": "cancelled"
+          "determine-scope": "success",
+          "fast-feedback": "success",
+          "infra-static-check": "failure",
+          "identity-static-check": "cancelled"
         }
       })
     );
 
     expect(reasons).toEqual([
       {
-        code: "CHECK_INFRA_QUICK_CHECK_REQUIRED_NOT_SUCCESS",
-        message: "infra-quick-check required but result is failure"
+        code: "CHECK_INFRA_STATIC_CHECK_REQUIRED_NOT_SUCCESS",
+        message: "infra-static-check required but result is failure"
       },
       {
-        code: "CHECK_IDENTITY_QUICK_CHECK_REQUIRED_NOT_SUCCESS",
-        message: "identity-quick-check required but result is cancelled"
+        code: "CHECK_IDENTITY_STATIC_CHECK_REQUIRED_NOT_SUCCESS",
+        message: "identity-static-check required but result is cancelled"
       }
     ]);
   });

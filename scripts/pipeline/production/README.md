@@ -33,7 +33,7 @@
 ### Production Metadata
 
 - `HEAD_SHA`
-- `KIND`
+- `CHANGE_CLASS`
 
 ### GitHub Deployment Record Context
 

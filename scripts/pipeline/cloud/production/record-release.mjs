@@ -10,26 +10,48 @@ const environmentUrl = process.env.DEPLOY_ENVIRONMENT_URL?.trim() || "";
 const candidateApiRef = process.env.CANDIDATE_API_REF?.trim() || "";
 const candidateWebRef = process.env.CANDIDATE_WEB_REF?.trim() || "";
 const changeClass = process.env.CHANGE_CLASS?.trim() || "runtime";
+const maxRetryAttempts = 3;
+const baseRetryDelayMs = 1000;
 
 async function githubRequest(pathname, options = {}) {
-  const response = await fetch(`https://api.github.com${pathname}`, {
-    method: options.method || "GET",
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${token}`,
-      "X-GitHub-Api-Version": apiVersion,
-      "User-Agent": "compass-release-pipeline",
-      ...(options.body ? { "Content-Type": "application/json" } : {})
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined
-  });
+  const method = options.method || "GET";
+  const headers = {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${token}`,
+    "X-GitHub-Api-Version": apiVersion,
+    "User-Agent": "compass-release-pipeline",
+    ...(options.body ? { "Content-Type": "application/json" } : {})
+  };
+  const bodyPayload = options.body ? JSON.stringify(options.body) : undefined;
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`GitHub API request failed (${response.status}): ${pathname}\n${body}`);
+  for (let attempt = 0; attempt <= maxRetryAttempts; attempt += 1) {
+    const response = await fetch(`https://api.github.com${pathname}`, {
+      method,
+      headers,
+      body: bodyPayload
+    });
+
+    if (response.ok) {
+      return response.json();
+    }
+
+    const responseBody = await response.text();
+    const status = response.status;
+    const retryAfterSeconds = Number(response.headers.get("retry-after"));
+    const shouldRetry = (status === 429 || status >= 500) && attempt < maxRetryAttempts;
+    if (!shouldRetry) {
+      throw new Error(`GitHub API request failed (${status}): ${pathname}\n${responseBody}`);
+    }
+
+    const exponentialBackoffMs = baseRetryDelayMs * 2 ** attempt;
+    const retryAfterMs =
+      Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 0;
+    const backoffMs = Math.max(exponentialBackoffMs, retryAfterMs);
+    console.warn(
+      `GitHub API request ${pathname} returned ${status}; retrying ${attempt + 1}/${maxRetryAttempts} in ${backoffMs}ms`
+    );
+    await new Promise((resolve) => setTimeout(resolve, backoffMs));
   }
-
-  return response.json();
 }
 
 async function main() {

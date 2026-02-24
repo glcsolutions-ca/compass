@@ -109,7 +109,7 @@ done
 PR_NUMBER=0 \
 WEB_BASE_URL=http://127.0.0.1:3000 \
 EXPECTED_ENTRYPOINT=/ \
-REQUIRED_FLOW_IDS_JSON="[\"${flowId}\"]" \
+REQUIRED_FLOW_IDS_JSON="$(printf '[\"%s\"]' "${flowId}")" \
 pnpm acceptance:browser-evidence
 `);
 

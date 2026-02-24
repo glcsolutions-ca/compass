@@ -54,6 +54,10 @@ Configuration is parsed in `src/config/index.ts`.
 - When auth tables are unavailable, strict auth checks still run using `AUTH_*` in-memory bootstrap config.
 - Local template is `apps/api/.env.example`.
 
+## Runtime Acceptance Note
+
+- Browser and API/system candidate acceptance paths must inject the same auth bootstrap env (`AUTH_*` and `OAUTH_*`) so `/health` readiness is validated under the same production-mode config.
+
 ## Commands
 
 Exact local commands from `apps/api/package.json`:

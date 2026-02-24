@@ -12,6 +12,7 @@ const databaseUrl = resolveDatabaseUrl();
 // Scratch-drill trigger marker: intentionally non-functional.
 // Final-proof scratch-drill marker: intentionally non-functional.
 // Post-infra-fix scratch-drill marker: intentionally non-functional.
+// Post-cert-order-fix final-proof marker: intentionally non-functional.
 const supportedCommands = new Set(["create", "up", "down", "redo"]);
 
 if (!command || !supportedCommands.has(command)) {

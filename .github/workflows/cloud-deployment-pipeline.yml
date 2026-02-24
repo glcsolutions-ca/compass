@@ -1077,13 +1077,18 @@ jobs:
     needs:
       - load_release_candidate
       - acceptance_stage
-    if: ${{ needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && needs.acceptance_stage.outputs.control_plane_required == 'true' }}
+    if: ${{ needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' }}
     runs-on: ubuntu-latest
-    environment: production-control-plane
+    environment: ${{ needs.acceptance_stage.outputs.control_plane_required == 'true' && 'production-control-plane' || 'acceptance' }}
     timeout-minutes: 60
     steps:
       - name: Approval checkpoint
+        if: ${{ needs.acceptance_stage.outputs.control_plane_required == 'true' }}
         run: echo "Control-plane approval granted"
+
+      - name: Approval not required
+        if: ${{ needs.acceptance_stage.outputs.control_plane_required != 'true' }}
+        run: echo "Control-plane approval bypassed for non-control-plane scope"
 
   deploy_approved_candidate:
     name: deploy-approved-candidate
@@ -1091,7 +1096,7 @@ jobs:
       - load_release_candidate
       - acceptance_stage
       - approve_control_plane
-    if: ${{ always() && needs.load_release_candidate.result == 'success' && needs.acceptance_stage.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && (needs.acceptance_stage.outputs.control_plane_required != 'true' || needs.approve_control_plane.result == 'success') }}
+    if: ${{ always() && needs.load_release_candidate.result == 'success' && needs.acceptance_stage.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && needs.approve_control_plane.result == 'success' }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 75

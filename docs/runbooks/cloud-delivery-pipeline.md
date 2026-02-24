@@ -135,3 +135,4 @@ Use replay when you need to rerun delivery for an existing release package SHA w
 - This runbook is used as a docs-drift target during full scratch recovery drills.
 - Drill-trigger commits may include non-functional markers in `db/scripts/**`, `infra/azure/**`, and `infra/identity/**` to force full-scope pipeline execution.
 - Final-proof reruns follow the same trigger pattern after fix-forward merges to preserve a true clean-slate guarantee.
+- Managed certificate resources are defined with the ACA environment module to keep infra readonly template validation scratch-safe.

@@ -102,7 +102,7 @@ for i in $(seq 1 90); do
   sleep 1
 done
 
-readarray -t smoke_tokens < <(ACCEPTANCE_AUTH_SECRET="$auth_secret" node --input-type=module - <<'NODE'
+read -r delegated_smoke_token app_smoke_token < <(ACCEPTANCE_AUTH_SECRET="$auth_secret" node --input-type=module - <<'NODE'
 import { createHmac } from "node:crypto";
 
 function encodeJson(value) {
@@ -159,10 +159,7 @@ const app = signJwt(
 console.log(delegated);
 console.log(app);
 NODE
-)
-
-delegated_smoke_token="\${smoke_tokens[0]:-}"
-app_smoke_token="\${smoke_tokens[1]:-}"
+) | paste -sd' ' -
 if [ -z "$delegated_smoke_token" ] || [ -z "$app_smoke_token" ]; then
   echo "Failed to generate acceptance smoke auth tokens" >&2
   exit 1
@@ -198,15 +195,15 @@ if [ -n "${codexRef}" ]; then
 else
   mkdir -p ".artifacts/codex-smoke/${testedSha}"
   cat > ".artifacts/codex-smoke/${testedSha}/result.json" <<JSON
-  {
-    "schemaVersion": "1",
-    "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-    "headSha": "${headSha}",
-    "testedSha": "${testedSha}",
-    "status": "not-required",
-    "reasonCode": "CODEX_REF_MISSING"
-  }
-  JSON
+{
+  "schemaVersion": "1",
+  "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "headSha": "${headSha}",
+  "testedSha": "${testedSha}",
+  "status": "not-required",
+  "reasonCode": "CODEX_REF_MISSING"
+}
+JSON
 fi
 `);
 

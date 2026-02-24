@@ -59,6 +59,28 @@ Result artifact path:
 
 - `.artifacts/docs-drift/<testedSha>/result.json`
 
+## Commit-Stage SLO Telemetry
+
+Policy fields:
+
+- `commitStage.slo.targetSeconds` (current target: `300`)
+- `commitStage.slo.mode` (`observe` or `enforce`)
+
+Current default is `observe`.
+
+- Over-target runs emit warnings and timing evidence.
+- They do not block merge until mode changes to `enforce`.
+
+Timing artifact path:
+
+- `.artifacts/commit-stage/<testedSha>/timing.json`
+
+Timing keys:
+
+- `metrics.time_to_commit_gate_seconds`
+- `metrics.quick_feedback_seconds`
+- `metrics.total_run_seconds`
+
 ## Gate semantics
 
 `commit-stage-gate` makes merge decisions from required job outcomes (`needs.*.result`) plus docs-drift state.
@@ -68,6 +90,7 @@ Result artifact path:
 - `infra-quick-check` must succeed when `infra` is required.
 - `identity-quick-check` must succeed when `identity` is required.
 - If docs-drift blocking is true, docs-drift status must be `pass`.
+- If `commitStage.slo.mode = enforce`, gate fails when timing SLO is not met.
 
 ## Runtime baseline
 

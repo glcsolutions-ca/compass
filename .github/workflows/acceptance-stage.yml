@@ -37,6 +37,8 @@ jobs:
       candidate_api_ref: ${{ steps.manifest.outputs.candidate_api_ref }}
       candidate_web_ref: ${{ steps.manifest.outputs.candidate_web_ref }}
       commit_run_id: ${{ steps.manifest.outputs.commit_run_id }}
+      candidate_ref_contract_status: ${{ steps.manifest.outputs.candidate_ref_contract_status }}
+      candidate_ref_contract_reason_codes_json: ${{ steps.manifest.outputs.candidate_ref_contract_reason_codes_json }}
     steps:
       - name: Resolve commit-stage run id for workflow_dispatch
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -142,18 +144,48 @@ jobs:
             throw new Error(`Unsupported candidate manifest schemaVersion: ${manifest.schemaVersion}`);
           }
 
+          const runtimeChanged = Boolean(manifest.scope?.runtime);
+          const infraChanged = Boolean(manifest.scope?.infra);
+          const needsInfra = Boolean(manifest.needsInfra);
+          const requiresCandidateRefs = runtimeChanged || infraChanged || needsInfra;
+          const candidateApiRef = String(manifest.candidate?.apiRef || '');
+          const candidateWebRef = String(manifest.candidate?.webRef || '');
+          const candidateContractReasonCodes = [];
+
+          if (requiresCandidateRefs) {
+            if (!candidateApiRef) {
+              candidateContractReasonCodes.push('CANDIDATE_API_REF_MISSING');
+            }
+            if (!candidateWebRef) {
+              candidateContractReasonCodes.push('CANDIDATE_WEB_REF_MISSING');
+            }
+
+            const digestPattern = /^.+@sha256:[a-fA-F0-9]{64}$/;
+            if (candidateApiRef && !digestPattern.test(candidateApiRef)) {
+              candidateContractReasonCodes.push('CANDIDATE_API_REF_NOT_DIGEST');
+            }
+            if (candidateWebRef && !digestPattern.test(candidateWebRef)) {
+              candidateContractReasonCodes.push('CANDIDATE_WEB_REF_NOT_DIGEST');
+            }
+          }
+
+          const candidateRefContractStatus =
+            candidateContractReasonCodes.length === 0 ? 'pass' : 'fail';
+
           const entries = {
             head_sha: String(manifest.headSha || ''),
             kind: String(manifest.kind || 'checks'),
-            runtime_changed: String(Boolean(manifest.scope?.runtime)),
-            infra_changed: String(Boolean(manifest.scope?.infra)),
+            runtime_changed: String(runtimeChanged),
+            infra_changed: String(infraChanged),
             identity_changed: String(Boolean(manifest.scope?.identity)),
             docs_only_changed: String(Boolean(manifest.scope?.docsOnly)),
-            needs_infra: String(Boolean(manifest.needsInfra)),
+            needs_infra: String(needsInfra),
             needs_migrations: String(Boolean(manifest.needsMigrations)),
-            candidate_api_ref: String(manifest.candidate?.apiRef || ''),
-            candidate_web_ref: String(manifest.candidate?.webRef || ''),
-            commit_run_id: String(runId || '')
+            candidate_api_ref: candidateApiRef,
+            candidate_web_ref: candidateWebRef,
+            commit_run_id: String(runId || ''),
+            candidate_ref_contract_status: candidateRefContractStatus,
+            candidate_ref_contract_reason_codes_json: JSON.stringify(candidateContractReasonCodes)
           };
 
           for (const [key, value] of Object.entries(entries)) {
@@ -175,9 +207,16 @@ jobs:
     if: ${{ needs.load_candidate.outputs.runtime_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 70
+    environment: production
     env:
       HEAD_SHA: ${{ needs.load_candidate.outputs.head_sha }}
       TESTED_SHA: ${{ needs.load_candidate.outputs.head_sha }}
+      CANDIDATE_API_REF: ${{ needs.load_candidate.outputs.candidate_api_ref }}
+      CANDIDATE_WEB_REF: ${{ needs.load_candidate.outputs.candidate_web_ref }}
+      CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_candidate.outputs.candidate_ref_contract_status }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
       DATABASE_URL: postgres://compass:compass@127.0.0.1:5432/compass
     steps:
       - name: Checkout
@@ -217,82 +256,57 @@ jobs:
           pnpm db:seed
           pnpm test:full
 
-      - name: Install Playwright browser
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Build contracts package
-        run: pnpm --filter @compass/contracts build
-
-      - name: Build API
-        run: pnpm --filter @compass/api build
-
-      - name: Build Web
-        run: pnpm --filter @compass/web build
-
-      - name: Prepare Web standalone assets
-        run: |
-          rm -rf apps/web/.next/standalone/apps/web/.next/static
-          rm -rf apps/web/.next/standalone/apps/web/public
-          mkdir -p apps/web/.next/standalone/apps/web/.next
-          mkdir -p apps/web/.next/standalone/apps/web/public
-          cp -R apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
-          if [ -d apps/web/public ]; then
-            cp -R apps/web/public/. apps/web/.next/standalone/apps/web/public/
-          fi
-
-      - name: Start API server
-        run: |
-          pnpm --filter @compass/api start > /tmp/compass-api.log 2>&1 &
-          echo $! > /tmp/compass-api.pid
-
-      - name: Wait for API readiness
-        run: |
-          for _ in $(seq 1 60); do
-            if curl --silent --fail http://127.0.0.1:3001/health > /dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
-          cat /tmp/compass-api.log || true
-          exit 1
-
-      - name: Start Web server
-        env:
-          API_BASE_URL: http://127.0.0.1:3001
-        run: |
-          pnpm --filter @compass/web start:standalone > /tmp/compass-web.log 2>&1 &
-          echo $! > /tmp/compass-web.pid
-
-      - name: Wait for Web readiness
-        run: |
-          for _ in $(seq 1 90); do
-            if curl --silent --fail http://127.0.0.1:3000 > /dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
-          cat /tmp/compass-web.log || true
-          exit 1
-
-      - name: Browser evidence
-        env:
-          PR_NUMBER: 0
-          WEB_BASE_URL: http://127.0.0.1:3000
-          EXPECTED_ENTRYPOINT: ${{ env.EXPECTED_ENTRYPOINT }}
-          REQUIRED_FLOW_IDS_JSON: '["compass-smoke"]'
-        run: pnpm acceptance:browser-evidence
-
       - name: Harness smoke
         run: pnpm acceptance:harness-smoke
 
-      - name: Migration image smoke
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Validate candidate reference contract
         run: |
           set -euo pipefail
-          artifact_dir=".artifacts/migration-image-smoke/$HEAD_SHA"
-          mkdir -p "$artifact_dir"
+
+          if [ "$CANDIDATE_REF_CONTRACT_STATUS" != "pass" ]; then
+            echo "Candidate ref contract status is $CANDIDATE_REF_CONTRACT_STATUS" >&2
+            exit 1
+          fi
+
+          for image in "$CANDIDATE_API_REF" "$CANDIDATE_WEB_REF"; do
+            if [ -z "$image" ]; then
+              echo "Candidate image reference is missing" >&2
+              exit 1
+            fi
+            if [[ "$image" != *"@sha256:"* ]]; then
+              echo "Candidate image is not a digest reference: $image" >&2
+              exit 1
+            fi
+          done
+
+      - name: Azure login for runtime candidate pull
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_ACCEPTANCE_CLIENT_ID || secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Pull candidate runtime images
+        run: |
+          set -euo pipefail
+          az acr login --name "$ACR_NAME" --only-show-errors
+          docker pull "$CANDIDATE_API_REF"
+          docker pull "$CANDIDATE_WEB_REF"
+
+      - name: Start candidate runtime stack
+        run: |
+          set -euo pipefail
+          artifact_dir=".artifacts/runtime-candidate/$HEAD_SHA"
+          migration_artifact_dir=".artifacts/migration-image-smoke/$HEAD_SHA"
+          mkdir -p "$artifact_dir" "$migration_artifact_dir"
           log_path="$artifact_dir/run.log"
-          network_name="acceptance-migration-image-smoke-net"
-          postgres_name="acceptance-migration-image-smoke-postgres"
+          network_name="acceptance-candidate-net"
+          postgres_name="acceptance-candidate-postgres"
+          api_container="acceptance-candidate-api"
+          web_container="acceptance-candidate-web"
 
           {
             docker network create "$network_name"
@@ -311,20 +325,64 @@ jobs:
               fi
 
               if [ "$i" -eq 90 ]; then
-                echo "Timed out waiting for postgres in migration-image-smoke job" >&2
+                echo "Timed out waiting for postgres in candidate runtime stack" >&2
                 exit 1
               fi
 
               sleep 1
             done
 
-            docker build -f apps/api/Dockerfile -t "compass-api-migration-smoke:$HEAD_SHA" .
+            db_url="postgres://compass:compass@$postgres_name:5432/compass"
 
             docker run --rm \
               --network "$network_name" \
-              -e DATABASE_URL="postgres://compass:compass@$postgres_name:5432/compass" \
-              "compass-api-migration-smoke:$HEAD_SHA" \
+              -e DATABASE_URL="$db_url" \
+              "$CANDIDATE_API_REF" \
               node db/scripts/migrate.mjs up
+
+            docker run --rm \
+              --network "$network_name" \
+              -e DATABASE_URL="$db_url" \
+              "$CANDIDATE_API_REF" \
+              node db/scripts/seed-postgres.mjs
+
+            docker run -d \
+              --name "$api_container" \
+              --network "$network_name" \
+              -p 3001:3001 \
+              -e DATABASE_URL="$db_url" \
+              "$CANDIDATE_API_REF"
+
+            for _ in $(seq 1 90); do
+              if curl --silent --fail http://127.0.0.1:3001/health >/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+
+            if ! curl --silent --fail http://127.0.0.1:3001/health >/dev/null; then
+              echo "Timed out waiting for candidate API readiness" >&2
+              exit 1
+            fi
+
+            docker run -d \
+              --name "$web_container" \
+              --network "$network_name" \
+              -p 3000:3000 \
+              -e API_BASE_URL="http://$api_container:3001" \
+              "$CANDIDATE_WEB_REF"
+
+            for _ in $(seq 1 90); do
+              if curl --silent --fail http://127.0.0.1:3000 >/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+
+            if ! curl --silent --fail http://127.0.0.1:3000 >/dev/null; then
+              echo "Timed out waiting for candidate Web readiness" >&2
+              exit 1
+            fi
           } 2>&1 | tee "$log_path"
 
           cat > "$artifact_dir/result.json" <<JSON
@@ -333,16 +391,38 @@ jobs:
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "headSha": "$HEAD_SHA",
             "status": "pass",
-            "reasonCode": "",
+            "candidate": {
+              "apiRef": "$CANDIDATE_API_REF",
+              "webRef": "$CANDIDATE_WEB_REF"
+            },
             "logPath": "$artifact_dir/run.log"
           }
           JSON
 
-      - name: Stop migration-image-smoke services
-        if: ${{ always() }}
-        run: |
-          docker rm -f acceptance-migration-image-smoke-postgres >/dev/null 2>&1 || true
-          docker network rm acceptance-migration-image-smoke-net >/dev/null 2>&1 || true
+          cat > "$migration_artifact_dir/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "status": "pass",
+            "reasonCode": "",
+            "candidateApiRef": "$CANDIDATE_API_REF",
+            "logPath": "$artifact_dir/run.log"
+          }
+          JSON
+
+      - name: API smoke against candidate API
+        env:
+          TARGET_API_BASE_URL: http://127.0.0.1:3001
+        run: pnpm deploy:smoke
+
+      - name: Browser evidence
+        env:
+          PR_NUMBER: 0
+          WEB_BASE_URL: http://127.0.0.1:3000
+          EXPECTED_ENTRYPOINT: ${{ env.EXPECTED_ENTRYPOINT }}
+          REQUIRED_FLOW_IDS_JSON: '["compass-smoke"]'
+        run: pnpm acceptance:browser-evidence
 
       - name: Upload runtime acceptance artifacts
         if: ${{ always() }}
@@ -352,18 +432,18 @@ jobs:
           path: |
             .artifacts/browser-evidence/${{ env.HEAD_SHA }}
             .artifacts/harness-smoke/${{ env.HEAD_SHA }}/result.json
+            .artifacts/deploy/${{ env.HEAD_SHA }}/api-smoke.json
             .artifacts/migration-image-smoke/${{ env.HEAD_SHA }}
+            .artifacts/runtime-candidate/${{ env.HEAD_SHA }}/result.json
           if-no-files-found: warn
 
-      - name: Stop background servers
+      - name: Stop runtime acceptance services
         if: ${{ always() }}
         run: |
-          if [ -f /tmp/compass-web.pid ]; then
-            kill "$(cat /tmp/compass-web.pid)" || true
-          fi
-          if [ -f /tmp/compass-api.pid ]; then
-            kill "$(cat /tmp/compass-api.pid)" || true
-          fi
+          docker rm -f acceptance-candidate-web >/dev/null 2>&1 || true
+          docker rm -f acceptance-candidate-api >/dev/null 2>&1 || true
+          docker rm -f acceptance-candidate-postgres >/dev/null 2>&1 || true
+          docker network rm acceptance-candidate-net >/dev/null 2>&1 || true
           docker rm -f acceptance-postgres >/dev/null 2>&1 || true
 
   infra_acceptance:
@@ -378,14 +458,37 @@ jobs:
       HEAD_SHA: ${{ needs.load_candidate.outputs.head_sha }}
       API_IMAGE: ${{ needs.load_candidate.outputs.candidate_api_ref }}
       WEB_IMAGE: ${{ needs.load_candidate.outputs.candidate_web_ref }}
+      CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_candidate.outputs.candidate_ref_contract_status }}
+      CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_candidate.outputs.candidate_ref_contract_reason_codes_json }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate candidate references for infra acceptance
+        run: |
+          set -euo pipefail
+
+          if [ "${CANDIDATE_REF_CONTRACT_STATUS:-unknown}" != "pass" ]; then
+            echo "Candidate ref contract status is ${CANDIDATE_REF_CONTRACT_STATUS:-unknown}" >&2
+            echo "Reason codes: ${CANDIDATE_REF_CONTRACT_REASON_CODES_JSON:-[]}" >&2
+            exit 1
+          fi
+
+          for image in "$API_IMAGE" "$WEB_IMAGE"; do
+            if [ -z "$image" ]; then
+              echo "Candidate image reference is missing for infra acceptance" >&2
+              exit 1
+            fi
+            if [[ "$image" != *"@sha256:"* ]]; then
+              echo "Candidate image is not a digest reference: $image" >&2
+              exit 1
+            fi
+          done
+
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          client-id: ${{ secrets.AZURE_ACCEPTANCE_CLIENT_ID || secrets.AZURE_DEPLOY_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
@@ -586,11 +689,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
+    outputs:
+      identity_config_contract_status: ${{ steps.identity_config.outputs.config_contract_status }}
+      identity_config_contract_reason_codes_json: ${{ steps.identity_config.outputs.config_contract_reason_codes_json }}
     env:
       HEAD_SHA: ${{ needs.load_candidate.outputs.head_sha }}
       ARM_USE_OIDC: "true"
       ARM_USE_AZUREAD: "true"
-      ARM_CLIENT_ID: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
+      ARM_CLIENT_ID: ${{ secrets.AZURE_ACCEPTANCE_IDENTITY_CLIENT_ID || secrets.AZURE_IDENTITY_CLIENT_ID }}
       ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
@@ -599,6 +705,7 @@ jobs:
       TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
       GH_ORGANIZATION: ${{ vars.GH_ORGANIZATION }}
       GH_REPOSITORY_NAME: ${{ vars.GH_REPOSITORY_NAME }}
+      API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
       ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
       IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
       GITHUB_ENVIRONMENT_NAME: production
@@ -609,28 +716,12 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Validate required environment configuration
-        run: |
-          set -euo pipefail
-          required_values=(
-            ARM_CLIENT_ID
-            ARM_TENANT_ID
-            ARM_SUBSCRIPTION_ID
-            TFSTATE_RESOURCE_GROUP
-            TFSTATE_STORAGE_ACCOUNT
-            TFSTATE_CONTAINER
-            TFSTATE_KEY
-            GH_ORGANIZATION
-            GH_REPOSITORY_NAME
-            ENTRA_AUDIENCE
-            IDENTITY_OWNER_OBJECT_IDS_JSON
-          )
-          for name in "${required_values[@]}"; do
-            if [ -z "${!name:-}" ]; then
-              echo "Missing required production environment value: ${name}" >&2
-              exit 1
-            fi
-          done
+      - name: Validate identity config contract
+        id: identity_config
+        env:
+          IDENTITY_CONFIG_MODE: acceptance
+          REQUIRED_ENV_NAMES: ARM_CLIENT_ID,ARM_TENANT_ID,ARM_SUBSCRIPTION_ID,TFSTATE_RESOURCE_GROUP,TFSTATE_STORAGE_ACCOUNT,TFSTATE_CONTAINER,TFSTATE_KEY,GH_ORGANIZATION,GH_REPOSITORY_NAME,IDENTITY_OWNER_OBJECT_IDS_JSON
+        run: node scripts/pipeline/shared/validate-identity-config.mjs
 
       - name: Azure login (OIDC)
         uses: azure/login@v2
@@ -669,7 +760,7 @@ jobs:
             -var "github_organization=${GH_ORGANIZATION}" \
             -var "github_repository=${GH_REPOSITORY_NAME}" \
             -var "github_environment_name=${GITHUB_ENVIRONMENT_NAME}" \
-            -var "api_identifier_uri=${ENTRA_AUDIENCE}" \
+            -var "api_identifier_uri=${{ steps.identity_config.outputs.api_identifier_uri }}" \
             -var "owners=${IDENTITY_OWNER_OBJECT_IDS_JSON}" \
             -out=tfplan
           terraform -chdir=infra/identity show -json tfplan > ".artifacts/identity/$HEAD_SHA/plan.json"
@@ -679,7 +770,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: identity-acceptance-${{ env.HEAD_SHA }}
-          path: .artifacts/identity/${{ env.HEAD_SHA }}/plan.json
+          path: |
+            .artifacts/identity/${{ env.HEAD_SHA }}/plan.json
+            .artifacts/identity/${{ env.HEAD_SHA }}/config-validation.json
           if-no-files-found: warn
 
   acceptance_stage_gate:
@@ -707,6 +800,12 @@ jobs:
           RUNTIME_REQUIRED: ${{ needs.load_candidate.outputs.runtime_changed }}
           INFRA_REQUIRED: ${{ needs.load_candidate.outputs.infra_changed == 'true' || needs.load_candidate.outputs.needs_infra == 'true' }}
           IDENTITY_REQUIRED: ${{ needs.load_candidate.outputs.identity_changed }}
+          CANDIDATE_API_REF: ${{ needs.load_candidate.outputs.candidate_api_ref }}
+          CANDIDATE_WEB_REF: ${{ needs.load_candidate.outputs.candidate_web_ref }}
+          CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_candidate.outputs.candidate_ref_contract_status }}
+          CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_candidate.outputs.candidate_ref_contract_reason_codes_json }}
+          IDENTITY_CONFIG_CONTRACT_STATUS: ${{ needs.identity_acceptance.outputs.identity_config_contract_status }}
+          IDENTITY_CONFIG_CONTRACT_REASON_CODES_JSON: ${{ needs.identity_acceptance.outputs.identity_config_contract_reason_codes_json }}
           CHECK_RESULTS_JSON: ${{ format('{{"load-candidate":"{0}","runtime-acceptance":"{1}","infra-acceptance":"{2}","identity-acceptance":"{3}"}}', needs.load_candidate.result, needs.runtime_acceptance.result, needs.infra_acceptance.result, needs.identity_acceptance.result) }}
         run: node scripts/pipeline/acceptance/acceptance-stage-gate.mjs
 
@@ -723,6 +822,10 @@ jobs:
           CANDIDATE_API_REF: ${{ needs.load_candidate.outputs.candidate_api_ref }}
           CANDIDATE_WEB_REF: ${{ needs.load_candidate.outputs.candidate_web_ref }}
           COMMIT_RUN_ID: ${{ needs.load_candidate.outputs.commit_run_id }}
+          CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_candidate.outputs.candidate_ref_contract_status }}
+          CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_candidate.outputs.candidate_ref_contract_reason_codes_json }}
+          IDENTITY_CONFIG_CONTRACT_STATUS: ${{ needs.identity_acceptance.outputs.identity_config_contract_status }}
+          IDENTITY_CONFIG_CONTRACT_REASON_CODES_JSON: ${{ needs.identity_acceptance.outputs.identity_config_contract_reason_codes_json }}
           RUNTIME_RESULT: ${{ needs.runtime_acceptance.result }}
           INFRA_RESULT: ${{ needs.infra_acceptance.result }}
           IDENTITY_RESULT: ${{ needs.identity_acceptance.result }}
@@ -730,6 +833,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ".artifacts/acceptance/$HEAD_SHA"
+          candidate_ref_reason_codes_json="${CANDIDATE_REF_CONTRACT_REASON_CODES_JSON:-[]}"
+          identity_config_reason_codes_json="${IDENTITY_CONFIG_CONTRACT_REASON_CODES_JSON:-[]}"
           jq -n \
             --arg generatedAt "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
             --arg headSha "$HEAD_SHA" \
@@ -741,6 +846,10 @@ jobs:
             --arg gateResult "$GATE_RESULT" \
             --arg apiRef "$CANDIDATE_API_REF" \
             --arg webRef "$CANDIDATE_WEB_REF" \
+            --arg candidateRefContractStatus "${CANDIDATE_REF_CONTRACT_STATUS:-unknown}" \
+            --arg candidateRefReasonCodesJson "$candidate_ref_reason_codes_json" \
+            --arg identityConfigContractStatus "${IDENTITY_CONFIG_CONTRACT_STATUS:-unknown}" \
+            --arg identityConfigReasonCodesJson "$identity_config_reason_codes_json" \
             --argjson runtimeChanged "$RUNTIME_CHANGED" \
             --argjson infraChanged "$INFRA_CHANGED" \
             --argjson identityChanged "$IDENTITY_CHANGED" \
@@ -766,6 +875,20 @@ jobs:
               candidate: {
                 apiRef: $apiRef,
                 webRef: $webRef
+              },
+              configContracts: {
+                candidateRefs: {
+                  status: $candidateRefContractStatus,
+                  reasonCodes: ($candidateRefReasonCodesJson | fromjson)
+                },
+                identity: {
+                  status: $identityConfigContractStatus,
+                  reasonCodes: ($identityConfigReasonCodesJson | fromjson)
+                }
+              },
+              candidateFidelity: {
+                runtimeCandidateRefsRequired: ($runtimeChanged or $infraChanged or $needsInfra),
+                status: (if ($runtimeChanged or $infraChanged or $needsInfra) then $candidateRefContractStatus else "not-required" end)
               },
               checks: {
                 runtimeAcceptance: $runtimeResult,

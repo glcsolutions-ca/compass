@@ -13,12 +13,12 @@
 
 ## `commit-stage-gate` Failure
 
-- Cause: required commit-stage check outcomes did not succeed or docs-drift was blocking.
+- Cause: required commit-stage check outcomes did not succeed, docs-drift was blocking, or commit-stage SLO was in `enforce` mode and exceeded target.
 - Fix: rerun failed required checks on latest commit and ensure docs-drift targets are updated when policy-critical paths changed.
 
 ## `acceptance-stage-gate` Failure
 
-- Cause: required acceptance check outcomes did not succeed for the candidate scope.
+- Cause: required acceptance check outcomes did not succeed for the candidate scope, candidate digest contract failed, or identity config contract failed.
 - Fix: inspect `.artifacts/acceptance/<sha>/result.json` and rerun acceptance after fix-forward.
 
 ## Stale Candidate in Production Stage

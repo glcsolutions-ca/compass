@@ -45,7 +45,11 @@ const policy = loadPipelinePolicyObject({
     ]
   },
   commitStage: {
-    requiredChecks: ["scope", "quick-feedback", "commit-stage-gate"]
+    requiredChecks: ["scope", "quick-feedback", "commit-stage-gate"],
+    slo: {
+      targetSeconds: 300,
+      mode: "observe"
+    }
   },
   acceptanceStage: {
     requiredFlowIds: ["compass-smoke"],

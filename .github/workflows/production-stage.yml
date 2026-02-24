@@ -179,7 +179,7 @@ jobs:
     needs:
       - load_accepted_candidate
       - stale_guard
-    if: ${{ github.event_name == 'workflow_dispatch' || needs.stale_guard.result == 'success' }}
+    if: ${{ always() && needs.load_accepted_candidate.result == 'success' && (github.event_name == 'workflow_dispatch' || needs.stale_guard.result == 'success') }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 75
@@ -236,6 +236,27 @@ jobs:
         if: ${{ env.IDENTITY_CHANGED == 'true' }}
         uses: hashicorp/setup-terraform@v3
 
+      - name: Validate identity config contract
+        if: ${{ env.IDENTITY_CHANGED == 'true' }}
+        id: identity_config
+        env:
+          HEAD_SHA: ${{ env.HEAD_SHA }}
+          IDENTITY_CONFIG_MODE: production
+          API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
+          ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
+          ARM_CLIENT_ID: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+          TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+          TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
+          TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
+          GH_ORGANIZATION: ${{ vars.GH_ORGANIZATION }}
+          GH_REPOSITORY_NAME: ${{ vars.GH_REPOSITORY_NAME }}
+          IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
+          REQUIRED_ENV_NAMES: ARM_CLIENT_ID,ARM_TENANT_ID,ARM_SUBSCRIPTION_ID,TFSTATE_RESOURCE_GROUP,TFSTATE_STORAGE_ACCOUNT,TFSTATE_CONTAINER,TFSTATE_KEY,GH_ORGANIZATION,GH_REPOSITORY_NAME,IDENTITY_OWNER_OBJECT_IDS_JSON
+        run: node scripts/pipeline/shared/validate-identity-config.mjs
+
       - name: Azure login for identity apply
         if: ${{ env.IDENTITY_CHANGED == 'true' }}
         uses: azure/login@v2
@@ -258,6 +279,7 @@ jobs:
           TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
           GH_ORGANIZATION: ${{ vars.GH_ORGANIZATION }}
           GH_REPOSITORY_NAME: ${{ vars.GH_REPOSITORY_NAME }}
+          API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
           ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
           IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
           GITHUB_ENVIRONMENT_NAME: production
@@ -283,7 +305,7 @@ jobs:
             -var "github_organization=${GH_ORGANIZATION}" \
             -var "github_repository=${GH_REPOSITORY_NAME}" \
             -var "github_environment_name=${GITHUB_ENVIRONMENT_NAME}" \
-            -var "api_identifier_uri=${ENTRA_AUDIENCE}" \
+            -var "api_identifier_uri=${{ steps.identity_config.outputs.api_identifier_uri }}" \
             -var "owners=${IDENTITY_OWNER_OBJECT_IDS_JSON}"
 
           mkdir -p ".artifacts/identity/$HEAD_SHA"

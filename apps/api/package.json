@@ -1,6 +1,7 @@
 {
   "name": "@compass/api",
   "version": "0.1.0",
+  "description": "Compass API service.",
   "private": true,
   "type": "module",
   "scripts": {

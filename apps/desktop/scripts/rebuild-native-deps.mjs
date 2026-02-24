@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-const allowBuildScripts =
-  "esbuild,sharp,electron,fs-xattr,macos-alias";
+const allowBuildScripts = "esbuild,sharp,electron,fs-xattr,macos-alias";
 
 const packages = ["electron"];
 if (process.platform === "darwin") {

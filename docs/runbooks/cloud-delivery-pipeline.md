@@ -33,8 +33,8 @@ H -- "Yes" --> I["Release complete (Release on Demand)"]
 
 ## Trigger Model
 
-- `commit-stage.yml`: `pull_request`, `merge_group` (heavy fast-feedback checks run only on `pull_request`; merge-group run emits required `commit-stage` context)
-- `merge-queue-gate.yml`: `pull_request`, `merge_group` (full exact-merge checks run only on `merge_group`)
+- `commit-stage.yml`: `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`) + `merge_group`
+- `merge-queue-gate.yml`: `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`) + `merge_group`
 - `cloud-delivery-pipeline.yml`: `push` to `main`
 - `cloud-delivery-replay.yml`: `workflow_dispatch` with `release_package_sha`
 
@@ -73,6 +73,8 @@ H -- "Yes" --> I["Release complete (Release on Demand)"]
 
 7. Production Verification
 
+- Verify `commit-stage` evidence for the release SHA.
+- Verify `merge-queue-gate` evidence for the release SHA.
 - Verify auth canary freshness.
 - Verify delegated probe freshness for target SHA.
 - Run API smoke and browser smoke.
@@ -83,7 +85,9 @@ H -- "Yes" --> I["Release complete (Release on Demand)"]
 
 ## Artifact Contracts
 
+- Commit stage evidence: `.artifacts/commit-stage/<sha>/evidence.json`
 - Merge queue evidence: `.artifacts/merge-queue-gate/<sha>/result.json`
+- Merge queue timing: `.artifacts/merge-queue-gate/<sha>/timing.json`
 - Release package manifest: `.artifacts/release-package/<sha>/manifest.json`
 - Acceptance result: `.artifacts/acceptance/<sha>/result.json`
 - Production result: `.artifacts/production/<sha>/result.json`
@@ -124,4 +128,4 @@ Use replay when you need to rerun delivery for an existing release package SHA w
 - Do not rebuild runtime images in production stage jobs.
 - Keep production mutation serialized (`production-mutation`).
 - Keep acceptance credentials read-only and separate from production credentials.
-- Keep branch protection checks explicit: `commit-stage` for PRs, `merge-queue-gate` for merge queue.
+- Keep branch protection checks explicit: `commit-stage` for PR quality and `merge-queue-gate` for exact merge safety.

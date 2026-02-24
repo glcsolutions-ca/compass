@@ -11,7 +11,9 @@ app
     port: config.port
   })
   .then(() => {
-    app.log.info(`Codex gateway listening on ${config.host}:${config.port}`);
+    app.log.info(
+      `Codex gateway listening on ${config.host}:${config.port} (startOnBoot=${config.startOnBoot}, codexHome=${config.codexHome})`
+    );
   })
   .catch((error) => {
     app.log.error(error, "Codex gateway failed to start");

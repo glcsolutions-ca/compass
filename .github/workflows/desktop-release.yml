@@ -20,6 +20,24 @@ on:
         required: false
         default: true
         type: boolean
+      signing_mode:
+        description: Installer signing policy (`signed`, `unsigned`, `unsigned-macos`, `unsigned-windows`)
+        required: false
+        default: signed
+        type: choice
+        options:
+          - signed
+          - unsigned
+          - unsigned-macos
+          - unsigned-windows
+      candidate_validation:
+        description: Candidate validation policy (`strict` requires successful deployment pipeline; `main-only` is for unsigned testing)
+        required: false
+        default: strict
+        type: choice
+        options:
+          - strict
+          - main-only
 
 permissions:
   actions: read
@@ -41,6 +59,8 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          CANDIDATE_VALIDATION: ${{ inputs.candidate_validation }}
+          SIGNING_MODE: ${{ inputs.signing_mode }}
         run: |
           set -euo pipefail
 
@@ -50,6 +70,8 @@ jobs:
           const token = process.env.GITHUB_TOKEN;
           const repository = process.env.GITHUB_REPOSITORY;
           const candidateSha = process.env.CANDIDATE_SHA;
+          const candidateValidation = process.env.CANDIDATE_VALIDATION || "strict";
+          const signingMode = process.env.SIGNING_MODE || "signed";
           const outputPath = process.env.GITHUB_OUTPUT;
           const apiVersion = "2022-11-28";
 
@@ -70,26 +92,58 @@ jobs:
             return response.json();
           }
 
+          function writeOutputs(runId) {
+            fs.appendFileSync(outputPath, `deployment_pipeline_run_id=${runId}\n`);
+            fs.appendFileSync(outputPath, `candidate_sha=${candidateSha}\n`);
+          }
+
           (async () => {
-            const data = await request(
-              `/repos/${repository}/actions/workflows/deployment-pipeline.yml/runs?status=success&per_page=100`
-            );
+            if (!["strict", "main-only"].includes(candidateValidation)) {
+              throw new Error(`Unsupported candidate_validation value: ${candidateValidation}`);
+            }
 
-            const run = (data.workflow_runs || []).find(
-              (entry) =>
-                entry.head_sha === candidateSha &&
-                entry.conclusion === "success" &&
-                entry.head_branch === "main"
-            );
+            if (candidateValidation === "main-only" && signingMode === "signed") {
+              throw new Error("candidate_validation=main-only is not allowed with signing_mode=signed");
+            }
 
-            if (!run) {
+            if (candidateValidation === "strict") {
+              const data = await request(
+                `/repos/${repository}/actions/workflows/deployment-pipeline.yml/runs?status=success&per_page=100`
+              );
+
+              const run = (data.workflow_runs || []).find(
+                (entry) =>
+                  entry.head_sha === candidateSha &&
+                  entry.conclusion === "success" &&
+                  entry.head_branch === "main"
+              );
+
+              if (!run) {
+                throw new Error(
+                  `No successful Deployment Pipeline run on main found for candidate ${candidateSha}`
+                );
+              }
+
+              writeOutputs(String(run.id));
+              return;
+            }
+
+            const comparison = await request(`/repos/${repository}/compare/${candidateSha}...main`);
+            const status = comparison.status;
+            if (status !== "behind" && status !== "identical") {
               throw new Error(
-                `No successful Deployment Pipeline run on main found for candidate ${candidateSha}`
+                `Candidate ${candidateSha} is not reachable from main (compare status: ${status})`
               );
             }
 
-            fs.appendFileSync(outputPath, `deployment_pipeline_run_id=${run.id}\n`);
-            fs.appendFileSync(outputPath, `candidate_sha=${candidateSha}\n`);
+            const commitStageRuns = await request(
+              `/repos/${repository}/actions/workflows/commit-stage.yml/runs?status=success&per_page=100`
+            );
+            const commitStageRun = (commitStageRuns.workflow_runs || []).find(
+              (entry) => entry.head_sha === candidateSha && entry.conclusion === "success"
+            );
+
+            writeOutputs(commitStageRun ? String(commitStageRun.id) : "main-only");
           })().catch((error) => {
             console.error(error instanceof Error ? error.message : String(error));
             process.exit(1);
@@ -141,6 +195,7 @@ jobs:
 
       - name: Decode signing assets
         id: signing_assets
+        if: ${{ inputs.signing_mode == 'signed' || inputs.signing_mode == 'unsigned-windows' }}
         env:
           CERT_P12_BASE64: ${{ secrets.MACOS_SIGNING_CERT_P12_BASE64 }}
           APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
@@ -165,6 +220,7 @@ jobs:
           echo "api_key_path=$api_key_path" >> "$GITHUB_OUTPUT"
 
       - name: Configure temporary keychain
+        if: ${{ inputs.signing_mode == 'signed' || inputs.signing_mode == 'unsigned-windows' }}
         env:
           CERT_PATH: ${{ steps.signing_assets.outputs.cert_path }}
           CERT_PASSWORD: ${{ secrets.MACOS_SIGNING_CERT_PASSWORD }}
@@ -184,6 +240,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain"
 
       - name: Build signed macOS DMG
+        if: ${{ inputs.signing_mode == 'signed' || inputs.signing_mode == 'unsigned-windows' }}
         env:
           COMPASS_DESKTOP_START_URL: ${{ inputs.web_base_url }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -192,7 +249,14 @@ jobs:
           APPLE_API_KEY_PATH: ${{ steps.signing_assets.outputs.api_key_path }}
         run: pnpm --filter @compass/desktop make:mac
 
+      - name: Build unsigned macOS DMG
+        if: ${{ inputs.signing_mode == 'unsigned' || inputs.signing_mode == 'unsigned-macos' }}
+        env:
+          COMPASS_DESKTOP_START_URL: ${{ inputs.web_base_url }}
+        run: pnpm --filter @compass/desktop make:mac
+
       - name: Verify macOS signing and notarization
+        if: ${{ inputs.signing_mode == 'signed' || inputs.signing_mode == 'unsigned-windows' }}
         run: |
           set -euo pipefail
 
@@ -207,6 +271,23 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app_path"
           spctl --assess --type execute --verbose=4 "$app_path"
           xcrun stapler validate "$app_path"
+
+      - name: Verify unsigned macOS package output
+        if: ${{ inputs.signing_mode == 'unsigned' || inputs.signing_mode == 'unsigned-macos' }}
+        run: |
+          set -euo pipefail
+
+          app_path="$(find apps/desktop/out -type d -name '*.app' | head -n 1)"
+          dmg_path="$(find apps/desktop/out/make -type f -name '*.dmg' | head -n 1)"
+
+          if [ -z "$app_path" ] || [ -z "$dmg_path" ]; then
+            echo "Missing macOS app or DMG output." >&2
+            exit 1
+          fi
+
+          echo "Unsigned test artifacts generated:"
+          echo "  app: $app_path"
+          echo "  dmg: $dmg_path"
 
       - name: Prepare macOS installer artifact
         id: collect
@@ -283,6 +364,7 @@ jobs:
           "msi_path=$artifactPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Azure login for signing
+        if: ${{ inputs.signing_mode == 'signed' || inputs.signing_mode == 'unsigned-macos' }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -290,6 +372,7 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Sign MSI with Azure Artifact Signing
+        if: ${{ inputs.signing_mode == 'signed' || inputs.signing_mode == 'unsigned-macos' }}
         uses: azure/artifact-signing-action@v1
         with:
           endpoint: ${{ vars.TRUSTED_SIGNING_ENDPOINT }}
@@ -301,11 +384,22 @@ jobs:
           timestamp-digest: SHA256
 
       - name: Verify Authenticode signature
+        if: ${{ inputs.signing_mode == 'signed' || inputs.signing_mode == 'unsigned-macos' }}
         shell: pwsh
         run: |
           $signature = Get-AuthenticodeSignature "${{ steps.collect.outputs.msi_path }}"
           if ($signature.Status -ne "Valid") {
             throw "Invalid Windows signature status: $($signature.Status)"
+          }
+
+      - name: Verify unsigned Windows package output
+        if: ${{ inputs.signing_mode == 'unsigned' || inputs.signing_mode == 'unsigned-windows' }}
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature "${{ steps.collect.outputs.msi_path }}"
+          Write-Host "Unsigned MSI signature status: $($signature.Status)"
+          if ($signature.Status -eq "Valid") {
+            throw "Expected unsigned MSI but signature status is Valid."
           }
 
       - name: Upload Windows installer artifact
@@ -321,6 +415,7 @@ jobs:
       - validate_candidate
       - build_macos
       - build_windows
+    if: ${{ needs.validate_candidate.result == 'success' && needs.build_macos.result == 'success' && needs.build_windows.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Download macOS installer artifact
@@ -337,7 +432,17 @@ jobs:
 
       - name: Generate checksums
         working-directory: .artifacts/desktop/${{ needs.validate_candidate.outputs.candidate_sha }}/installers
-        run: sha256sum *.dmg *.msi > SHA256SUMS.txt
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          files=( *.dmg *.msi )
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No installer artifacts found to checksum." >&2
+            exit 1
+          fi
+
+          sha256sum "${files[@]}" > SHA256SUMS.txt
 
       - name: Create release manifest
         run: |
@@ -400,25 +505,58 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag }}
           DRAFT: ${{ inputs.draft }}
           CANDIDATE_SHA: ${{ needs.validate_candidate.outputs.candidate_sha }}
+          SIGNING_MODE: ${{ inputs.signing_mode }}
         run: |
           set -euo pipefail
+          shopt -s nullglob
 
           installers_dir=".artifacts/desktop/$CANDIDATE_SHA/installers"
           cd "$installers_dir"
 
-          dmg_file="$(ls *.dmg)"
-          msi_file="$(ls *.msi)"
+          dmg_files=( *.dmg )
+          msi_files=( *.msi )
+          if [ "${#dmg_files[@]}" -eq 0 ]; then
+            echo "Expected at least one DMG in release installers directory." >&2
+            exit 1
+          fi
+          if [ "${#msi_files[@]}" -eq 0 ]; then
+            echo "Expected at least one MSI in release installers directory." >&2
+            exit 1
+          fi
+
+          dmg_file="${dmg_files[0]}"
+          msi_file="${msi_files[0]}"
           sums_file="SHA256SUMS.txt"
+          assets=( "$dmg_file" "$msi_file" "$sums_file" )
           notes="Desktop installers for candidate ${CANDIDATE_SHA}"
 
+          case "$SIGNING_MODE" in
+            signed)
+              notes="${notes}\n\nSigning mode: signed (macOS signed/notarized, Windows signed)."
+              ;;
+            unsigned)
+              notes="${notes}\n\nSigning mode: unsigned (macOS unsigned, Windows unsigned) for internal testing."
+              ;;
+            unsigned-macos)
+              notes="${notes}\n\nSigning mode: unsigned-macos (macOS unsigned, Windows signed) for internal testing."
+              ;;
+            unsigned-windows)
+              notes="${notes}\n\nSigning mode: unsigned-windows (macOS signed/notarized, Windows unsigned) for internal testing."
+              ;;
+            *)
+              echo "Unsupported signing mode: $SIGNING_MODE" >&2
+              exit 1
+              ;;
+          esac
+
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "$dmg_file" "$msi_file" "$sums_file" --clobber
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
             gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" --notes "$notes"
           else
             if [ "$DRAFT" = "true" ]; then
-              gh release create "$RELEASE_TAG" "$dmg_file" "$msi_file" "$sums_file" --title "$RELEASE_TAG" --notes "$notes" --draft
+              gh release create "$RELEASE_TAG" "${assets[@]}" --title "$RELEASE_TAG" --notes "$notes" --draft
             else
-              gh release create "$RELEASE_TAG" "$dmg_file" "$msi_file" "$sums_file" --title "$RELEASE_TAG" --notes "$notes"
+              gh release create "$RELEASE_TAG" "${assets[@]}" --title "$RELEASE_TAG" --notes "$notes"
             fi
           fi
 

@@ -18,6 +18,8 @@ Installers are built from a `main` candidate that already passed the deployment 
   - `release_tag`: release tag (for example `desktop-v0.1.0`)
   - `web_base_url`: HTTPS URL loaded by Electron renderer
   - `draft`: publish release as draft (`true`/`false`)
+  - `signing_mode`: `signed` (default), `unsigned`, `unsigned-macos`, or `unsigned-windows`
+  - `candidate_validation`: `strict` (default) or `main-only` (unsigned test mode only)
 
 ## Required GitHub Environment
 
@@ -48,6 +50,24 @@ Build jobs (`build-macos`, `build-windows`) run inside this environment.
   - `TRUSTED_SIGNING_ACCOUNT_NAME`
   - `TRUSTED_SIGNING_PROFILE_NAME`
 
+## Signing Policy Modes
+
+Use `signing_mode` to control signing behavior while always producing both installers.
+
+- `signed`: macOS signed/notarized + Windows signed.
+- `unsigned`: macOS unsigned + Windows unsigned.
+- `unsigned-macos`: macOS unsigned + Windows signed.
+- `unsigned-windows`: macOS signed/notarized + Windows unsigned.
+
+Unsigned modes are for internal testing only.
+
+## Candidate Validation Modes
+
+- `strict` (default): requires a successful `deployment-pipeline.yml` run on `main` for `candidate_sha`.
+- `main-only`: allows unsigned testing when strict evidence is unavailable; verifies only that `candidate_sha` is reachable from `main`.
+
+`main-only` is blocked when `signing_mode=signed`.
+
 ## PNPM Native Build Policy
 
 This repo restricts install-time build scripts by default (`.npmrc`).
@@ -62,9 +82,9 @@ Desktop packaging requires native modules used by Electron and DMG/MSI makers.
 
 1. Confirm deployment pipeline success for the `candidate_sha` on `main`.
 2. Start `Desktop Release` workflow with target inputs.
-3. Wait for both build jobs:
-   - `build-macos`: signs + notarizes app, emits renamed DMG.
-   - `build-windows`: builds MSI, signs via Azure Artifact Signing.
+3. Wait for build jobs:
+   - `build-macos`: emits renamed DMG (signed/notarized depending on `signing_mode`).
+   - `build-windows`: emits MSI (signed depending on `signing_mode`).
 4. Validate `publish-release` job:
    - GitHub Release is created/updated by `release_tag`.
    - Assets include one `.dmg`, one `.msi`, and `SHA256SUMS.txt`.

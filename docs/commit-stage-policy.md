@@ -60,6 +60,7 @@ Scope evaluation excludes files matching `scopeRules.docsOnly` before computing 
 
 - Blocking: docs-critical paths changed without matching docs target updates.
 - Advisory: control-plane blocking paths changed without docs target updates.
+- Infra auth runtime wiring changes (for example `OAUTH_TOKEN_SIGNING_SECRET` convergence) must include one of the configured docs-target updates.
 
 Result artifact path:
 

@@ -24,7 +24,7 @@ Testing philosophy lives in `tests/README.md`. This folder defines how that phil
 
 ## Enforcement layers
 
-### Layer 1: Testing Contract (fastest)
+### Layer 1: Testing Policy (fastest)
 
 What it enforces:
 
@@ -36,11 +36,11 @@ What it enforces:
 
 When it runs:
 
-- PR preflight, before dependency install
+- commit-stage quick feedback, before long-running acceptance checks
 
 Output:
 
-- `.artifacts/testing-contract/<testedSha>/result.json`
+- `.artifacts/testing-policy/<testedSha>/result.json`
 
 ### Layer 2: Runner guardrails (runtime)
 
@@ -123,7 +123,7 @@ Rules:
 
 ### Useful commands
 
-- `pnpm ci:testing-contract`
+- `pnpm commit:testing-policy`
 - `pnpm test`
 - `pnpm test:integration`
 
@@ -132,5 +132,5 @@ Rules:
 1. Update `tests/policy/test-policy.json`.
 2. Update `tests/policy/test-quarantine.json` when skip metadata changes.
 3. Update docs when behavior changes (`tests/README.md` and this file).
-4. Run `pnpm ci:testing-contract` and `pnpm test`.
-5. Keep `scripts/ci/test-policy.test.mjs`, `scripts/ci/testing-contract.test.mjs`, and `scripts/ci/eslint-policy.test.mjs` aligned with policy validation rules.
+4. Run `pnpm commit:testing-policy` and `pnpm test`.
+5. Keep `scripts/pipeline/commit/testing-policy.test.mjs`, `scripts/pipeline/commit/check-testing-policy.test.mjs`, and `scripts/pipeline/commit/eslint-policy.test.mjs` aligned with policy validation rules.

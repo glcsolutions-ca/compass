@@ -1,0 +1,600 @@
+name: Production Stage
+
+on:
+  workflow_run:
+    workflows:
+      - Acceptance Stage
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Candidate SHA to deploy
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  deployments: write
+
+jobs:
+  load_accepted_candidate:
+    name: load-accepted-candidate
+    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    outputs:
+      head_sha: ${{ steps.manifest.outputs.head_sha }}
+      kind: ${{ steps.manifest.outputs.kind }}
+      runtime_changed: ${{ steps.manifest.outputs.runtime_changed }}
+      infra_changed: ${{ steps.manifest.outputs.infra_changed }}
+      identity_changed: ${{ steps.manifest.outputs.identity_changed }}
+      docs_only_changed: ${{ steps.manifest.outputs.docs_only_changed }}
+      needs_infra: ${{ steps.manifest.outputs.needs_infra }}
+      needs_migrations: ${{ steps.manifest.outputs.needs_migrations }}
+      candidate_api_ref: ${{ steps.manifest.outputs.candidate_api_ref }}
+      candidate_web_ref: ${{ steps.manifest.outputs.candidate_web_ref }}
+      acceptance_run_id: ${{ steps.manifest.outputs.acceptance_run_id }}
+    steps:
+      - name: Resolve acceptance-stage run id for workflow_dispatch
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        id: resolve_run
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const token = process.env.GITHUB_TOKEN;
+          const repository = process.env.GITHUB_REPOSITORY;
+          const candidateSha = process.env.CANDIDATE_SHA;
+          const outputPath = process.env.GITHUB_OUTPUT;
+
+          async function request(pathname) {
+            const response = await fetch(`https://api.github.com${pathname}`, {
+              headers: {
+                Accept: 'application/vnd.github+json',
+                Authorization: `Bearer ${token}`,
+                'X-GitHub-Api-Version': '2022-11-28'
+              }
+            });
+
+            if (!response.ok) {
+              const body = await response.text();
+              throw new Error(`GitHub API request failed (${response.status}): ${pathname}\n${body}`);
+            }
+
+            return response.json();
+          }
+
+          (async () => {
+            const data = await request(`/repos/${repository}/actions/workflows/acceptance-stage.yml/runs?status=success&per_page=50`);
+            const run = (data.workflow_runs || []).find((entry) => entry.head_sha === candidateSha);
+            if (!run) {
+              throw new Error(`No successful Acceptance Stage run found for ${candidateSha}`);
+            }
+            fs.appendFileSync(outputPath, `run_id=${run.id}\n`);
+          })().catch((error) => {
+            console.error(error instanceof Error ? error.message : String(error));
+            process.exit(1);
+          });
+          NODE
+
+      - name: Download acceptance evidence artifact (workflow_run)
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: acceptance-evidence-${{ github.event.workflow_run.head_sha }}
+          path: .artifacts/acceptance/${{ github.event.workflow_run.head_sha }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Download acceptance evidence artifact (workflow_dispatch)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: acceptance-evidence-${{ inputs.candidate_sha }}
+          path: .artifacts/acceptance/${{ inputs.candidate_sha }}
+          run-id: ${{ steps.resolve_run.outputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Parse acceptance evidence
+        id: manifest
+        env:
+          WORKFLOW_EVENT_SHA: ${{ github.event.workflow_run.head_sha }}
+          DISPATCH_SHA: ${{ inputs.candidate_sha }}
+          WORKFLOW_EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          DISPATCH_RUN_ID: ${{ steps.resolve_run.outputs.run_id }}
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            sha="$DISPATCH_SHA"
+            run_id="$DISPATCH_RUN_ID"
+          else
+            sha="$WORKFLOW_EVENT_SHA"
+            run_id="$WORKFLOW_EVENT_RUN_ID"
+          fi
+
+          evidence_path=".artifacts/acceptance/$sha/evidence-manifest.json"
+          if [ ! -f "$evidence_path" ]; then
+            echo "Acceptance evidence manifest not found: $evidence_path" >&2
+            exit 1
+          fi
+
+          EVIDENCE_PATH="$evidence_path" RUN_ID="$run_id" node <<'NODE'
+          const fs = require('node:fs');
+
+          const evidencePath = process.env.EVIDENCE_PATH;
+          const runId = process.env.RUN_ID;
+          const outputPath = process.env.GITHUB_OUTPUT;
+
+          const evidence = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+          if (evidence.schemaVersion !== '1') {
+            throw new Error(`Unsupported acceptance evidence schemaVersion: ${evidence.schemaVersion}`);
+          }
+
+          if (evidence.checks?.acceptanceStageGate !== 'success') {
+            throw new Error(`Acceptance gate did not succeed for ${evidence.headSha}`);
+          }
+
+          const entries = {
+            head_sha: String(evidence.headSha || ''),
+            kind: String(evidence.kind || 'checks'),
+            runtime_changed: String(Boolean(evidence.scope?.runtime)),
+            infra_changed: String(Boolean(evidence.scope?.infra)),
+            identity_changed: String(Boolean(evidence.scope?.identity)),
+            docs_only_changed: String(Boolean(evidence.scope?.docsOnly)),
+            needs_infra: String(Boolean(evidence.needsInfra)),
+            needs_migrations: String(Boolean(evidence.needsMigrations)),
+            candidate_api_ref: String(evidence.candidate?.apiRef || ''),
+            candidate_web_ref: String(evidence.candidate?.webRef || ''),
+            acceptance_run_id: String(runId || '')
+          };
+
+          for (const [key, value] of Object.entries(entries)) {
+            fs.appendFileSync(outputPath, `${key}=${value}\n`);
+          }
+          NODE
+
+  stale_guard:
+    name: stale-guard
+    needs:
+      - load_accepted_candidate
+    if: ${{ github.event_name == 'workflow_run' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assert fresh candidate on main
+        env:
+          HEAD_SHA: ${{ needs.load_accepted_candidate.outputs.head_sha }}
+        run: node scripts/pipeline/production/assert-fresh-candidate.mjs
+
+  production_mutate:
+    name: production-mutate
+    needs:
+      - load_accepted_candidate
+      - stale_guard
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.stale_guard.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 75
+    concurrency:
+      group: production-mutation
+      cancel-in-progress: false
+    outputs:
+      api_prod_url: ${{ steps.current_state.outputs.api_prod_url }}
+      web_prod_url: ${{ steps.current_state.outputs.web_prod_url }}
+      deployment_id: ${{ steps.record_release.outputs.deployment_id }}
+    env:
+      HEAD_SHA: ${{ needs.load_accepted_candidate.outputs.head_sha }}
+      KIND: ${{ needs.load_accepted_candidate.outputs.kind }}
+      RUNTIME_CHANGED: ${{ needs.load_accepted_candidate.outputs.runtime_changed }}
+      INFRA_CHANGED: ${{ needs.load_accepted_candidate.outputs.infra_changed }}
+      IDENTITY_CHANGED: ${{ needs.load_accepted_candidate.outputs.identity_changed }}
+      NEEDS_INFRA: ${{ needs.load_accepted_candidate.outputs.needs_infra }}
+      NEEDS_MIGRATIONS: ${{ needs.load_accepted_candidate.outputs.needs_migrations }}
+      CANDIDATE_API_REF: ${{ needs.load_accepted_candidate.outputs.candidate_api_ref }}
+      CANDIDATE_WEB_REF: ${{ needs.load_accepted_candidate.outputs.candidate_web_ref }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_VNET_NAME: ${{ vars.AZURE_VNET_NAME }}
+      AZURE_ACA_SUBNET_NAME: ${{ vars.AZURE_ACA_SUBNET_NAME }}
+      AZURE_POSTGRES_SUBNET_NAME: ${{ vars.AZURE_POSTGRES_SUBNET_NAME }}
+      AZURE_PRIVATE_DNS_ZONE_NAME: ${{ vars.AZURE_PRIVATE_DNS_ZONE_NAME }}
+      ACA_ENVIRONMENT_NAME: ${{ vars.ACA_ENVIRONMENT_NAME }}
+      AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
+      ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
+      ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+      ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+      ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACR_SKU: ${{ vars.ACR_SKU }}
+      POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
+      POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
+      POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
+      POSTGRES_VERSION: ${{ vars.POSTGRES_VERSION }}
+      POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
+      POSTGRES_SKU_TIER: ${{ vars.POSTGRES_SKU_TIER }}
+      POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
+      ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
+      ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
+      ACA_API_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_API_MANAGED_CERTIFICATE_NAME }}
+      ACA_WEB_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_WEB_MANAGED_CERTIFICATE_NAME }}
+      ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
+      POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+      ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        if: ${{ env.IDENTITY_CHANGED == 'true' }}
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Azure login for identity apply
+        if: ${{ env.IDENTITY_CHANGED == 'true' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Apply identity infrastructure
+        if: ${{ env.IDENTITY_CHANGED == 'true' }}
+        env:
+          ARM_USE_OIDC: "true"
+          ARM_USE_AZUREAD: "true"
+          ARM_CLIENT_ID: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+          TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+          TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
+          TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
+          GH_ORGANIZATION: ${{ vars.GH_ORGANIZATION }}
+          GH_REPOSITORY_NAME: ${{ vars.GH_REPOSITORY_NAME }}
+          ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
+          IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
+          GITHUB_ENVIRONMENT_NAME: production
+        run: |
+          set -euo pipefail
+
+          terraform -chdir=infra/identity init \
+            -input=false \
+            -backend-config="resource_group_name=${TFSTATE_RESOURCE_GROUP}" \
+            -backend-config="storage_account_name=${TFSTATE_STORAGE_ACCOUNT}" \
+            -backend-config="container_name=${TFSTATE_CONTAINER}" \
+            -backend-config="key=${TFSTATE_KEY}" \
+            -backend-config="use_oidc=true" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="tenant_id=${ARM_TENANT_ID}" \
+            -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}" \
+            -backend-config="client_id=${ARM_CLIENT_ID}"
+
+          terraform -chdir=infra/identity apply \
+            -input=false \
+            -auto-approve \
+            -var-file=env/prod.tfvars \
+            -var "github_organization=${GH_ORGANIZATION}" \
+            -var "github_repository=${GH_REPOSITORY_NAME}" \
+            -var "github_environment_name=${GITHUB_ENVIRONMENT_NAME}" \
+            -var "api_identifier_uri=${ENTRA_AUDIENCE}" \
+            -var "owners=${IDENTITY_OWNER_OBJECT_IDS_JSON}"
+
+          mkdir -p ".artifacts/identity/$HEAD_SHA"
+          terraform -chdir=infra/identity output -json > ".artifacts/identity/$HEAD_SHA/outputs.json"
+
+      - name: Azure login for infra/runtime
+        if: ${{ env.INFRA_CHANGED == 'true' || env.RUNTIME_CHANGED == 'true' || env.NEEDS_INFRA == 'true' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate deployment candidate refs
+        if: ${{ env.INFRA_CHANGED == 'true' || env.RUNTIME_CHANGED == 'true' || env.NEEDS_INFRA == 'true' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CANDIDATE_API_REF:-}" ] || [ -z "${CANDIDATE_WEB_REF:-}" ]; then
+            echo "Candidate refs are required for infra/runtime production stage" >&2
+            exit 1
+          fi
+
+          for image in "$CANDIDATE_API_REF" "$CANDIDATE_WEB_REF"; do
+            if [[ "$image" != "${ACR_REGISTRY}/"*"@sha256:"* ]]; then
+              echo "Candidate ref must be an ACR digest ref: $image" >&2
+              exit 1
+            fi
+          done
+
+      - name: Apply infra (when needed)
+        if: ${{ env.INFRA_CHANGED == 'true' || env.NEEDS_INFRA == 'true' }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p ".artifacts/infra/$HEAD_SHA"
+          node scripts/pipeline/production/assert-managed-certificate-contract.mjs
+
+          custom_domain_validation_method="$(echo "${ACA_CUSTOM_DOMAIN_VALIDATION_METHOD:-CNAME}" | tr '[:lower:]' '[:upper:]')"
+
+          jq -n \
+            --arg location "$AZURE_LOCATION" \
+            --arg vnetName "$AZURE_VNET_NAME" \
+            --arg acaSubnetName "$AZURE_ACA_SUBNET_NAME" \
+            --arg postgresSubnetName "$AZURE_POSTGRES_SUBNET_NAME" \
+            --arg privateDnsZoneName "$AZURE_PRIVATE_DNS_ZONE_NAME" \
+            --arg environmentName "$ACA_ENVIRONMENT_NAME" \
+            --arg logAnalyticsWorkspaceName "$AZURE_LOG_ANALYTICS_WORKSPACE_NAME" \
+            --arg apiAppName "$ACA_API_APP_NAME" \
+            --arg webAppName "$ACA_WEB_APP_NAME" \
+            --arg apiCustomDomain "${ACA_API_CUSTOM_DOMAIN:-}" \
+            --arg webCustomDomain "${ACA_WEB_CUSTOM_DOMAIN:-}" \
+            --arg apiManagedCertificateName "${ACA_API_MANAGED_CERTIFICATE_NAME:-}" \
+            --arg webManagedCertificateName "${ACA_WEB_MANAGED_CERTIFICATE_NAME:-}" \
+            --arg customDomainValidationMethod "$custom_domain_validation_method" \
+            --arg migrationJobName "$ACA_MIGRATE_JOB_NAME" \
+            --arg acrPullIdentityName "$ACR_PULL_IDENTITY_NAME" \
+            --arg acrName "$ACR_NAME" \
+            --arg acrSku "$ACR_SKU" \
+            --arg postgresServerName "$POSTGRES_SERVER_NAME" \
+            --arg postgresDatabaseName "$POSTGRES_DATABASE_NAME" \
+            --arg postgresAdminUsername "$POSTGRES_ADMIN_USERNAME" \
+            --arg postgresVersion "$POSTGRES_VERSION" \
+            --arg postgresSkuName "$POSTGRES_SKU_NAME" \
+            --arg postgresSkuTier "$POSTGRES_SKU_TIER" \
+            --arg postgresStorageMb "$POSTGRES_STORAGE_MB" \
+            --arg postgresAdminPassword "$POSTGRES_ADMIN_PASSWORD" \
+            --arg apiImage "$CANDIDATE_API_REF" \
+            --arg webImage "$CANDIDATE_WEB_REF" \
+            '{
+              "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+              "contentVersion": "1.0.0.0",
+              "parameters": {
+                "location": {"value": $location},
+                "vnetName": {"value": $vnetName},
+                "acaSubnetName": {"value": $acaSubnetName},
+                "postgresSubnetName": {"value": $postgresSubnetName},
+                "privateDnsZoneName": {"value": $privateDnsZoneName},
+                "environmentName": {"value": $environmentName},
+                "logAnalyticsWorkspaceName": {"value": $logAnalyticsWorkspaceName},
+                "apiAppName": {"value": $apiAppName},
+                "webAppName": {"value": $webAppName},
+                "apiCustomDomain": {"value": $apiCustomDomain},
+                "webCustomDomain": {"value": $webCustomDomain},
+                "apiManagedCertificateName": {"value": $apiManagedCertificateName},
+                "webManagedCertificateName": {"value": $webManagedCertificateName},
+                "customDomainValidationMethod": {"value": $customDomainValidationMethod},
+                "migrationJobName": {"value": $migrationJobName},
+                "acrPullIdentityName": {"value": $acrPullIdentityName},
+                "acrName": {"value": $acrName},
+                "acrSku": {"value": $acrSku},
+                "postgresServerName": {"value": $postgresServerName},
+                "postgresDatabaseName": {"value": $postgresDatabaseName},
+                "postgresAdminUsername": {"value": $postgresAdminUsername},
+                "postgresVersion": {"value": $postgresVersion},
+                "postgresSkuName": {"value": $postgresSkuName},
+                "postgresSkuTier": {"value": $postgresSkuTier},
+                "postgresStorageMb": {"value": ($postgresStorageMb | tonumber)},
+                "postgresAdminPassword": {"value": $postgresAdminPassword},
+                "apiImage": {"value": $apiImage},
+                "webImage": {"value": $webImage}
+              }
+            }' > ".artifacts/infra/$HEAD_SHA/runtime.parameters.json"
+
+          export ARM_TEMPLATE_FILE="infra/azure/main.bicep"
+          export ARM_PARAMETERS_FILE=".artifacts/infra/$HEAD_SHA/runtime.parameters.json"
+          export ARM_ARTIFACT_DIR=".artifacts/infra/$HEAD_SHA"
+
+          node scripts/pipeline/production/apply-infra.mjs
+
+      - name: Update migration job image
+        if: ${{ env.RUNTIME_CHANGED == 'true' }}
+        run: |
+          az containerapp job update \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_MIGRATE_JOB_NAME" \
+            --image "$CANDIDATE_API_REF" \
+            --output none
+
+      - name: Run migration job
+        if: ${{ env.RUNTIME_CHANGED == 'true' && env.NEEDS_MIGRATIONS == 'true' }}
+        id: migration_start
+        env:
+          AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
+          ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
+        run: node scripts/pipeline/production/start-migration-job.mjs
+
+      - name: Wait for migration completion
+        if: ${{ env.RUNTIME_CHANGED == 'true' && env.NEEDS_MIGRATIONS == 'true' }}
+        env:
+          AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
+          ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
+          MIGRATION_EXECUTION_NAME: ${{ steps.migration_start.outputs.migration_execution_name }}
+          MIGRATION_TIMEOUT_SECONDS: 900
+        run: node scripts/pipeline/production/wait-migration-job.mjs
+
+      - name: Deploy API
+        if: ${{ env.RUNTIME_CHANGED == 'true' }}
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          imageToDeploy: ${{ env.CANDIDATE_API_REF }}
+          containerAppName: ${{ env.ACA_API_APP_NAME }}
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          disableTelemetry: true
+
+      - name: Deploy Web
+        if: ${{ env.RUNTIME_CHANGED == 'true' }}
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          imageToDeploy: ${{ env.CANDIDATE_WEB_REF }}
+          containerAppName: ${{ env.ACA_WEB_APP_NAME }}
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          disableTelemetry: true
+
+      - name: Resolve current production URLs
+        id: current_state
+        if: ${{ env.RUNTIME_CHANGED == 'true' || env.INFRA_CHANGED == 'true' || env.NEEDS_INFRA == 'true' }}
+        run: |
+          set -euo pipefail
+
+          api_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_API_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
+          web_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_WEB_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
+
+          echo "api_prod_url=$api_prod_url" >> "$GITHUB_OUTPUT"
+          echo "web_prod_url=$web_prod_url" >> "$GITHUB_OUTPUT"
+
+      - name: Record successful production deployment
+        id: record_release
+        if: ${{ success() }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TARGET_ENVIRONMENT: production
+          HEAD_SHA: ${{ env.HEAD_SHA }}
+          DEPLOY_LOG_URL: ${{ format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          DEPLOY_ENVIRONMENT_URL: ${{ steps.current_state.outputs.web_prod_url }}
+          CANDIDATE_API_REF: ${{ env.CANDIDATE_API_REF }}
+          CANDIDATE_WEB_REF: ${{ env.CANDIDATE_WEB_REF }}
+          KIND: ${{ env.KIND }}
+        run: node scripts/pipeline/production/record-release.mjs
+
+      - name: Write deployment record artifact
+        if: ${{ always() }}
+        run: |
+          mkdir -p ".artifacts/production/$HEAD_SHA"
+          cat > ".artifacts/production/$HEAD_SHA/deployment-record.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "kind": "$KIND",
+            "deploymentId": "${{ steps.record_release.outputs.deployment_id || '' }}",
+            "candidate": {
+              "api": "$CANDIDATE_API_REF",
+              "web": "$CANDIDATE_WEB_REF"
+            }
+          }
+          JSON
+
+      - name: Upload mutation artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-mutate-${{ env.HEAD_SHA }}
+          path: |
+            .artifacts/production/${{ env.HEAD_SHA }}/deployment-record.json
+            .artifacts/deploy/${{ env.HEAD_SHA }}
+            .artifacts/infra/${{ env.HEAD_SHA }}
+            .artifacts/identity/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
+
+  post_deploy_verify:
+    name: post-deploy-verify
+    needs:
+      - load_accepted_candidate
+      - production_mutate
+    if: ${{ needs.load_accepted_candidate.outputs.runtime_changed == 'true' || needs.load_accepted_candidate.outputs.infra_changed == 'true' || needs.load_accepted_candidate.outputs.needs_infra == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HEAD_SHA: ${{ needs.load_accepted_candidate.outputs.head_sha }}
+      TARGET_API_BASE_URL: ${{ needs.production_mutate.outputs.api_prod_url }}
+      WEB_BASE_URL: ${{ needs.production_mutate.outputs.web_prod_url }}
+      EXPECTED_ENTRYPOINT: /
+      REQUIRED_FLOW_IDS_JSON: '["compass-smoke"]'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: API smoke verification
+        run: node scripts/pipeline/production/verify-api-smoke.mjs
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser smoke verification
+        env:
+          PR_NUMBER: 0
+        run: pnpm acceptance:browser-evidence
+
+      - name: Upload post-deploy artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-deploy-verify-${{ env.HEAD_SHA }}
+          path: |
+            .artifacts/deploy/${{ env.HEAD_SHA }}/api-smoke.json
+            .artifacts/browser-evidence/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
+
+  production_stage_result:
+    name: production-stage-result
+    needs:
+      - load_accepted_candidate
+      - stale_guard
+      - production_mutate
+      - post_deploy_verify
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write production stage result
+        env:
+          HEAD_SHA: ${{ needs.load_accepted_candidate.outputs.head_sha || inputs.candidate_sha }}
+          KIND: ${{ needs.load_accepted_candidate.outputs.kind }}
+          RUNTIME_CHANGED: ${{ needs.load_accepted_candidate.outputs.runtime_changed }}
+          INFRA_CHANGED: ${{ needs.load_accepted_candidate.outputs.infra_changed }}
+          IDENTITY_CHANGED: ${{ needs.load_accepted_candidate.outputs.identity_changed }}
+          MUTATE_RESULT: ${{ needs.production_mutate.result }}
+          VERIFY_RESULT: ${{ needs.post_deploy_verify.result }}
+          STALE_RESULT: ${{ needs.stale_guard.result }}
+          DEPLOYMENT_ID: ${{ needs.production_mutate.outputs.deployment_id }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p ".artifacts/production/$HEAD_SHA"
+          cat > ".artifacts/production/$HEAD_SHA/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "kind": "$KIND",
+            "scope": {
+              "runtime": $RUNTIME_CHANGED,
+              "infra": $INFRA_CHANGED,
+              "identity": $IDENTITY_CHANGED
+            },
+            "staleGuardResult": "${STALE_RESULT:-skipped}",
+            "productionMutateResult": "${MUTATE_RESULT:-skipped}",
+            "postDeployVerifyResult": "${VERIFY_RESULT:-skipped}",
+            "deploymentId": "${DEPLOYMENT_ID:-}"
+          }
+          JSON
+
+      - name: Upload production result artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-stage-${{ needs.load_accepted_candidate.outputs.head_sha || inputs.candidate_sha }}
+          path: .artifacts/production/${{ needs.load_accepted_candidate.outputs.head_sha || inputs.candidate_sha }}
+          if-no-files-found: warn

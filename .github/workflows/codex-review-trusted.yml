@@ -34,7 +34,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           PR_NUMBER: ${{ inputs.pr_number }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: node scripts/ci/codex-review-trusted.mjs
+        run: node scripts/pipeline/shared/codex-review-trusted.mjs
 
       - name: Upload trusted review artifact
         if: ${{ always() }}

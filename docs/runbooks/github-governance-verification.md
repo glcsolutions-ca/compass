@@ -21,10 +21,24 @@ Expected:
 
 - `enforce_admins.enabled=true`
 - `required_status_checks.strict=true`
-- required check context includes only `risk-policy-gate`
+- required check context includes only `commit-stage-gate`
 - `required_pull_request_reviews.required_approving_review_count=0`
 - `allow_force_pushes.enabled=false`
 - `allow_deletions.enabled=false`
+
+If the required check context differs, apply the baseline:
+
+```bash
+cat > /tmp/required-status-checks.json <<'JSON'
+{
+  "strict": true,
+  "contexts": ["commit-stage-gate"]
+}
+JSON
+
+gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/required_status_checks \
+  --input /tmp/required-status-checks.json
+```
 
 ## 2) Merge Method Policy
 

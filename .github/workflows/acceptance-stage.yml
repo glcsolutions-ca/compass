@@ -1,0 +1,784 @@
+name: Acceptance Stage
+
+on:
+  workflow_run:
+    workflows:
+      - Commit Stage
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Candidate SHA to replay acceptance for
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  EXPECTED_ENTRYPOINT: /
+
+jobs:
+  load_candidate:
+    name: load-candidate
+    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    outputs:
+      head_sha: ${{ steps.manifest.outputs.head_sha }}
+      kind: ${{ steps.manifest.outputs.kind }}
+      runtime_changed: ${{ steps.manifest.outputs.runtime_changed }}
+      infra_changed: ${{ steps.manifest.outputs.infra_changed }}
+      identity_changed: ${{ steps.manifest.outputs.identity_changed }}
+      docs_only_changed: ${{ steps.manifest.outputs.docs_only_changed }}
+      needs_infra: ${{ steps.manifest.outputs.needs_infra }}
+      needs_migrations: ${{ steps.manifest.outputs.needs_migrations }}
+      candidate_api_ref: ${{ steps.manifest.outputs.candidate_api_ref }}
+      candidate_web_ref: ${{ steps.manifest.outputs.candidate_web_ref }}
+      commit_run_id: ${{ steps.manifest.outputs.commit_run_id }}
+    steps:
+      - name: Resolve commit-stage run id for workflow_dispatch
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        id: resolve_run
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const token = process.env.GITHUB_TOKEN;
+          const repository = process.env.GITHUB_REPOSITORY;
+          const candidateSha = process.env.CANDIDATE_SHA;
+          const outputPath = process.env.GITHUB_OUTPUT;
+
+          async function request(pathname) {
+            const response = await fetch(`https://api.github.com${pathname}`, {
+              headers: {
+                Accept: 'application/vnd.github+json',
+                Authorization: `Bearer ${token}`,
+                'X-GitHub-Api-Version': '2022-11-28'
+              }
+            });
+
+            if (!response.ok) {
+              const body = await response.text();
+              throw new Error(`GitHub API request failed (${response.status}): ${pathname}\n${body}`);
+            }
+
+            return response.json();
+          }
+
+          (async () => {
+            const data = await request(`/repos/${repository}/actions/workflows/commit-stage.yml/runs?event=push&status=success&per_page=50`);
+            const run = (data.workflow_runs || []).find((entry) => entry.head_sha === candidateSha);
+            if (!run) {
+              throw new Error(`No successful Commit Stage run found for ${candidateSha}`);
+            }
+            fs.appendFileSync(outputPath, `run_id=${run.id}\n`);
+          })().catch((error) => {
+            console.error(error instanceof Error ? error.message : String(error));
+            process.exit(1);
+          });
+          NODE
+
+      - name: Download candidate artifact (workflow_run)
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: candidate-${{ github.event.workflow_run.head_sha }}
+          path: .artifacts/candidate/${{ github.event.workflow_run.head_sha }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Download candidate artifact (workflow_dispatch)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: candidate-${{ inputs.candidate_sha }}
+          path: .artifacts/candidate/${{ inputs.candidate_sha }}
+          run-id: ${{ steps.resolve_run.outputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Parse candidate manifest
+        id: manifest
+        env:
+          WORKFLOW_EVENT_SHA: ${{ github.event.workflow_run.head_sha }}
+          DISPATCH_SHA: ${{ inputs.candidate_sha }}
+          WORKFLOW_EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          DISPATCH_RUN_ID: ${{ steps.resolve_run.outputs.run_id }}
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            sha="$DISPATCH_SHA"
+            run_id="$DISPATCH_RUN_ID"
+          else
+            sha="$WORKFLOW_EVENT_SHA"
+            run_id="$WORKFLOW_EVENT_RUN_ID"
+          fi
+
+          manifest_path=".artifacts/candidate/$sha/manifest.json"
+          if [ ! -f "$manifest_path" ]; then
+            echo "Candidate manifest not found: $manifest_path" >&2
+            exit 1
+          fi
+
+          mkdir -p ".artifacts/acceptance/$sha"
+          cp "$manifest_path" ".artifacts/acceptance/$sha/candidate-manifest.json"
+
+          MANIFEST_PATH="$manifest_path" RUN_ID="$run_id" node <<'NODE'
+          const fs = require('node:fs');
+
+          const manifestPath = process.env.MANIFEST_PATH;
+          const runId = process.env.RUN_ID;
+          const outputPath = process.env.GITHUB_OUTPUT;
+
+          const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+
+          if (manifest.schemaVersion !== '1') {
+            throw new Error(`Unsupported candidate manifest schemaVersion: ${manifest.schemaVersion}`);
+          }
+
+          const entries = {
+            head_sha: String(manifest.headSha || ''),
+            kind: String(manifest.kind || 'checks'),
+            runtime_changed: String(Boolean(manifest.scope?.runtime)),
+            infra_changed: String(Boolean(manifest.scope?.infra)),
+            identity_changed: String(Boolean(manifest.scope?.identity)),
+            docs_only_changed: String(Boolean(manifest.scope?.docsOnly)),
+            needs_infra: String(Boolean(manifest.needsInfra)),
+            needs_migrations: String(Boolean(manifest.needsMigrations)),
+            candidate_api_ref: String(manifest.candidate?.apiRef || ''),
+            candidate_web_ref: String(manifest.candidate?.webRef || ''),
+            commit_run_id: String(runId || '')
+          };
+
+          for (const [key, value] of Object.entries(entries)) {
+            fs.appendFileSync(outputPath, `${key}=${value}\n`);
+          }
+          NODE
+
+      - name: Upload candidate manifest copy
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-candidate-${{ steps.manifest.outputs.head_sha }}
+          path: .artifacts/acceptance/${{ steps.manifest.outputs.head_sha }}/candidate-manifest.json
+          if-no-files-found: error
+
+  runtime_acceptance:
+    name: runtime-acceptance
+    needs:
+      - load_candidate
+    if: ${{ needs.load_candidate.outputs.runtime_changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    env:
+      HEAD_SHA: ${{ needs.load_candidate.outputs.head_sha }}
+      TESTED_SHA: ${{ needs.load_candidate.outputs.head_sha }}
+      DATABASE_URL: postgres://compass:compass@127.0.0.1:5432/compass
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start Postgres
+        run: |
+          docker run -d \
+            --name acceptance-postgres \
+            -e POSTGRES_DB=compass \
+            -e POSTGRES_USER=compass \
+            -e POSTGRES_PASSWORD=compass \
+            -p 5432:5432 \
+            postgres:16-alpine
+
+      - name: Run full test suite
+        run: |
+          pnpm db:postgres:wait
+          pnpm db:migrate:up
+          pnpm db:seed
+          pnpm test:full
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build contracts package
+        run: pnpm --filter @compass/contracts build
+
+      - name: Build API
+        run: pnpm --filter @compass/api build
+
+      - name: Build Web
+        run: pnpm --filter @compass/web build
+
+      - name: Prepare Web standalone assets
+        run: |
+          rm -rf apps/web/.next/standalone/apps/web/.next/static
+          rm -rf apps/web/.next/standalone/apps/web/public
+          mkdir -p apps/web/.next/standalone/apps/web/.next
+          mkdir -p apps/web/.next/standalone/apps/web/public
+          cp -R apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
+          if [ -d apps/web/public ]; then
+            cp -R apps/web/public/. apps/web/.next/standalone/apps/web/public/
+          fi
+
+      - name: Start API server
+        run: |
+          pnpm --filter @compass/api start > /tmp/compass-api.log 2>&1 &
+          echo $! > /tmp/compass-api.pid
+
+      - name: Wait for API readiness
+        run: |
+          for _ in $(seq 1 60); do
+            if curl --silent --fail http://127.0.0.1:3001/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/compass-api.log || true
+          exit 1
+
+      - name: Start Web server
+        env:
+          API_BASE_URL: http://127.0.0.1:3001
+        run: |
+          pnpm --filter @compass/web start:standalone > /tmp/compass-web.log 2>&1 &
+          echo $! > /tmp/compass-web.pid
+
+      - name: Wait for Web readiness
+        run: |
+          for _ in $(seq 1 90); do
+            if curl --silent --fail http://127.0.0.1:3000 > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/compass-web.log || true
+          exit 1
+
+      - name: Browser evidence
+        env:
+          PR_NUMBER: 0
+          WEB_BASE_URL: http://127.0.0.1:3000
+          EXPECTED_ENTRYPOINT: ${{ env.EXPECTED_ENTRYPOINT }}
+          REQUIRED_FLOW_IDS_JSON: '["compass-smoke"]'
+        run: pnpm acceptance:browser-evidence
+
+      - name: Harness smoke
+        run: pnpm acceptance:harness-smoke
+
+      - name: Migration image smoke
+        run: |
+          set -euo pipefail
+          artifact_dir=".artifacts/migration-image-smoke/$HEAD_SHA"
+          mkdir -p "$artifact_dir"
+          log_path="$artifact_dir/run.log"
+          network_name="acceptance-migration-image-smoke-net"
+          postgres_name="acceptance-migration-image-smoke-postgres"
+
+          {
+            docker network create "$network_name"
+
+            docker run -d \
+              --name "$postgres_name" \
+              --network "$network_name" \
+              -e POSTGRES_DB=compass \
+              -e POSTGRES_USER=compass \
+              -e POSTGRES_PASSWORD=compass \
+              postgres:16-alpine
+
+            for i in $(seq 1 90); do
+              if docker exec "$postgres_name" pg_isready -U compass -d compass >/dev/null 2>&1; then
+                break
+              fi
+
+              if [ "$i" -eq 90 ]; then
+                echo "Timed out waiting for postgres in migration-image-smoke job" >&2
+                exit 1
+              fi
+
+              sleep 1
+            done
+
+            docker build -f apps/api/Dockerfile -t "compass-api-migration-smoke:$HEAD_SHA" .
+
+            docker run --rm \
+              --network "$network_name" \
+              -e DATABASE_URL="postgres://compass:compass@$postgres_name:5432/compass" \
+              "compass-api-migration-smoke:$HEAD_SHA" \
+              node db/scripts/migrate.mjs up
+          } 2>&1 | tee "$log_path"
+
+          cat > "$artifact_dir/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "headSha": "$HEAD_SHA",
+            "status": "pass",
+            "reasonCode": "",
+            "logPath": "$artifact_dir/run.log"
+          }
+          JSON
+
+      - name: Stop migration-image-smoke services
+        if: ${{ always() }}
+        run: |
+          docker rm -f acceptance-migration-image-smoke-postgres >/dev/null 2>&1 || true
+          docker network rm acceptance-migration-image-smoke-net >/dev/null 2>&1 || true
+
+      - name: Upload runtime acceptance artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-acceptance-${{ env.HEAD_SHA }}
+          path: |
+            .artifacts/browser-evidence/${{ env.HEAD_SHA }}
+            .artifacts/harness-smoke/${{ env.HEAD_SHA }}/result.json
+            .artifacts/migration-image-smoke/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
+
+      - name: Stop background servers
+        if: ${{ always() }}
+        run: |
+          if [ -f /tmp/compass-web.pid ]; then
+            kill "$(cat /tmp/compass-web.pid)" || true
+          fi
+          if [ -f /tmp/compass-api.pid ]; then
+            kill "$(cat /tmp/compass-api.pid)" || true
+          fi
+          docker rm -f acceptance-postgres >/dev/null 2>&1 || true
+
+  infra_acceptance:
+    name: infra-acceptance
+    needs:
+      - load_candidate
+    if: ${{ needs.load_candidate.outputs.infra_changed == 'true' || needs.load_candidate.outputs.needs_infra == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      HEAD_SHA: ${{ needs.load_candidate.outputs.head_sha }}
+      API_IMAGE: ${{ needs.load_candidate.outputs.candidate_api_ref }}
+      WEB_IMAGE: ${{ needs.load_candidate.outputs.candidate_web_ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate required environment configuration
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+          AZURE_VNET_NAME: ${{ vars.AZURE_VNET_NAME }}
+          AZURE_ACA_SUBNET_NAME: ${{ vars.AZURE_ACA_SUBNET_NAME }}
+          AZURE_POSTGRES_SUBNET_NAME: ${{ vars.AZURE_POSTGRES_SUBNET_NAME }}
+          AZURE_PRIVATE_DNS_ZONE_NAME: ${{ vars.AZURE_PRIVATE_DNS_ZONE_NAME }}
+          ACA_ENVIRONMENT_NAME: ${{ vars.ACA_ENVIRONMENT_NAME }}
+          AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
+          ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
+          ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+          ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+          ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          ACR_SKU: ${{ vars.ACR_SKU }}
+          POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
+          POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
+          POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
+          POSTGRES_VERSION: ${{ vars.POSTGRES_VERSION }}
+          POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
+          POSTGRES_SKU_TIER: ${{ vars.POSTGRES_SKU_TIER }}
+          POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
+          ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
+          ACA_API_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_API_MANAGED_CERTIFICATE_NAME }}
+          ACA_WEB_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_WEB_MANAGED_CERTIFICATE_NAME }}
+          ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
+        run: |
+          set -euo pipefail
+
+          required_values=(
+            AZURE_TENANT_ID
+            AZURE_SUBSCRIPTION_ID
+            AZURE_RESOURCE_GROUP
+            AZURE_LOCATION
+            AZURE_VNET_NAME
+            AZURE_ACA_SUBNET_NAME
+            AZURE_POSTGRES_SUBNET_NAME
+            AZURE_PRIVATE_DNS_ZONE_NAME
+            ACA_ENVIRONMENT_NAME
+            AZURE_LOG_ANALYTICS_WORKSPACE_NAME
+            ACA_API_APP_NAME
+            ACA_WEB_APP_NAME
+            ACA_MIGRATE_JOB_NAME
+            ACR_PULL_IDENTITY_NAME
+            ACR_NAME
+            ACR_SKU
+            POSTGRES_SERVER_NAME
+            POSTGRES_DATABASE_NAME
+            POSTGRES_ADMIN_USERNAME
+            POSTGRES_VERSION
+            POSTGRES_SKU_NAME
+            POSTGRES_SKU_TIER
+            POSTGRES_STORAGE_MB
+            POSTGRES_ADMIN_PASSWORD
+          )
+
+          for name in "${required_values[@]}"; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required value: ${name}" >&2
+              exit 1
+            fi
+          done
+
+          providers=(
+            "Microsoft.App"
+            "Microsoft.ContainerService"
+            "Microsoft.Network"
+            "Microsoft.DBforPostgreSQL"
+            "Microsoft.OperationalInsights"
+          )
+
+          for namespace in "${providers[@]}"; do
+            state="$(az provider show --namespace "$namespace" --query registrationState -o tsv)"
+            if [ "$state" != "Registered" ]; then
+              echo "Provider $namespace is not registered (state=$state)" >&2
+              exit 1
+            fi
+          done
+
+          private_dns_suffix=".postgres.database.azure.com"
+          private_dns_zone_normalized="$(echo "$AZURE_PRIVATE_DNS_ZONE_NAME" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$private_dns_zone_normalized" != *"$private_dns_suffix" ]]; then
+            echo "AZURE_PRIVATE_DNS_ZONE_NAME must end with .postgres.database.azure.com" >&2
+            exit 1
+          fi
+
+          postgres_sku_tier_normalized="$(echo "$POSTGRES_SKU_TIER" | tr '[:upper:]' '[:lower:]')"
+          postgres_sku_name_normalized="$(echo "$POSTGRES_SKU_NAME" | tr '[:upper:]' '[:lower:]')"
+          if [ "$postgres_sku_tier_normalized" = "burstable" ] && [[ ! "$postgres_sku_name_normalized" =~ ^standard_b ]]; then
+            echo "POSTGRES_SKU_NAME must start with Standard_B when POSTGRES_SKU_TIER=Burstable" >&2
+            exit 1
+          fi
+
+          custom_domain_validation_method="$(echo "${ACA_CUSTOM_DOMAIN_VALIDATION_METHOD:-CNAME}" | tr '[:lower:]' '[:upper:]')"
+          case "$custom_domain_validation_method" in
+            CNAME|HTTP|TXT) ;;
+            *)
+              echo "ACA_CUSTOM_DOMAIN_VALIDATION_METHOD must be one of CNAME, HTTP, TXT" >&2
+              exit 1
+              ;;
+          esac
+
+          node scripts/pipeline/production/assert-managed-certificate-contract.mjs
+
+          mkdir -p ".artifacts/infra/$HEAD_SHA"
+          jq -n \
+            --arg location "$AZURE_LOCATION" \
+            --arg vnetName "$AZURE_VNET_NAME" \
+            --arg acaSubnetName "$AZURE_ACA_SUBNET_NAME" \
+            --arg postgresSubnetName "$AZURE_POSTGRES_SUBNET_NAME" \
+            --arg privateDnsZoneName "$AZURE_PRIVATE_DNS_ZONE_NAME" \
+            --arg environmentName "$ACA_ENVIRONMENT_NAME" \
+            --arg logAnalyticsWorkspaceName "$AZURE_LOG_ANALYTICS_WORKSPACE_NAME" \
+            --arg apiAppName "$ACA_API_APP_NAME" \
+            --arg webAppName "$ACA_WEB_APP_NAME" \
+            --arg apiCustomDomain "${ACA_API_CUSTOM_DOMAIN:-}" \
+            --arg webCustomDomain "${ACA_WEB_CUSTOM_DOMAIN:-}" \
+            --arg apiManagedCertificateName "${ACA_API_MANAGED_CERTIFICATE_NAME:-}" \
+            --arg webManagedCertificateName "${ACA_WEB_MANAGED_CERTIFICATE_NAME:-}" \
+            --arg customDomainValidationMethod "${ACA_CUSTOM_DOMAIN_VALIDATION_METHOD:-CNAME}" \
+            --arg migrationJobName "$ACA_MIGRATE_JOB_NAME" \
+            --arg acrPullIdentityName "$ACR_PULL_IDENTITY_NAME" \
+            --arg acrName "$ACR_NAME" \
+            --arg acrSku "$ACR_SKU" \
+            --arg postgresServerName "$POSTGRES_SERVER_NAME" \
+            --arg postgresDatabaseName "$POSTGRES_DATABASE_NAME" \
+            --arg postgresAdminUsername "$POSTGRES_ADMIN_USERNAME" \
+            --arg postgresVersion "$POSTGRES_VERSION" \
+            --arg postgresSkuName "$POSTGRES_SKU_NAME" \
+            --arg postgresSkuTier "$POSTGRES_SKU_TIER" \
+            --arg postgresStorageMb "$POSTGRES_STORAGE_MB" \
+            --arg postgresAdminPassword "$POSTGRES_ADMIN_PASSWORD" \
+            --arg apiImage "$API_IMAGE" \
+            --arg webImage "$WEB_IMAGE" \
+            '{
+              "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+              "contentVersion": "1.0.0.0",
+              "parameters": {
+                "location": {"value": $location},
+                "vnetName": {"value": $vnetName},
+                "acaSubnetName": {"value": $acaSubnetName},
+                "postgresSubnetName": {"value": $postgresSubnetName},
+                "privateDnsZoneName": {"value": $privateDnsZoneName},
+                "environmentName": {"value": $environmentName},
+                "logAnalyticsWorkspaceName": {"value": $logAnalyticsWorkspaceName},
+                "apiAppName": {"value": $apiAppName},
+                "webAppName": {"value": $webAppName},
+                "apiCustomDomain": {"value": $apiCustomDomain},
+                "webCustomDomain": {"value": $webCustomDomain},
+                "apiManagedCertificateName": {"value": $apiManagedCertificateName},
+                "webManagedCertificateName": {"value": $webManagedCertificateName},
+                "customDomainValidationMethod": {"value": $customDomainValidationMethod},
+                "migrationJobName": {"value": $migrationJobName},
+                "acrPullIdentityName": {"value": $acrPullIdentityName},
+                "acrName": {"value": $acrName},
+                "acrSku": {"value": $acrSku},
+                "postgresServerName": {"value": $postgresServerName},
+                "postgresDatabaseName": {"value": $postgresDatabaseName},
+                "postgresAdminUsername": {"value": $postgresAdminUsername},
+                "postgresVersion": {"value": $postgresVersion},
+                "postgresSkuName": {"value": $postgresSkuName},
+                "postgresSkuTier": {"value": $postgresSkuTier},
+                "postgresStorageMb": {"value": ($postgresStorageMb | tonumber)},
+                "postgresAdminPassword": {"value": $postgresAdminPassword},
+                "apiImage": {"value": $apiImage},
+                "webImage": {"value": $webImage}
+              }
+            }' > ".artifacts/infra/$HEAD_SHA/runtime.parameters.json"
+
+          az deployment group validate \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "acceptance-$HEAD_SHA" \
+            --template-file infra/azure/main.bicep \
+            --parameters @".artifacts/infra/$HEAD_SHA/runtime.parameters.json" \
+            --output json > ".artifacts/infra/$HEAD_SHA/validate.json"
+
+      - name: Upload infra acceptance artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-acceptance-${{ env.HEAD_SHA }}
+          path: .artifacts/infra/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
+
+  identity_acceptance:
+    name: identity-acceptance
+    needs:
+      - load_candidate
+    if: ${{ needs.load_candidate.outputs.identity_changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      HEAD_SHA: ${{ needs.load_candidate.outputs.head_sha }}
+      ARM_USE_OIDC: "true"
+      ARM_USE_AZUREAD: "true"
+      ARM_CLIENT_ID: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+      TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+      TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
+      TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
+      GH_ORGANIZATION: ${{ vars.GH_ORGANIZATION }}
+      GH_REPOSITORY_NAME: ${{ vars.GH_REPOSITORY_NAME }}
+      ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
+      IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
+      GITHUB_ENVIRONMENT_NAME: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Validate required environment configuration
+        run: |
+          set -euo pipefail
+          required_values=(
+            ARM_CLIENT_ID
+            ARM_TENANT_ID
+            ARM_SUBSCRIPTION_ID
+            TFSTATE_RESOURCE_GROUP
+            TFSTATE_STORAGE_ACCOUNT
+            TFSTATE_CONTAINER
+            TFSTATE_KEY
+            GH_ORGANIZATION
+            GH_REPOSITORY_NAME
+            ENTRA_AUDIENCE
+            IDENTITY_OWNER_OBJECT_IDS_JSON
+          )
+          for name in "${required_values[@]}"; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required production environment value: ${name}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Terraform format check
+        run: terraform -chdir=infra/identity fmt -check -recursive
+
+      - name: Terraform init
+        run: |
+          terraform -chdir=infra/identity init \
+            -input=false \
+            -backend-config="resource_group_name=${TFSTATE_RESOURCE_GROUP}" \
+            -backend-config="storage_account_name=${TFSTATE_STORAGE_ACCOUNT}" \
+            -backend-config="container_name=${TFSTATE_CONTAINER}" \
+            -backend-config="key=${TFSTATE_KEY}" \
+            -backend-config="use_oidc=true" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="tenant_id=${ARM_TENANT_ID}" \
+            -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}" \
+            -backend-config="client_id=${ARM_CLIENT_ID}"
+
+      - name: Terraform validate
+        run: terraform -chdir=infra/identity validate
+
+      - name: Terraform plan
+        run: |
+          mkdir -p ".artifacts/identity/$HEAD_SHA"
+          terraform -chdir=infra/identity plan \
+            -input=false \
+            -lock=false \
+            -var-file=env/prod.tfvars \
+            -var "github_organization=${GH_ORGANIZATION}" \
+            -var "github_repository=${GH_REPOSITORY_NAME}" \
+            -var "github_environment_name=${GITHUB_ENVIRONMENT_NAME}" \
+            -var "api_identifier_uri=${ENTRA_AUDIENCE}" \
+            -var "owners=${IDENTITY_OWNER_OBJECT_IDS_JSON}" \
+            -out=tfplan
+          terraform -chdir=infra/identity show -json tfplan > ".artifacts/identity/$HEAD_SHA/plan.json"
+
+      - name: Upload identity acceptance artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: identity-acceptance-${{ env.HEAD_SHA }}
+          path: .artifacts/identity/${{ env.HEAD_SHA }}/plan.json
+          if-no-files-found: warn
+
+  acceptance_stage_gate:
+    name: acceptance-stage-gate
+    if: ${{ always() }}
+    needs:
+      - load_candidate
+      - runtime_acceptance
+      - infra_acceptance
+      - identity_acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Enforce acceptance stage gate
+        env:
+          HEAD_SHA: ${{ needs.load_candidate.outputs.head_sha }}
+          RUNTIME_REQUIRED: ${{ needs.load_candidate.outputs.runtime_changed }}
+          INFRA_REQUIRED: ${{ needs.load_candidate.outputs.infra_changed == 'true' || needs.load_candidate.outputs.needs_infra == 'true' }}
+          IDENTITY_REQUIRED: ${{ needs.load_candidate.outputs.identity_changed }}
+          CHECK_RESULTS_JSON: ${{ format('{{"load-candidate":"{0}","runtime-acceptance":"{1}","infra-acceptance":"{2}","identity-acceptance":"{3}"}}', needs.load_candidate.result, needs.runtime_acceptance.result, needs.infra_acceptance.result, needs.identity_acceptance.result) }}
+        run: node scripts/pipeline/acceptance/acceptance-stage-gate.mjs
+
+      - name: Write acceptance evidence manifest
+        env:
+          HEAD_SHA: ${{ needs.load_candidate.outputs.head_sha }}
+          KIND: ${{ needs.load_candidate.outputs.kind }}
+          RUNTIME_CHANGED: ${{ needs.load_candidate.outputs.runtime_changed }}
+          INFRA_CHANGED: ${{ needs.load_candidate.outputs.infra_changed }}
+          IDENTITY_CHANGED: ${{ needs.load_candidate.outputs.identity_changed }}
+          DOCS_ONLY_CHANGED: ${{ needs.load_candidate.outputs.docs_only_changed }}
+          NEEDS_INFRA: ${{ needs.load_candidate.outputs.needs_infra }}
+          NEEDS_MIGRATIONS: ${{ needs.load_candidate.outputs.needs_migrations }}
+          CANDIDATE_API_REF: ${{ needs.load_candidate.outputs.candidate_api_ref }}
+          CANDIDATE_WEB_REF: ${{ needs.load_candidate.outputs.candidate_web_ref }}
+          COMMIT_RUN_ID: ${{ needs.load_candidate.outputs.commit_run_id }}
+          RUNTIME_RESULT: ${{ needs.runtime_acceptance.result }}
+          INFRA_RESULT: ${{ needs.infra_acceptance.result }}
+          IDENTITY_RESULT: ${{ needs.identity_acceptance.result }}
+          GATE_RESULT: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/acceptance/$HEAD_SHA"
+          jq -n \
+            --arg generatedAt "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+            --arg headSha "$HEAD_SHA" \
+            --arg kind "$KIND" \
+            --arg commitRunId "$COMMIT_RUN_ID" \
+            --arg runtimeResult "$RUNTIME_RESULT" \
+            --arg infraResult "$INFRA_RESULT" \
+            --arg identityResult "$IDENTITY_RESULT" \
+            --arg gateResult "$GATE_RESULT" \
+            --arg apiRef "$CANDIDATE_API_REF" \
+            --arg webRef "$CANDIDATE_WEB_REF" \
+            --argjson runtimeChanged "$RUNTIME_CHANGED" \
+            --argjson infraChanged "$INFRA_CHANGED" \
+            --argjson identityChanged "$IDENTITY_CHANGED" \
+            --argjson docsOnlyChanged "$DOCS_ONLY_CHANGED" \
+            --argjson needsInfra "$NEEDS_INFRA" \
+            --argjson needsMigrations "$NEEDS_MIGRATIONS" \
+            '{
+              schemaVersion: "1",
+              generatedAt: $generatedAt,
+              headSha: $headSha,
+              kind: $kind,
+              source: {
+                commitRunId: $commitRunId
+              },
+              scope: {
+                runtime: $runtimeChanged,
+                infra: $infraChanged,
+                identity: $identityChanged,
+                docsOnly: $docsOnlyChanged
+              },
+              needsInfra: $needsInfra,
+              needsMigrations: $needsMigrations,
+              candidate: {
+                apiRef: $apiRef,
+                webRef: $webRef
+              },
+              checks: {
+                runtimeAcceptance: $runtimeResult,
+                infraAcceptance: $infraResult,
+                identityAcceptance: $identityResult,
+                acceptanceStageGate: $gateResult
+              }
+            }' > ".artifacts/acceptance/$HEAD_SHA/evidence-manifest.json"
+
+      - name: Upload acceptance artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-evidence-${{ needs.load_candidate.outputs.head_sha }}
+          path: .artifacts/acceptance/${{ needs.load_candidate.outputs.head_sha }}
+          if-no-files-found: warn

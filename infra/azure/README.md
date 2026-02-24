@@ -5,7 +5,9 @@
 - Stack entry point: `infra/azure/main.bicep`
 - Environment parameter template: `infra/azure/environments/prod.bicepparam`
 - Reusable resource modules: `infra/azure/modules/*.bicep`
-- Production mutation workflow: `.github/workflows/infra-apply.yml`
+- Pipeline stages:
+  - `.github/workflows/acceptance-stage.yml` (`infra-acceptance`, validate only)
+  - `.github/workflows/production-stage.yml` (`production-mutate`, apply)
 
 ## Resource Topology
 
@@ -37,12 +39,12 @@
 
 Tracked files stay organization-neutral:
 
-- `main.bicep` and `environments/prod.bicepparam` use `SET_IN_GITHUB_ENV` placeholders for concrete production values.
-- `.github/workflows/infra-apply.yml` materializes a runtime parameter payload into `.artifacts/infra/<sha>/runtime.parameters.json`.
+- `main.bicep` and `environments/prod.bicepparam` use placeholders for concrete production values.
+- Acceptance/production workflows materialize runtime parameters into `.artifacts/infra/<sha>/runtime.parameters.json`.
 - `POSTGRES_ADMIN_PASSWORD` is injected at runtime from GitHub environment secrets.
-- `apiImage` and `webImage` are resolved to ACR digest refs before apply.
+- `apiImage` and `webImage` must be ACR digest refs from accepted candidate evidence.
 
-## Required Production Variables (infra-apply)
+## Required Production Variables
 
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
@@ -68,7 +70,7 @@ Tracked files stay organization-neutral:
 - `POSTGRES_SKU_TIER`
 - `POSTGRES_STORAGE_MB`
 
-## Required Production Secrets (infra-apply)
+## Required Production Secrets
 
 - `AZURE_DEPLOY_CLIENT_ID`
 - `POSTGRES_ADMIN_PASSWORD`
@@ -83,48 +85,45 @@ Tracked files stay organization-neutral:
 
 ## Preflight and Fail-Closed Checks
 
-`infra-apply` fails closed when any contract guard fails:
+Infra validation/apply fails closed when any contract guard fails:
 
 - Azure account guard: authenticated tenant/subscription must match configured values.
 - Resource group guard: resource group location must match configured location.
-- Provider guard: required providers must be registered (`Microsoft.App`, `Microsoft.ContainerService`, `Microsoft.Network`, `Microsoft.DBforPostgreSQL`, `Microsoft.OperationalInsights`).
+- Provider guard: required providers must be registered.
 - DNS guard: `AZURE_PRIVATE_DNS_ZONE_NAME` must end with `.postgres.database.azure.com`.
 - SKU guard: if `POSTGRES_SKU_TIER=Burstable`, `POSTGRES_SKU_NAME` must start with `Standard_B`.
-- Custom-domain validation method guard: value must be one of `CNAME`, `HTTP`, `TXT`.
+- Custom-domain validation method guard: must be one of `CNAME`, `HTTP`, `TXT`.
 - Managed certificate contract guard: custom domain and managed certificate names must be coherent.
-- ACR auth guard: `authentication-as-arm` is converged to enabled.
 - Image ref guard: deployment image refs are normalized to digest form and validated in ACR.
 
 ## Apply Behavior and Retry
 
-Deployment behavior is deterministic:
+Production apply behavior is deterministic:
 
-1. Workflow resolves runtime variables/secrets into `.artifacts/infra/<sha>/runtime.parameters.json`.
-2. `scripts/deploy/apply-bicep-template.mjs` runs `az deployment group validate`.
+1. Build runtime parameters in `.artifacts/infra/<sha>/runtime.parameters.json`.
+2. `scripts/pipeline/production/apply-infra.mjs` runs `az deployment group validate`.
 3. If validation succeeds, it runs `az deployment group create`.
-4. Create retries once with 20 second backoff only for recognized transient ARM/ACA failures.
+4. Create retries once with backoff only for recognized transient ARM/ACA failures.
 5. Terminal failures emit explicit stderr diagnostics and artifact logs.
 
 ## Outputs Contract
 
 Key outputs from `main.bicep` for operators and downstream validation:
 
-| Output                                                                                       | Meaning                                                                      |
-| -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `containerAppsEnvironmentName` / `containerAppsEnvironmentId` / `containerAppsDefaultDomain` | ACA managed environment identity and default ingress domain.                 |
-| `apiBaseUrlOutput`                                                                           | Effective API base URL (custom domain if configured, else ACA default host). |
-| `acrId` / `acrNameOutput` / `acrLoginServer`                                                 | ACR identity and registry endpoint details.                                  |
-| `acrPullIdentityId` / `acrPullIdentityPrincipalId`                                           | Shared pull identity resource and principal IDs.                             |
-| `apiContainerAppName` / `apiLatestRevision` / `apiLatestRevisionFqdn`                        | API app identity and latest revision/FQDN info.                              |
-| `webContainerAppName` / `webLatestRevision` / `webLatestRevisionFqdn`                        | Web app identity and latest revision/FQDN info.                              |
-| `migrationJobName` / `migrationJobId`                                                        | Migration job identity outputs.                                              |
-| `postgresServerResourceId` / `postgresServerName` / `postgresFqdn` / `postgresDatabaseName`  | Postgres resource identity and connection host context.                      |
+- `containerAppsEnvironmentName` / `containerAppsEnvironmentId` / `containerAppsDefaultDomain`
+- `apiBaseUrlOutput`
+- `acrId` / `acrNameOutput` / `acrLoginServer`
+- `acrPullIdentityId` / `acrPullIdentityPrincipalId`
+- `apiContainerAppName` / `apiLatestRevision` / `apiLatestRevisionFqdn`
+- `webContainerAppName` / `webLatestRevision` / `webLatestRevisionFqdn`
+- `migrationJobName` / `migrationJobId`
+- `postgresServerResourceId` / `postgresServerName` / `postgresFqdn` / `postgresDatabaseName`
 
 ## Operational Procedures
 
 ### Custom domain flow
 
-1. Set optional custom-domain variables in GitHub `production` environment.
+1. Set custom-domain vars in GitHub `production` environment.
 2. Generate DNS records from live ACA state:
 
 ```bash
@@ -137,18 +136,18 @@ pnpm deploy:custom-domain:dns
 ```
 
 3. Publish emitted `CNAME`/`TXT` records at your DNS provider.
-4. Run `infra-apply` to mint/bind managed certificates and hostnames.
+4. Run `production-stage.yml` for accepted candidate.
 5. Verify bindings with `az containerapp hostname list`.
 
 ### Replay guidance
 
-- Re-run `infra-apply` on the same SHA after a successful run to validate idempotent convergence.
+- Re-run `acceptance-stage` or `production-stage` for the same accepted SHA to verify deterministic convergence.
 - Use artifact diffs under `.artifacts/infra/<sha>/` to investigate drift or transient retries.
 
-### Rollback by `image_tag`
+### Rollback by candidate SHA
 
-- Trigger manual `.github/workflows/infra-apply.yml` with `image_tag=<known-good-tag>`.
-- Workflow resolves tags to digests and re-applies the stack with pinned image refs.
+- Trigger manual `.github/workflows/production-stage.yml` with `candidate_sha=<known-good-sha>`.
+- Production stage deploys the accepted digest refs for that SHA.
 
 ### Artifact locations
 
@@ -161,9 +160,9 @@ pnpm deploy:custom-domain:dns
 
 ## References
 
-- `.github/workflows/infra-apply.yml`
-- `.github/workflows/deploy.yml`
-- `scripts/deploy/apply-bicep-template.mjs`
-- `scripts/deploy/assert-managed-certificate-contract.mjs`
-- `scripts/deploy/custom-domain-dns.mjs`
-- `docs/runbooks/deploy-aca.md`
+- `.github/workflows/acceptance-stage.yml`
+- `.github/workflows/production-stage.yml`
+- `scripts/pipeline/production/apply-infra.mjs`
+- `scripts/pipeline/production/assert-managed-certificate-contract.mjs`
+- `scripts/pipeline/production/custom-domain-dns.mjs`
+- `docs/runbooks/production-stage.md`

@@ -3,19 +3,25 @@
 ## `docs-drift` Failure
 
 - Cause: docs-critical paths changed without doc target updates.
-- Where it appears: `risk-policy-preflight`.
-- Fix: update required docs (`docs/merge-policy.md`, `.github/workflows/README.md`, or matching targets in policy).
+- Where it appears: `scope` job in `commit-stage.yml`.
+- Fix: update required docs (`docs/commit-stage-policy.md`, `.github/workflows/README.md`, or matching targets in policy).
 
 ## `codex-review-trusted` Failure
 
 - Cause: trusted review workflow failed to fetch PR diff data or review output failed validation.
-- Fix: rerun `codex-review-trusted.yml` with the PR number only when you want supplemental trusted feedback; it is manual and non-blocking. Verify trusted workflow secrets/config are present.
+- Fix: rerun `codex-review-trusted.yml` manually when you want supplemental trusted feedback; it is non-blocking.
 
-## `risk-policy-gate` Failure
+## `commit-stage-gate` Failure
 
-- Cause: required `needs.*.result` outcomes did not succeed, docs-drift was blocking, or browser-evidence assertions failed.
-- Fix: rerun failed required checks on latest commit; for UI-required PRs verify manifest flow status, entrypoint, identity, and assertions for current `headSha` and `testedSha`.
+- Cause: required commit-stage check outcomes did not succeed or docs-drift was blocking.
+- Fix: rerun failed required checks on latest commit and ensure docs-drift targets are updated when policy-critical paths changed.
 
-## Stale Evidence After Push
+## `acceptance-stage-gate` Failure
 
-- Any synchronize/push invalidates prior evidence. Rerun required checks for the new head SHA.
+- Cause: required acceptance check outcomes did not succeed for the candidate scope.
+- Fix: inspect `.artifacts/acceptance/<sha>/result.json` and rerun acceptance after fix-forward.
+
+## Stale Candidate in Production Stage
+
+- Cause: candidate SHA was no longer current `main` when auto promotion started.
+- Fix: allow next accepted candidate to promote, or run a manual replay with explicit `candidate_sha` when appropriate.

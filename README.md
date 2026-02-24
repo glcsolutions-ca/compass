@@ -35,7 +35,7 @@ pnpm dev
 1. Implement the change.
 2. Run `pnpm test` and `pnpm build`.
 3. Open a PR to `main`.
-4. Let CI enforce merge safety (`risk-policy-gate`).
+4. Let CI enforce merge safety (`commit-stage-gate`).
 
 ## PR title and format standard
 
@@ -54,9 +54,10 @@ pnpm dev
 - Script index: `scripts/README.md`
 - Testing philosophy: `tests/README.md`
 - Testing policy and enforcement (layers 1-3): `tests/policy/README.md`
-- Merge policy (human): `docs/merge-policy.md`
+- Commit-stage policy (human): `docs/commit-stage-policy.md`
 - Branch protection: `docs/branch-protection.md`
-- Machine policy: `.github/policy/merge-policy.json`
-- Merge contract CI: `.github/workflows/merge-contract.yml`
-- Deploy workflow (`main`): `.github/workflows/deploy.yml`
+- Machine policy: `.github/policy/pipeline-policy.json`
+- Commit stage workflow: `.github/workflows/commit-stage.yml`
+- Acceptance stage workflow: `.github/workflows/acceptance-stage.yml`
+- Production stage workflow: `.github/workflows/production-stage.yml`
 - Runbooks: `docs/runbooks/`

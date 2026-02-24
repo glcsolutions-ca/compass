@@ -2,17 +2,31 @@
 
 Configure branch protection for `main` with one required status check:
 
-- `risk-policy-gate`
+- `commit-stage-gate`
 
-Do not require dynamic checks directly (`ci-pipeline`, `browser-evidence`, `harness-smoke`, `migration-image-smoke`).
+Do not require acceptance or production checks directly. Those are post-merge stage gates.
 
-Those are tier-conditional and enforced by `risk-policy-gate` using `.github/policy/merge-policy.json`.
+## Apply or Repair via GitHub CLI
+
+If required checks drift, reset the `main` required status checks to this baseline:
+
+```bash
+cat > /tmp/required-status-checks.json <<'JSON'
+{
+  "strict": true,
+  "contexts": ["commit-stage-gate"]
+}
+JSON
+
+gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/required_status_checks \
+  --input /tmp/required-status-checks.json
+```
 
 ## Required Mainline Safety Controls
 
 - Enforce admins (`main` has no admin bypass in normal flow).
 - Require merge queue on `main`.
-- Require `.github/workflows/merge-contract.yml` to run on `pull_request` and `merge_group`.
+- Require `.github/workflows/commit-stage.yml` to run on `pull_request` and `merge_group`.
 - Require PR-only integration into `main` (no direct pushes).
 - Keep force-push and deletion blocked.
 - Keep strict status checks enabled.
@@ -20,15 +34,15 @@ Those are tier-conditional and enforced by `risk-policy-gate` using `.github/pol
 ## Why one check
 
 - Branch protection stays static and simple.
-- Tier-specific required checks remain policy-driven.
-- Stale SHA/tier evidence is rejected centrally.
-- The same required gate context is used for PR and merge queue runs.
+- Commit stage remains the single merge decision point.
+- Acceptance/production stay decoupled as post-merge release-candidate gates.
+- Merge queue and PR runs use the same required gate context.
 
-## Triage Notes
+## Triage notes
 
-- `risk-policy-gate` artifacts include `reasonCodes` and `reasonDetails` for direct remediation.
+- `commit-stage-gate` artifacts include `reasonCodes` and `reasonDetails` for direct remediation.
 - `docs-drift` artifacts include changed blocking paths, docs-critical paths, and expected doc targets.
 
-## Verification Runbook
+## Verification runbook
 
 - `docs/runbooks/github-governance-verification.md`

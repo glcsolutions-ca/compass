@@ -1,0 +1,92 @@
+import path from "node:path";
+import { evaluateAcceptanceStageResults } from "./acceptance-stage-gate-lib.mjs";
+import { appendGithubOutput, requireEnv, writeJsonFile } from "../shared/pipeline-utils.mjs";
+
+function parseBooleanEnv(name, fallback = false) {
+  const raw = process.env[name];
+  if (!raw || raw.trim().length === 0) {
+    return fallback;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "true") {
+    return true;
+  }
+  if (normalized === "false") {
+    return false;
+  }
+
+  throw new Error(`${name} must be 'true' or 'false'`);
+}
+
+function parseCheckResults() {
+  const raw = requireEnv("CHECK_RESULTS_JSON");
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("CHECK_RESULTS_JSON must be a JSON object");
+  }
+
+  const expectedChecks = [
+    "load-candidate",
+    "runtime-acceptance",
+    "infra-acceptance",
+    "identity-acceptance"
+  ];
+
+  const checkResults = {};
+  for (const checkName of expectedChecks) {
+    const value = parsed[checkName];
+    checkResults[checkName] =
+      typeof value === "string" && value.trim().length > 0 ? value : "unknown";
+  }
+
+  return checkResults;
+}
+
+async function main() {
+  const headSha = requireEnv("HEAD_SHA");
+  const runtimeRequired = parseBooleanEnv("RUNTIME_REQUIRED", false);
+  const infraRequired = parseBooleanEnv("INFRA_REQUIRED", false);
+  const identityRequired = parseBooleanEnv("IDENTITY_REQUIRED", false);
+
+  const checkResults = parseCheckResults();
+  const reasons = evaluateAcceptanceStageResults({
+    checkResults,
+    runtimeRequired,
+    infraRequired,
+    identityRequired
+  });
+
+  const resultPath = path.join(".artifacts", "acceptance", headSha, "result.json");
+  const payload = {
+    schemaVersion: "1",
+    generatedAt: new Date().toISOString(),
+    headSha,
+    runtimeRequired,
+    infraRequired,
+    identityRequired,
+    checkResults,
+    pass: reasons.length === 0,
+    reasonCodes: reasons.map((reason) => reason.code),
+    reasonDetails: reasons,
+    reasons: reasons.map((reason) => reason.message)
+  };
+
+  await writeJsonFile(resultPath, payload);
+  await appendGithubOutput({
+    acceptance_result_path: resultPath,
+    acceptance_pass: String(reasons.length === 0)
+  });
+
+  if (reasons.length > 0) {
+    console.error("acceptance-stage-gate blocking reasons:");
+    for (const reason of reasons) {
+      console.error(`- [${reason.code}] ${reason.message}`);
+    }
+    process.exit(1);
+  }
+
+  console.info(`acceptance-stage-gate passed for ${headSha}`);
+}
+
+void main();

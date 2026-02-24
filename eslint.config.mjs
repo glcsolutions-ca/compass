@@ -2,7 +2,7 @@ import js from "@eslint/js";
 import nextPlugin from "@next/eslint-plugin-next";
 import eslintConfigPrettier from "eslint-config-prettier";
 import tseslint from "typescript-eslint";
-import { loadTestPolicySync } from "./scripts/ci/test-policy.mjs";
+import { loadTestPolicySync } from "./scripts/pipeline/commit/testing-policy.mjs";
 
 const testPolicy = loadTestPolicySync(process.env.TEST_POLICY_PATH?.trim() || undefined);
 const lintPolicy = testPolicy.lint;

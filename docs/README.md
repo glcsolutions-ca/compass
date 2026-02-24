@@ -8,7 +8,7 @@ General documentation and architecture records live here.
 - Agent contribution workflow and PR checklist are in `/CONTRIBUTING.md`.
 - Root agent index is in `/AGENTS.md`.
 - `engineering-baseline.md` is retained as a short pointer.
-- Merge contract documentation is in `merge-policy.md`.
+- Commit-stage policy documentation is in `commit-stage-policy.md`.
 - Branch protection setup is in `branch-protection.md`.
 - Agent playbooks and troubleshooting are in `agents/README.md`.
 
@@ -24,7 +24,7 @@ General documentation and architecture records live here.
 
 - `runbooks/README.md`
 - `runbooks/postgres-local.md`
-- `runbooks/deploy-aca.md`
+- `runbooks/production-stage.md`
 - `runbooks/migration-safety.md`
 
 ## Infrastructure Docs

@@ -14,6 +14,7 @@ This directory is the machine source of truth for delivery stage control.
 - `commitStage`: required commit checks plus timing SLO policy (`targetSeconds`, `mode`)
 - `acceptanceStage`: required acceptance jobs by scope
 - `productionStage`: production promotion safety toggles
+- `deploymentPipeline`: post-merge stage timing SLO targets (`acceptance`, `production`)
 - `docsDriftRules`: control-plane/docs-critical drift enforcement
 
 `docsOnly` paths are subtracted from mutable scope classification so documentation updates fail closed only through policy checks, not production mutation paths.

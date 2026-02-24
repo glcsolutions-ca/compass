@@ -17,10 +17,24 @@ export function evaluateAcceptanceStageResults({
     });
   }
 
-  if (runtimeRequired && checkResults["runtime-blackbox-acceptance"] !== "success") {
+  if (runtimeRequired && checkResults["runtime-api-system-acceptance"] !== "success") {
     reasons.push({
-      code: "CHECK_RUNTIME_BLACKBOX_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
-      message: `runtime-blackbox-acceptance required but result is ${checkResults["runtime-blackbox-acceptance"]}`
+      code: "CHECK_RUNTIME_API_SYSTEM_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
+      message: `runtime-api-system-acceptance required but result is ${checkResults["runtime-api-system-acceptance"]}`
+    });
+  }
+
+  if (runtimeRequired && checkResults["runtime-browser-acceptance"] !== "success") {
+    reasons.push({
+      code: "CHECK_RUNTIME_BROWSER_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
+      message: `runtime-browser-acceptance required but result is ${checkResults["runtime-browser-acceptance"]}`
+    });
+  }
+
+  if (runtimeRequired && checkResults["runtime-migration-image-acceptance"] !== "success") {
+    reasons.push({
+      code: "CHECK_RUNTIME_MIGRATION_IMAGE_ACCEPTANCE_REQUIRED_NOT_SUCCESS",
+      message: `runtime-migration-image-acceptance required but result is ${checkResults["runtime-migration-image-acceptance"]}`
     });
   }
 

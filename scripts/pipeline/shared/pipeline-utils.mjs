@@ -189,6 +189,26 @@ export function assertPipelinePolicyShape(policy) {
   if (typeof policy.productionStage?.requireFreshHeadOnAuto !== "boolean") {
     throw new Error("productionStage.requireFreshHeadOnAuto must be a boolean");
   }
+
+  const deploymentPipelineSlo = policy.deploymentPipeline?.slo;
+  if (deploymentPipelineSlo !== undefined) {
+    if (!deploymentPipelineSlo || typeof deploymentPipelineSlo !== "object") {
+      throw new Error("deploymentPipeline.slo must be an object when provided");
+    }
+
+    if (!["observe", "enforce"].includes(String(deploymentPipelineSlo.mode || "").trim())) {
+      throw new Error("deploymentPipeline.slo.mode must be one of: observe, enforce");
+    }
+
+    const acceptanceTarget = deploymentPipelineSlo.acceptanceTargetSeconds;
+    const productionTarget = deploymentPipelineSlo.productionTargetSeconds;
+    if (!Number.isInteger(acceptanceTarget) || acceptanceTarget <= 0) {
+      throw new Error("deploymentPipeline.slo.acceptanceTargetSeconds must be a positive integer");
+    }
+    if (!Number.isInteger(productionTarget) || productionTarget <= 0) {
+      throw new Error("deploymentPipeline.slo.productionTargetSeconds must be a positive integer");
+    }
+  }
 }
 
 export function resolveChangeScope(policy, changedFiles) {

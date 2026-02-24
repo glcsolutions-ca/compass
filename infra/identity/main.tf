@@ -2,6 +2,7 @@ locals {
   repo_slug      = "${var.github_organization}/${var.github_repository}"
   deploy_subject = "repo:${local.repo_slug}:environment:${var.github_environment_name}"
   # Scratch-drill trigger marker: intentionally non-functional.
+  # Final-proof scratch-drill marker: intentionally non-functional.
 }
 
 resource "azuread_application" "api" {

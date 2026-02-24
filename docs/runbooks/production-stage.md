@@ -49,6 +49,9 @@ All concrete production values must be stored in GitHub environments (`acceptanc
 - `API_IDENTIFIER_URI` (canonical identity URI, `api://...` format)
 - `ENTRA_AUDIENCE` (legacy fallback during transition)
 - plus infra parameter vars documented in `infra/azure/README.md`
+- API and Web Container App module sources are `infra/azure/modules/containerapp-api.bicep`
+  and `infra/azure/modules/containerapp-web.bicep`; production expects these apps to keep
+  at least one replica warm (`minReplicas: 1`).
 
 Optional custom domain vars:
 

@@ -9,7 +9,7 @@
 | Script                                    | Role                                                                         |
 | ----------------------------------------- | ---------------------------------------------------------------------------- |
 | `apply-infra.mjs`                         | Validates/applies Bicep with transient retry handling and infra artifacts.   |
-| `assert-managed-certificate-contract.mjs` | Validates custom-domain/certificate contract before infra apply.             |
+| `assert-managed-certificate-contract.mjs` | Validates custom-domain/certificate contract before infra apply; when ACA env is absent it records scratch-bootstrap create mode. |
 | `custom-domain-dns.mjs`                   | Emits required DNS records for managed certificate binding.                  |
 | `start-migration-job.mjs`                 | Starts ACA migration job execution and records metadata.                     |
 | `wait-migration-job.mjs`                  | Polls migration execution to terminal state, captures logs/status artifacts. |

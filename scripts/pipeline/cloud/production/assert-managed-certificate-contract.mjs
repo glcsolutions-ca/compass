@@ -5,6 +5,51 @@ import {
   extractManagedCertificateEntries
 } from "./managed-certificate-contract.mjs";
 
+function isMissingManagedEnvironmentError(error) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return message.includes("ParentResourceNotFound") && message.includes("managedEnvironments");
+}
+
+async function listManagedCertificates(resourceGroup, environmentName) {
+  try {
+    const rawCertificates =
+      (await runJson("az", [
+        "containerapp",
+        "env",
+        "certificate",
+        "list",
+        "--resource-group",
+        resourceGroup,
+        "--name",
+        environmentName,
+        "--managed-certificates-only",
+        "--output",
+        "json"
+      ])) ?? [];
+
+    return {
+      environmentExists: true,
+      rawCertificates
+    };
+  } catch (error) {
+    if (!isMissingManagedEnvironmentError(error)) {
+      throw error;
+    }
+
+    console.warn(
+      [
+        `Managed environment '${environmentName}' was not found in '${resourceGroup}'.`,
+        "Treating this as a scratch bootstrap path with no existing managed certificates."
+      ].join("\n")
+    );
+
+    return {
+      environmentExists: false,
+      rawCertificates: []
+    };
+  }
+}
+
 async function main() {
   const resourceGroup = requireEnv("AZURE_RESOURCE_GROUP");
   const environmentName = requireEnv("ACA_ENVIRONMENT_NAME");
@@ -16,20 +61,10 @@ async function main() {
   const webManagedCertificateName = process.env.ACA_WEB_MANAGED_CERTIFICATE_NAME?.trim() || "";
   const codexManagedCertificateName = process.env.ACA_CODEX_MANAGED_CERTIFICATE_NAME?.trim() || "";
 
-  const rawCertificates =
-    (await runJson("az", [
-      "containerapp",
-      "env",
-      "certificate",
-      "list",
-      "--resource-group",
-      resourceGroup,
-      "--name",
-      environmentName,
-      "--managed-certificates-only",
-      "--output",
-      "json"
-    ])) ?? [];
+  const { environmentExists, rawCertificates } = await listManagedCertificates(
+    resourceGroup,
+    environmentName
+  );
 
   const managedCertificates = extractManagedCertificateEntries(rawCertificates);
 
@@ -65,6 +100,7 @@ async function main() {
     generatedAt: new Date().toISOString(),
     resourceGroup,
     environmentName,
+    environmentExists,
     managedCertificates: managedCertificates.map((certificate) => ({
       name: certificate.name,
       subjectName: certificate.subjectName

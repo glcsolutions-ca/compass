@@ -492,6 +492,7 @@ jobs:
           HEAD_SHA: ${{ needs.candidate_context.outputs.candidate_sha }}
           RUN_EVENT: push
           RUN_STATUS: success
+          RUN_STATUS_FALLBACK: completed
         run: node scripts/pipeline/shared/resolve-triggered-run-id.mjs
 
       - name: Download release candidate artifact (same run)

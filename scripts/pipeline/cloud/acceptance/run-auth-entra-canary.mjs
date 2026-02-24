@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import path from "node:path";
-import { appendGithubOutput, requireEnv, writeJsonFile } from "../shared/pipeline-utils.mjs";
-import { fetchClientCredentialsToken } from "../shared/entra-token-utils.mjs";
+import { appendGithubOutput, requireEnv, writeJsonFile } from "../../shared/pipeline-utils.mjs";
+import { fetchClientCredentialsToken } from "../../shared/entra-token-utils.mjs";
 
 async function requestJson(url, options = undefined) {
   const response = await fetch(url, options);

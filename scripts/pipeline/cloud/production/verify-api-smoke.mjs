@@ -1,5 +1,5 @@
 import { appendGithubOutput, getHeadSha, requireEnv, writeDeployArtifact } from "./utils.mjs";
-import { fetchClientCredentialsToken } from "../shared/entra-token-utils.mjs";
+import { fetchClientCredentialsToken } from "../../shared/entra-token-utils.mjs";
 
 const targetBaseUrl = requireEnv("TARGET_API_BASE_URL").replace(/\/$/, "");
 const verifyShaHeader = process.env.VERIFY_SHA_HEADER?.trim() === "true";

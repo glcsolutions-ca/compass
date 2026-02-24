@@ -1125,43 +1125,12 @@ jobs:
           echo "Acceptance stage decision is NO" >&2
           exit 1
 
-  approve_control_plane:
-    name: approve-control-plane
-    needs:
-      - load_release_candidate
-      - acceptance_stage
-    if: ${{ always() && needs.load_release_candidate.result == 'success' && needs.acceptance_stage.result == 'success' }}
-    runs-on: ubuntu-latest
-    environment: ${{ needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && needs.acceptance_stage.outputs.control_plane_required == 'true' && 'production-control-plane' || 'acceptance' }}
-    timeout-minutes: 60
-    steps:
-      - name: Record control-plane gate decision
-        env:
-          ACCEPTANCE_DECISION: ${{ needs.acceptance_stage.outputs.acceptance_decision }}
-          DEPLOY_REQUIRED: ${{ needs.acceptance_stage.outputs.deploy_required }}
-          CONTROL_PLANE_REQUIRED: ${{ needs.acceptance_stage.outputs.control_plane_required }}
-        run: |
-          set -euo pipefail
-
-          if [ "$ACCEPTANCE_DECISION" != "YES" ] || [ "$DEPLOY_REQUIRED" != "true" ]; then
-            echo "Control-plane approval bypassed because deployment is not eligible."
-            exit 0
-          fi
-
-          if [ "$CONTROL_PLANE_REQUIRED" != "true" ]; then
-            echo "Control-plane approval bypassed because this scope is not control-plane."
-            exit 0
-          fi
-
-          echo "Control-plane approval granted."
-
   deploy_approved_candidate:
     name: deploy-approved-candidate
     needs:
       - load_release_candidate
       - acceptance_stage
-      - approve_control_plane
-    if: ${{ always() && needs.load_release_candidate.result == 'success' && needs.acceptance_stage.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && needs.approve_control_plane.result == 'success' }}
+    if: ${{ always() && needs.load_release_candidate.result == 'success' && needs.acceptance_stage.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 75

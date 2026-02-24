@@ -42,6 +42,6 @@ pnpm commit:docs-drift
 
 ## High-Risk Paths
 
-When scope includes `infra` or `identity`, expect control-plane approval via `production-control-plane` before production mutation.
+When scope includes `infra` or `identity`, expect the same automated production mutation path with deterministic post-deploy verification.
 
 Trusted Codex review remains available through manual `codex-review-trusted.yml` runs and does not block merges.

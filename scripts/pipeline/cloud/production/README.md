@@ -6,20 +6,20 @@
 
 ## Script Map
 
-| Script                                    | Role                                                                         |
-| ----------------------------------------- | ---------------------------------------------------------------------------- |
-| `apply-infra.mjs`                         | Validates/applies Bicep with transient retry handling and infra artifacts.   |
+| Script                                    | Role                                                                                                                              |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `apply-infra.mjs`                         | Validates/applies Bicep with transient retry handling and infra artifacts.                                                        |
 | `assert-managed-certificate-contract.mjs` | Validates custom-domain/certificate contract before infra apply; when ACA env is absent it records scratch-bootstrap create mode. |
-| `custom-domain-dns.mjs`                   | Emits required DNS records for managed certificate binding.                  |
-| `start-migration-job.mjs`                 | Starts ACA migration job execution and records metadata.                     |
-| `wait-migration-job.mjs`                  | Polls migration execution to terminal state, captures logs/status artifacts. |
-| `verify-auth-canary-freshness.mjs`        | Validates freshness of required auth canary/probe workflows.                 |
-| `verify-api-smoke.mjs`                    | Verifies API health/OpenAPI and app-token auth paths after promotion.        |
-| `verify-delegated-smoke.mjs`              | Validates delegated `/v1/me` behavior and writes delegated probe artifact.   |
-| `record-release.mjs`                      | Writes successful production deployment record to GitHub Deployments API.    |
-| `decide-production-stage.mjs`             | Produces production stage YES/NO result artifact and reason codes.           |
-| `managed-certificate-contract.mjs`        | Shared contract logic for managed certificate assertions.                    |
-| `utils.mjs`                               | Shared execution/env/artifact helpers for production scripts.                |
+| `custom-domain-dns.mjs`                   | Emits required DNS records for managed certificate binding.                                                                       |
+| `start-migration-job.mjs`                 | Starts ACA migration job execution and records metadata.                                                                          |
+| `wait-migration-job.mjs`                  | Polls migration execution to terminal state, captures logs/status artifacts.                                                      |
+| `verify-auth-canary-freshness.mjs`        | Validates freshness of required auth canary/probe workflows.                                                                      |
+| `verify-api-smoke.mjs`                    | Verifies API health/OpenAPI and app-token auth paths after promotion.                                                             |
+| `verify-delegated-smoke.mjs`              | Validates delegated `/v1/me` behavior and writes delegated probe artifact.                                                        |
+| `record-release.mjs`                      | Writes successful production deployment record to GitHub Deployments API.                                                         |
+| `decide-production-stage.mjs`             | Produces production stage YES/NO result artifact and reason codes.                                                                |
+| `managed-certificate-contract.mjs`        | Shared contract logic for managed certificate assertions.                                                                         |
+| `utils.mjs`                               | Shared execution/env/artifact helpers for production scripts.                                                                     |
 
 ## Required Env Groups
 

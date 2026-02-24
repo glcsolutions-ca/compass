@@ -44,7 +44,8 @@ async function githubRequest(pathname, options = {}) {
     }
 
     const exponentialBackoffMs = baseRetryDelayMs * 2 ** attempt;
-    const retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 0;
+    const retryAfterMs =
+      Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 0;
     const backoffMs = Math.max(exponentialBackoffMs, retryAfterMs);
     console.warn(
       `GitHub API request ${pathname} returned ${status}; retrying ${attempt + 1}/${maxRetryAttempts} in ${backoffMs}ms`

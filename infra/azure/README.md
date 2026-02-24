@@ -21,7 +21,8 @@
 6. `AcrPull` role assignment at ACR scope for the pull identity.
 7. API Container App.
 8. Web Container App.
-9. Manual-trigger migration ACA Job pinned to API image.
+9. Codex gateway Container App.
+10. Manual-trigger migration ACA Job pinned to API image.
 
 ## Module Contract
 
@@ -33,6 +34,7 @@
 | `modules/postgres-flex.bicep`            | Creates private Postgres Flexible Server and database.                                                    |
 | `modules/containerapp-api.bicep`         | Creates API Container App with managed-identity registry pull and secure DB secret wiring.                |
 | `modules/containerapp-web.bicep`         | Creates Web Container App with managed-identity registry pull and API base URL wiring.                    |
+| `modules/containerapp-codex.bicep`       | Creates Codex gateway Container App with managed-identity registry pull and DB secret wiring.             |
 | `modules/containerapp-job-migrate.bicep` | Creates manual migration job that runs DB migrations using the API image.                                 |
 
 ## Parameter Model
@@ -42,7 +44,7 @@ Tracked files stay organization-neutral:
 - `main.bicep` and `environments/prod.bicepparam` use placeholders for concrete production values.
 - Acceptance/production workflows materialize runtime parameters into `.artifacts/infra/<sha>/runtime.parameters.json`.
 - `POSTGRES_ADMIN_PASSWORD` is injected at runtime from GitHub environment secrets.
-- `apiImage` and `webImage` must be ACR digest refs from accepted candidate evidence.
+- `apiImage`, `webImage`, and `codexImage` must be ACR digest refs from accepted candidate evidence.
 
 ## Required Production Variables
 
@@ -58,6 +60,7 @@ Tracked files stay organization-neutral:
 - `AZURE_LOG_ANALYTICS_WORKSPACE_NAME`
 - `ACA_API_APP_NAME`
 - `ACA_WEB_APP_NAME`
+- `ACA_CODEX_APP_NAME`
 - `ACA_MIGRATE_JOB_NAME`
 - `ACR_PULL_IDENTITY_NAME`
 - `ACR_NAME`
@@ -92,8 +95,10 @@ Tracked files stay organization-neutral:
 
 - `ACA_API_CUSTOM_DOMAIN`
 - `ACA_WEB_CUSTOM_DOMAIN`
+- `ACA_CODEX_CUSTOM_DOMAIN`
 - `ACA_API_MANAGED_CERTIFICATE_NAME`
 - `ACA_WEB_MANAGED_CERTIFICATE_NAME`
+- `ACA_CODEX_MANAGED_CERTIFICATE_NAME`
 - `ACA_CUSTOM_DOMAIN_VALIDATION_METHOD`
 
 ## Preflight and Fail-Closed Checks
@@ -129,6 +134,7 @@ Key outputs from `main.bicep` for operators and downstream validation:
 - `acrPullIdentityId` / `acrPullIdentityPrincipalId`
 - `apiContainerAppName` / `apiLatestRevision` / `apiLatestRevisionFqdn`
 - `webContainerAppName` / `webLatestRevision` / `webLatestRevisionFqdn`
+- `codexContainerAppName` / `codexLatestRevision` / `codexLatestRevisionFqdn`
 - `migrationJobName` / `migrationJobId`
 - `postgresServerResourceId` / `postgresServerName` / `postgresFqdn` / `postgresDatabaseName`
 
@@ -143,8 +149,10 @@ Key outputs from `main.bicep` for operators and downstream validation:
 AZURE_RESOURCE_GROUP="<resource-group>" \
 ACA_API_APP_NAME="<api-app-name>" \
 ACA_WEB_APP_NAME="<web-app-name>" \
+ACA_CODEX_APP_NAME="<codex-app-name>" \
 ACA_API_CUSTOM_DOMAIN="<api-domain>" \
 ACA_WEB_CUSTOM_DOMAIN="<web-domain>" \
+ACA_CODEX_CUSTOM_DOMAIN="<codex-domain-optional>" \
 pnpm deploy:custom-domain:dns
 ```
 

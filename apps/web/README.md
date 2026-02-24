@@ -25,11 +25,13 @@ Proxy target rules:
 
 ## Env Table
 
-| Env Var               | Default                                 | Notes                                                                                 |
-| --------------------- | --------------------------------------- | ------------------------------------------------------------------------------------- |
-| `API_BASE_URL`        | `http://localhost:3001` (dev/test only) | Runtime proxy target for `/api/v1/*`; required in production.                         |
-| `WEB_SESSION_SECRET`  | dev/test default                        | Required in production; signs/verifies host-only BFF session cookie.                  |
-| `WEB_ALLOWED_ORIGINS` | unset                                   | Optional comma-separated allowlist for origin/referer checks on mutating proxy calls. |
+| Env Var                          | Default                                 | Notes                                                                                 |
+| -------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------- |
+| `API_BASE_URL`                   | `http://localhost:3001` (dev/test only) | Runtime proxy target for `/api/v1/*`; required in production.                         |
+| `WEB_SESSION_SECRET`             | dev/test default                        | Required in production; signs/verifies host-only BFF session cookie.                  |
+| `WEB_ALLOWED_ORIGINS`            | unset                                   | Optional comma-separated allowlist for origin/referer checks on mutating proxy calls. |
+| `NEXT_PUBLIC_CODEX_API_BASE_URL` | `http://localhost:3010`                 | Browser-side base URL for direct codex gateway HTTP calls.                            |
+| `NEXT_PUBLIC_CODEX_WS_BASE_URL`  | `ws://localhost:3010`                   | Browser-side base URL for direct codex gateway websocket stream.                      |
 
 Local template: `apps/web/.env.local.example`.
 

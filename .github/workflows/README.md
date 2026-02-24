@@ -19,7 +19,7 @@
 - `cloud-deployment-pipeline.yml` (cloud runtime/infra/identity)
   - trigger: `push` to `main`, `workflow_dispatch` replay by `candidate_sha`
   - key jobs: commit group (`determine-scope`, `fast-feedback`, optional static checks, `commit-stage`)
-  - candidate group: `freeze-candidate-api-image`, `freeze-candidate-web-image`, `freeze-current-runtime-refs`, `publish-release-candidate`, `load-release-candidate`
+  - candidate group: `freeze-candidate-api-image`, `freeze-candidate-web-image`, `freeze-candidate-codex-image`, `freeze-current-runtime-refs`, `publish-release-candidate`, `load-release-candidate`
   - acceptance group: optional `runtime-api-system-acceptance` / `runtime-browser-acceptance` / `runtime-migration-image-acceptance` / `infra-readonly-acceptance` / `identity-readonly-acceptance`, `acceptance-stage` (`YES` or `NO`)
   - production group: `approve-control-plane` (enters `production-control-plane` only for control-plane-required deploys), conditional `deploy-approved-candidate`, `production-blackbox-verify`, `production-stage`
   - production blackbox auth contract: requires fresh nightly `auth-entra-canary` run and fresh `auth-delegated-smoke` run for target SHA
@@ -54,6 +54,14 @@
 - Cloud production mutation runs in `production`.
 - Cloud infra/identity mutation requires `production-control-plane` approval when control-plane scope is present.
 - Desktop signing/publishing runs in `desktop-release`.
+
+## Runtime Candidate Contract
+
+- Cloud release candidates now include three digest-pinned runtime refs:
+  - `candidate.apiRef`
+  - `candidate.webRef`
+  - `candidate.codexRef`
+- Acceptance and production mutation fail closed when any required runtime ref is missing or not digest-pinned.
 
 ## Identity Variable Naming
 

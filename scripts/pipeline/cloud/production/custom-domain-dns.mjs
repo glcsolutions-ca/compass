@@ -4,6 +4,7 @@ import { getHeadSha, requireEnv, runJson, writeArtifact } from "./utils.mjs";
 const resourceGroup = requireEnv("AZURE_RESOURCE_GROUP");
 const apiAppName = requireEnv("ACA_API_APP_NAME");
 const webAppName = requireEnv("ACA_WEB_APP_NAME");
+const codexAppName = process.env.ACA_CODEX_APP_NAME?.trim() || "";
 const apiCustomDomain = normalizeDomain(
   requireEnv("ACA_API_CUSTOM_DOMAIN"),
   "ACA_API_CUSTOM_DOMAIN"
@@ -12,6 +13,9 @@ const webCustomDomain = normalizeDomain(
   requireEnv("ACA_WEB_CUSTOM_DOMAIN"),
   "ACA_WEB_CUSTOM_DOMAIN"
 );
+const codexCustomDomain = process.env.ACA_CODEX_CUSTOM_DOMAIN?.trim()
+  ? normalizeDomain(process.env.ACA_CODEX_CUSTOM_DOMAIN, "ACA_CODEX_CUSTOM_DOMAIN")
+  : "";
 
 function normalizeDomain(value, variableName) {
   const normalized = value.trim().toLowerCase().replace(/\.$/, "");
@@ -77,6 +81,10 @@ function buildRecords(domainName, ingressFqdn, verificationId) {
 async function main() {
   const apiDnsInputs = await readContainerAppDnsInputs(apiAppName);
   const webDnsInputs = await readContainerAppDnsInputs(webAppName);
+  const codexDnsInputs =
+    codexCustomDomain.length > 0
+      ? await readContainerAppDnsInputs(requireCodexAppName(codexAppName))
+      : null;
 
   const payload = {
     schemaVersion: "1",
@@ -84,7 +92,10 @@ async function main() {
     resourceGroup,
     records: [
       ...buildRecords(apiCustomDomain, apiDnsInputs.ingressFqdn, apiDnsInputs.verificationId),
-      ...buildRecords(webCustomDomain, webDnsInputs.ingressFqdn, webDnsInputs.verificationId)
+      ...buildRecords(webCustomDomain, webDnsInputs.ingressFqdn, webDnsInputs.verificationId),
+      ...(codexDnsInputs
+        ? buildRecords(codexCustomDomain, codexDnsInputs.ingressFqdn, codexDnsInputs.verificationId)
+        : [])
     ]
   };
 
@@ -104,3 +115,10 @@ async function main() {
 }
 
 void main();
+
+function requireCodexAppName(value) {
+  if (!value || value.trim().length === 0) {
+    throw new Error("ACA_CODEX_APP_NAME is required when ACA_CODEX_CUSTOM_DOMAIN is configured.");
+  }
+  return value.trim();
+}

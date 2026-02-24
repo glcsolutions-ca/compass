@@ -47,10 +47,15 @@ async function main() {
       logAnalyticsWorkspaceName: { value: requireEnv("AZURE_LOG_ANALYTICS_WORKSPACE_NAME") },
       apiAppName: { value: requireEnv("ACA_API_APP_NAME") },
       webAppName: { value: requireEnv("ACA_WEB_APP_NAME") },
+      codexAppName: { value: requireEnv("ACA_CODEX_APP_NAME") },
       apiCustomDomain: { value: readOptional("ACA_API_CUSTOM_DOMAIN") },
       webCustomDomain: { value: readOptional("ACA_WEB_CUSTOM_DOMAIN") },
+      codexCustomDomain: { value: readOptional("ACA_CODEX_CUSTOM_DOMAIN") },
       apiManagedCertificateName: { value: readOptional("ACA_API_MANAGED_CERTIFICATE_NAME") },
       webManagedCertificateName: { value: readOptional("ACA_WEB_MANAGED_CERTIFICATE_NAME") },
+      codexManagedCertificateName: {
+        value: readOptional("ACA_CODEX_MANAGED_CERTIFICATE_NAME")
+      },
       customDomainValidationMethod: {
         value: normalizeCustomDomainValidationMethod(
           process.env.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD
@@ -87,7 +92,8 @@ async function main() {
       postgresStorageMb: { value: asNumber("POSTGRES_STORAGE_MB") },
       postgresAdminPassword: { value: requireEnv("POSTGRES_ADMIN_PASSWORD") },
       apiImage: { value: requireEnv("API_IMAGE") },
-      webImage: { value: requireEnv("WEB_IMAGE") }
+      webImage: { value: requireEnv("WEB_IMAGE") },
+      codexImage: { value: requireEnv("CODEX_IMAGE") }
     }
   };
 

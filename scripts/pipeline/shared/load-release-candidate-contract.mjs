@@ -28,6 +28,7 @@ async function main() {
 
   const candidateApiRef = String(manifest?.candidate?.apiRef || "");
   const candidateWebRef = String(manifest?.candidate?.webRef || "");
+  const candidateCodexRef = String(manifest?.candidate?.codexRef || "");
 
   const reasonCodes = [];
   const requiresCandidateRefs = runtimeChanged || infraChanged || requiresInfraConvergence;
@@ -39,12 +40,18 @@ async function main() {
     if (!candidateWebRef) {
       reasonCodes.push("CANDIDATE_WEB_REF_MISSING");
     }
+    if (!candidateCodexRef) {
+      reasonCodes.push("CANDIDATE_CODEX_REF_MISSING");
+    }
 
     if (candidateApiRef && !DIGEST_PATTERN.test(candidateApiRef)) {
       reasonCodes.push("CANDIDATE_API_REF_NOT_DIGEST");
     }
     if (candidateWebRef && !DIGEST_PATTERN.test(candidateWebRef)) {
       reasonCodes.push("CANDIDATE_WEB_REF_NOT_DIGEST");
+    }
+    if (candidateCodexRef && !DIGEST_PATTERN.test(candidateCodexRef)) {
+      reasonCodes.push("CANDIDATE_CODEX_REF_NOT_DIGEST");
     }
   }
 
@@ -78,6 +85,7 @@ async function main() {
     requires_migrations: String(requiresMigrations),
     candidate_api_ref: candidateApiRef,
     candidate_web_ref: candidateWebRef,
+    candidate_codex_ref: candidateCodexRef,
     commit_run_id: runId,
     candidate_ref_contract_status: candidateRefContractStatus,
     candidate_ref_contract_reason_codes_json: JSON.stringify(reasonCodes),

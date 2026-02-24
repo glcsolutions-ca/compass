@@ -3,14 +3,14 @@
 This directory is the machine source of truth for delivery stage control.
 
 - Canonical contract: `.github/policy/pipeline-policy.json`
-- Enforced by workflows: `.github/workflows/commit-stage.yml`, `.github/workflows/acceptance-stage.yml`, `.github/workflows/production-stage.yml`
+- Enforced by workflows: `.github/workflows/commit-stage.yml`, `.github/workflows/deployment-pipeline.yml`
 - Required branch-protection check context: `commit-stage`
 
-`commit-stage` is the single merge-blocking check context. Acceptance and production are post-merge stage gates.
+`commit-stage` is the single merge-blocking check context. Acceptance and production are post-merge stages inside `deployment-pipeline.yml`.
 
 ## Policy Sections
 
-- `scopeRules`: file-to-scope classification (`runtime`, `infra`, `identity`, `docsOnly`, rollout flags)
+- `scopeRules`: file-to-scope classification (`runtime`, `desktop`, `infra`, `identity`, `docsOnly`, rollout flags)
 - `commitStage`: required commit checks plus timing SLO policy (`targetSeconds`, `mode`)
 - `acceptanceStage`: required acceptance jobs by scope
 - `productionStage`: production promotion safety toggles

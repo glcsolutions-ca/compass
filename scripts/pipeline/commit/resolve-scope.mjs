@@ -62,6 +62,7 @@ async function main() {
     pr_number: prNumber ? String(prNumber) : "",
     change_class: changeClass,
     runtime_changed: String(scope.runtime),
+    desktop_changed: String(scope.desktop),
     infra_changed: String(scope.infra),
     identity_changed: String(scope.identity),
     migration_changed: String(scope.migration),
@@ -83,6 +84,7 @@ async function main() {
       `- Change class: \`${changeClass}\``,
       `- Changed files: ${changedFiles.length}`,
       `- Runtime changed: \`${scope.runtime}\``,
+      `- Desktop changed: \`${scope.desktop}\``,
       `- Infra changed: \`${scope.infra}\``,
       `- Identity changed: \`${scope.identity}\``,
       `- Docs only: \`${scope.docsOnly}\``,
@@ -93,7 +95,7 @@ async function main() {
   );
 
   console.info(
-    `Scope resolved: changeClass=${changeClass}, runtime=${scope.runtime}, infra=${scope.infra}, identity=${scope.identity}`
+    `Scope resolved: changeClass=${changeClass}, runtime=${scope.runtime}, desktop=${scope.desktop}, infra=${scope.infra}, identity=${scope.identity}`
   );
 }
 

@@ -130,6 +130,7 @@ export function assertPipelinePolicyShape(policy) {
   const scopeRules = policy.scopeRules;
   const requiredScopeArrays = [
     "runtime",
+    "desktop",
     "infra",
     "identity",
     "docsOnly",
@@ -194,6 +195,9 @@ export function resolveChangeScope(policy, changedFiles) {
   const runtime = changedFiles.some((filePath) =>
     matchesAnyPattern(filePath, policy.scopeRules.runtime)
   );
+  const desktop = changedFiles.some((filePath) =>
+    matchesAnyPattern(filePath, policy.scopeRules.desktop)
+  );
   const infra = changedFiles.some((filePath) =>
     matchesAnyPattern(filePath, policy.scopeRules.infra)
   );
@@ -210,10 +214,11 @@ export function resolveChangeScope(policy, changedFiles) {
   const docsOnlyCandidate =
     changedFiles.length > 0 &&
     changedFiles.every((filePath) => matchesAnyPattern(filePath, policy.scopeRules.docsOnly));
-  const docsOnly = docsOnlyCandidate && !runtime && !infra && !identity;
+  const docsOnly = docsOnlyCandidate && !runtime && !desktop && !infra && !identity;
 
   return {
     runtime,
+    desktop,
     infra,
     identity,
     migration,
@@ -233,6 +238,10 @@ export function classifyCandidateKind(scope) {
 
   if (scope.identity) {
     return "identity";
+  }
+
+  if (scope.desktop) {
+    return "desktop";
   }
 
   return "checks";

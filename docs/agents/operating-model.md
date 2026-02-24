@@ -18,7 +18,8 @@ Compass uses a deterministic 3-stage delivery pipeline.
 ## Canonical Stage Dependencies
 
 1. `commit-stage.yml` runs `determine-scope`, `fast-feedback`, optional infra/identity static checks, then `commit-stage`.
-2. Successful commit stage on `main` emits `.artifacts/candidate/<sha>/manifest.json`.
-3. `acceptance-stage.yml` loads that candidate, runs required scope-based acceptance jobs, and enforces candidate/config contracts.
-4. `acceptance-stage` is the acceptance yes/no decision.
-5. `production-stage.yml` loads accepted evidence, runs freshness check, mutates production, then verifies and records release evidence.
+2. `deployment-pipeline.yml` runs on `push main` and reuses commit-stage checks before promotion.
+3. Deployment pipeline candidate freeze emits `.artifacts/candidate/<sha>/manifest.json`.
+4. Deployment pipeline acceptance jobs load that candidate, run scope-based acceptance checks, and enforce candidate/config contracts.
+5. Deployment pipeline production mutates only accepted candidate refs, then verifies and records release evidence.
+6. Final decision artifact is `.artifacts/release/<sha>/decision.json`.

@@ -11,7 +11,9 @@ const policy = loadPipelinePolicyObject({
   version: "1",
   scopeRules: {
     runtime: [
-      "apps/**",
+      "apps/api/**",
+      "apps/web/**",
+      "apps/worker/**",
       "packages/**",
       "db/migrations/**",
       "db/scripts/**",
@@ -22,6 +24,7 @@ const policy = loadPipelinePolicyObject({
       "pnpm-workspace.yaml",
       "**/package.json"
     ],
+    desktop: ["apps/desktop/**", ".github/workflows/desktop-release.yml"],
     infra: ["infra/azure/**"],
     identity: ["infra/identity/**"],
     migration: ["db/migrations/**", "db/scripts/**"],
@@ -97,6 +100,16 @@ describe("scope resolution", () => {
     const scope = resolveChangeScope(policy, ["docs/README.md"]);
     expect(scope.docsOnly).toBe(true);
     expect(classifyCandidateKind(scope)).toBe("checks");
+  });
+
+  it("classifies desktop-only changes", () => {
+    const scope = resolveChangeScope(policy, ["apps/desktop/src/main.ts"]);
+    expect(scope.runtime).toBe(false);
+    expect(scope.desktop).toBe(true);
+    expect(scope.infra).toBe(false);
+    expect(scope.identity).toBe(false);
+    expect(scope.docsOnly).toBe(false);
+    expect(classifyCandidateKind(scope)).toBe("desktop");
   });
 
   it("flags migration changes", () => {

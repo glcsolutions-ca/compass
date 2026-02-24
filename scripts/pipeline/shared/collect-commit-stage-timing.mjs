@@ -86,34 +86,61 @@ function durationSeconds(job) {
   return end - start;
 }
 
-function calculateTimeToCommitGate({ runCreatedAt, gateJob, nowEpochSeconds }) {
-  if (!runCreatedAt) {
+function earliestStartEpoch(jobs, jobNames) {
+  let earliest = null;
+  for (const jobName of jobNames) {
+    const job = jobs.find((entry) => entry?.name === jobName);
+    const startedAt = parseIsoToEpochSeconds(job?.started_at);
+    if (startedAt === null) {
+      continue;
+    }
+    if (earliest === null || startedAt < earliest) {
+      earliest = startedAt;
+    }
+  }
+  return earliest;
+}
+
+function calculateQueueDelaySeconds({ runCreatedAt, executionStartedAt }) {
+  if (!runCreatedAt || !executionStartedAt) {
     return null;
   }
 
-  const gateCompletedAt = parseIsoToEpochSeconds(gateJob?.completed_at);
-  if (gateCompletedAt && gateCompletedAt >= runCreatedAt) {
-    return gateCompletedAt - runCreatedAt;
-  }
-
-  if (nowEpochSeconds >= runCreatedAt) {
-    return nowEpochSeconds - runCreatedAt;
+  if (executionStartedAt >= runCreatedAt) {
+    return executionStartedAt - runCreatedAt;
   }
 
   return null;
 }
 
-function calculateObservedRunSeconds({ runCreatedAt, runUpdatedAt, nowEpochSeconds }) {
-  if (!runCreatedAt) {
+function calculateTimeToCommitGate({ executionStartedAt, gateJob, nowEpochSeconds }) {
+  if (!executionStartedAt) {
     return null;
   }
 
-  if (runUpdatedAt && runUpdatedAt >= runCreatedAt) {
-    return runUpdatedAt - runCreatedAt;
+  const gateCompletedAt = parseIsoToEpochSeconds(gateJob?.completed_at);
+  if (gateCompletedAt && gateCompletedAt >= executionStartedAt) {
+    return gateCompletedAt - executionStartedAt;
   }
 
-  if (nowEpochSeconds >= runCreatedAt) {
-    return nowEpochSeconds - runCreatedAt;
+  if (nowEpochSeconds >= executionStartedAt) {
+    return nowEpochSeconds - executionStartedAt;
+  }
+
+  return null;
+}
+
+function calculateObservedRunSeconds({ executionStartedAt, runUpdatedAt, nowEpochSeconds }) {
+  if (!executionStartedAt) {
+    return null;
+  }
+
+  if (runUpdatedAt && runUpdatedAt >= executionStartedAt) {
+    return runUpdatedAt - executionStartedAt;
+  }
+
+  if (nowEpochSeconds >= executionStartedAt) {
+    return nowEpochSeconds - executionStartedAt;
   }
 
   return null;
@@ -148,15 +175,26 @@ async function main() {
 
   const quickFeedbackJob = jobs.find((job) => job.name === "fast-feedback");
   const gateJob = jobs.find((job) => job.name === "commit-stage");
+  const executionStartedAt = earliestStartEpoch(jobs, [
+    "determine-scope",
+    "fast-feedback",
+    "infra-static-check",
+    "identity-static-check",
+    "commit-stage"
+  ]);
 
   const quickFeedbackSeconds = durationSeconds(quickFeedbackJob);
-  const timeToCommitGateSeconds = calculateTimeToCommitGate({
+  const queueDelaySeconds = calculateQueueDelaySeconds({
     runCreatedAt,
+    executionStartedAt
+  });
+  const timeToCommitGateSeconds = calculateTimeToCommitGate({
+    executionStartedAt,
     gateJob,
     nowEpochSeconds
   });
   const totalRunSeconds = calculateObservedRunSeconds({
-    runCreatedAt,
+    executionStartedAt,
     runUpdatedAt,
     nowEpochSeconds
   });
@@ -177,6 +215,7 @@ async function main() {
     runConclusion: run?.conclusion ?? "",
     metrics: {
       time_to_commit_gate_seconds: timeToCommitGateSeconds,
+      queue_delay_seconds: queueDelaySeconds,
       quick_feedback_seconds: quickFeedbackSeconds,
       total_run_seconds: totalRunSeconds
     },
@@ -217,6 +256,7 @@ async function main() {
     timing_path: artifactPath,
     time_to_commit_gate_seconds:
       timeToCommitGateSeconds === null ? "" : String(timeToCommitGateSeconds),
+    queue_delay_seconds: queueDelaySeconds === null ? "" : String(queueDelaySeconds),
     quick_feedback_seconds: quickFeedbackSeconds === null ? "" : String(quickFeedbackSeconds),
     total_run_seconds: totalRunSeconds === null ? "" : String(totalRunSeconds),
     commit_stage_slo_mode: mode,
@@ -229,9 +269,10 @@ async function main() {
       "### Commit Stage Timing",
       `- phase: ${phase}`,
       `- tested sha: \`${testedSha}\``,
-      `- time to commit gate: ${formatMetric(timeToCommitGateSeconds)}`,
+      `- queue delay (non-SLO): ${formatMetric(queueDelaySeconds)}`,
+      `- execution to commit gate: ${formatMetric(timeToCommitGateSeconds)}`,
       `- quick feedback duration: ${formatMetric(quickFeedbackSeconds)}`,
-      `- observed total run: ${formatMetric(totalRunSeconds)}`,
+      `- observed execution total: ${formatMetric(totalRunSeconds)}`,
       `- SLO: mode=\`${mode}\`, target=\`${targetSeconds}s\`, pass=\`${String(Boolean(sloPass))}\``
     ].join("\n")
   );

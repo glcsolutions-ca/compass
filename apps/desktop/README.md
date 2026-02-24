@@ -34,8 +34,19 @@ in packaged artifacts.
 ## Packaging Dependency Note
 
 Repo-level pnpm policy limits install-time build scripts. Desktop make scripts run `prepack:deps`
-to rebuild required native modules (`electron`, `fs-xattr`, `macos-alias`,
-`@bitdisaster/exe-icon-extractor`) before packaging.
+to rebuild required native modules (`electron`, `fs-xattr`, `macos-alias`) before packaging.
+
+The Windows icon extraction helper (`@bitdisaster/exe-icon-extractor`) is optional in
+`electron-wix-msi`; package builds continue if that optional dependency is unavailable.
+
+## Unsigned Installer Testing
+
+Unsigned macOS apps downloaded from GitHub Releases are quarantined by Gatekeeper. After copying
+`Compass.app` to `/Applications`, remove quarantine before first launch:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Compass.app"
+```
 
 ## Desktop API (preload)
 

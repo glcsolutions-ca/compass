@@ -17,3 +17,5 @@ test-results
 *.tsbuildinfo
 
 apps/desktop/out
+
+apps/codex-app-server/.codex-gateway

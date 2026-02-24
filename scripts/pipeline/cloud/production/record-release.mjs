@@ -9,6 +9,7 @@ const logUrl = process.env.DEPLOY_LOG_URL?.trim() || "";
 const environmentUrl = process.env.DEPLOY_ENVIRONMENT_URL?.trim() || "";
 const candidateApiRef = process.env.CANDIDATE_API_REF?.trim() || "";
 const candidateWebRef = process.env.CANDIDATE_WEB_REF?.trim() || "";
+const candidateCodexRef = process.env.CANDIDATE_CODEX_REF?.trim() || "";
 const changeClass = process.env.CHANGE_CLASS?.trim() || "runtime";
 const maxRetryAttempts = 3;
 const baseRetryDelayMs = 1000;
@@ -68,7 +69,8 @@ async function main() {
       payload: {
         changeClass,
         candidateApiRef,
-        candidateWebRef
+        candidateWebRef,
+        candidateCodexRef
       }
     }
   });

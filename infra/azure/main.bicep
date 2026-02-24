@@ -13,6 +13,7 @@ param environmentName string = 'SET_IN_GITHUB_ENV'
 param logAnalyticsWorkspaceName string = 'SET_IN_GITHUB_ENV'
 param apiAppName string = 'SET_IN_GITHUB_ENV'
 param webAppName string = 'SET_IN_GITHUB_ENV'
+param codexAppName string = 'SET_IN_GITHUB_ENV'
 param migrationJobName string = 'SET_IN_GITHUB_ENV'
 param acrPullIdentityName string = 'SET_IN_GITHUB_ENV'
 param acrName string = 'SET_IN_GITHUB_ENV'
@@ -30,10 +31,13 @@ param postgresStorageMb int = 32768
 
 param apiImage string = 'SET_IN_GITHUB_ENV'
 param webImage string = 'SET_IN_GITHUB_ENV'
+param codexImage string = 'SET_IN_GITHUB_ENV'
 param apiCustomDomain string = ''
 param webCustomDomain string = ''
+param codexCustomDomain string = ''
 param apiManagedCertificateName string = ''
 param webManagedCertificateName string = ''
+param codexManagedCertificateName string = ''
 @allowed([
   'CNAME'
   'HTTP'
@@ -42,6 +46,7 @@ param webManagedCertificateName string = ''
 param customDomainValidationMethod string = 'CNAME'
 
 param apiLogLevel string = 'warn'
+param codexLogLevel string = 'warn'
 param authIssuer string = 'SET_IN_GITHUB_ENV'
 param authJwksUri string = 'SET_IN_GITHUB_ENV'
 param authAudience string = 'SET_IN_GITHUB_ENV'
@@ -115,6 +120,19 @@ resource webManagedCertificate 'Microsoft.App/managedEnvironments/managedCertifi
   }
 }
 
+resource codexManagedCertificate 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(codexCustomDomain)) {
+  parent: managedEnvironment
+  name: codexManagedCertificateName
+  location: location
+  dependsOn: [
+    containerEnvironment
+  ]
+  properties: {
+    subjectName: codexCustomDomain
+    domainControlValidation: customDomainValidationMethod
+  }
+}
+
 module acr './modules/acr.bicep' = {
   name: 'acr'
   params: {
@@ -148,6 +166,9 @@ var databaseUrl = 'postgres://${encodedDbUser}:${encodedDbPassword}@${postgres.o
 var apiBaseUrl = empty(apiCustomDomain)
   ? 'https://${apiAppName}.${containerEnvironment.outputs.defaultDomain}'
   : 'https://${apiCustomDomain}'
+var codexBaseUrl = empty(codexCustomDomain)
+  ? 'https://${codexAppName}.${containerEnvironment.outputs.defaultDomain}'
+  : 'https://${codexCustomDomain}'
 
 resource acrPullIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: acrPullIdentityName
@@ -217,6 +238,25 @@ module web './modules/containerapp-web.bicep' = {
   ]
 }
 
+module codex './modules/containerapp-codex.bicep' = {
+  name: 'containerapp-codex'
+  params: {
+    location: location
+    containerAppName: codexAppName
+    managedEnvironmentId: containerEnvironment.outputs.environmentId
+    image: codexImage
+    registryServer: acr.outputs.loginServer
+    registryIdentityResourceId: acrPullIdentity.id
+    databaseUrl: databaseUrl
+    logLevel: codexLogLevel
+    customDomainName: codexCustomDomain
+    customDomainCertificateId: empty(codexCustomDomain) ? '' : codexManagedCertificate.id
+  }
+  dependsOn: [
+    acrPullIdentityRoleAssignment
+  ]
+}
+
 module migrateJob './modules/containerapp-job-migrate.bicep' = {
   name: 'containerapp-job-migrate'
   params: {
@@ -241,6 +281,7 @@ output containerAppsEnvironmentName string = containerEnvironment.outputs.enviro
 output containerAppsEnvironmentId string = containerEnvironment.outputs.environmentId
 output containerAppsDefaultDomain string = containerEnvironment.outputs.defaultDomain
 output apiBaseUrlOutput string = apiBaseUrl
+output codexBaseUrlOutput string = codexBaseUrl
 output acrId string = acr.outputs.registryId
 output acrNameOutput string = acr.outputs.registryNameOutput
 output acrLoginServer string = acr.outputs.loginServer
@@ -254,6 +295,10 @@ output apiLatestRevisionFqdn string = api.outputs.latestRevisionFqdn
 output webContainerAppName string = web.outputs.appName
 output webLatestRevision string = web.outputs.latestRevisionName
 output webLatestRevisionFqdn string = web.outputs.latestRevisionFqdn
+
+output codexContainerAppName string = codex.outputs.appName
+output codexLatestRevision string = codex.outputs.latestRevisionName
+output codexLatestRevisionFqdn string = codex.outputs.latestRevisionFqdn
 
 output migrationJobName string = migrateJob.outputs.jobNameOutput
 output migrationJobId string = migrateJob.outputs.jobId

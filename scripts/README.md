@@ -7,7 +7,7 @@ The `scripts/` directory contains delivery pipeline control-plane automation.
 ## Pipeline Stage Boundaries
 
 - `scripts/pipeline/commit/`: fast, merge-blocking checks and scope/docs/testing policy gate logic.
-- `scripts/pipeline/acceptance/`: acceptance decision logic and release-candidate validation helpers used in mainline pipeline.
+- `scripts/pipeline/acceptance/`: acceptance decision logic and release-candidate validation helpers used in deployment pipeline.
 - `scripts/pipeline/production/`: production mutation helpers (infra apply, migration orchestration, smoke verification, release recording).
 - `scripts/pipeline/shared/`: shared utilities, replay loaders, and workflow contract tests.
 

@@ -4,7 +4,7 @@
 
 1. PRs run `commit-stage.yml` and must pass `commit-stage`.
 2. Merge queue runs the same commit gate on `merge_group` before integrating to `main`.
-3. Commits on `main` run `mainline-pipeline.yml`.
+3. Commits on `main` run `deployment-pipeline.yml`.
 4. Mainline pipeline performs commit checks, freezes candidate refs, runs acceptance, then runs production.
 5. Production deploys accepted candidate digests only (no runtime image rebuild).
 6. Mainline pipeline emits one canonical release decision artifact (`YES` or `NO`).
@@ -16,7 +16,7 @@
   - key jobs: `determine-scope`, `fast-feedback`, optional `infra-static-check`/`identity-static-check`, `commit-stage`
   - merge-blocking required context: `commit-stage`
   - emits timing telemetry at `.artifacts/commit-stage/<sha>/timing.json`
-- `mainline-pipeline.yml`
+- `deployment-pipeline.yml`
   - trigger: `push` to `main`, `workflow_dispatch` replay by `candidate_sha`
   - key jobs: commit group (`determine-scope`, `fast-feedback`, optional static checks, `commit-stage`)
   - candidate group: `freeze-release-candidate-images`, `publish-release-candidate`, `load-release-candidate`

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const commitStageWorkflowPath = ".github/workflows/commit-stage.yml";
-const mainlineWorkflowPath = ".github/workflows/mainline-pipeline.yml";
+const deploymentPipelineWorkflowPath = ".github/workflows/deployment-pipeline.yml";
 const sharedApplyScriptPath = "scripts/pipeline/production/apply-infra.mjs";
 
 function readUtf8(filePath) {
@@ -49,7 +49,7 @@ function extractConcurrencySettings(jobBlock) {
 
 describe("workflow pipeline contract", () => {
   it("keeps production mutation under a serialized lock with cancel disabled", () => {
-    const workflow = readUtf8(mainlineWorkflowPath);
+    const workflow = readUtf8(deploymentPipelineWorkflowPath);
 
     const concurrency = extractConcurrencySettings(
       extractJobBlock(workflow, "deploy_approved_candidate")
@@ -60,13 +60,13 @@ describe("workflow pipeline contract", () => {
   });
 
   it("uses shared infra apply script and deterministic run-scoped ARM deployment name", () => {
-    const productionWorkflow = readUtf8(mainlineWorkflowPath);
+    const productionWorkflow = readUtf8(deploymentPipelineWorkflowPath);
 
     expect(productionWorkflow).toContain("node scripts/pipeline/production/apply-infra.mjs");
   });
 
   it("keeps production stage deploy-only with no docker build commands", () => {
-    const workflow = readUtf8(mainlineWorkflowPath);
+    const workflow = readUtf8(deploymentPipelineWorkflowPath);
     const deployJob = extractJobBlock(workflow, "deploy_approved_candidate");
 
     expect(deployJob).not.toContain("docker build");
@@ -74,7 +74,7 @@ describe("workflow pipeline contract", () => {
   });
 
   it("keeps acceptance runtime candidate-fidelity contract", () => {
-    const workflow = readUtf8(mainlineWorkflowPath);
+    const workflow = readUtf8(deploymentPipelineWorkflowPath);
 
     expect(workflow).toContain("Pull candidate runtime images");
     expect(workflow).toContain('docker pull "$CANDIDATE_API_REF"');
@@ -95,22 +95,22 @@ describe("workflow pipeline contract", () => {
     expect(workflow).not.toContain("\n  push:");
   });
 
-  it("keeps mainline pipeline as push/dispatch and removes cross-workflow chaining", () => {
-    const workflow = readUtf8(mainlineWorkflowPath);
+  it("keeps deployment pipeline as push/dispatch and removes cross-workflow chaining", () => {
+    const workflow = readUtf8(deploymentPipelineWorkflowPath);
     expect(workflow).toContain("push:");
     expect(workflow).toContain("workflow_dispatch:");
     expect(workflow).not.toContain("workflow_run:");
   });
 
   it("keeps control-plane approval gate for infra and identity scopes", () => {
-    const workflow = readUtf8(mainlineWorkflowPath);
+    const workflow = readUtf8(deploymentPipelineWorkflowPath);
     expect(workflow).toContain("name: approve-control-plane");
     expect(workflow).toContain("environment: production-control-plane");
     expect(workflow).toContain("needs.acceptance_stage.outputs.control_plane_required == 'true'");
   });
 
   it("runs production only after acceptance YES and deploy-required true", () => {
-    const workflow = readUtf8(mainlineWorkflowPath);
+    const workflow = readUtf8(deploymentPipelineWorkflowPath);
     expect(workflow).toContain("needs.acceptance_stage.outputs.acceptance_decision == 'YES'");
     expect(workflow).toContain("needs.acceptance_stage.outputs.deploy_required == 'true'");
   });

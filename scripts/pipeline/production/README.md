@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`scripts/pipeline/production/` contains production stage helpers used by `mainline-pipeline.yml`.
+`scripts/pipeline/production/` contains production stage helpers used by `deployment-pipeline.yml`.
 
 ## Script Map
 

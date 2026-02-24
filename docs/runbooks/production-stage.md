@@ -9,8 +9,8 @@ Production stage must deploy accepted candidate digest refs and must not rebuild
 ## Stage Topology
 
 1. `commit-stage.yml` gates PR and merge queue with fast merge-blocking feedback.
-2. `mainline-pipeline.yml` runs on `push` to `main`.
-3. Inside mainline pipeline: commit checks -> candidate freeze -> acceptance (YES/NO) -> production -> release decision.
+2. `deployment-pipeline.yml` runs on `push` to `main`.
+3. Inside deployment pipeline: commit checks -> candidate freeze -> acceptance (YES/NO) -> production -> release decision.
 
 ## Non-Commit Rule
 
@@ -19,7 +19,7 @@ All concrete production values must be stored in GitHub environments (`acceptanc
 
 ## Workflow
 
-- Workflow file: `.github/workflows/mainline-pipeline.yml`
+- Workflow file: `.github/workflows/deployment-pipeline.yml`
 - Trigger:
   - `push` to `main`
   - `workflow_dispatch` replay by `candidate_sha`
@@ -101,7 +101,7 @@ Identity config preflight contract (shared with acceptance):
 
 ## Replay and Rollback
 
-- Manual replay: run `mainline-pipeline.yml` with `candidate_sha`.
+- Manual replay: run `deployment-pipeline.yml` with `candidate_sha`.
 - Replay uses the same candidate manifest and digest refs.
 - For runtime rollback, replay a previously accepted candidate SHA.
 
@@ -118,6 +118,6 @@ Identity config preflight contract (shared with acceptance):
 
 ## Safety Notes
 
-- Keep `mainline-pipeline.yml` deploy-only for runtime artifacts in production jobs (no `docker build`/`docker push` in production stage jobs).
+- Keep `deployment-pipeline.yml` deploy-only for runtime artifacts in production jobs (no `docker build`/`docker push` in production stage jobs).
 - Keep infra/identity mutation under `environment: production` and `production-mutation` lock.
 - Keep acceptance credentials read-only and isolated from production mutation credentials.

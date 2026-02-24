@@ -1,4 +1,4 @@
-name: Mainline Pipeline
+name: Deployment Pipeline
 
 on:
   push:
@@ -495,7 +495,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          WORKFLOW_FILE: mainline-pipeline.yml
+          WORKFLOW_FILE: deployment-pipeline.yml
           HEAD_SHA: ${{ needs.candidate_context.outputs.candidate_sha }}
           RUN_EVENT: push
           RUN_STATUS: success
@@ -527,7 +527,7 @@ jobs:
       - name: Upload release candidate manifest copy
         uses: actions/upload-artifact@v4
         with:
-          name: mainline-candidate-${{ steps.manifest.outputs.head_sha }}
+          name: deployment-pipeline-candidate-${{ steps.manifest.outputs.head_sha }}
           path: ${{ steps.manifest.outputs.release_candidate_manifest_copy_path }}
           if-no-files-found: error
 

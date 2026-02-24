@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`scripts/pipeline/shared/` contains reusable helpers for commit-stage and mainline pipeline orchestration.
+`scripts/pipeline/shared/` contains reusable helpers for commit-stage and deployment pipeline orchestration.
 
 ## Script Map
 

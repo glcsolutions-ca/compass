@@ -19,7 +19,7 @@
 ## `acceptance-stage` Failure
 
 - Cause: required acceptance check outcomes did not succeed for the candidate scope, candidate digest contract failed, or identity config contract failed.
-- Fix: inspect `.artifacts/acceptance/<sha>/result.json` and rerun `mainline-pipeline.yml` after fix-forward.
+- Fix: inspect `.artifacts/acceptance/<sha>/result.json` and rerun `deployment-pipeline.yml` after fix-forward.
 
 ## `production-stage` Failure
 

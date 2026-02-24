@@ -9,8 +9,8 @@
 - Terraform + provider versions/backend declaration: `infra/identity/versions.tf`
 - Environment variable template: `infra/identity/env/prod.tfvars`
 - Pipeline stages:
-  - `.github/workflows/mainline-pipeline.yml` (`identity-readonly-acceptance`, plan)
-  - `.github/workflows/mainline-pipeline.yml` (`deploy-approved-candidate`, apply)
+  - `.github/workflows/deployment-pipeline.yml` (`identity-readonly-acceptance`, plan)
+  - `.github/workflows/deployment-pipeline.yml` (`deploy-approved-candidate`, apply)
 
 ## Provisioned Identity Objects
 
@@ -77,7 +77,7 @@ Bootstrap steps:
 3. Assign `Application Administrator` to the bootstrap service principal.
 4. Create/prepare Terraform state storage and grant `Storage Blob Data Contributor` on the tfstate container scope.
 5. Set GitHub `production` secret `AZURE_IDENTITY_CLIENT_ID` to the bootstrap app client ID.
-6. Run mainline pipeline with identity scope to confirm non-mutating auth and backend access.
+6. Run deployment pipeline with identity scope to confirm non-mutating auth and backend access.
 
 ## Bootstrap Identity Rotation
 
@@ -87,7 +87,7 @@ Rotate bootstrap identity with explicit handoff:
 2. Add the same federated credential subject (`repo:<org>/<repo>:environment:production`).
 3. Grant the same Entra role assignments and Azure RBAC access used by the previous bootstrap identity.
 4. Update GitHub `production` secret `AZURE_IDENTITY_CLIENT_ID` to the new client ID.
-5. Run mainline pipeline (identity scope) to verify auth and backend access.
+5. Run deployment pipeline (identity scope) to verify auth and backend access.
 6. Remove old role assignments and old bootstrap app after replacement is verified.
 
 ## Workflow Evidence
@@ -155,7 +155,7 @@ terraform -chdir=infra/identity apply \
 
 ## References
 
-- `.github/workflows/mainline-pipeline.yml`
+- `.github/workflows/deployment-pipeline.yml`
 - `infra/README.md`
 - `infra/azure/README.md`
 - `docs/runbooks/production-stage.md`

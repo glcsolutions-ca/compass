@@ -59,7 +59,7 @@ All were rejected for current production posture due to security or control-plan
 4. Non-prod canary prerequisite for any future GHCR reconsideration:
    - prove deploy and cold-start image pull for API/Web/Job,
    - prove migration job execution path,
-   - prove no mainline promotion or determinism regression.
+   - prove no deployment pipeline promotion or determinism regression.
 
 ## Assumptions and Defaults
 

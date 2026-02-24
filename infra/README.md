@@ -25,14 +25,14 @@ Concrete production values belong only in GitHub `production` environment `vars`
 Infrastructure flows through the 3-stage delivery pipeline:
 
 1. `commit-stage.yml` performs fast non-mutating checks and scope classification on PR/merge queue.
-2. `mainline-pipeline.yml` runs acceptance jobs (`infra-readonly-acceptance`, `identity-readonly-acceptance`) against the frozen candidate.
-3. `mainline-pipeline.yml` performs guarded production mutation (`deploy-approved-candidate`) when required, with `approve-control-plane` for infra/identity control-plane scopes.
+2. `deployment-pipeline.yml` runs acceptance jobs (`infra-readonly-acceptance`, `identity-readonly-acceptance`) against the frozen candidate.
+3. `deployment-pipeline.yml` performs guarded production mutation (`deploy-approved-candidate`) when required, with `approve-control-plane` for infra/identity control-plane scopes.
 
 ## Replay and Determinism
 
 Replay is part of the operating model:
 
-- Replay via `mainline-pipeline.yml` `workflow_dispatch` with `candidate_sha=<sha>`.
+- Replay via `deployment-pipeline.yml` `workflow_dispatch` with `candidate_sha=<sha>`.
 
 Both replays are expected to fail closed on drift, invalid environment configuration, or missing evidence.
 

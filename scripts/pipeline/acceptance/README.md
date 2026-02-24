@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`scripts/pipeline/acceptance/` contains acceptance-stage gate logic used by `mainline-pipeline.yml`.
+`scripts/pipeline/acceptance/` contains acceptance-stage gate logic used by `deployment-pipeline.yml`.
 
 ## Script Map
 

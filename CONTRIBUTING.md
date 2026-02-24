@@ -66,4 +66,4 @@ The API uses PostgreSQL when `DATABASE_URL` is set in `apps/api/.env` (see `apps
 - Human commit-stage policy: `docs/commit-stage-policy.md`
 - Machine pipeline policy: `.github/policy/pipeline-policy.json`
 - Commit stage workflow: `.github/workflows/commit-stage.yml`
-- Mainline pipeline workflow: `.github/workflows/mainline-pipeline.yml`
+- Mainline pipeline workflow: `.github/workflows/deployment-pipeline.yml`

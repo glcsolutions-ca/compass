@@ -26,7 +26,7 @@ pnpm commit:docs-drift
 2. `commit-stage.yml` computes scope and runs fast required checks.
 3. `commit-stage` is the merge-blocking decision.
 4. Merge queue runs the same commit-stage gate on `merge_group`.
-5. Merge to `main` triggers `mainline-pipeline.yml`.
+5. Merge to `main` triggers `deployment-pipeline.yml`.
 6. Mainline pipeline runs commit checks, freezes candidate digest refs, and loads candidate contract.
 7. Mainline acceptance stage validates the same candidate and emits one yes/no decision.
 8. Mainline production stage promotes accepted candidate refs with production lock.

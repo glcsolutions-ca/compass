@@ -20,5 +20,5 @@ This directory contains operational guidance for coding and review agents workin
 
 - Policy contract: [`../../.github/policy/pipeline-policy.json`](../../.github/policy/pipeline-policy.json)
 - Commit workflow: [`../../.github/workflows/commit-stage.yml`](../../.github/workflows/commit-stage.yml)
-- Mainline workflow: [`../../.github/workflows/mainline-pipeline.yml`](../../.github/workflows/mainline-pipeline.yml)
+- Mainline workflow: [`../../.github/workflows/deployment-pipeline.yml`](../../.github/workflows/deployment-pipeline.yml)
 - Policy docs: [`../commit-stage-policy.md`](../commit-stage-policy.md)

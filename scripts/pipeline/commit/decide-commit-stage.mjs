@@ -57,6 +57,7 @@ function parseCheckResults() {
   const expectedChecks = [
     "determine-scope",
     "fast-feedback",
+    "desktop-fast-feedback",
     "infra-static-check",
     "identity-static-check"
   ];
@@ -74,6 +75,8 @@ function parseCheckResults() {
 async function main() {
   const headSha = requireEnv("HEAD_SHA");
   const testedSha = process.env.TESTED_SHA?.trim() || headSha;
+  const runtimeRequired = parseBooleanEnv("RUNTIME_REQUIRED", true);
+  const desktopRequired = parseBooleanEnv("DESKTOP_REQUIRED", false);
   const infraRequired = parseBooleanEnv("INFRA_REQUIRED", false);
   const identityRequired = parseBooleanEnv("IDENTITY_REQUIRED", false);
   const docsDriftBlocking = parseBooleanEnv("DOCS_DRIFT_BLOCKING", false);
@@ -86,6 +89,8 @@ async function main() {
   const checkResults = parseCheckResults();
   const reasons = evaluateCommitStageResults({
     checkResults,
+    runtimeRequired,
+    desktopRequired,
     infraRequired,
     identityRequired,
     docsDriftBlocking,
@@ -102,6 +107,8 @@ async function main() {
     generatedAt: new Date().toISOString(),
     headSha,
     testedSha,
+    runtimeRequired,
+    desktopRequired,
     infraRequired,
     identityRequired,
     docsDriftBlocking,

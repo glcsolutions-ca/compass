@@ -11,7 +11,7 @@ Every PR to `main` must pass fast, reliable, merge-blocking evidence:
 3. Merge is allowed only when `commit-stage` passes.
 
 `commit-stage.yml` runs for both `pull_request` and `merge_group` so the same commit-stage contract applies before merge and in queue execution.
-Post-merge deployment pipelines (`deployment-pipeline.yml` for cloud, `desktop-deployment-pipeline.yml` for desktop) run on `push` to `main`.
+Post-merge deployment pipelines (`cloud-deployment-pipeline.yml` for cloud, `desktop-deployment-pipeline.yml` for desktop) run on `push` to `main`.
 
 ## Source of truth precedence
 
@@ -32,7 +32,8 @@ Branch protection requires only:
 ## Commit-stage checks
 
 - `determine-scope` (always)
-- `fast-feedback` (always)
+- `fast-feedback` (when runtime/infra/identity is true, or when control-plane blocking paths changed)
+- `desktop-fast-feedback` (when `desktop` scope is true and change is not docs-only)
 - `infra-static-check` (only when `infra` scope is true)
 - `identity-static-check` (only when `identity` scope is true)
 - `docs-drift` is always evaluated and can block merge for docs-critical drift
@@ -94,7 +95,8 @@ Timing keys:
 `commit-stage` makes merge decisions from required job outcomes (`needs.*.result`) plus docs-drift state.
 
 - `determine-scope` must succeed.
-- `fast-feedback` must succeed.
+- `fast-feedback` must succeed when runtime/infra/identity commit evidence is required, or when control-plane paths changed.
+- `desktop-fast-feedback` must succeed when desktop commit evidence is required.
 - `infra-static-check` must succeed when `infra` is required.
 - `identity-static-check` must succeed when `identity` is required.
 - If docs-drift blocking is true, docs-drift status must be `pass`.

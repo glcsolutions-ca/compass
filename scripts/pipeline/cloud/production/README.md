@@ -1,8 +1,8 @@
-# Production Stage Scripts
+# Cloud Production Stage Scripts
 
 ## Purpose
 
-`scripts/pipeline/production/` contains production stage helpers used by `deployment-pipeline.yml`.
+`scripts/pipeline/cloud/production/` contains production stage helpers used by `cloud-deployment-pipeline.yml`.
 
 ## Script Map
 

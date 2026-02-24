@@ -27,10 +27,10 @@
     "db:postgres:down": "docker compose -f db/postgres/docker-compose.yml down",
     "db:postgres:reset": "docker compose -f db/postgres/docker-compose.yml down --volumes && pnpm db:postgres:up",
     "db:postgres:logs": "docker compose -f db/postgres/docker-compose.yml logs -f postgres",
-    "deploy:migrate:start": "node scripts/pipeline/production/start-migration-job.mjs",
-    "deploy:migrate:wait": "node scripts/pipeline/production/wait-migration-job.mjs",
-    "deploy:custom-domain:dns": "node scripts/pipeline/production/custom-domain-dns.mjs",
-    "deploy:smoke": "node scripts/pipeline/production/verify-api-smoke.mjs",
+    "deploy:migrate:start": "node scripts/pipeline/cloud/production/start-migration-job.mjs",
+    "deploy:migrate:wait": "node scripts/pipeline/cloud/production/wait-migration-job.mjs",
+    "deploy:custom-domain:dns": "node scripts/pipeline/cloud/production/custom-domain-dns.mjs",
+    "deploy:smoke": "node scripts/pipeline/cloud/production/verify-api-smoke.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "generate": "turbo run generate",
@@ -56,7 +56,7 @@
     "desktop:make:win": "pnpm --filter @compass/desktop make:win",
     "commit:system-smoke": "tsx tests/commit/smoke.inproc.ts",
     "commit:stage": "node scripts/pipeline/commit/decide-commit-stage.mjs",
-    "test:pipeline-contract": "vitest run scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/acceptance/decide-acceptance-stage-lib.test.mjs scripts/pipeline/acceptance/acceptance-blackbox-contract.test.mjs scripts/pipeline/production/managed-certificate-contract.test.mjs scripts/pipeline/production/apply-infra.test.mjs",
+    "test:pipeline-contract": "vitest run scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/cloud/acceptance/decide-acceptance-stage-lib.test.mjs scripts/pipeline/cloud/acceptance/acceptance-blackbox-contract.test.mjs scripts/pipeline/cloud/production/managed-certificate-contract.test.mjs scripts/pipeline/cloud/production/apply-infra.test.mjs",
     "commit:fast-feedback": "pnpm test && pnpm commit:system-smoke"
   },
   "lint-staged": {

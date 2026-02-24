@@ -4,6 +4,7 @@ locals {
   # Scratch-drill trigger marker: intentionally non-functional.
   # Final-proof scratch-drill marker: intentionally non-functional.
   # Post-infra-fix scratch-drill marker: intentionally non-functional.
+  # Post-cert-order-fix final-proof marker: intentionally non-functional.
 }
 
 resource "azuread_application" "api" {

@@ -35,7 +35,8 @@ async function main() {
     reasonCodes: result.reasonCodes,
     candidate: {
       apiRef: process.env.CANDIDATE_API_REF || "",
-      webRef: process.env.CANDIDATE_WEB_REF || ""
+      webRef: process.env.CANDIDATE_WEB_REF || "",
+      codexRef: process.env.CANDIDATE_CODEX_REF || ""
     }
   });
 

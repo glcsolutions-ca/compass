@@ -5,7 +5,7 @@ async function main() {
   const headSha = requireEnv("HEAD_SHA");
   const testedSha = process.env.TESTED_SHA?.trim() || headSha;
   const acrName = requireEnv("ACR_NAME");
-  const { apiRef } = requireCandidateRefs();
+  const { apiRef, codexRef } = requireCandidateRefs();
 
   const artifactPath = `.artifacts/runtime-api-system/${headSha}/result.json`;
 
@@ -18,6 +18,7 @@ mkdir -p "$artifact_dir" ".artifacts/deploy/${testedSha}" ".artifacts/harness-sm
 network_name="acceptance-api-system-net"
 postgres_name="acceptance-api-system-postgres"
 api_container="acceptance-api-system-api"
+codex_container="acceptance-api-system-codex"
 db_url="postgres://compass:compass@$postgres_name:5432/compass"
 tenant_id="acceptance-tenant"
 delegated_client_id="web-client"
@@ -29,6 +30,7 @@ oauth_signing_secret="acceptance-oauth-signing-secret-123456"
 auth_assignments='[{"tenantId":"acceptance-tenant","subjectType":"user","subjectId":"smoke-user","permissions":["profile.read"],"principalId":"principal-smoke-user"},{"tenantId":"acceptance-tenant","subjectType":"app","subjectId":"integration-client","permissions":["profile.read"],"principalId":"principal-smoke-app"}]'
 
 cleanup() {
+  docker rm -f "$codex_container" >/dev/null 2>&1 || true
   docker rm -f "$api_container" >/dev/null 2>&1 || true
   docker rm -f "$postgres_name" >/dev/null 2>&1 || true
   docker network rm "$network_name" >/dev/null 2>&1 || true
@@ -37,6 +39,9 @@ trap cleanup EXIT
 
 az acr login --name "${acrName}" --only-show-errors
 docker pull "${apiRef}"
+if [ -n "${codexRef}" ]; then
+  docker pull "${codexRef}"
+fi
 
 docker network create "$network_name"
 
@@ -167,6 +172,42 @@ BASE_URL=http://127.0.0.1:3001 \
 AUTH_SMOKE_TOKEN="$delegated_smoke_token" \
 APP_SMOKE_TOKEN="$app_smoke_token" \
 pnpm acceptance:system-smoke
+
+if [ -n "${codexRef}" ]; then
+  docker run -d \
+    --name "$codex_container" \
+    --network "$network_name" \
+    -p 3010:3010 \
+    -e DATABASE_URL="$db_url" \
+    -e CODEX_START_ON_BOOT=false \
+    -e LOG_LEVEL=silent \
+    "${codexRef}"
+
+  for i in $(seq 1 120); do
+    if curl --silent --fail http://127.0.0.1:3010/health >/dev/null; then
+      break
+    fi
+    if [ "$i" -eq 120 ]; then
+      echo "Timed out waiting for candidate codex gateway readiness" >&2
+      exit 1
+    fi
+    sleep 1
+  done
+
+  CODEX_BASE_URL=http://127.0.0.1:3010 pnpm acceptance:codex-smoke
+else
+  mkdir -p ".artifacts/codex-smoke/${testedSha}"
+  cat > ".artifacts/codex-smoke/${testedSha}/result.json" <<JSON
+  {
+    "schemaVersion": "1",
+    "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+    "headSha": "${headSha}",
+    "testedSha": "${testedSha}",
+    "status": "not-required",
+    "reasonCode": "CODEX_REF_MISSING"
+  }
+  JSON
+fi
 `);
 
     await writeJsonFile(artifactPath, {
@@ -175,7 +216,7 @@ pnpm acceptance:system-smoke
       headSha,
       testedSha,
       status: "pass",
-      candidate: { apiRef }
+      candidate: { apiRef, codexRef }
     });
   } catch (error) {
     await writeJsonFile(artifactPath, {
@@ -184,7 +225,7 @@ pnpm acceptance:system-smoke
       headSha,
       testedSha,
       status: "fail",
-      candidate: { apiRef },
+      candidate: { apiRef, codexRef },
       error: error instanceof Error ? error.message : String(error)
     });
     throw error;

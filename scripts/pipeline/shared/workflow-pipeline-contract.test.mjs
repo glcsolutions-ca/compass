@@ -99,6 +99,7 @@ describe("workflow pipeline contract", () => {
     const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
     expect(workflow).toContain("name: freeze-candidate-api-image");
     expect(workflow).toContain("name: freeze-candidate-web-image");
+    expect(workflow).toContain("name: freeze-candidate-codex-image");
     expect(workflow).toContain("name: freeze-current-runtime-refs");
     expect(workflow).toContain("node scripts/pipeline/shared/freeze-release-candidate-refs.mjs");
   });

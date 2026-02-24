@@ -14,6 +14,7 @@ All database concerns live under this directory.
 - Migration and seed tooling remain active by default.
 - Seed execution is generic and no-ops when no `.sql` seed files exist.
 - Product/domain tables should be introduced only through explicit migrations.
+- Codex gateway persistence tables (`codex_*`) are created by migration `20260223223500_create_codex_gateway_tables.mjs`.
 
 ## Common Commands
 

@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const ACCEPTANCE_TEST_FILES = ["tests/system/smoke.ts", "tests/e2e/smoke.spec.ts"];
+const ACCEPTANCE_TEST_FILES = [
+  "tests/system/smoke.ts",
+  "tests/system/codex-smoke.ts",
+  "tests/e2e/smoke.spec.ts"
+];
 
 function readUtf8(filePath) {
   return readFileSync(filePath, "utf8");

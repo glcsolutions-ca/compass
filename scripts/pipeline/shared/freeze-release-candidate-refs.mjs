@@ -99,11 +99,30 @@ async function freezeWebImage() {
   await appendGithubOutput({ candidate_web_ref: candidateWebRef });
 }
 
+async function freezeCodexImage() {
+  const headSha = requireEnv("HEAD_SHA");
+  const acrName = requireEnv("ACR_NAME");
+  const acrRegistry = requireEnv("ACR_REGISTRY");
+  const image = `${acrRegistry}/compass-codex-app-server:${headSha}`;
+
+  await run("az", ["acr", "login", "--name", acrName, "--only-show-errors"]);
+  await run("docker", ["build", "-f", "apps/codex-app-server/Dockerfile", "-t", image, "."]);
+  await run("docker", ["push", image]);
+
+  const candidateCodexRef = await capture("docker", [
+    "inspect",
+    "--format={{index .RepoDigests 0}}",
+    image
+  ]);
+  await appendGithubOutput({ candidate_codex_ref: candidateCodexRef });
+}
+
 async function freezeCurrentRuntimeRefs() {
   const acrName = requireEnv("ACR_NAME");
   const resourceGroup = requireEnv("AZURE_RESOURCE_GROUP");
   const apiAppName = requireEnv("ACA_API_APP_NAME");
   const webAppName = requireEnv("ACA_WEB_APP_NAME");
+  const codexAppName = requireEnv("ACA_CODEX_APP_NAME");
 
   const apiImage = await capture("az", [
     "containerapp",
@@ -129,13 +148,27 @@ async function freezeCurrentRuntimeRefs() {
     "--output",
     "tsv"
   ]);
+  const codexImage = await capture("az", [
+    "containerapp",
+    "show",
+    "--resource-group",
+    resourceGroup,
+    "--name",
+    codexAppName,
+    "--query",
+    "properties.template.containers[0].image",
+    "--output",
+    "tsv"
+  ]);
 
   const candidateApiRef = await resolveToDigestRef(acrName, apiImage);
   const candidateWebRef = await resolveToDigestRef(acrName, webImage);
+  const candidateCodexRef = await resolveToDigestRef(acrName, codexImage);
 
   await appendGithubOutput({
     candidate_api_ref: candidateApiRef,
-    candidate_web_ref: candidateWebRef
+    candidate_web_ref: candidateWebRef,
+    candidate_codex_ref: candidateCodexRef
   });
 }
 
@@ -148,6 +181,10 @@ async function main() {
   }
   if (mode === "build-web") {
     await freezeWebImage();
+    return;
+  }
+  if (mode === "build-codex") {
+    await freezeCodexImage();
     return;
   }
   if (mode === "resolve-current-runtime-refs") {

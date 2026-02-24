@@ -21,7 +21,7 @@
   - key jobs: commit group (`determine-scope`, `fast-feedback`, optional static checks, `commit-stage`)
   - candidate group: `freeze-candidate-api-image`, `freeze-candidate-web-image`, `freeze-current-runtime-refs`, `publish-release-candidate`, `load-release-candidate`
   - acceptance group: optional `runtime-api-system-acceptance` / `runtime-browser-acceptance` / `runtime-migration-image-acceptance` / `infra-readonly-acceptance` / `identity-readonly-acceptance`, `acceptance-stage` (`YES` or `NO`)
-  - production group: conditional `deploy-approved-candidate` (uses `production-control-plane` environment when control-plane scope is present), `production-blackbox-verify`, `production-stage`
+  - production group: `approve-control-plane` (enters `production-control-plane` only for control-plane-required deploys), conditional `deploy-approved-candidate`, `production-blackbox-verify`, `production-stage`
   - production blackbox auth contract: requires fresh nightly `auth-entra-canary` run and fresh `auth-delegated-smoke` run for target SHA
   - final gate: `release-decision` writes `.artifacts/release/<sha>/decision.json` and `.artifacts/pipeline/<sha>/timing.json`
   - no `workflow_run` chaining inside the core release path

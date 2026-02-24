@@ -1,5 +1,7 @@
 export function evaluateCommitStageResults({
   checkResults,
+  runtimeRequired,
+  desktopRequired,
   infraRequired,
   identityRequired,
   docsDriftBlocking,
@@ -18,10 +20,17 @@ export function evaluateCommitStageResults({
     });
   }
 
-  if (checkResults["fast-feedback"] !== "success") {
+  if (runtimeRequired && checkResults["fast-feedback"] !== "success") {
     reasons.push({
-      code: "CHECK_FAST_FEEDBACK_NOT_SUCCESS",
-      message: `fast-feedback result is ${checkResults["fast-feedback"]}`
+      code: "CHECK_RUNTIME_FAST_FEEDBACK_REQUIRED_NOT_SUCCESS",
+      message: `fast-feedback required but result is ${checkResults["fast-feedback"]}`
+    });
+  }
+
+  if (desktopRequired && checkResults["desktop-fast-feedback"] !== "success") {
+    reasons.push({
+      code: "CHECK_DESKTOP_FAST_FEEDBACK_REQUIRED_NOT_SUCCESS",
+      message: `desktop-fast-feedback required but result is ${checkResults["desktop-fast-feedback"]}`
     });
   }
 

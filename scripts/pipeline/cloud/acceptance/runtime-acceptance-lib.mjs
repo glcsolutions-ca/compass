@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { requireEnv } from "../shared/pipeline-utils.mjs";
+import { requireEnv } from "../../shared/pipeline-utils.mjs";
 
 const execFileAsync = promisify(execFile);
 

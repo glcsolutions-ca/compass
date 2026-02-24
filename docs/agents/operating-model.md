@@ -1,6 +1,6 @@
 # Operating Model
 
-Compass uses deterministic Deployment Pipelines with the same 3-stage model.
+Compass uses deterministic Cloud and Desktop Deployment Pipelines with the same 3-stage model.
 
 ## Core Rules
 
@@ -17,8 +17,8 @@ Compass uses deterministic Deployment Pipelines with the same 3-stage model.
 
 ## Canonical Stage Dependencies
 
-1. `commit-stage.yml` runs `determine-scope`, `fast-feedback`, optional infra/identity static checks, then `commit-stage`.
-2. `deployment-pipeline.yml` runs on `push main` for cloud runtime/infra/identity.
+1. `commit-stage.yml` runs `determine-scope`, change-aware `fast-feedback` (runtime/infra/identity/control-plane), change-aware `desktop-fast-feedback` (desktop), optional infra/identity static checks, then `commit-stage`.
+2. `cloud-deployment-pipeline.yml` runs on `push main` for cloud runtime/infra/identity.
 3. `desktop-deployment-pipeline.yml` runs on `push main` for desktop installers.
 4. Cloud candidate freeze emits `.artifacts/candidate/<sha>/manifest.json`.
 5. Cloud acceptance jobs load that candidate, run scope-based acceptance checks, and enforce candidate/config contracts.

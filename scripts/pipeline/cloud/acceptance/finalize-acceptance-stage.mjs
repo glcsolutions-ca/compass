@@ -5,7 +5,7 @@ import {
   readJsonFile,
   requireEnv,
   writeJsonFile
-} from "../shared/pipeline-utils.mjs";
+} from "../../shared/pipeline-utils.mjs";
 
 function parseBoolean(value, fallback = false) {
   const normalized = String(value || "")

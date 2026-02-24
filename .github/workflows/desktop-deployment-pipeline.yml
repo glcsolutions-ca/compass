@@ -292,6 +292,38 @@ jobs:
           path: .artifacts/desktop-candidate/${{ steps.publish.outputs.head_sha }}/manifest.json
           if-no-files-found: error
 
+  desktop_backend_contract_acceptance:
+    name: desktop-backend-contract-acceptance
+    needs:
+      - publish_desktop_candidate
+    if: ${{ needs.publish_desktop_candidate.outputs.deploy_required == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HEAD_SHA: ${{ needs.publish_desktop_candidate.outputs.head_sha }}
+      WEB_BASE_URL: ${{ needs.publish_desktop_candidate.outputs.web_base_url }}
+    steps:
+      - name: Checkout desktop candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.publish_desktop_candidate.outputs.candidate_sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Run desktop backend compatibility contract
+        run: node scripts/pipeline/desktop/acceptance/run-desktop-backend-contract-acceptance.mjs
+
+      - name: Upload desktop backend compatibility artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-backend-contract-acceptance-${{ env.HEAD_SHA }}
+          path: .artifacts/desktop-acceptance/${{ env.HEAD_SHA }}/backend-contract.json
+          if-no-files-found: warn
+
   build_signed_macos:
     name: build-signed-macos
     needs:
@@ -504,6 +536,7 @@ jobs:
     name: desktop-acceptance-stage
     needs:
       - publish_desktop_candidate
+      - desktop_backend_contract_acceptance
       - build_signed_macos
       - build_signed_windows
     if: ${{ always() && needs.publish_desktop_candidate.result == 'success' }}
@@ -520,6 +553,7 @@ jobs:
       DEPLOY_REQUIRED: ${{ needs.publish_desktop_candidate.outputs.deploy_required }}
       BUILD_SIGNED_MACOS_RESULT: ${{ needs.build_signed_macos.result }}
       BUILD_SIGNED_WINDOWS_RESULT: ${{ needs.build_signed_windows.result }}
+      DESKTOP_BACKEND_CONTRACT_RESULT: ${{ needs.desktop_backend_contract_acceptance.result }}
       WEB_BASE_URL: ${{ needs.publish_desktop_candidate.outputs.web_base_url }}
     steps:
       - name: Decide desktop acceptance stage
@@ -534,19 +568,20 @@ jobs:
             reason_codes='["DESKTOP_SCOPE_NOT_REQUIRED"]'
           else
             node -e "const url=new URL(process.argv[1]); if (url.protocol !== 'https:') { throw new Error('Desktop web_base_url must be HTTPS'); }" "$WEB_BASE_URL"
-            if [ "$BUILD_SIGNED_MACOS_RESULT" != "success" ] || [ "$BUILD_SIGNED_WINDOWS_RESULT" != "success" ]; then
+            failure_codes=()
+            if [ "$BUILD_SIGNED_MACOS_RESULT" != "success" ]; then
+              failure_codes+=("BUILD_SIGNED_MACOS_NOT_SUCCESS")
+            fi
+            if [ "$BUILD_SIGNED_WINDOWS_RESULT" != "success" ]; then
+              failure_codes+=("BUILD_SIGNED_WINDOWS_NOT_SUCCESS")
+            fi
+            if [ "$DESKTOP_BACKEND_CONTRACT_RESULT" != "success" ]; then
+              failure_codes+=("DESKTOP_BACKEND_CONTRACT_NOT_SUCCESS")
+            fi
+
+            if [ "${#failure_codes[@]}" -gt 0 ]; then
               acceptance_decision="NO"
-              reason_codes='[]'
-              if [ "$BUILD_SIGNED_MACOS_RESULT" != "success" ]; then
-                reason_codes='["BUILD_SIGNED_MACOS_NOT_SUCCESS"]'
-              fi
-              if [ "$BUILD_SIGNED_WINDOWS_RESULT" != "success" ]; then
-                if [ "$reason_codes" = '[]' ]; then
-                  reason_codes='["BUILD_SIGNED_WINDOWS_NOT_SUCCESS"]'
-                else
-                  reason_codes='["BUILD_SIGNED_MACOS_NOT_SUCCESS","BUILD_SIGNED_WINDOWS_NOT_SUCCESS"]'
-                fi
-              fi
+              reason_codes="$(printf '%s\n' "${failure_codes[@]}" | node -e 'const fs=require(\"node:fs\"); const items=fs.readFileSync(0,\"utf8\").split(/\\r?\\n/).map((entry)=>entry.trim()).filter(Boolean); process.stdout.write(JSON.stringify(items));')"
             fi
           fi
 
@@ -561,7 +596,8 @@ jobs:
             "reasonCodes": $reason_codes,
             "checks": {
               "buildSignedMacos": "$BUILD_SIGNED_MACOS_RESULT",
-              "buildSignedWindows": "$BUILD_SIGNED_WINDOWS_RESULT"
+              "buildSignedWindows": "$BUILD_SIGNED_WINDOWS_RESULT",
+              "desktopBackendContract": "$DESKTOP_BACKEND_CONTRACT_RESULT"
             }
           }
           JSON

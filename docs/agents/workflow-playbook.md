@@ -23,11 +23,11 @@ pnpm commit:docs-drift
 ## CI/CD Cycle (Plain-English)
 
 1. Open PR from a short-lived branch.
-2. `commit-stage.yml` computes scope and runs fast required checks.
+2. `commit-stage.yml` computes scope and runs fast required checks by surface (`fast-feedback` for runtime/control-plane, `desktop-fast-feedback` for desktop).
 3. `commit-stage` is the merge-blocking decision.
 4. Merge queue runs the same commit-stage gate on `merge_group`.
 5. Merge to `main` triggers both deployment pipelines:
-   - `deployment-pipeline.yml` for cloud runtime/infra/identity
+   - `cloud-deployment-pipeline.yml` for cloud runtime/infra/identity
    - `desktop-deployment-pipeline.yml` for desktop installers
 6. Cloud pipeline runs commit checks, freezes candidate digest refs, and loads candidate contract.
 7. Cloud acceptance stage validates the same candidate and emits one yes/no decision.

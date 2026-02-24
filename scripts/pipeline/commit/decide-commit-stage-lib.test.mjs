@@ -6,9 +6,12 @@ function makeBaseInput(overrides = {}) {
     checkResults: {
       "determine-scope": "success",
       "fast-feedback": "success",
+      "desktop-fast-feedback": "skipped",
       "infra-static-check": "skipped",
       "identity-static-check": "skipped"
     },
+    runtimeRequired: false,
+    desktopRequired: false,
     infraRequired: false,
     identityRequired: false,
     docsDriftBlocking: false,
@@ -22,12 +25,14 @@ function makeBaseInput(overrides = {}) {
 }
 
 describe("evaluateCommitStageResults", () => {
-  it("always requires determine-scope and fast-feedback success", () => {
+  it("always requires determine-scope and conditionally requires runtime fast-feedback", () => {
     const reasons = evaluateCommitStageResults(
       makeBaseInput({
+        runtimeRequired: true,
         checkResults: {
           "determine-scope": "failure",
           "fast-feedback": "cancelled",
+          "desktop-fast-feedback": "skipped",
           "infra-static-check": "skipped",
           "identity-static-check": "skipped"
         }
@@ -40,10 +45,50 @@ describe("evaluateCommitStageResults", () => {
         message: "determine-scope result is failure"
       },
       {
-        code: "CHECK_FAST_FEEDBACK_NOT_SUCCESS",
-        message: "fast-feedback result is cancelled"
+        code: "CHECK_RUNTIME_FAST_FEEDBACK_REQUIRED_NOT_SUCCESS",
+        message: "fast-feedback required but result is cancelled"
       }
     ]);
+  });
+
+  it("requires desktop fast-feedback only when desktop scope is required", () => {
+    const reasons = evaluateCommitStageResults(
+      makeBaseInput({
+        desktopRequired: true,
+        checkResults: {
+          "determine-scope": "success",
+          "fast-feedback": "skipped",
+          "desktop-fast-feedback": "failure",
+          "infra-static-check": "skipped",
+          "identity-static-check": "skipped"
+        }
+      })
+    );
+
+    expect(reasons).toEqual([
+      {
+        code: "CHECK_DESKTOP_FAST_FEEDBACK_REQUIRED_NOT_SUCCESS",
+        message: "desktop-fast-feedback required but result is failure"
+      }
+    ]);
+  });
+
+  it("allows skipped fast-feedback lanes when those surfaces are not required", () => {
+    const reasons = evaluateCommitStageResults(
+      makeBaseInput({
+        runtimeRequired: false,
+        desktopRequired: false,
+        checkResults: {
+          "determine-scope": "success",
+          "fast-feedback": "skipped",
+          "desktop-fast-feedback": "skipped",
+          "infra-static-check": "skipped",
+          "identity-static-check": "skipped"
+        }
+      })
+    );
+
+    expect(reasons).toEqual([]);
   });
 
   it("enforces infra and identity checks only when required", () => {
@@ -54,6 +99,7 @@ describe("evaluateCommitStageResults", () => {
         checkResults: {
           "determine-scope": "success",
           "fast-feedback": "success",
+          "desktop-fast-feedback": "skipped",
           "infra-static-check": "failure",
           "identity-static-check": "cancelled"
         }

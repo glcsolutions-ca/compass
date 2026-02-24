@@ -2,12 +2,14 @@
 
 ## Purpose
 
-Operate the desktop Deployment Pipeline for signed Compass installers:
+Operate the Desktop Deployment Pipeline for signed Compass installers:
 
 - macOS arm64 (`.dmg`)
 - Windows x64 (`.msi`)
 
 This pipeline follows commit -> acceptance -> production in one workflow run and emits a binary release decision (`YES` or `NO`).
+Acceptance includes a desktop-to-backend compatibility contract check so installer releases do not drift from the active cloud API surface.
+Desktop production is intentionally decoupled from cloud production so signing/notarization failures do not block backend releases.
 
 ## Canonical Workflow
 
@@ -27,6 +29,7 @@ Compatibility lane:
    - `desktop-fast-feedback`
    - `desktop-commit-stage`
 2. Acceptance stage:
+   - `desktop-backend-contract-acceptance`
    - `build-signed-macos`
    - `build-signed-windows`
    - `desktop-acceptance-stage`
@@ -89,10 +92,11 @@ Canonical artifacts:
 ## Verification Checklist
 
 1. `desktop-acceptance-stage` decision is `YES`.
-2. macOS verification succeeded (`codesign`, `spctl`, notarization stapler validation).
-3. Windows Authenticode verification is `Valid`.
-4. `publish-desktop-release` produced `.dmg`, `.msi`, and `SHA256SUMS.txt`.
-5. `desktop-release-decision` artifact exists and `releaseable` is true.
+2. desktop backend compatibility contract passed (`/api/v1/health` and `/api/v1/openapi.json`).
+3. macOS verification succeeded (`codesign`, `spctl`, notarization stapler validation).
+4. Windows Authenticode verification is `Valid`.
+5. `publish-desktop-release` produced `.dmg`, `.msi`, and `SHA256SUMS.txt`.
+6. `desktop-release-decision` artifact exists and `releaseable` is true.
 
 ## Failure Recovery
 

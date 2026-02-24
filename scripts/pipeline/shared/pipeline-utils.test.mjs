@@ -52,7 +52,7 @@ const policy = loadPipelinePolicyObject({
     ]
   },
   commitStage: {
-    requiredChecks: ["determine-scope", "fast-feedback", "commit-stage"],
+    requiredChecks: ["determine-scope", "fast-feedback", "desktop-fast-feedback", "commit-stage"],
     slo: {
       targetSeconds: 300,
       mode: "enforce"
@@ -71,7 +71,7 @@ const policy = loadPipelinePolicyObject({
   productionStage: {
     requireFreshHeadOnAuto: true
   },
-  deploymentPipeline: {
+  cloudDeploymentPipeline: {
     slo: {
       mode: "observe",
       acceptanceTargetSeconds: 900,

@@ -20,6 +20,6 @@ This directory contains operational guidance for coding and review agents workin
 
 - Policy contract: [`../../.github/policy/pipeline-policy.json`](../../.github/policy/pipeline-policy.json)
 - Commit workflow: [`../../.github/workflows/commit-stage.yml`](../../.github/workflows/commit-stage.yml)
-- Cloud deployment pipeline workflow: [`../../.github/workflows/deployment-pipeline.yml`](../../.github/workflows/deployment-pipeline.yml)
+- Cloud deployment pipeline workflow: [`../../.github/workflows/cloud-deployment-pipeline.yml`](../../.github/workflows/cloud-deployment-pipeline.yml)
 - Desktop deployment pipeline workflow: [`../../.github/workflows/desktop-deployment-pipeline.yml`](../../.github/workflows/desktop-deployment-pipeline.yml)
 - Policy docs: [`../commit-stage-policy.md`](../commit-stage-policy.md)

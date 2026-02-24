@@ -129,3 +129,4 @@ Identity config preflight contract (shared with acceptance):
 - Keep `cloud-deployment-pipeline.yml` deploy-only for runtime artifacts in production jobs (no `docker build`/`docker push` in production stage jobs).
 - Keep infra/identity mutation under `environment: production` and `production-mutation` lock.
 - Keep acceptance credentials read-only and isolated from production mutation credentials.
+- Keep Container App `minReplicas` at `1` for API and Web to avoid cold-start regressions.

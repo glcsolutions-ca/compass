@@ -112,6 +112,10 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
                 name: 'AUTH_DEV_FALLBACK_ENABLED'
                 value: authDevFallbackEnabled
               }
+              {
+                name: 'VITE_API_BASE_URL'
+                value: apiBaseUrl
+              }
             ],
             entraClientSecretEnv
           )

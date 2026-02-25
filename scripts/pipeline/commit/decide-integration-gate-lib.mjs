@@ -2,7 +2,7 @@ export function evaluateIntegrationGateResults({
   checkResults,
   buildRequired,
   migrationRequired,
-  authRequired,
+  runtimeSmokeRequired,
   integrationRequired,
   docsDriftBlocking,
   docsDriftStatus
@@ -30,10 +30,10 @@ export function evaluateIntegrationGateResults({
     });
   }
 
-  if (authRequired && checkResults["auth-critical-smoke"] !== "success") {
+  if (runtimeSmokeRequired && checkResults["runtime-contract-smoke"] !== "success") {
     reasons.push({
-      code: "CHECK_AUTH_CRITICAL_SMOKE_REQUIRED_NOT_SUCCESS",
-      message: `auth-critical-smoke required but result is ${checkResults["auth-critical-smoke"]}`
+      code: "CHECK_RUNTIME_CONTRACT_SMOKE_REQUIRED_NOT_SUCCESS",
+      message: `runtime-contract-smoke required but result is ${checkResults["runtime-contract-smoke"]}`
     });
   }
 

@@ -13,7 +13,7 @@
 
 ## `integration-gate` Failure
 
-- Cause: integration checks failed (`build-compile`, `migration-safety`, `auth-critical-smoke`, or `minimal-integration-smoke`).
+- Cause: integration checks failed (`build-compile`, `migration-safety`, `runtime-contract-smoke`, or `minimal-integration-smoke`).
 - Fix: inspect `.artifacts/integration-gate/<sha>/result.json`, fix forward on `main`, and push a corrective commit.
 
 ## `automated-acceptance-test-gate` Failure

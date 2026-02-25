@@ -173,6 +173,7 @@ async function main() {
   const releaseCandidateStart = earliestStartEpoch(jobs, [
     "build-release-candidate-api-image",
     "build-release-candidate-web-image",
+    "build-release-candidate-worker-image",
     "capture-current-runtime-refs",
     "freeze-release-candidate-images"
   ]);

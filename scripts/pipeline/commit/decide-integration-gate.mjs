@@ -30,7 +30,7 @@ function parseCheckResults() {
     "determine-scope",
     "build-compile",
     "migration-safety",
-    "auth-critical-smoke",
+    "runtime-contract-smoke",
     "minimal-integration-smoke"
   ];
 
@@ -49,7 +49,7 @@ async function main() {
   const testedSha = process.env.TESTED_SHA?.trim() || headSha;
   const buildRequired = parseBooleanEnv("BUILD_REQUIRED", true);
   const migrationRequired = parseBooleanEnv("MIGRATION_REQUIRED", false);
-  const authRequired = parseBooleanEnv("AUTH_REQUIRED", true);
+  const runtimeSmokeRequired = parseBooleanEnv("RUNTIME_SMOKE_REQUIRED", true);
   const integrationRequired = parseBooleanEnv("INTEGRATION_REQUIRED", true);
   const docsDriftBlocking = parseBooleanEnv("DOCS_DRIFT_BLOCKING", false);
   const docsDriftStatus = (process.env.DOCS_DRIFT_STATUS?.trim() || "unknown").toLowerCase();
@@ -59,7 +59,7 @@ async function main() {
     checkResults,
     buildRequired,
     migrationRequired,
-    authRequired,
+    runtimeSmokeRequired,
     integrationRequired,
     docsDriftBlocking,
     docsDriftStatus
@@ -73,7 +73,7 @@ async function main() {
     testedSha,
     buildRequired,
     migrationRequired,
-    authRequired,
+    runtimeSmokeRequired,
     integrationRequired,
     docsDriftBlocking,
     docsDriftStatus,

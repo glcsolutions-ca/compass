@@ -1,20 +1,8 @@
 import { appendGithubOutput, getHeadSha, requireEnv, writeDeployArtifact } from "./utils.mjs";
-import { fetchClientCredentialsToken } from "../../shared/entra-token-utils.mjs";
 
 const targetBaseUrl = requireEnv("TARGET_API_BASE_URL").replace(/\/$/, "");
 const verifyShaHeader = process.env.VERIFY_SHA_HEADER?.trim() === "true";
 const expectedSha = process.env.EXPECTED_SHA?.trim() || getHeadSha();
-const deniedExpectedCode = "assignment_denied";
-const apiScope = `${requireEnv("API_IDENTIFIER_URI")}/.default`;
-
-function requireClientCredentials({ tenantIdEnv, clientIdEnv, clientSecretEnv }) {
-  return {
-    tenantId: requireEnv(tenantIdEnv),
-    clientId: requireEnv(clientIdEnv),
-    clientSecret: requireEnv(clientSecretEnv),
-    scope: apiScope
-  };
-}
 
 async function request(path, init) {
   const requestedAt = new Date().toISOString();
@@ -59,24 +47,9 @@ async function main() {
   let reason = "";
   let health = null;
   let openapi = null;
-  let appMe = null;
-  let deniedMe = null;
-  let invalidMe = null;
+  let ping = null;
 
   try {
-    const allowedClient = requireClientCredentials({
-      tenantIdEnv: "API_SMOKE_ALLOWED_TENANT_ID",
-      clientIdEnv: "API_SMOKE_ALLOWED_CLIENT_ID",
-      clientSecretEnv: "API_SMOKE_ALLOWED_CLIENT_SECRET"
-    });
-    const deniedClient = requireClientCredentials({
-      tenantIdEnv: "API_SMOKE_DENIED_TENANT_ID",
-      clientIdEnv: "API_SMOKE_DENIED_CLIENT_ID",
-      clientSecretEnv: "API_SMOKE_DENIED_CLIENT_SECRET"
-    });
-    const appAuthSmokeToken = await fetchClientCredentialsToken(allowedClient);
-    const deniedToken = await fetchClientCredentialsToken(deniedClient);
-
     health = await request("/health", { method: "GET" });
     assertions.push({
       id: "health-200",
@@ -92,56 +65,23 @@ async function main() {
     });
 
     const hasHealthPath = Boolean(openapi?.json?.paths?.["/health"]);
+    const hasPingPath = Boolean(openapi?.json?.paths?.["/v1/ping"]);
     assertions.push({
       id: "openapi-includes-health",
       pass: hasHealthPath,
       details: `healthPath=${String(hasHealthPath)}`
     });
-
-    appMe = await request("/v1/me", {
-      method: "GET",
-      headers: {
-        authorization: `Bearer ${appAuthSmokeToken}`
-      }
-    });
     assertions.push({
-      id: "auth-me-app-200",
-      pass: appMe.status === 200,
-      details: `status=${appMe.status}`
-    });
-    assertions.push({
-      id: "auth-me-app-type",
-      pass: appMe.json?.caller?.tokenType === "app",
-      details: `tokenType=${appMe.json?.caller?.tokenType ?? "n/a"}`
+      id: "openapi-includes-ping",
+      pass: hasPingPath,
+      details: `pingPath=${String(hasPingPath)}`
     });
 
-    deniedMe = await request("/v1/me", {
-      method: "GET",
-      headers: {
-        authorization: `Bearer ${deniedToken}`
-      }
-    });
+    ping = await request("/v1/ping", { method: "GET" });
     assertions.push({
-      id: "auth-me-denied-403",
-      pass: deniedMe.status === 403,
-      details: `status=${deniedMe.status}`
-    });
-    assertions.push({
-      id: "auth-me-denied-code",
-      pass: deniedMe.json?.code === deniedExpectedCode,
-      details: `expected=${deniedExpectedCode}, actual=${deniedMe.json?.code ?? "n/a"}`
-    });
-
-    invalidMe = await request("/v1/me", {
-      method: "GET",
-      headers: {
-        authorization: "Bearer invalid.smoke.token"
-      }
-    });
-    assertions.push({
-      id: "auth-me-invalid-401",
-      pass: invalidMe.status === 401,
-      details: `status=${invalidMe.status}`
+      id: "ping-200",
+      pass: ping.status === 200,
+      details: `status=${ping.status}`
     });
 
     if (verifyShaHeader) {
@@ -181,9 +121,7 @@ async function main() {
     responses: {
       health: responsePreview(health),
       openapi: responsePreview(openapi),
-      appMe: responsePreview(appMe),
-      deniedMe: responsePreview(deniedMe),
-      invalidMe: responsePreview(invalidMe)
+      ping: responsePreview(ping)
     },
     assertions
   });

@@ -76,6 +76,7 @@ jobs:
       requires_migrations: ${{ steps.manifest.outputs.requires_migrations }}
       release_candidate_api_ref: ${{ steps.manifest.outputs.release_candidate_api_ref }}
       release_candidate_web_ref: ${{ steps.manifest.outputs.release_candidate_web_ref }}
+      release_candidate_worker_ref: ${{ steps.manifest.outputs.release_candidate_worker_ref }}
       release_candidate_codex_ref: ${{ steps.manifest.outputs.release_candidate_codex_ref }}
       commit_run_id: ${{ steps.manifest.outputs.commit_run_id }}
       release_candidate_ref_contract_status: ${{ steps.manifest.outputs.release_candidate_ref_contract_status }}
@@ -125,6 +126,7 @@ jobs:
       TESTED_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
       RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+      RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
       RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
       RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
@@ -200,6 +202,8 @@ jobs:
       EVIDENCE_FLOW_ID: ${{ matrix.flow_id }}
       RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+      RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
+      RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
       RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
@@ -270,6 +274,8 @@ jobs:
       HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
       RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+      RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
+      RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
       RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
@@ -335,6 +341,7 @@ jobs:
       HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
       API_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
       WEB_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+      WORKER_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
       CODEX_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
       RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
       RELEASE_CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_reason_codes_json }}
@@ -350,6 +357,7 @@ jobs:
       AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+      ACA_WORKER_APP_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
       ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
       ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
       ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
@@ -379,6 +387,9 @@ jobs:
       AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_ID }}
       AUTH_BOOTSTRAP_DELEGATED_USER_OID: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_OID }}
       AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL }}
+      AZURE_SERVICE_BUS_CONNECTION_STRING: ${{ secrets.AZURE_SERVICE_BUS_CONNECTION_STRING }}
+      SERVICE_BUS_QUEUE_NAME: ${{ vars.SERVICE_BUS_QUEUE_NAME }}
+      WORKER_RUN_MODE: ${{ vars.WORKER_RUN_MODE }}
     steps:
       - name: Record not-required infra acceptance
         if: ${{ env.JOB_REQUIRED != 'true' }}
@@ -410,7 +421,7 @@ jobs:
             exit 1
           fi
 
-          for image in "$API_IMAGE" "$WEB_IMAGE" "$CODEX_IMAGE"; do
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$CODEX_IMAGE"; do
             if [ -z "$image" ]; then
               echo "Release candidate image reference is missing for infra acceptance" >&2
               exit 1
@@ -774,6 +785,7 @@ jobs:
       REQUIRES_INFRA_CONVERGENCE: ${{ needs.load_release_candidate.outputs.requires_infra_convergence }}
       RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+      RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
       RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
@@ -786,6 +798,7 @@ jobs:
       AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+      ACA_WORKER_APP_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
       ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
       ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
       ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
@@ -813,6 +826,9 @@ jobs:
       AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_ID }}
       AUTH_BOOTSTRAP_DELEGATED_USER_OID: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_OID }}
       AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL }}
+      AZURE_SERVICE_BUS_CONNECTION_STRING: ${{ secrets.AZURE_SERVICE_BUS_CONNECTION_STRING }}
+      SERVICE_BUS_QUEUE_NAME: ${{ vars.SERVICE_BUS_QUEUE_NAME }}
+      WORKER_RUN_MODE: ${{ vars.WORKER_RUN_MODE }}
       POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
       ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
     steps:
@@ -830,7 +846,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_CODEX_REF"; do
+          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_WORKER_REF" "$RELEASE_CANDIDATE_CODEX_REF"; do
             if [ -z "$image" ]; then
               echo "Release candidate image reference is missing for infra deployment" >&2
               exit 1
@@ -896,6 +912,44 @@ jobs:
             echo "codex_app_exists=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check Worker app presence
+        id: worker_app_presence
+        if: ${{ env.RUNTIME_CHANGED == 'true' }}
+        run: |
+          set -euo pipefail
+
+          if ! az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_WORKER_APP_NAME" \
+            --query id \
+            --output tsv >/dev/null 2>&1; then
+            echo "worker_app_exists=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          worker_identity_type="$(az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_WORKER_APP_NAME" \
+            --query 'identity.type' \
+            --output tsv)"
+          worker_registry_identity="$(az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_WORKER_APP_NAME" \
+            --query 'properties.configuration.registries[0].identity' \
+            --output tsv)"
+          worker_registry_server="$(az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_WORKER_APP_NAME" \
+            --query 'properties.configuration.registries[0].server' \
+            --output tsv)"
+
+          if [ "$worker_identity_type" != "UserAssigned" ] || [ -z "$worker_registry_identity" ] || [ "$worker_registry_server" != "$ACR_REGISTRY" ] || [[ "$worker_registry_identity" != *"/$ACR_PULL_IDENTITY_NAME" ]]; then
+            echo "Worker app exists but registry identity config is not converged. Forcing infra convergence."
+            echo "worker_app_exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "worker_app_exists=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Decide infra apply necessity
         id: decide_infra_apply
         run: |
@@ -904,7 +958,7 @@ jobs:
           infra_apply_required="false"
           if [ "$INFRA_CHANGED" = "true" ] || [ "$REQUIRES_INFRA_CONVERGENCE" = "true" ]; then
             infra_apply_required="true"
-          elif [ "$RUNTIME_CHANGED" = "true" ] && [ "${{ steps.codex_app_presence.outputs.codex_app_exists }}" != "true" ]; then
+          elif [ "$RUNTIME_CHANGED" = "true" ] && { [ "${{ steps.codex_app_presence.outputs.codex_app_exists }}" != "true" ] || [ "${{ steps.worker_app_presence.outputs.worker_app_exists }}" != "true" ]; }; then
             infra_apply_required="true"
           fi
 
@@ -915,7 +969,11 @@ jobs:
         env:
           API_IMAGE: ${{ env.RELEASE_CANDIDATE_API_REF }}
           WEB_IMAGE: ${{ env.RELEASE_CANDIDATE_WEB_REF }}
+          WORKER_IMAGE: ${{ env.RELEASE_CANDIDATE_WORKER_REF }}
           CODEX_IMAGE: ${{ env.RELEASE_CANDIDATE_CODEX_REF }}
+          AZURE_SERVICE_BUS_CONNECTION_STRING: ${{ secrets.AZURE_SERVICE_BUS_CONNECTION_STRING }}
+          SERVICE_BUS_QUEUE_NAME: ${{ vars.SERVICE_BUS_QUEUE_NAME }}
+          WORKER_RUN_MODE: ${{ vars.WORKER_RUN_MODE }}
           ARM_PARAMETERS_FILE: .artifacts/infra/${{ env.HEAD_SHA }}/runtime.parameters.json
         run: |
           set -euo pipefail
@@ -971,10 +1029,12 @@ jobs:
       REQUIRES_MIGRATIONS: ${{ needs.load_release_candidate.outputs.requires_migrations }}
       RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+      RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
       RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+      ACA_WORKER_APP_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
       ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
       ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
       ACR_NAME: ${{ vars.ACR_NAME }}
@@ -995,7 +1055,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_CODEX_REF"; do
+          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_WORKER_REF" "$RELEASE_CANDIDATE_CODEX_REF"; do
             if [ -z "$image" ]; then
               echo "Release candidate image reference is missing for runtime deployment" >&2
               exit 1
@@ -1063,6 +1123,14 @@ jobs:
           resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
           disableTelemetry: true
 
+      - name: Deploy Worker
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          imageToDeploy: ${{ env.RELEASE_CANDIDATE_WORKER_REF }}
+          containerAppName: ${{ env.ACA_WORKER_APP_NAME }}
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          disableTelemetry: true
+
       - name: Deploy Codex
         uses: azure/container-apps-deploy-action@v1
         with:
@@ -1114,6 +1182,7 @@ jobs:
       CHANGE_CLASS: ${{ needs.load_release_candidate.outputs.change_class }}
       RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+      RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
       RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
     steps:
       - name: Checkout
@@ -1154,6 +1223,7 @@ jobs:
           DEPLOY_ENVIRONMENT_URL: ${{ steps.current_state.outputs.web_prod_url }}
           RELEASE_CANDIDATE_API_REF: ${{ env.RELEASE_CANDIDATE_API_REF }}
           RELEASE_CANDIDATE_WEB_REF: ${{ env.RELEASE_CANDIDATE_WEB_REF }}
+          RELEASE_CANDIDATE_WORKER_REF: ${{ env.RELEASE_CANDIDATE_WORKER_REF }}
           RELEASE_CANDIDATE_CODEX_REF: ${{ env.RELEASE_CANDIDATE_CODEX_REF }}
           CHANGE_CLASS: ${{ env.CHANGE_CLASS }}
         run: node scripts/pipeline/cloud/deployment-stage/record-release.mjs
@@ -1172,6 +1242,7 @@ jobs:
             "releaseCandidate": {
               "api": "$RELEASE_CANDIDATE_API_REF",
               "web": "$RELEASE_CANDIDATE_WEB_REF",
+              "worker": "$RELEASE_CANDIDATE_WORKER_REF",
               "codex": "$RELEASE_CANDIDATE_CODEX_REF"
             }
           }
@@ -1279,6 +1350,7 @@ jobs:
           CHANGE_CLASS: ${{ needs.load_release_candidate.outputs.change_class }}
           RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
           RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+          RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
           RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
           DEPLOY_RESULT: ${{ needs.deploy_release_candidate.result }}
           VERIFY_RESULT: ${{ needs.production_blackbox_verify.result }}
@@ -1342,6 +1414,7 @@ jobs:
           DEPLOYMENT_REQUIRED: ${{ needs.automated_acceptance_test_gate.outputs.deployment_required || '' }}
           RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
           RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+          RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
           RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
         run: node scripts/pipeline/shared/decide-release-outcome.mjs
 

@@ -1,0 +1,78 @@
+:root {
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background: radial-gradient(circle at top right, #d7f3e3 0%, #f7fbff 35%, #f3f7fb 100%);
+  color: #0e2435;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.page {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.panel {
+  width: min(840px, 100%);
+  border: 1px solid #c6d7e4;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 22px 60px rgba(20, 51, 69, 0.1);
+  padding: 2rem;
+}
+
+.eyebrow {
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #27506b;
+  margin: 0;
+}
+
+h1 {
+  margin: 0.5rem 0;
+  font-size: clamp(1.5rem, 2.5vw, 2.2rem);
+}
+
+.helper {
+  margin: 0 0 1.25rem;
+  color: #355b72;
+}
+
+.list {
+  margin: 0;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.list div {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.8rem;
+  border-radius: 10px;
+  background: #eef4f8;
+}
+
+dt {
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #4b6779;
+}
+
+dd {
+  margin: 0;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9rem;
+  color: #10293a;
+  word-break: break-word;
+}

@@ -7,12 +7,12 @@ function baseInput() {
       "determine-scope": "success",
       "build-compile": "success",
       "migration-safety": "success",
-      "auth-critical-smoke": "success",
+      "runtime-contract-smoke": "success",
       "minimal-integration-smoke": "success"
     },
     buildRequired: true,
     migrationRequired: false,
-    authRequired: true,
+    runtimeSmokeRequired: true,
     integrationRequired: true,
     docsDriftBlocking: false,
     docsDriftStatus: "pass"
@@ -41,10 +41,10 @@ describe("evaluateIntegrationGateResults", () => {
   it("fails required checks and docs drift when set", () => {
     const input = baseInput();
     input.checkResults["build-compile"] = "timed_out";
-    input.checkResults["auth-critical-smoke"] = "cancelled";
+    input.checkResults["runtime-contract-smoke"] = "cancelled";
     input.checkResults["minimal-integration-smoke"] = "skipped";
     input.buildRequired = true;
-    input.authRequired = true;
+    input.runtimeSmokeRequired = true;
     input.integrationRequired = true;
     input.docsDriftBlocking = true;
     input.docsDriftStatus = "fail";
@@ -56,8 +56,8 @@ describe("evaluateIntegrationGateResults", () => {
         message: "build-compile required but result is timed_out"
       },
       {
-        code: "CHECK_AUTH_CRITICAL_SMOKE_REQUIRED_NOT_SUCCESS",
-        message: "auth-critical-smoke required but result is cancelled"
+        code: "CHECK_RUNTIME_CONTRACT_SMOKE_REQUIRED_NOT_SUCCESS",
+        message: "runtime-contract-smoke required but result is cancelled"
       },
       {
         code: "CHECK_MINIMAL_INTEGRATION_SMOKE_REQUIRED_NOT_SUCCESS",

@@ -10,5 +10,6 @@
       "path": "../../packages/contracts/tsconfig.build.json"
     }
   ],
+  "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]
 }

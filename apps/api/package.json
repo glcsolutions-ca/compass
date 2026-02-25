@@ -14,20 +14,19 @@
     "typecheck": "tsc -p tsconfig.ref.json --noEmit"
   },
   "dependencies": {
-    "@fastify/cors": "^11.0.0",
-    "@fastify/postgres": "^6.0.2",
     "@compass/contracts": "workspace:*",
+    "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "fastify": "^5.2.1",
-    "fastify-type-provider-zod": "^4.0.2",
-    "jose": "^5.9.6",
+    "express": "^5.2.1",
     "node-pg-migrate": "8.0.4",
-    "pg": "^8.16.3",
-    "zod": "^3.24.2"
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@compass/testkit": "workspace:*",
-    "@types/pg": "^8.15.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.2.2",
     "tsx": "4.21.0",
     "vitest": "3.2.4"
   }

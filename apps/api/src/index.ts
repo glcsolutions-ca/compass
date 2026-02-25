@@ -1,19 +1,10 @@
 import "dotenv/config";
 import { buildApiApp } from "./app.js";
-import { loadApiConfig } from "./config/index.js";
+import { loadApiConfig } from "./config.js";
 
 const config = loadApiConfig();
-const app = buildApiApp({ config });
+const app = buildApiApp();
 
-app
-  .listen({
-    host: config.host,
-    port: config.port
-  })
-  .then(() => {
-    app.log.info(`API listening on ${config.host}:${config.port}`);
-  })
-  .catch((error) => {
-    app.log.error(error, "API failed to start");
-    process.exit(1);
-  });
+app.listen(config.port, config.host, () => {
+  console.info(`API listening on ${config.host}:${config.port}`);
+});

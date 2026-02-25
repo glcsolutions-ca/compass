@@ -96,6 +96,7 @@ Integration-gate emits throughput telemetry on push runs:
 
 - first hard deterministic failure: rerun failed jobs once
 - repeated hard deterministic failure: auto-revert head commit
+- successful integration-gate runs may still show a `Main Red Recovery` run as `skipped`; this is expected for `workflow_run`-triggered workflows
 
 Artifact:
 

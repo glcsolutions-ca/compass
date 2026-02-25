@@ -28,7 +28,7 @@ async function githubRequest(token, pathname) {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${token}`,
       "X-GitHub-Api-Version": GITHUB_API_VERSION,
-      "User-Agent": "compass-cloud-delivery-stage-timing"
+      "User-Agent": "compass-cloud-deployment-stage-timing"
     }
   });
 
@@ -152,45 +152,47 @@ async function main() {
   const policyPath =
     process.env.PIPELINE_POLICY_PATH ?? path.join(".github", "policy", "pipeline-policy.json");
   const policy = await loadPipelinePolicy(policyPath);
-  const cloudDeliverySlo = policy.cloudDeliveryPipeline?.slo ?? {};
-  const sloMode = String(cloudDeliverySlo.mode || "observe")
+  const cloudDeploymentPipelineSlo = policy.cloudDeploymentPipeline?.slo ?? {};
+  const sloMode = String(cloudDeploymentPipelineSlo.mode || "observe")
     .trim()
     .toLowerCase();
-  const acceptanceTarget = parseTarget(cloudDeliverySlo.acceptanceTargetSeconds);
-  const productionTarget = parseTarget(cloudDeliverySlo.productionTargetSeconds);
+  const acceptanceTarget = parseTarget(
+    cloudDeploymentPipelineSlo.automatedAcceptanceTestGateTargetSeconds
+  );
+  const productionTarget = parseTarget(cloudDeploymentPipelineSlo.deploymentStageTargetSeconds);
 
   const { run, jobs } = await fetchRunAndJobs({ token, repository, runId });
 
   const commitStart = earliestStartEpoch(jobs, [
-    "verify-merge-queue-gate-evidence",
+    "verify-integration-gate-evidence",
     "verify-commit-stage-evidence",
     "determine-scope"
   ]);
   const commitEnd = latestEndEpoch(jobs, ["determine-scope"]);
 
-  const releasePackageStart = earliestStartEpoch(jobs, [
-    "build-release-package-api-image",
-    "build-release-package-web-image",
+  const releaseCandidateStart = earliestStartEpoch(jobs, [
+    "build-release-candidate-api-image",
+    "build-release-candidate-web-image",
     "capture-current-runtime-refs",
-    "freeze-release-package-images"
+    "freeze-release-candidate-images"
   ]);
-  const releasePackageEnd = latestEndEpoch(jobs, ["publish-release-package"]);
+  const releaseCandidateEnd = latestEndEpoch(jobs, ["publish-release-candidate"]);
 
   const acceptanceStart = earliestStartEpoch(jobs, [
-    "load-release-package",
+    "load-release-candidate",
     "runtime-api-system-acceptance",
     "runtime-browser-acceptance",
     "runtime-migration-image-acceptance",
     "infra-readonly-acceptance",
     "identity-readonly-acceptance"
   ]);
-  const acceptanceEnd = latestEndEpoch(jobs, ["acceptance-stage"]);
+  const acceptanceEnd = latestEndEpoch(jobs, ["automated-acceptance-test-gate"]);
 
   const productionStart = earliestStartEpoch(jobs, [
-    "deploy-release-package",
+    "deploy-release-candidate",
     "production-blackbox-verify"
   ]);
-  const productionEnd = latestEndEpoch(jobs, ["production-stage"]);
+  const productionEnd = latestEndEpoch(jobs, ["deployment-stage"]);
 
   const runCreatedAt = parseIsoToEpochSeconds(run?.created_at);
   const runUpdatedAt = parseIsoToEpochSeconds(run?.updated_at);
@@ -202,7 +204,7 @@ async function main() {
   const queueDelaySeconds = durationFromRange(runCreatedAt, overallStart);
 
   const commitDuration = durationFromRange(commitStart, commitEnd);
-  const releasePackageDuration = durationFromRange(releasePackageStart, releasePackageEnd);
+  const releaseCandidateDuration = durationFromRange(releaseCandidateStart, releaseCandidateEnd);
   const acceptanceDuration = durationFromRange(acceptanceStart, acceptanceEnd);
   const productionDuration = durationFromRange(productionStart, productionEnd);
 
@@ -217,14 +219,14 @@ async function main() {
       queueDelaySeconds,
       overallExecutionSeconds,
       commitStageSeconds: commitDuration,
-      releasePackageBuildSeconds: releasePackageDuration,
-      acceptanceStageSeconds: acceptanceDuration,
-      productionStageSeconds: productionDuration
+      releaseCandidateBuildSeconds: releaseCandidateDuration,
+      automatedAcceptanceTestGateSeconds: acceptanceDuration,
+      deploymentStageSeconds: productionDuration
     },
     slo: {
       mode: sloMode,
-      acceptanceTargetSeconds: acceptanceTarget,
-      productionTargetSeconds: productionTarget,
+      automatedAcceptanceTestGateTargetSeconds: acceptanceTarget,
+      deploymentStageTargetSeconds: productionTarget,
       acceptancePass: stagePass(acceptanceDuration, acceptanceTarget),
       productionPass: stagePass(productionDuration, productionTarget)
     },
@@ -236,20 +238,21 @@ async function main() {
 
   await appendGithubOutput({
     pipeline_timing_path: artifactPath,
-    cloud_delivery_acceptance_seconds:
+    cloud_deployment_pipeline_automated_acceptance_test_gate_seconds:
       acceptanceDuration === null ? "" : String(acceptanceDuration),
-    cloud_delivery_production_seconds: productionDuration === null ? "" : String(productionDuration)
+    cloud_deployment_pipeline_deployment_stage_seconds:
+      productionDuration === null ? "" : String(productionDuration)
   });
 
   await appendGithubStepSummary(
     [
-      "### Cloud Delivery Pipeline Timing",
+      "### Cloud Deployment Pipeline Timing",
       `- queue delay (non-SLO): ${formatMetric(queueDelaySeconds)}`,
       `- overall execution: ${formatMetric(overallExecutionSeconds)}`,
       `- commit stage: ${formatMetric(commitDuration)}`,
-      `- release package build: ${formatMetric(releasePackageDuration)}`,
-      `- acceptance stage: ${formatMetric(acceptanceDuration)}`,
-      `- production stage: ${formatMetric(productionDuration)}`,
+      `- release candidate build: ${formatMetric(releaseCandidateDuration)}`,
+      `- automated acceptance test gate: ${formatMetric(acceptanceDuration)}`,
+      `- deployment stage: ${formatMetric(productionDuration)}`,
       `- SLO mode: \`${sloMode}\``,
       `- acceptance target: ${formatMetric(acceptanceTarget)}`,
       `- production target: ${formatMetric(productionTarget)}`

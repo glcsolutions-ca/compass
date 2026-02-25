@@ -56,8 +56,8 @@ function parseCheckResults() {
 
   const expectedChecks = [
     "determine-scope",
-    "fast-feedback",
-    "desktop-fast-feedback",
+    "commit-test-suite",
+    "desktop-commit-test-suite",
     "infra-static-check",
     "identity-static-check"
   ];

@@ -1,4 +1,4 @@
-name: Cloud Delivery Pipeline
+name: Cloud Deployment Pipeline
 
 on:
   push:
@@ -50,13 +50,13 @@ jobs:
           path: .artifacts/commit-stage/${{ github.sha }}/evidence.json
           if-no-files-found: warn
 
-  verify_merge_queue_gate_evidence:
-    name: verify-merge-queue-gate-evidence
+  verify_integration_gate_evidence:
+    name: verify-integration-gate-evidence
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      merge_queue_gate_run_id: ${{ steps.verify.outputs.merge_queue_gate_run_id }}
-      merge_queue_gate_evidence_path: ${{ steps.verify.outputs.merge_queue_gate_evidence_path }}
+      integration_gate_run_id: ${{ steps.verify.outputs.integration_gate_run_id }}
+      integration_gate_evidence_path: ${{ steps.verify.outputs.integration_gate_evidence_path }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,28 +66,28 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Verify merge queue gate evidence for release SHA
+      - name: Verify integration gate evidence for release SHA
         id: verify
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           HEAD_SHA: ${{ github.sha }}
-          MERGE_QUEUE_GATE_WORKFLOW_FILE: merge-queue-gate.yml
-        run: node scripts/pipeline/shared/verify-merge-queue-gate-evidence.mjs
+          INTEGRATION_GATE_WORKFLOW_FILE: integration-gate.yml
+        run: node scripts/pipeline/shared/verify-integration-gate-evidence.mjs
 
-      - name: Upload merge queue gate evidence artifact
+      - name: Upload integration gate evidence artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: merge-queue-gate-evidence-${{ github.sha }}
-          path: .artifacts/merge-queue-gate/${{ github.sha }}/evidence.json
+          name: integration-gate-evidence-${{ github.sha }}
+          path: .artifacts/integration-gate/${{ github.sha }}/evidence.json
           if-no-files-found: warn
 
   determine_scope:
     name: determine-scope
     needs:
       - verify_commit_stage_evidence
-      - verify_merge_queue_gate_evidence
+      - verify_integration_gate_evidence
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -104,7 +104,7 @@ jobs:
       migration_changed: ${{ steps.scope.outputs.migration_changed }}
       infra_rollout_changed: ${{ steps.scope.outputs.infra_rollout_changed }}
       docs_only_changed: ${{ steps.scope.outputs.docs_only_changed }}
-      delivery_config_changed: ${{ steps.scope.outputs.delivery_config_changed }}
+      deployment_pipeline_config_changed: ${{ steps.scope.outputs.deployment_pipeline_config_changed }}
       requires_infra_convergence: ${{ steps.scope.outputs.requires_infra_convergence }}
       requires_migrations: ${{ steps.scope.outputs.requires_migrations }}
       changed_files_json: ${{ steps.scope.outputs.changed_files_json }}
@@ -155,8 +155,8 @@ jobs:
           path: .artifacts/docs-drift/${{ steps.scope.outputs.tested_sha }}/result.json
           if-no-files-found: warn
 
-  build_release_package_api_image:
-    name: build-release-package-api-image
+  build_release_candidate_api_image:
+    name: build-release-candidate-api-image
     needs:
       - determine_scope
     if: ${{ needs.determine_scope.outputs.runtime_changed == 'true' }}
@@ -164,7 +164,7 @@ jobs:
     timeout-minutes: 45
     environment: production
     outputs:
-      release_package_api_ref: ${{ steps.freeze.outputs.release_package_api_ref }}
+      release_candidate_api_ref: ${{ steps.freeze.outputs.release_candidate_api_ref }}
     env:
       HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
       ACR_NAME: ${{ vars.ACR_NAME }}
@@ -185,14 +185,14 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build release package API image
+      - name: Build release candidate API image
         id: freeze
         env:
           FREEZE_MODE: build-api
-        run: node scripts/pipeline/shared/freeze-release-package-refs.mjs
+        run: node scripts/pipeline/shared/freeze-release-candidate-refs.mjs
 
-  build_release_package_web_image:
-    name: build-release-package-web-image
+  build_release_candidate_web_image:
+    name: build-release-candidate-web-image
     needs:
       - determine_scope
     if: ${{ needs.determine_scope.outputs.runtime_changed == 'true' }}
@@ -200,7 +200,7 @@ jobs:
     timeout-minutes: 45
     environment: production
     outputs:
-      release_package_web_ref: ${{ steps.freeze.outputs.release_package_web_ref }}
+      release_candidate_web_ref: ${{ steps.freeze.outputs.release_candidate_web_ref }}
     env:
       HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
       ACR_NAME: ${{ vars.ACR_NAME }}
@@ -221,14 +221,14 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build release package Web image
+      - name: Build release candidate Web image
         id: freeze
         env:
           FREEZE_MODE: build-web
-        run: node scripts/pipeline/shared/freeze-release-package-refs.mjs
+        run: node scripts/pipeline/shared/freeze-release-candidate-refs.mjs
 
-  build_release_package_codex_image:
-    name: build-release-package-codex-image
+  build_release_candidate_codex_image:
+    name: build-release-candidate-codex-image
     needs:
       - determine_scope
     if: ${{ needs.determine_scope.outputs.runtime_changed == 'true' }}
@@ -236,7 +236,7 @@ jobs:
     timeout-minutes: 45
     environment: production
     outputs:
-      release_package_codex_ref: ${{ steps.freeze.outputs.release_package_codex_ref }}
+      release_candidate_codex_ref: ${{ steps.freeze.outputs.release_candidate_codex_ref }}
     env:
       HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
       ACR_NAME: ${{ vars.ACR_NAME }}
@@ -257,11 +257,11 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build release package Codex image
+      - name: Build release candidate Codex image
         id: freeze
         env:
           FREEZE_MODE: build-codex
-        run: node scripts/pipeline/shared/freeze-release-package-refs.mjs
+        run: node scripts/pipeline/shared/freeze-release-candidate-refs.mjs
 
   capture_current_runtime_refs:
     name: capture-current-runtime-refs
@@ -272,9 +272,9 @@ jobs:
     timeout-minutes: 20
     environment: production
     outputs:
-      release_package_api_ref: ${{ steps.freeze.outputs.release_package_api_ref }}
-      release_package_web_ref: ${{ steps.freeze.outputs.release_package_web_ref }}
-      release_package_codex_ref: ${{ steps.freeze.outputs.release_package_codex_ref }}
+      release_candidate_api_ref: ${{ steps.freeze.outputs.release_candidate_api_ref }}
+      release_candidate_web_ref: ${{ steps.freeze.outputs.release_candidate_web_ref }}
+      release_candidate_codex_ref: ${{ steps.freeze.outputs.release_candidate_codex_ref }}
     env:
       ACR_NAME: ${{ vars.ACR_NAME }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
@@ -301,19 +301,19 @@ jobs:
         id: freeze
         env:
           FREEZE_MODE: resolve-current-runtime-refs
-        run: node scripts/pipeline/shared/freeze-release-package-refs.mjs
+        run: node scripts/pipeline/shared/freeze-release-candidate-refs.mjs
 
-  publish_release_package:
-    name: publish-release-package
+  publish_release_candidate:
+    name: publish-release-candidate
     needs:
       - verify_commit_stage_evidence
-      - verify_merge_queue_gate_evidence
+      - verify_integration_gate_evidence
       - determine_scope
-      - build_release_package_api_image
-      - build_release_package_web_image
-      - build_release_package_codex_image
+      - build_release_candidate_api_image
+      - build_release_candidate_web_image
+      - build_release_candidate_codex_image
       - capture_current_runtime_refs
-    if: ${{ always() && needs.verify_commit_stage_evidence.result == 'success' && needs.verify_merge_queue_gate_evidence.result == 'success' && needs.determine_scope.result == 'success' && ((needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_package_api_image.result == 'success' && needs.build_release_package_web_image.result == 'success' && needs.build_release_package_codex_image.result == 'success') || ((needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.requires_infra_convergence == 'true') && needs.capture_current_runtime_refs.result == 'success') || (needs.determine_scope.outputs.runtime_changed != 'true' && needs.determine_scope.outputs.infra_changed != 'true' && needs.determine_scope.outputs.requires_infra_convergence != 'true')) }}
+    if: ${{ always() && needs.verify_commit_stage_evidence.result == 'success' && needs.verify_integration_gate_evidence.result == 'success' && needs.determine_scope.result == 'success' && ((needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_api_image.result == 'success' && needs.build_release_candidate_web_image.result == 'success' && needs.build_release_candidate_codex_image.result == 'success') || ((needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.requires_infra_convergence == 'true') && needs.capture_current_runtime_refs.result == 'success') || (needs.determine_scope.outputs.runtime_changed != 'true' && needs.determine_scope.outputs.infra_changed != 'true' && needs.determine_scope.outputs.requires_infra_convergence != 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -323,7 +323,7 @@ jobs:
       TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
       CHANGE_CLASS: ${{ needs.determine_scope.outputs.change_class }}
       COMMIT_STAGE_RUN_ID: ${{ needs.verify_commit_stage_evidence.outputs.commit_stage_run_id }}
-      MERGE_QUEUE_GATE_RUN_ID: ${{ needs.verify_merge_queue_gate_evidence.outputs.merge_queue_gate_run_id }}
+      INTEGRATION_GATE_RUN_ID: ${{ needs.verify_integration_gate_evidence.outputs.integration_gate_run_id }}
       RUNTIME_CHANGED: ${{ needs.determine_scope.outputs.runtime_changed }}
       DESKTOP_CHANGED: ${{ needs.determine_scope.outputs.desktop_changed }}
       INFRA_CHANGED: ${{ needs.determine_scope.outputs.infra_changed }}
@@ -331,20 +331,20 @@ jobs:
       DOCS_ONLY_CHANGED: ${{ needs.determine_scope.outputs.docs_only_changed }}
       REQUIRES_INFRA_CONVERGENCE: ${{ needs.determine_scope.outputs.requires_infra_convergence }}
       REQUIRES_MIGRATIONS: ${{ needs.determine_scope.outputs.requires_migrations }}
-      RELEASE_PACKAGE_API_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_package_api_image.outputs.release_package_api_ref || needs.capture_current_runtime_refs.outputs.release_package_api_ref }}
-      RELEASE_PACKAGE_WEB_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_package_web_image.outputs.release_package_web_ref || needs.capture_current_runtime_refs.outputs.release_package_web_ref }}
-      RELEASE_PACKAGE_CODEX_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_package_codex_image.outputs.release_package_codex_ref || needs.capture_current_runtime_refs.outputs.release_package_codex_ref }}
-      FREEZE_API_RESULT: ${{ needs.build_release_package_api_image.result }}
-      FREEZE_WEB_RESULT: ${{ needs.build_release_package_web_image.result }}
-      FREEZE_CODEX_RESULT: ${{ needs.build_release_package_codex_image.result }}
+      RELEASE_CANDIDATE_API_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_api_image.outputs.release_candidate_api_ref || needs.capture_current_runtime_refs.outputs.release_candidate_api_ref }}
+      RELEASE_CANDIDATE_WEB_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_web_image.outputs.release_candidate_web_ref || needs.capture_current_runtime_refs.outputs.release_candidate_web_ref }}
+      RELEASE_CANDIDATE_CODEX_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_codex_image.outputs.release_candidate_codex_ref || needs.capture_current_runtime_refs.outputs.release_candidate_codex_ref }}
+      FREEZE_API_RESULT: ${{ needs.build_release_candidate_api_image.result }}
+      FREEZE_WEB_RESULT: ${{ needs.build_release_candidate_web_image.result }}
+      FREEZE_CODEX_RESULT: ${{ needs.build_release_candidate_codex_image.result }}
       FREEZE_CURRENT_REFS_RESULT: ${{ needs.capture_current_runtime_refs.result }}
     steps:
-      - name: Publish release package manifest
+      - name: Publish release candidate manifest
         id: publish
         run: |
           set -euo pipefail
 
-          artifact_dir=".artifacts/release-package/$HEAD_SHA"
+          artifact_dir=".artifacts/release-candidate/$HEAD_SHA"
           mkdir -p "$artifact_dir"
 
           requires_refs=false
@@ -354,7 +354,7 @@ jobs:
 
           if [ "$RUNTIME_CHANGED" = "true" ]; then
             if [ "$FREEZE_API_RESULT" != "success" ] || [ "$FREEZE_WEB_RESULT" != "success" ] || [ "$FREEZE_CODEX_RESULT" != "success" ]; then
-              echo "Runtime release package refs are required but runtime freeze jobs did not all succeed." >&2
+              echo "Runtime release candidate refs are required but runtime freeze jobs did not all succeed." >&2
               exit 1
             fi
           elif [ "$INFRA_CHANGED" = "true" ] || [ "$REQUIRES_INFRA_CONVERGENCE" = "true" ]; then
@@ -365,8 +365,8 @@ jobs:
           fi
 
           if [ "$requires_refs" = "true" ]; then
-            if [ -z "${RELEASE_PACKAGE_API_REF:-}" ] || [ -z "${RELEASE_PACKAGE_WEB_REF:-}" ] || [ -z "${RELEASE_PACKAGE_CODEX_REF:-}" ]; then
-              echo "Release package refs are required but missing." >&2
+            if [ -z "${RELEASE_CANDIDATE_API_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_WEB_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_CODEX_REF:-}" ]; then
+              echo "Release candidate refs are required but missing." >&2
               exit 1
             fi
           fi
@@ -379,7 +379,7 @@ jobs:
             "testedSha": "$TESTED_SHA",
             "changeClass": "$CHANGE_CLASS",
             "commitStageRunId": "$COMMIT_STAGE_RUN_ID",
-            "mergeQueueGateRunId": "$MERGE_QUEUE_GATE_RUN_ID",
+            "integrationGateRunId": "$INTEGRATION_GATE_RUN_ID",
             "buildRunId": "${GITHUB_RUN_ID}",
             "scope": {
               "runtime": ${RUNTIME_CHANGED},
@@ -390,29 +390,29 @@ jobs:
             },
             "requiresInfraConvergence": ${REQUIRES_INFRA_CONVERGENCE},
             "requiresMigrations": ${REQUIRES_MIGRATIONS},
-            "releasePackage": {
-              "apiRef": "${RELEASE_PACKAGE_API_REF:-}",
-              "webRef": "${RELEASE_PACKAGE_WEB_REF:-}",
-              "codexRef": "${RELEASE_PACKAGE_CODEX_REF:-}"
+            "releaseCandidate": {
+              "apiRef": "${RELEASE_CANDIDATE_API_REF:-}",
+              "webRef": "${RELEASE_CANDIDATE_WEB_REF:-}",
+              "codexRef": "${RELEASE_CANDIDATE_CODEX_REF:-}"
             }
           }
           JSON
 
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Upload release package artifact
+      - name: Upload release candidate artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-package-${{ env.HEAD_SHA }}
-          path: .artifacts/release-package/${{ env.HEAD_SHA }}/manifest.json
+          name: release-candidate-${{ env.HEAD_SHA }}
+          path: .artifacts/release-candidate/${{ env.HEAD_SHA }}/manifest.json
           if-no-files-found: error
 
-  load_release_package:
-    name: load-release-package
+  load_release_candidate:
+    name: load-release-candidate
     needs:
       - determine_scope
-      - publish_release_package
-    if: ${{ always() && needs.publish_release_package.result == 'success' }}
+      - publish_release_candidate
+    if: ${{ always() && needs.publish_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     outputs:
       head_sha: ${{ steps.manifest.outputs.head_sha }}
@@ -424,12 +424,12 @@ jobs:
       docs_only_changed: ${{ steps.manifest.outputs.docs_only_changed }}
       requires_infra_convergence: ${{ steps.manifest.outputs.requires_infra_convergence }}
       requires_migrations: ${{ steps.manifest.outputs.requires_migrations }}
-      release_package_api_ref: ${{ steps.manifest.outputs.release_package_api_ref }}
-      release_package_web_ref: ${{ steps.manifest.outputs.release_package_web_ref }}
-      release_package_codex_ref: ${{ steps.manifest.outputs.release_package_codex_ref }}
+      release_candidate_api_ref: ${{ steps.manifest.outputs.release_candidate_api_ref }}
+      release_candidate_web_ref: ${{ steps.manifest.outputs.release_candidate_web_ref }}
+      release_candidate_codex_ref: ${{ steps.manifest.outputs.release_candidate_codex_ref }}
       commit_run_id: ${{ steps.manifest.outputs.commit_run_id }}
-      release_package_ref_contract_status: ${{ steps.manifest.outputs.release_package_ref_contract_status }}
-      release_package_ref_contract_reason_codes_json: ${{ steps.manifest.outputs.release_package_ref_contract_reason_codes_json }}
+      release_candidate_ref_contract_status: ${{ steps.manifest.outputs.release_candidate_ref_contract_status }}
+      release_candidate_ref_contract_reason_codes_json: ${{ steps.manifest.outputs.release_candidate_ref_contract_reason_codes_json }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -439,45 +439,45 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Download release package artifact
+      - name: Download release candidate artifact
         uses: actions/download-artifact@v4
         with:
-          name: release-package-${{ needs.determine_scope.outputs.head_sha }}
-          path: .artifacts/release-package/${{ needs.determine_scope.outputs.head_sha }}
+          name: release-candidate-${{ needs.determine_scope.outputs.head_sha }}
+          path: .artifacts/release-candidate/${{ needs.determine_scope.outputs.head_sha }}
 
-      - name: Parse release package manifest
+      - name: Parse release candidate manifest
         id: manifest
         env:
-          RELEASE_PACKAGE_MANIFEST_PATH: .artifacts/release-package/${{ needs.determine_scope.outputs.head_sha }}/manifest.json
+          RELEASE_CANDIDATE_MANIFEST_PATH: .artifacts/release-candidate/${{ needs.determine_scope.outputs.head_sha }}/manifest.json
           RUN_ID: ${{ github.run_id }}
-        run: node scripts/pipeline/shared/load-release-package-contract.mjs
+        run: node scripts/pipeline/shared/load-release-candidate-contract.mjs
 
-      - name: Upload release package manifest copy
+      - name: Upload release candidate manifest copy
         uses: actions/upload-artifact@v4
         with:
-          name: deployment-pipeline-release-package-${{ steps.manifest.outputs.head_sha }}
-          path: ${{ steps.manifest.outputs.release_package_manifest_copy_path }}
+          name: deployment-pipeline-release-candidate-${{ steps.manifest.outputs.head_sha }}
+          path: ${{ steps.manifest.outputs.release_candidate_manifest_copy_path }}
           if-no-files-found: error
 
   runtime_api_system_acceptance:
     name: runtime-api-system-acceptance
     needs:
-      - load_release_package
-    if: ${{ always() && needs.load_release_package.result == 'success' }}
+      - load_release_candidate
+    if: ${{ always() && needs.load_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: acceptance
     env:
-      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
-      TESTED_SHA: ${{ needs.load_release_package.outputs.head_sha }}
-      RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
-      RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
-      RELEASE_PACKAGE_CODEX_REF: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
-      RELEASE_PACKAGE_REF_CONTRACT_STATUS: ${{ needs.load_release_package.outputs.release_package_ref_contract_status }}
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      TESTED_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
+      RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+      RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
+      RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       ACR_NAME: ${{ vars.ACR_NAME }}
-      JOB_REQUIRED: ${{ needs.load_release_package.outputs.runtime_changed == 'true' && needs.load_release_package.outputs.docs_only_changed != 'true' }}
+      JOB_REQUIRED: ${{ needs.load_release_candidate.outputs.runtime_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
     steps:
       - name: Record not-required runtime API/system acceptance
         if: ${{ env.JOB_REQUIRED != 'true' }}
@@ -504,7 +504,7 @@ jobs:
         if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: ./.github/actions/setup-node-pnpm
 
-      - name: Azure login for runtime release package pull
+      - name: Azure login for runtime release candidate pull
         if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: azure/login@v2
         with:
@@ -512,9 +512,9 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Run API/system acceptance against release package API image
+      - name: Run API/system acceptance against release candidate API image
         if: ${{ env.JOB_REQUIRED == 'true' }}
-        run: node scripts/pipeline/cloud/acceptance/run-runtime-api-system-acceptance.mjs
+        run: node scripts/pipeline/cloud/automated-acceptance-test-gate/run-runtime-api-system-acceptance.mjs
 
       - name: Upload runtime API/system acceptance artifacts
         if: ${{ always() }}
@@ -531,8 +531,8 @@ jobs:
   runtime_browser_acceptance:
     name: runtime-browser-acceptance
     needs:
-      - load_release_package
-    if: ${{ always() && needs.load_release_package.result == 'success' }}
+      - load_release_candidate
+    if: ${{ always() && needs.load_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: acceptance
@@ -542,16 +542,16 @@ jobs:
           - compass-smoke
       fail-fast: false
     env:
-      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
-      TESTED_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      TESTED_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
       EVIDENCE_FLOW_ID: ${{ matrix.flow_id }}
-      RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
-      RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
-      RELEASE_PACKAGE_REF_CONTRACT_STATUS: ${{ needs.load_release_package.outputs.release_package_ref_contract_status }}
+      RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
+      RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+      RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       ACR_NAME: ${{ vars.ACR_NAME }}
-      JOB_REQUIRED: ${{ needs.load_release_package.outputs.runtime_changed == 'true' && needs.load_release_package.outputs.docs_only_changed != 'true' }}
+      JOB_REQUIRED: ${{ needs.load_release_candidate.outputs.runtime_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
     steps:
       - name: Record not-required runtime browser acceptance
         if: ${{ env.JOB_REQUIRED != 'true' }}
@@ -583,7 +583,7 @@ jobs:
         if: ${{ env.JOB_REQUIRED == 'true' }}
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Azure login for runtime release package pull
+      - name: Azure login for runtime release candidate pull
         if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: azure/login@v2
         with:
@@ -591,9 +591,9 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Run browser acceptance against release package Web image
+      - name: Run browser acceptance against release candidate Web image
         if: ${{ env.JOB_REQUIRED == 'true' }}
-        run: node scripts/pipeline/cloud/acceptance/run-runtime-browser-acceptance.mjs
+        run: node scripts/pipeline/cloud/automated-acceptance-test-gate/run-runtime-browser-acceptance.mjs
 
       - name: Upload runtime browser acceptance artifacts
         if: ${{ always() }}
@@ -608,20 +608,20 @@ jobs:
   runtime_migration_image_acceptance:
     name: runtime-migration-image-acceptance
     needs:
-      - load_release_package
-    if: ${{ always() && needs.load_release_package.result == 'success' }}
+      - load_release_candidate
+    if: ${{ always() && needs.load_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: acceptance
     env:
-      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
-      RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
-      RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
-      RELEASE_PACKAGE_REF_CONTRACT_STATUS: ${{ needs.load_release_package.outputs.release_package_ref_contract_status }}
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
+      RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+      RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       ACR_NAME: ${{ vars.ACR_NAME }}
-      JOB_REQUIRED: ${{ needs.load_release_package.outputs.runtime_changed == 'true' && needs.load_release_package.outputs.docs_only_changed != 'true' }}
+      JOB_REQUIRED: ${{ needs.load_release_candidate.outputs.runtime_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
     steps:
       - name: Record not-required runtime migration acceptance
         if: ${{ env.JOB_REQUIRED != 'true' }}
@@ -650,7 +650,7 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Azure login for runtime release package pull
+      - name: Azure login for runtime release candidate pull
         if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: azure/login@v2
         with:
@@ -658,9 +658,9 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Run migration-image acceptance against release package API image
+      - name: Run migration-image acceptance against release candidate API image
         if: ${{ env.JOB_REQUIRED == 'true' }}
-        run: node scripts/pipeline/cloud/acceptance/run-runtime-migration-image-acceptance.mjs
+        run: node scripts/pipeline/cloud/automated-acceptance-test-gate/run-runtime-migration-image-acceptance.mjs
 
       - name: Upload migration-image acceptance artifacts
         if: ${{ always() }}
@@ -673,18 +673,18 @@ jobs:
   infra_readonly_acceptance:
     name: infra-readonly-acceptance
     needs:
-      - load_release_package
-    if: ${{ always() && needs.load_release_package.result == 'success' }}
+      - load_release_candidate
+    if: ${{ always() && needs.load_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: acceptance
     env:
-      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
-      API_IMAGE: ${{ needs.load_release_package.outputs.release_package_api_ref }}
-      WEB_IMAGE: ${{ needs.load_release_package.outputs.release_package_web_ref }}
-      CODEX_IMAGE: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
-      RELEASE_PACKAGE_REF_CONTRACT_STATUS: ${{ needs.load_release_package.outputs.release_package_ref_contract_status }}
-      RELEASE_PACKAGE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_release_package.outputs.release_package_ref_contract_reason_codes_json }}
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      API_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
+      WEB_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+      CODEX_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
+      RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
+      RELEASE_CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_reason_codes_json }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
@@ -708,7 +708,7 @@ jobs:
       POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
       POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
       POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
-      JOB_REQUIRED: ${{ (needs.load_release_package.outputs.infra_changed == 'true' || needs.load_release_package.outputs.requires_infra_convergence == 'true') && needs.load_release_package.outputs.docs_only_changed != 'true' }}
+      JOB_REQUIRED: ${{ (needs.load_release_candidate.outputs.infra_changed == 'true' || needs.load_release_candidate.outputs.requires_infra_convergence == 'true') && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
       API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
       AUTH_AUDIENCE: ${{ vars.AUTH_AUDIENCE }}
       AUTH_ALLOWED_CLIENT_IDS: ${{ vars.AUTH_ALLOWED_CLIENT_IDS }}
@@ -740,24 +740,24 @@ jobs:
         if: ${{ env.JOB_REQUIRED == 'true' }}
         uses: actions/checkout@v4
 
-      - name: Validate release package references for infra acceptance
+      - name: Validate release candidate references for infra acceptance
         if: ${{ env.JOB_REQUIRED == 'true' }}
         run: |
           set -euo pipefail
 
-          if [ "${RELEASE_PACKAGE_REF_CONTRACT_STATUS:-unknown}" != "pass" ]; then
-            echo "Release package ref contract status is ${RELEASE_PACKAGE_REF_CONTRACT_STATUS:-unknown}" >&2
-            echo "Reason codes: ${RELEASE_PACKAGE_REF_CONTRACT_REASON_CODES_JSON:-[]}" >&2
+          if [ "${RELEASE_CANDIDATE_REF_CONTRACT_STATUS:-unknown}" != "pass" ]; then
+            echo "Release candidate ref contract status is ${RELEASE_CANDIDATE_REF_CONTRACT_STATUS:-unknown}" >&2
+            echo "Reason codes: ${RELEASE_CANDIDATE_REF_CONTRACT_REASON_CODES_JSON:-[]}" >&2
             exit 1
           fi
 
           for image in "$API_IMAGE" "$WEB_IMAGE" "$CODEX_IMAGE"; do
             if [ -z "$image" ]; then
-              echo "Release package image reference is missing for infra acceptance" >&2
+              echo "Release candidate image reference is missing for infra acceptance" >&2
               exit 1
             fi
             if [[ "$image" != *"@sha256:"* ]]; then
-              echo "Release package image is not a digest reference: $image" >&2
+              echo "Release candidate image is not a digest reference: $image" >&2
               exit 1
             fi
           done
@@ -803,8 +803,8 @@ jobs:
   identity_readonly_acceptance:
     name: identity-readonly-acceptance
     needs:
-      - load_release_package
-    if: ${{ always() && needs.load_release_package.result == 'success' }}
+      - load_release_candidate
+    if: ${{ always() && needs.load_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: acceptance
@@ -812,7 +812,7 @@ jobs:
       identity_config_contract_status: ${{ steps.identity_config.outputs.config_contract_status }}
       identity_config_contract_reason_codes_json: ${{ steps.identity_config.outputs.config_contract_reason_codes_json }}
     env:
-      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
       ARM_USE_OIDC: "true"
       ARM_USE_AZUREAD: "true"
       ARM_CLIENT_ID: ${{ secrets.AZURE_ACCEPTANCE_IDENTITY_CLIENT_ID }}
@@ -825,7 +825,7 @@ jobs:
       API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
       IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
       GITHUB_ENVIRONMENT_NAME: production
-      JOB_REQUIRED: ${{ needs.load_release_package.outputs.identity_changed == 'true' && needs.load_release_package.outputs.docs_only_changed != 'true' }}
+      JOB_REQUIRED: ${{ needs.load_release_candidate.outputs.identity_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
     steps:
       - name: Record not-required identity acceptance
         if: ${{ env.JOB_REQUIRED != 'true' }}
@@ -919,22 +919,22 @@ jobs:
             .artifacts/identity/${{ env.HEAD_SHA }}/config-validation.json
           if-no-files-found: warn
 
-  acceptance_stage:
-    name: acceptance-stage
+  automated_acceptance_test_gate:
+    name: automated-acceptance-test-gate
     needs:
-      - load_release_package
+      - load_release_candidate
       - runtime_api_system_acceptance
       - runtime_browser_acceptance
       - runtime_migration_image_acceptance
       - infra_readonly_acceptance
       - identity_readonly_acceptance
-    if: ${{ always() && needs.load_release_package.result == 'success' }}
+    if: ${{ always() && needs.load_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
       acceptance_decision: ${{ steps.finalize.outputs.acceptance_decision }}
-      deploy_required: ${{ steps.scope.outputs.deploy_required }}
-      delivery_config_required: ${{ steps.scope.outputs.delivery_config_required }}
+      deployment_required: ${{ steps.scope.outputs.deployment_required }}
+      deployment_pipeline_config_required: ${{ steps.scope.outputs.deployment_pipeline_config_required }}
       deploy_skip_reason_code: ${{ steps.scope.outputs.deploy_skip_reason_code }}
       reason_codes_json: ${{ steps.finalize.outputs.reason_codes_json }}
     steps:
@@ -950,60 +950,60 @@ jobs:
         id: scope
         env:
           STAGE_ELIGIBILITY_MODE: acceptance
-          CHANGE_CLASS: ${{ needs.load_release_package.outputs.change_class }}
-          INFRA_CHANGED: ${{ needs.load_release_package.outputs.infra_changed }}
-          IDENTITY_CHANGED: ${{ needs.load_release_package.outputs.identity_changed }}
-          DOCS_ONLY_CHANGED: ${{ needs.load_release_package.outputs.docs_only_changed }}
-          REQUIRES_INFRA_CONVERGENCE: ${{ needs.load_release_package.outputs.requires_infra_convergence }}
+          CHANGE_CLASS: ${{ needs.load_release_candidate.outputs.change_class }}
+          INFRA_CHANGED: ${{ needs.load_release_candidate.outputs.infra_changed }}
+          IDENTITY_CHANGED: ${{ needs.load_release_candidate.outputs.identity_changed }}
+          DOCS_ONLY_CHANGED: ${{ needs.load_release_candidate.outputs.docs_only_changed }}
+          REQUIRES_INFRA_CONVERGENCE: ${{ needs.load_release_candidate.outputs.requires_infra_convergence }}
         run: node scripts/pipeline/shared/resolve-stage-eligibility.mjs
 
-      - name: Decide acceptance stage
+      - name: Decide automated acceptance test gate
         id: decide
-        if: ${{ steps.scope.outputs.deploy_required == 'true' }}
+        if: ${{ steps.scope.outputs.deployment_required == 'true' }}
         continue-on-error: true
         env:
-          HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
-          RUNTIME_REQUIRED: ${{ needs.load_release_package.outputs.runtime_changed }}
-          INFRA_REQUIRED: ${{ needs.load_release_package.outputs.infra_changed == 'true' || needs.load_release_package.outputs.requires_infra_convergence == 'true' }}
-          IDENTITY_REQUIRED: ${{ needs.load_release_package.outputs.identity_changed }}
-          RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
-          RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
-          RELEASE_PACKAGE_REF_CONTRACT_STATUS: ${{ needs.load_release_package.outputs.release_package_ref_contract_status }}
-          RELEASE_PACKAGE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_release_package.outputs.release_package_ref_contract_reason_codes_json }}
+          HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+          RUNTIME_REQUIRED: ${{ needs.load_release_candidate.outputs.runtime_changed }}
+          INFRA_REQUIRED: ${{ needs.load_release_candidate.outputs.infra_changed == 'true' || needs.load_release_candidate.outputs.requires_infra_convergence == 'true' }}
+          IDENTITY_REQUIRED: ${{ needs.load_release_candidate.outputs.identity_changed }}
+          RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
+          RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+          RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
+          RELEASE_CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_reason_codes_json }}
           IDENTITY_CONFIG_CONTRACT_STATUS: ${{ needs.identity_readonly_acceptance.outputs.identity_config_contract_status }}
           IDENTITY_CONFIG_CONTRACT_REASON_CODES_JSON: ${{ needs.identity_readonly_acceptance.outputs.identity_config_contract_reason_codes_json }}
-          CHECK_RESULTS_JSON: ${{ format('{{"load-release-package":"{0}","runtime-api-system-acceptance":"{1}","runtime-browser-acceptance":"{2}","runtime-migration-image-acceptance":"{3}","infra-readonly-acceptance":"{4}","identity-readonly-acceptance":"{5}"}}', needs.load_release_package.result, needs.runtime_api_system_acceptance.result, needs.runtime_browser_acceptance.result, needs.runtime_migration_image_acceptance.result, needs.infra_readonly_acceptance.result, needs.identity_readonly_acceptance.result) }}
-        run: node scripts/pipeline/cloud/acceptance/decide-acceptance-stage.mjs
+          CHECK_RESULTS_JSON: ${{ format('{{"load-release-candidate":"{0}","runtime-api-system-acceptance":"{1}","runtime-browser-acceptance":"{2}","runtime-migration-image-acceptance":"{3}","infra-readonly-acceptance":"{4}","identity-readonly-acceptance":"{5}"}}', needs.load_release_candidate.result, needs.runtime_api_system_acceptance.result, needs.runtime_browser_acceptance.result, needs.runtime_migration_image_acceptance.result, needs.infra_readonly_acceptance.result, needs.identity_readonly_acceptance.result) }}
+        run: node scripts/pipeline/cloud/automated-acceptance-test-gate/decide-automated-acceptance-test-gate.mjs
 
       - name: Finalize acceptance decision
         id: finalize
         env:
-          DEPLOY_REQUIRED: ${{ steps.scope.outputs.deploy_required }}
+          DEPLOYMENT_REQUIRED: ${{ steps.scope.outputs.deployment_required }}
           DEPLOY_SKIP_REASON_CODE: ${{ steps.scope.outputs.deploy_skip_reason_code }}
-          HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+          HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
           DECIDE_OUTCOME: ${{ steps.decide.outcome }}
-        run: node scripts/pipeline/cloud/acceptance/finalize-acceptance-stage.mjs
+        run: node scripts/pipeline/cloud/automated-acceptance-test-gate/finalize-automated-acceptance-test-gate.mjs
 
       - name: Upload acceptance artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: acceptance-stage-${{ needs.load_release_package.outputs.head_sha }}
-          path: .artifacts/acceptance/${{ needs.load_release_package.outputs.head_sha }}
+          name: automated-acceptance-test-gate-${{ needs.load_release_candidate.outputs.head_sha }}
+          path: .artifacts/automated-acceptance-test-gate/${{ needs.load_release_candidate.outputs.head_sha }}
           if-no-files-found: warn
 
       - name: Fail acceptance on NO
         if: ${{ steps.finalize.outputs.acceptance_decision == 'NO' }}
         run: |
-          echo "Acceptance stage decision is NO" >&2
+          echo "Automated acceptance test gate decision is NO" >&2
           exit 1
 
   deploy_identity:
     name: deploy-identity
     needs:
-      - load_release_package
-      - acceptance_stage
-    if: ${{ always() && needs.load_release_package.result == 'success' && needs.acceptance_stage.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && needs.load_release_package.outputs.identity_changed == 'true' }}
+      - load_release_candidate
+      - automated_acceptance_test_gate
+    if: ${{ always() && needs.load_release_candidate.result == 'success' && needs.automated_acceptance_test_gate.result == 'success' && needs.automated_acceptance_test_gate.outputs.acceptance_decision == 'YES' && needs.automated_acceptance_test_gate.outputs.deployment_required == 'true' && needs.load_release_candidate.outputs.identity_changed == 'true' }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 45
@@ -1011,7 +1011,7 @@ jobs:
       group: production-identity-mutation
       cancel-in-progress: false
     env:
-      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
       API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
       ARM_CLIENT_ID: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
       ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
@@ -1090,9 +1090,9 @@ jobs:
   deploy_infra:
     name: deploy-infra
     needs:
-      - load_release_package
-      - acceptance_stage
-    if: ${{ always() && needs.load_release_package.result == 'success' && needs.acceptance_stage.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && (needs.load_release_package.outputs.infra_changed == 'true' || needs.load_release_package.outputs.requires_infra_convergence == 'true' || needs.load_release_package.outputs.runtime_changed == 'true') }}
+      - load_release_candidate
+      - automated_acceptance_test_gate
+    if: ${{ always() && needs.load_release_candidate.result == 'success' && needs.automated_acceptance_test_gate.result == 'success' && needs.automated_acceptance_test_gate.outputs.acceptance_decision == 'YES' && needs.automated_acceptance_test_gate.outputs.deployment_required == 'true' && (needs.load_release_candidate.outputs.infra_changed == 'true' || needs.load_release_candidate.outputs.requires_infra_convergence == 'true' || needs.load_release_candidate.outputs.runtime_changed == 'true') }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 60
@@ -1105,13 +1105,13 @@ jobs:
       web_prod_url: ${{ steps.current_state.outputs.web_prod_url }}
       codex_prod_url: ${{ steps.current_state.outputs.codex_prod_url }}
     env:
-      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
-      RUNTIME_CHANGED: ${{ needs.load_release_package.outputs.runtime_changed }}
-      INFRA_CHANGED: ${{ needs.load_release_package.outputs.infra_changed }}
-      REQUIRES_INFRA_CONVERGENCE: ${{ needs.load_release_package.outputs.requires_infra_convergence }}
-      RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
-      RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
-      RELEASE_PACKAGE_CODEX_REF: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      RUNTIME_CHANGED: ${{ needs.load_release_candidate.outputs.runtime_changed }}
+      INFRA_CHANGED: ${{ needs.load_release_candidate.outputs.infra_changed }}
+      REQUIRES_INFRA_CONVERGENCE: ${{ needs.load_release_candidate.outputs.requires_infra_convergence }}
+      RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
+      RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+      RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
       AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
@@ -1157,17 +1157,17 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Validate deployment release package refs
+      - name: Validate deployment release candidate refs
         run: |
           set -euo pipefail
 
-          for image in "$RELEASE_PACKAGE_API_REF" "$RELEASE_PACKAGE_WEB_REF" "$RELEASE_PACKAGE_CODEX_REF"; do
+          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_CODEX_REF"; do
             if [ -z "$image" ]; then
-              echo "Release package image reference is missing for infra deployment" >&2
+              echo "Release candidate image reference is missing for infra deployment" >&2
               exit 1
             fi
             if [[ "$image" != "${ACR_REGISTRY}/"*"@sha256:"* ]]; then
-              echo "Release package ref must be an ACR digest ref: $image" >&2
+              echo "Release candidate ref must be an ACR digest ref: $image" >&2
               exit 1
             fi
           done
@@ -1244,9 +1244,9 @@ jobs:
       - name: Apply infra (when needed)
         if: ${{ steps.decide_infra_apply.outputs.infra_apply_required == 'true' }}
         env:
-          API_IMAGE: ${{ env.RELEASE_PACKAGE_API_REF }}
-          WEB_IMAGE: ${{ env.RELEASE_PACKAGE_WEB_REF }}
-          CODEX_IMAGE: ${{ env.RELEASE_PACKAGE_CODEX_REF }}
+          API_IMAGE: ${{ env.RELEASE_CANDIDATE_API_REF }}
+          WEB_IMAGE: ${{ env.RELEASE_CANDIDATE_WEB_REF }}
+          CODEX_IMAGE: ${{ env.RELEASE_CANDIDATE_CODEX_REF }}
           ARM_PARAMETERS_FILE: .artifacts/infra/${{ env.HEAD_SHA }}/runtime.parameters.json
         run: |
           set -euo pipefail
@@ -1257,7 +1257,7 @@ jobs:
           export ARM_TEMPLATE_FILE="infra/azure/main.bicep"
           export ARM_ARTIFACT_DIR=".artifacts/infra/$HEAD_SHA"
 
-          node scripts/pipeline/cloud/production/apply-infra.mjs
+          node scripts/pipeline/cloud/deployment-stage/apply-infra.mjs
 
       - name: Resolve current production URLs
         id: current_state
@@ -1283,10 +1283,10 @@ jobs:
   deploy_runtime:
     name: deploy-runtime
     needs:
-      - load_release_package
-      - acceptance_stage
+      - load_release_candidate
+      - automated_acceptance_test_gate
       - deploy_infra
-    if: ${{ always() && needs.load_release_package.result == 'success' && needs.acceptance_stage.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && needs.load_release_package.outputs.runtime_changed == 'true' && (needs.deploy_infra.result == 'success' || needs.deploy_infra.result == 'skipped') }}
+    if: ${{ always() && needs.load_release_candidate.result == 'success' && needs.automated_acceptance_test_gate.result == 'success' && needs.automated_acceptance_test_gate.outputs.acceptance_decision == 'YES' && needs.automated_acceptance_test_gate.outputs.deployment_required == 'true' && needs.load_release_candidate.outputs.runtime_changed == 'true' && (needs.deploy_infra.result == 'success' || needs.deploy_infra.result == 'skipped') }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 45
@@ -1298,11 +1298,11 @@ jobs:
       web_prod_url: ${{ steps.current_state.outputs.web_prod_url }}
       codex_prod_url: ${{ steps.current_state.outputs.codex_prod_url }}
     env:
-      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
-      REQUIRES_MIGRATIONS: ${{ needs.load_release_package.outputs.requires_migrations }}
-      RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
-      RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
-      RELEASE_PACKAGE_CODEX_REF: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      REQUIRES_MIGRATIONS: ${{ needs.load_release_candidate.outputs.requires_migrations }}
+      RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
+      RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+      RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
@@ -1322,17 +1322,17 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Validate deployment release package refs
+      - name: Validate deployment release candidate refs
         run: |
           set -euo pipefail
 
-          for image in "$RELEASE_PACKAGE_API_REF" "$RELEASE_PACKAGE_WEB_REF" "$RELEASE_PACKAGE_CODEX_REF"; do
+          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_CODEX_REF"; do
             if [ -z "$image" ]; then
-              echo "Release package image reference is missing for runtime deployment" >&2
+              echo "Release candidate image reference is missing for runtime deployment" >&2
               exit 1
             fi
             if [[ "$image" != "${ACR_REGISTRY}/"*"@sha256:"* ]]; then
-              echo "Release package ref must be an ACR digest ref: $image" >&2
+              echo "Release candidate ref must be an ACR digest ref: $image" >&2
               exit 1
             fi
           done
@@ -1358,7 +1358,7 @@ jobs:
           az containerapp job update \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "$ACA_MIGRATE_JOB_NAME" \
-            --image "$RELEASE_PACKAGE_API_REF" \
+            --image "$RELEASE_CANDIDATE_API_REF" \
             --output none
 
       - name: Run migration job
@@ -1367,7 +1367,7 @@ jobs:
         env:
           AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
           ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
-        run: node scripts/pipeline/cloud/production/start-migration-job.mjs
+        run: node scripts/pipeline/cloud/deployment-stage/start-migration-job.mjs
 
       - name: Wait for migration completion
         if: ${{ env.REQUIRES_MIGRATIONS == 'true' }}
@@ -1376,12 +1376,12 @@ jobs:
           ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
           MIGRATION_EXECUTION_NAME: ${{ steps.migration_start.outputs.migration_execution_name }}
           MIGRATION_TIMEOUT_SECONDS: 900
-        run: node scripts/pipeline/cloud/production/wait-migration-job.mjs
+        run: node scripts/pipeline/cloud/deployment-stage/wait-migration-job.mjs
 
       - name: Deploy API
         uses: azure/container-apps-deploy-action@v1
         with:
-          imageToDeploy: ${{ env.RELEASE_PACKAGE_API_REF }}
+          imageToDeploy: ${{ env.RELEASE_CANDIDATE_API_REF }}
           containerAppName: ${{ env.ACA_API_APP_NAME }}
           resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
           disableTelemetry: true
@@ -1389,7 +1389,7 @@ jobs:
       - name: Deploy Web
         uses: azure/container-apps-deploy-action@v1
         with:
-          imageToDeploy: ${{ env.RELEASE_PACKAGE_WEB_REF }}
+          imageToDeploy: ${{ env.RELEASE_CANDIDATE_WEB_REF }}
           containerAppName: ${{ env.ACA_WEB_APP_NAME }}
           resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
           disableTelemetry: true
@@ -1397,7 +1397,7 @@ jobs:
       - name: Deploy Codex
         uses: azure/container-apps-deploy-action@v1
         with:
-          imageToDeploy: ${{ env.RELEASE_PACKAGE_CODEX_REF }}
+          imageToDeploy: ${{ env.RELEASE_CANDIDATE_CODEX_REF }}
           containerAppName: ${{ env.ACA_CODEX_APP_NAME }}
           resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
           disableTelemetry: true
@@ -1423,15 +1423,15 @@ jobs:
           path: .artifacts/deploy/${{ env.HEAD_SHA }}
           if-no-files-found: warn
 
-  deploy_release_package:
-    name: deploy-release-package
+  deploy_release_candidate:
+    name: deploy-release-candidate
     needs:
-      - load_release_package
-      - acceptance_stage
+      - load_release_candidate
+      - automated_acceptance_test_gate
       - deploy_identity
       - deploy_infra
       - deploy_runtime
-    if: ${{ always() && needs.load_release_package.result == 'success' && needs.acceptance_stage.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && (needs.deploy_identity.result == 'success' || needs.deploy_identity.result == 'skipped') && (needs.deploy_infra.result == 'success' || needs.deploy_infra.result == 'skipped') && (needs.deploy_runtime.result == 'success' || needs.deploy_runtime.result == 'skipped') }}
+    if: ${{ always() && needs.load_release_candidate.result == 'success' && needs.automated_acceptance_test_gate.result == 'success' && needs.automated_acceptance_test_gate.outputs.acceptance_decision == 'YES' && needs.automated_acceptance_test_gate.outputs.deployment_required == 'true' && (needs.deploy_identity.result == 'success' || needs.deploy_identity.result == 'skipped') && (needs.deploy_infra.result == 'success' || needs.deploy_infra.result == 'skipped') && (needs.deploy_runtime.result == 'success' || needs.deploy_runtime.result == 'skipped') }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 20
@@ -1441,11 +1441,11 @@ jobs:
       codex_prod_url: ${{ steps.current_state.outputs.codex_prod_url }}
       deployment_id: ${{ steps.record_release.outputs.deployment_id }}
     env:
-      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
-      CHANGE_CLASS: ${{ needs.load_release_package.outputs.change_class }}
-      RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
-      RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
-      RELEASE_PACKAGE_CODEX_REF: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      CHANGE_CLASS: ${{ needs.load_release_candidate.outputs.change_class }}
+      RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
+      RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+      RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -1483,27 +1483,27 @@ jobs:
           HEAD_SHA: ${{ env.HEAD_SHA }}
           DEPLOY_LOG_URL: ${{ format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
           DEPLOY_ENVIRONMENT_URL: ${{ steps.current_state.outputs.web_prod_url }}
-          RELEASE_PACKAGE_API_REF: ${{ env.RELEASE_PACKAGE_API_REF }}
-          RELEASE_PACKAGE_WEB_REF: ${{ env.RELEASE_PACKAGE_WEB_REF }}
-          RELEASE_PACKAGE_CODEX_REF: ${{ env.RELEASE_PACKAGE_CODEX_REF }}
+          RELEASE_CANDIDATE_API_REF: ${{ env.RELEASE_CANDIDATE_API_REF }}
+          RELEASE_CANDIDATE_WEB_REF: ${{ env.RELEASE_CANDIDATE_WEB_REF }}
+          RELEASE_CANDIDATE_CODEX_REF: ${{ env.RELEASE_CANDIDATE_CODEX_REF }}
           CHANGE_CLASS: ${{ env.CHANGE_CLASS }}
-        run: node scripts/pipeline/cloud/production/record-release.mjs
+        run: node scripts/pipeline/cloud/deployment-stage/record-release.mjs
 
       - name: Write deployment record artifact
         if: ${{ always() }}
         run: |
-          mkdir -p ".artifacts/production/$HEAD_SHA"
-          cat > ".artifacts/production/$HEAD_SHA/deployment-record.json" <<JSON
+          mkdir -p ".artifacts/deployment-stage/$HEAD_SHA"
+          cat > ".artifacts/deployment-stage/$HEAD_SHA/deployment-record.json" <<JSON
           {
             "schemaVersion": "1",
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "headSha": "$HEAD_SHA",
             "changeClass": "$CHANGE_CLASS",
             "deploymentId": "${{ steps.record_release.outputs.deployment_id || '' }}",
-            "releasePackage": {
-              "api": "$RELEASE_PACKAGE_API_REF",
-              "web": "$RELEASE_PACKAGE_WEB_REF",
-              "codex": "$RELEASE_PACKAGE_CODEX_REF"
+            "releaseCandidate": {
+              "api": "$RELEASE_CANDIDATE_API_REF",
+              "web": "$RELEASE_CANDIDATE_WEB_REF",
+              "codex": "$RELEASE_CANDIDATE_CODEX_REF"
             }
           }
           JSON
@@ -1512,9 +1512,9 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: deploy-release-package-${{ env.HEAD_SHA }}
+          name: deploy-release-candidate-${{ env.HEAD_SHA }}
           path: |
-            .artifacts/production/${{ env.HEAD_SHA }}/deployment-record.json
+            .artifacts/deployment-stage/${{ env.HEAD_SHA }}/deployment-record.json
             .artifacts/deploy/${{ env.HEAD_SHA }}
             .artifacts/infra/${{ env.HEAD_SHA }}
             .artifacts/identity/${{ env.HEAD_SHA }}
@@ -1523,20 +1523,20 @@ jobs:
   production_blackbox_verify:
     name: production-blackbox-verify
     needs:
-      - load_release_package
-      - acceptance_stage
+      - load_release_candidate
+      - automated_acceptance_test_gate
       - deploy_identity
       - deploy_infra
       - deploy_runtime
-      - deploy_release_package
-    if: ${{ always() && needs.deploy_release_package.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && (needs.load_release_package.outputs.runtime_changed == 'true' || needs.load_release_package.outputs.infra_changed == 'true' || needs.load_release_package.outputs.requires_infra_convergence == 'true') }}
+      - deploy_release_candidate
+    if: ${{ always() && needs.deploy_release_candidate.result == 'success' && needs.automated_acceptance_test_gate.outputs.acceptance_decision == 'YES' && needs.automated_acceptance_test_gate.outputs.deployment_required == 'true' && (needs.load_release_candidate.outputs.runtime_changed == 'true' || needs.load_release_candidate.outputs.infra_changed == 'true' || needs.load_release_candidate.outputs.requires_infra_convergence == 'true') }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 30
     env:
-      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
-      TARGET_API_BASE_URL: ${{ needs.deploy_release_package.outputs.api_prod_url }}
-      WEB_BASE_URL: ${{ needs.deploy_release_package.outputs.web_prod_url }}
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      TARGET_API_BASE_URL: ${{ needs.deploy_release_candidate.outputs.api_prod_url }}
+      WEB_BASE_URL: ${{ needs.deploy_release_candidate.outputs.web_prod_url }}
       EXPECTED_ENTRYPOINT: /
       REQUIRED_FLOW_IDS_JSON: '["compass-smoke"]'
       API_SMOKE_ALLOWED_TENANT_ID: ${{ vars.API_SMOKE_ALLOWED_TENANT_ID }}
@@ -1554,7 +1554,7 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
 
       - name: API smoke verification
-        run: node scripts/pipeline/cloud/production/verify-api-smoke.mjs
+        run: node scripts/pipeline/cloud/deployment-stage/verify-api-smoke.mjs
 
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
@@ -1564,7 +1564,7 @@ jobs:
           PR_NUMBER: 0
         run: pnpm test:acceptance:browser
 
-      - name: Upload post-deploy artifacts
+      - name: Upload post-deployment verification artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
@@ -1574,14 +1574,14 @@ jobs:
             .artifacts/browser-evidence/${{ env.HEAD_SHA }}
           if-no-files-found: warn
 
-  production_stage:
-    name: production-stage
+  deployment_stage:
+    name: deployment-stage
     needs:
-      - load_release_package
-      - acceptance_stage
-      - deploy_release_package
+      - load_release_candidate
+      - automated_acceptance_test_gate
+      - deploy_release_candidate
       - production_blackbox_verify
-    if: ${{ always() && needs.load_release_package.result == 'success' }}
+    if: ${{ always() && needs.load_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     outputs:
       production_decision: ${{ steps.result.outputs.production_decision }}
@@ -1595,42 +1595,42 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Write production stage result
+      - name: Write deployment stage result
         id: result
         env:
-          HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
-          ACCEPTANCE_DECISION: ${{ needs.acceptance_stage.outputs.acceptance_decision }}
-          ACCEPTANCE_REASON_CODES_JSON: ${{ needs.acceptance_stage.outputs.reason_codes_json }}
-          DEPLOY_REQUIRED: ${{ needs.acceptance_stage.outputs.deploy_required }}
-          RUNTIME_CHANGED: ${{ needs.load_release_package.outputs.runtime_changed }}
-          DESKTOP_CHANGED: ${{ needs.load_release_package.outputs.desktop_changed }}
-          INFRA_CHANGED: ${{ needs.load_release_package.outputs.infra_changed }}
-          IDENTITY_CHANGED: ${{ needs.load_release_package.outputs.identity_changed }}
-          REQUIRES_INFRA_CONVERGENCE: ${{ needs.load_release_package.outputs.requires_infra_convergence }}
-          CHANGE_CLASS: ${{ needs.load_release_package.outputs.change_class }}
-          RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
-          RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
-          RELEASE_PACKAGE_CODEX_REF: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
-          DEPLOY_RESULT: ${{ needs.deploy_release_package.result }}
+          HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+          ACCEPTANCE_DECISION: ${{ needs.automated_acceptance_test_gate.outputs.acceptance_decision }}
+          ACCEPTANCE_REASON_CODES_JSON: ${{ needs.automated_acceptance_test_gate.outputs.reason_codes_json }}
+          DEPLOYMENT_REQUIRED: ${{ needs.automated_acceptance_test_gate.outputs.deployment_required }}
+          RUNTIME_CHANGED: ${{ needs.load_release_candidate.outputs.runtime_changed }}
+          DESKTOP_CHANGED: ${{ needs.load_release_candidate.outputs.desktop_changed }}
+          INFRA_CHANGED: ${{ needs.load_release_candidate.outputs.infra_changed }}
+          IDENTITY_CHANGED: ${{ needs.load_release_candidate.outputs.identity_changed }}
+          REQUIRES_INFRA_CONVERGENCE: ${{ needs.load_release_candidate.outputs.requires_infra_convergence }}
+          CHANGE_CLASS: ${{ needs.load_release_candidate.outputs.change_class }}
+          RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
+          RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+          RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
+          DEPLOY_RESULT: ${{ needs.deploy_release_candidate.result }}
           VERIFY_RESULT: ${{ needs.production_blackbox_verify.result }}
-          DEPLOYMENT_ID: ${{ needs.deploy_release_package.outputs.deployment_id }}
-        run: node scripts/pipeline/cloud/production/decide-production-stage.mjs
+          DEPLOYMENT_ID: ${{ needs.deploy_release_candidate.outputs.deployment_id }}
+        run: node scripts/pipeline/cloud/deployment-stage/decide-deployment-stage.mjs
 
       - name: Upload production result artifact
         uses: actions/upload-artifact@v4
         with:
-          name: production-stage-${{ needs.load_release_package.outputs.head_sha }}
-          path: .artifacts/production/${{ needs.load_release_package.outputs.head_sha }}
+          name: deployment-stage-${{ needs.load_release_candidate.outputs.head_sha }}
+          path: .artifacts/deployment-stage/${{ needs.load_release_candidate.outputs.head_sha }}
           if-no-files-found: warn
 
   release_decision:
     name: release-decision
     needs:
-      - verify_merge_queue_gate_evidence
+      - verify_integration_gate_evidence
       - determine_scope
-      - load_release_package
-      - acceptance_stage
-      - production_stage
+      - load_release_candidate
+      - automated_acceptance_test_gate
+      - deployment_stage
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
@@ -1642,45 +1642,45 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Collect cloud delivery stage timing
+      - name: Collect cloud deployment pipeline stage timing
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
-          HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha || github.sha }}
-        run: node scripts/pipeline/shared/collect-cloud-delivery-stage-timing.mjs
+          HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha || github.sha }}
+        run: node scripts/pipeline/shared/collect-cloud-deployment-stage-timing.mjs
 
-      - name: Upload cloud delivery timing artifact
+      - name: Upload cloud deployment timing artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: cloud-delivery-pipeline-timing-${{ needs.load_release_package.outputs.head_sha || github.sha }}
-          path: .artifacts/pipeline/${{ needs.load_release_package.outputs.head_sha || github.sha }}/timing.json
+          name: cloud-deployment-pipeline-timing-${{ needs.load_release_candidate.outputs.head_sha || github.sha }}
+          path: .artifacts/pipeline/${{ needs.load_release_candidate.outputs.head_sha || github.sha }}/timing.json
           if-no-files-found: warn
 
       - name: Write release decision artifact
         env:
-          RELEASE_PACKAGE_SHA: ${{ needs.load_release_package.outputs.head_sha || github.sha }}
+          RELEASE_CANDIDATE_SHA: ${{ needs.load_release_candidate.outputs.head_sha || github.sha }}
           REPLAY_MODE: "false"
-          COMMIT_STAGE_RESULT: ${{ needs.verify_merge_queue_gate_evidence.result }}
-          LOAD_RELEASE_PACKAGE_RESULT: ${{ needs.load_release_package.result }}
-          ACCEPTANCE_STAGE_RESULT: ${{ needs.acceptance_stage.result }}
-          PRODUCTION_STAGE_RESULT: ${{ needs.production_stage.result }}
-          HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha || github.sha }}
-          ACCEPTANCE_DECISION: ${{ needs.acceptance_stage.outputs.acceptance_decision || '' }}
-          ACCEPTANCE_REASON_CODES_JSON: ${{ needs.acceptance_stage.outputs.reason_codes_json || '[]' }}
-          PRODUCTION_DECISION: ${{ needs.production_stage.outputs.production_decision || '' }}
-          PRODUCTION_REASON_CODES_JSON: ${{ needs.production_stage.outputs.reason_codes_json || '[]' }}
-          DEPLOY_REQUIRED: ${{ needs.acceptance_stage.outputs.deploy_required || '' }}
-          RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
-          RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
-          RELEASE_PACKAGE_CODEX_REF: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
+          COMMIT_STAGE_RESULT: ${{ needs.verify_integration_gate_evidence.result }}
+          LOAD_RELEASE_CANDIDATE_RESULT: ${{ needs.load_release_candidate.result }}
+          AUTOMATED_ACCEPTANCE_TEST_GATE_RESULT: ${{ needs.automated_acceptance_test_gate.result }}
+          DEPLOYMENT_STAGE_RESULT: ${{ needs.deployment_stage.result }}
+          HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha || github.sha }}
+          ACCEPTANCE_DECISION: ${{ needs.automated_acceptance_test_gate.outputs.acceptance_decision || '' }}
+          ACCEPTANCE_REASON_CODES_JSON: ${{ needs.automated_acceptance_test_gate.outputs.reason_codes_json || '[]' }}
+          PRODUCTION_DECISION: ${{ needs.deployment_stage.outputs.production_decision || '' }}
+          PRODUCTION_REASON_CODES_JSON: ${{ needs.deployment_stage.outputs.reason_codes_json || '[]' }}
+          DEPLOYMENT_REQUIRED: ${{ needs.automated_acceptance_test_gate.outputs.deployment_required || '' }}
+          RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
+          RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
+          RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
         run: node scripts/pipeline/shared/decide-release-outcome.mjs
 
       - name: Upload release decision artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: release-decision-${{ needs.load_release_package.outputs.head_sha || github.sha }}
-          path: .artifacts/release/${{ needs.load_release_package.outputs.head_sha || github.sha }}/decision.json
+          name: release-decision-${{ needs.load_release_candidate.outputs.head_sha || github.sha }}
+          path: .artifacts/release/${{ needs.load_release_candidate.outputs.head_sha || github.sha }}/decision.json
           if-no-files-found: warn

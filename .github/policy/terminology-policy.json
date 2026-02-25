@@ -1,0 +1,205 @@
+{
+  "version": "1",
+  "scan": {
+    "include": [
+      ".github/**",
+      "docs/**",
+      "scripts/**",
+      "tests/**",
+      "apps/**",
+      "packages/**",
+      "infra/**",
+      "db/**",
+      "README.md",
+      "CONTRIBUTING.md",
+      "AGENTS.md",
+      "package.json"
+    ],
+    "exclude": [
+      "**/node_modules/**",
+      ".git/**",
+      "**/*.png",
+      "**/*.jpg",
+      "**/*.jpeg",
+      "**/*.gif",
+      "**/*.ico",
+      "**/*.pdf",
+      "**/*.woff",
+      "**/*.woff2",
+      "**/*.ttf",
+      "**/*.zip",
+      "**/*.gz",
+      ".github/policy/terminology-policy.json"
+    ]
+  },
+  "allowlistSubstrings": [
+    "https://continuousdelivery.com/",
+    "https://www.davefarley.net/",
+    "https://www.informit.com/articles/article.aspx"
+  ],
+  "canonicalDefinitions": {
+    "integration gate": "The exact-merge validation gate that evaluates the queued merge result and rejects insufficient changes before promotion.",
+    "release candidate": "A specific immutable build/version produced by the pipeline and promoted through later stages without rebuilding.",
+    "cloud deployment pipeline": "The deployment pipeline path where production-destined cloud change is validated and promoted stage-by-stage.",
+    "cloud deployment pipeline replay": "A manual replay path that reruns automated acceptance test gate and deployment-stage verification for an existing release candidate SHA without rebuilding.",
+    "automated acceptance test gate": "The gate that proves the system meets acceptance criteria; failures stop promotion toward release.",
+    "deployment stage": "The stage that performs technical deployment and post-deployment verification for an accepted release candidate.",
+    "releasable": "The state where software can be released safely at any time.",
+    "release candidate sha": "The commit SHA that identifies the exact release candidate being promoted through the pipeline.",
+    "deployment required": "A decision flag indicating whether deployment-stage mutation must run for this release candidate.",
+    "deployment pipeline config": "Configuration that defines deployment pipeline stages, gates, policies, and promotion rules.",
+    "commit test suite": "A fast fail-first test suite (mostly unit tests plus minimal smoke checks) used in the commit stage/check-in gate.",
+    "post deployment verification gate": "A verification gate run after deployment to confirm expected production behavior before release.",
+    "release candidate *": "The canonical env/output prefix for release-candidate values.",
+    "desktop deployment pipeline": "The desktop deployment pipeline path that promotes immutable release candidates through acceptance and deployment-stage gates.",
+    "desktop deployment pipeline yml": "Canonical desktop deployment workflow file name."
+  },
+  "renames": [
+    { "legacy": "merge-queue-gate", "canonical": "integration-gate" },
+    { "legacy": "mergeQueueGate", "canonical": "integrationGate" },
+    { "legacy": "release-package", "canonical": "release-candidate" },
+    { "legacy": "releasePackage", "canonical": "releaseCandidate" },
+    { "legacy": "cloud-delivery-pipeline", "canonical": "cloud-deployment-pipeline" },
+    { "legacy": "cloudDeliveryPipeline", "canonical": "cloudDeploymentPipeline" },
+    { "legacy": "cloud-delivery-replay", "canonical": "cloud-deployment-pipeline-replay" },
+    { "legacy": "acceptance-stage", "canonical": "automated-acceptance-test-gate" },
+    { "legacy": "acceptanceStage", "canonical": "automatedAcceptanceTestGate" },
+    { "legacy": "production-stage", "canonical": "deployment-stage" },
+    { "legacy": "productionStage", "canonical": "deploymentStage" },
+    { "legacy": "releaseable", "canonical": "releasable" },
+    { "legacy": "candidate_sha", "canonical": "release_candidate_sha" },
+    { "legacy": "candidateSha", "canonical": "releaseCandidateSha" },
+    { "legacy": "deployRequired", "canonical": "deploymentRequired" },
+    { "legacy": "delivery-config", "canonical": "deployment-pipeline-config" },
+    { "legacy": "fast-feedback", "canonical": "commit-test-suite" },
+    { "legacy": "post-deploy smoke", "canonical": "post-deployment verification gate" },
+    { "legacy": "desktop-release.yml", "canonical": "desktop-deployment-pipeline.yml" }
+  ],
+  "forbiddenPatterns": [
+    {
+      "pattern": "\\bmerge-queue-gate\\b",
+      "flags": "g",
+      "message": "Use integration-gate."
+    },
+    {
+      "pattern": "\\bmerge queue gate\\b",
+      "flags": "gi",
+      "message": "Use integration gate."
+    },
+    {
+      "pattern": "\\brelease-package\\b",
+      "flags": "g",
+      "message": "Use release-candidate."
+    },
+    {
+      "pattern": "\\brelease package\\b",
+      "flags": "gi",
+      "message": "Use release candidate."
+    },
+    {
+      "pattern": "\\breleasePackage\\b",
+      "flags": "g",
+      "message": "Use releaseCandidate."
+    },
+    {
+      "pattern": "\\bcloud-delivery-pipeline\\b",
+      "flags": "g",
+      "message": "Use cloud-deployment-pipeline."
+    },
+    {
+      "pattern": "\\bcloudDeliveryPipeline\\b",
+      "flags": "g",
+      "message": "Use cloudDeploymentPipeline."
+    },
+    {
+      "pattern": "\\bcloud-delivery-replay\\b",
+      "flags": "g",
+      "message": "Use cloud-deployment-pipeline-replay."
+    },
+    {
+      "pattern": "\\bcloud delivery pipeline\\b",
+      "flags": "gi",
+      "message": "Use cloud deployment pipeline."
+    },
+    {
+      "pattern": "\\bacceptance-stage\\b",
+      "flags": "g",
+      "message": "Use automated-acceptance-test-gate."
+    },
+    {
+      "pattern": "\\bacceptanceStage\\b",
+      "flags": "g",
+      "message": "Use automatedAcceptanceTestGate."
+    },
+    {
+      "pattern": "\\bproduction-stage\\b",
+      "flags": "g",
+      "message": "Use deployment-stage."
+    },
+    {
+      "pattern": "\\bproductionStage\\b",
+      "flags": "g",
+      "message": "Use deploymentStage."
+    },
+    {
+      "pattern": "\\breleaseable\\b",
+      "flags": "gi",
+      "message": "Use releasable."
+    },
+    {
+      "pattern": "(?<!release_)candidate_sha\\b",
+      "flags": "g",
+      "message": "Use release_candidate_sha."
+    },
+    {
+      "pattern": "\\bcandidateSha\\b",
+      "flags": "g",
+      "message": "Use releaseCandidateSha."
+    },
+    {
+      "pattern": "\\bdeployRequired\\b",
+      "flags": "g",
+      "message": "Use deploymentRequired."
+    },
+    {
+      "pattern": "\\bdelivery-config\\b",
+      "flags": "gi",
+      "message": "Use deployment-pipeline-config."
+    },
+    {
+      "pattern": "\\bfast-feedback(?:-suite)?\\b",
+      "flags": "g",
+      "message": "Use commit-test-suite."
+    },
+    {
+      "pattern": "\\bpost-deploy smoke\\b",
+      "flags": "gi",
+      "message": "Use post-deployment verification gate."
+    },
+    {
+      "pattern": "\\bmergeQueueGate\\b",
+      "flags": "g",
+      "message": "Use integrationGate."
+    },
+    {
+      "pattern": "\\bRELEASE_PACKAGE_[A-Z0-9_]*\\b",
+      "flags": "g",
+      "message": "Use RELEASE_CANDIDATE_*."
+    },
+    {
+      "pattern": "\\brelease_package_[a-z0-9_]*\\b",
+      "flags": "g",
+      "message": "Use release_candidate_*."
+    },
+    {
+      "pattern": "\\bdesktopPipeline\\b",
+      "flags": "g",
+      "message": "Use desktopDeploymentPipeline."
+    },
+    {
+      "pattern": "\\bdesktop-release\\.yml\\b",
+      "flags": "g",
+      "message": "Compatibility workflow removed; use desktop-deployment-pipeline.yml."
+    }
+  ]
+}

@@ -1,8 +1,8 @@
-# Cloud Production Stage Scripts
+# Cloud Deployment Stage Scripts
 
 ## Purpose
 
-`scripts/pipeline/cloud/production/` contains helpers used by production deploy and verification jobs.
+`scripts/pipeline/cloud/deployment-stage/` contains helpers used by production deploy and verification jobs.
 
 ## Script Map
 
@@ -12,7 +12,7 @@
 - `wait-migration-job.mjs`: waits for migration completion and captures status/log metadata.
 - `verify-api-smoke.mjs`: validates API health, OpenAPI, allowed/denied auth behavior.
 - `record-release.mjs`: records successful deployment in GitHub Deployments.
-- `decide-production-stage.mjs`: computes production YES/NO decision artifact.
+- `decide-deployment-stage.mjs`: computes production YES/NO decision artifact.
 - `utils.mjs`: shared execution/env/artifact helpers.
 
 ## Environment Contract
@@ -50,7 +50,7 @@
 
 ## Artifact Paths
 
-- `.artifacts/production/<sha>/*.json`
+- `.artifacts/deployment-stage/<sha>/*.json`
 - `.artifacts/deploy/<sha>/*.json`
 - `.artifacts/infra/<sha>/*`
 

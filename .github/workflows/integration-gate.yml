@@ -1,4 +1,4 @@
-name: Merge Queue Gate
+name: Integration Gate
 
 permissions:
   actions: read
@@ -43,7 +43,7 @@ jobs:
       identity_changed: ${{ steps.scope.outputs.identity_changed }}
       migration_changed: ${{ steps.scope.outputs.migration_changed }}
       docs_only_changed: ${{ steps.scope.outputs.docs_only_changed }}
-      delivery_config_changed: ${{ steps.scope.outputs.delivery_config_changed }}
+      deployment_pipeline_config_changed: ${{ steps.scope.outputs.deployment_pipeline_config_changed }}
       docs_drift_blocking: ${{ steps.scope.outputs.docs_drift_blocking }}
       docs_drift_status: ${{ steps.docs_drift.outputs.docs_drift_status }}
     steps:
@@ -69,7 +69,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: merge-queue-scope-${{ steps.scope.outputs.tested_sha }}
+          name: integration-gate-scope-${{ steps.scope.outputs.tested_sha }}
           path: ${{ steps.scope.outputs.scope_path }}
           if-no-files-found: warn
 
@@ -85,7 +85,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: merge-queue-docs-drift-${{ steps.scope.outputs.tested_sha }}
+          name: integration-gate-docs-drift-${{ steps.scope.outputs.tested_sha }}
           path: .artifacts/docs-drift/${{ steps.scope.outputs.tested_sha }}/result.json
           if-no-files-found: warn
 
@@ -93,7 +93,7 @@ jobs:
     name: build-compile
     needs:
       - determine_scope
-    if: ${{ github.event_name == 'merge_group' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true') }}
+    if: ${{ github.event_name == 'merge_group' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -134,7 +134,7 @@ jobs:
     name: auth-critical-smoke
     needs:
       - determine_scope
-    if: ${{ github.event_name == 'merge_group' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true') }}
+    if: ${{ github.event_name == 'merge_group' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -151,7 +151,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: merge-queue-auth-smoke-${{ needs.determine_scope.outputs.tested_sha }}
+          name: integration-gate-auth-smoke-${{ needs.determine_scope.outputs.tested_sha }}
           path: .artifacts/commit-smoke/${{ needs.determine_scope.outputs.tested_sha }}/result.json
           if-no-files-found: warn
 
@@ -181,8 +181,8 @@ jobs:
         if: ${{ always() }}
         run: pnpm db:postgres:down
 
-  merge_queue_gate:
-    name: merge-queue-gate
+  integration_gate:
+    name: integration-gate
     if: ${{ always() }}
     needs:
       - determine_scope
@@ -201,35 +201,35 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Collect merge queue throughput metrics
+      - name: Collect integration gate throughput metrics
         if: ${{ github.event_name == 'merge_group' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
-          MERGE_QUEUE_GATE_WORKFLOW_FILE: merge-queue-gate.yml
-        run: node scripts/pipeline/shared/collect-merge-queue-gate-metrics.mjs
+          INTEGRATION_GATE_WORKFLOW_FILE: integration-gate.yml
+        run: node scripts/pipeline/shared/collect-integration-gate-metrics.mjs
 
-      - name: Decide merge queue gate
+      - name: Decide integration gate
         env:
           HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
           TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
-          BUILD_REQUIRED: ${{ github.event_name == 'merge_group' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true') }}
+          BUILD_REQUIRED: ${{ github.event_name == 'merge_group' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
           MIGRATION_REQUIRED: ${{ github.event_name == 'merge_group' && needs.determine_scope.outputs.migration_changed == 'true' }}
-          AUTH_REQUIRED: ${{ github.event_name == 'merge_group' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true') }}
+          AUTH_REQUIRED: ${{ github.event_name == 'merge_group' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
           INTEGRATION_REQUIRED: ${{ github.event_name == 'merge_group' && needs.determine_scope.outputs.runtime_changed == 'true' }}
           DOCS_DRIFT_BLOCKING: ${{ needs.determine_scope.outputs.docs_drift_blocking }}
           DOCS_DRIFT_STATUS: ${{ needs.determine_scope.outputs.docs_drift_status }}
           CHECK_RESULTS_JSON: ${{ format('{{"determine-scope":"{0}","build-compile":"{1}","migration-safety":"{2}","auth-critical-smoke":"{3}","minimal-integration-smoke":"{4}"}}', needs.determine_scope.result, needs.build_compile.result, needs.migration_safety.result, needs.auth_critical_smoke.result, needs.minimal_integration_smoke.result) }}
-        run: node scripts/pipeline/commit/decide-merge-queue-gate.mjs
+        run: node scripts/pipeline/commit/decide-integration-gate.mjs
 
-      - name: Upload merge queue gate artifact
+      - name: Upload integration gate artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: merge-queue-gate-${{ needs.determine_scope.outputs.tested_sha }}
+          name: integration-gate-${{ needs.determine_scope.outputs.tested_sha }}
           path: |
-            .artifacts/merge-queue-gate/${{ needs.determine_scope.outputs.tested_sha }}/result.json
-            .artifacts/merge-queue-gate/${{ needs.determine_scope.outputs.tested_sha }}/timing.json
+            .artifacts/integration-gate/${{ needs.determine_scope.outputs.tested_sha }}/result.json
+            .artifacts/integration-gate/${{ needs.determine_scope.outputs.tested_sha }}/timing.json
           if-no-files-found: warn

@@ -23,14 +23,14 @@
 - manual probe-token dependency
 - freshness checks in production/replay that gate release decisions
 
-3. Confirmed existing integration lane already runs in merge queue and is suitable for new deterministic JWKS integration coverage.
+3. Confirmed existing integration lane already runs in the integration gate exact-merge path and is suitable for new deterministic JWKS integration coverage.
 
 ### 2026-02-25T00:20Z (workflow simplification)
 
 1. Removed legacy freshness-gate steps from:
 
-- `.github/workflows/cloud-delivery-pipeline.yml`
-- `.github/workflows/cloud-delivery-replay.yml`
+- `.github/workflows/cloud-deployment-pipeline.yml`
+- `.github/workflows/cloud-deployment-pipeline-replay.yml`
 
 2. Deleted obsolete workflows/scripts:
 

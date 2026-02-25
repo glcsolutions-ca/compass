@@ -22,16 +22,16 @@ function parseBoolean(value, fallback = false) {
 
 async function main() {
   const headSha = requireEnv("HEAD_SHA");
-  const deployRequired = parseBoolean(process.env.DEPLOY_REQUIRED, true);
+  const deploymentRequired = parseBoolean(process.env.DEPLOYMENT_REQUIRED, true);
   const deploySkipReasonCode =
-    String(process.env.DEPLOY_SKIP_REASON_CODE || "").trim() || "NO_DEPLOY_REQUIRED";
+    String(process.env.DEPLOY_SKIP_REASON_CODE || "").trim() || "NO_DEPLOYMENT_REQUIRED";
   const decideOutcome = String(process.env.DECIDE_OUTCOME || "unknown").trim();
 
   const resultPath = path.join(".artifacts", "acceptance", headSha, "result.json");
   let acceptanceDecision = "YES";
   let reasonCodes = [];
 
-  if (deployRequired) {
+  if (deploymentRequired) {
     if (decideOutcome !== "success") {
       acceptanceDecision = "NO";
     }
@@ -49,13 +49,13 @@ async function main() {
       reasonCodes = ["ACCEPTANCE_GATE_FAILED"];
     }
   } else {
-    let reasonMessage = "No deployment required for this release package.";
+    let reasonMessage = "No deployment required for this release candidate.";
     if (deploySkipReasonCode === "DOCS_ONLY_CHANGE") {
-      reasonMessage = "Docs-only release package; deployment not required.";
+      reasonMessage = "Docs-only release candidate; deployment not required.";
     } else if (deploySkipReasonCode === "CHECKS_ONLY_CHANGE") {
-      reasonMessage = "Checks-only release package; deployment not required.";
+      reasonMessage = "Checks-only release candidate; deployment not required.";
     } else if (deploySkipReasonCode === "DESKTOP_ONLY_CHANGE") {
-      reasonMessage = "Desktop-only change; cloud delivery not required.";
+      reasonMessage = "Desktop-only change; cloud deployment pipeline not required.";
     }
 
     reasonCodes = [deploySkipReasonCode];

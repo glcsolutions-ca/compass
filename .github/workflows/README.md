@@ -2,69 +2,66 @@
 
 ## Delivery Model
 
-1. PRs run `commit-stage.yml` for fast feedback and merge readiness.
-2. Merge queue runs `merge-queue-gate.yml` on the exact queued merge result.
-3. A merge to `main` runs cloud delivery in `cloud-delivery-pipeline.yml`.
+1. PRs run `commit-stage.yml` for commit-test suite and merge readiness.
+2. Integration batching runs `integration-gate.yml` on the exact queued merge result.
+3. A merge to `main` runs cloud deployment pipeline in `cloud-deployment-pipeline.yml`.
 4. Desktop delivery runs independently in `desktop-deployment-pipeline.yml`.
-5. Replay is separate and manual in `cloud-delivery-replay.yml`.
+5. Replay is separate and manual in `cloud-deployment-pipeline-replay.yml`.
 6. Required gate contexts:
 
 - PR gate: `commit-stage`
-- Merge queue gate: `merge-queue-gate`
+- Integration gate: `integration-gate`
 
 ## Workflow Index
 
 - `commit-stage.yml`
   - trigger: `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`), `merge_group`
   - required check: `commit-stage`
-  - key jobs: `determine-scope`, scope-aware `fast-feedback`, scope-aware `desktop-fast-feedback`, optional static checks, final `commit-stage`
+  - key jobs: `determine-scope`, scope-aware `commit-test-suite`, scope-aware `desktop-commit-test-suite`, optional static checks, final `commit-stage`
   - behavior: heavy checks run only on `pull_request`; `merge_group` emits required `commit-stage` context for queue SHAs
   - key artifact: `.artifacts/commit-stage/<sha>/timing.json`
 
-- `merge-queue-gate.yml`
+- `integration-gate.yml`
   - trigger: `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`), `merge_group`
-  - required check: `merge-queue-gate`
-  - key jobs: `determine-scope` (always), merge-group-only checks `build-compile`, `migration-safety`, `auth-critical-smoke`, `minimal-integration-smoke`, final `merge-queue-gate`
+  - required check: `integration-gate`
+  - key jobs: `determine-scope` (always), merge-group-only checks `build-compile`, `migration-safety`, `auth-critical-smoke`, `minimal-integration-smoke`, final `integration-gate`
   - key artifacts:
-    - `.artifacts/merge-queue-gate/<sha>/result.json`
-    - `.artifacts/merge-queue-gate/<sha>/timing.json`
+    - `.artifacts/integration-gate/<sha>/result.json`
+    - `.artifacts/integration-gate/<sha>/timing.json`
 
-- `cloud-delivery-pipeline.yml`
+- `cloud-deployment-pipeline.yml`
   - trigger: `push` to `main`
   - key flow (Farley language):
-    - Integration Confidence: `verify-commit-stage-evidence`, `verify-merge-queue-gate-evidence`, `determine-scope`
-    - Build Once: `build-release-package-api-image`, `build-release-package-web-image`, `build-release-package-codex-image`, `capture-current-runtime-refs`, `publish-release-package`
-    - Promote, Don't Rebuild: `load-release-package`
-    - Acceptance Stage: runtime + infra + identity acceptance jobs, then `acceptance-stage`
-    - Continuous Delivery: `deploy-release-package` (when acceptance is YES and deploy is required)
-    - Production Verification: `production-blackbox-verify`, then `production-stage`
+    - Integration Confidence: `verify-commit-stage-evidence`, `verify-integration-gate-evidence`, `determine-scope`
+    - Build Once: `build-release-candidate-api-image`, `build-release-candidate-web-image`, `build-release-candidate-codex-image`, `capture-current-runtime-refs`, `publish-release-candidate`
+    - Promote, Don't Rebuild: `load-release-candidate`
+    - Automated Acceptance Test Gate: runtime + infra + identity acceptance jobs, then `automated-acceptance-test-gate`
+    - Continuous Delivery: `deploy-release-candidate` (when acceptance is YES and deploy is required)
+    - Production Verification: `production-blackbox-verify`, then `deployment-stage`
     - Release on Demand evidence: `release-decision`
   - key artifacts:
-    - `.artifacts/release-package/<sha>/manifest.json`
+    - `.artifacts/release-candidate/<sha>/manifest.json`
     - `.artifacts/release/<sha>/decision.json`
     - `.artifacts/pipeline/<sha>/timing.json`
 
-- `cloud-delivery-replay.yml`
+- `cloud-deployment-pipeline-replay.yml`
   - trigger: `workflow_dispatch`
-  - required input: `release_package_sha`
-  - purpose: rerun acceptance -> deploy -> production verification for the same release package (no rebuild)
+  - required input: `release_candidate_sha`
+  - purpose: rerun automated-acceptance-test-gate -> deployment-stage verification for the same release candidate (no rebuild)
 
 - `desktop-deployment-pipeline.yml`
   - trigger: `push` to `main`, `workflow_dispatch`
   - purpose: signed desktop installer delivery
 
 - Auth verification for cloud release happens inside `production-blackbox-verify` in:
-  - `cloud-delivery-pipeline.yml`
-  - `cloud-delivery-replay.yml`
+  - `cloud-deployment-pipeline.yml`
+  - `cloud-deployment-pipeline-replay.yml`
   - scope: app-only allowed/denied/invalid API smoke checks against target SHA
-
-- `desktop-release.yml`
-  - manual compatibility lane for desktop release publication
 
 ## Environment Separation
 
-- `acceptance`: non-mutating acceptance checks.
-- `production`: cloud production mutation and production verification.
+- `acceptance`: non-mutating automated acceptance test gate checks.
+- `production`: cloud deployment-stage mutation and deployment-stage verification.
 - `desktop-release`: desktop signing and publishing.
 
 ## References
@@ -72,4 +69,4 @@
 - Policy contract: `.github/policy/pipeline-policy.json`
 - Branch protection baseline: `docs/branch-protection.md`
 - Commit-stage policy: `docs/commit-stage-policy.md`
-- Cloud delivery runbook: `docs/runbooks/cloud-deployment-pipeline-setup.md`
+- Cloud deployment pipeline runbook: `docs/runbooks/cloud-deployment-pipeline-setup.md`

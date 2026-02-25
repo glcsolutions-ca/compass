@@ -1,5 +1,5 @@
 import path from "node:path";
-import { evaluateMergeQueueGateResults } from "./decide-merge-queue-gate-lib.mjs";
+import { evaluateMergeQueueGateResults } from "./decide-integration-gate-lib.mjs";
 import { appendGithubOutput, requireEnv, writeJsonFile } from "../shared/pipeline-utils.mjs";
 
 function parseBooleanEnv(name, fallback = false) {
@@ -65,7 +65,7 @@ async function main() {
     docsDriftStatus
   });
 
-  const gatePath = path.join(".artifacts", "merge-queue-gate", testedSha, "result.json");
+  const gatePath = path.join(".artifacts", "integration-gate", testedSha, "result.json");
   const gatePayload = {
     schemaVersion: "1",
     generatedAt: new Date().toISOString(),
@@ -88,14 +88,14 @@ async function main() {
   await appendGithubOutput({ gate_path: gatePath, gate_pass: String(reasons.length === 0) });
 
   if (reasons.length > 0) {
-    console.error("merge-queue-gate blocking reasons:");
+    console.error("integration-gate blocking reasons:");
     for (const reason of reasons) {
       console.error(`- [${reason.code}] ${reason.message}`);
     }
     process.exit(1);
   }
 
-  console.info(`merge-queue-gate passed for head=${headSha} tested=${testedSha}`);
+  console.info(`integration-gate passed for head=${headSha} tested=${testedSha}`);
 }
 
 void main();

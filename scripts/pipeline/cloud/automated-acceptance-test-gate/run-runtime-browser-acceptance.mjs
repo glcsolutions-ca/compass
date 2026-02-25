@@ -5,19 +5,24 @@ async function main() {
   const headSha = requireEnv("HEAD_SHA");
   const testedSha = process.env.TESTED_SHA?.trim() || headSha;
   const acrName = requireEnv("ACR_NAME");
-  const { apiRef, codexRef } = requireReleasePackageRefs();
+  const flowId = process.env.EVIDENCE_FLOW_ID?.trim() || "compass-smoke";
+  const { apiRef, webRef } = requireReleasePackageRefs();
+  if (!webRef) {
+    throw new Error("RELEASE_CANDIDATE_WEB_REF is required for browser acceptance");
+  }
 
-  const artifactPath = `.artifacts/runtime-api-system/${headSha}/result.json`;
+  const artifactPath = `.artifacts/runtime-browser/${headSha}/result.json`;
 
   try {
     await runShell(`
 set -euo pipefail
-artifact_dir=".artifacts/runtime-api-system/${headSha}"
-mkdir -p "$artifact_dir" ".artifacts/deploy/${testedSha}" ".artifacts/harness-smoke/${testedSha}"
+artifact_dir=".artifacts/runtime-browser/${headSha}"
+mkdir -p "$artifact_dir" ".artifacts/browser-evidence/${testedSha}"
 
-network_name="acceptance-api-system-net"
-postgres_name="acceptance-api-system-postgres"
-api_container="acceptance-api-system-api"
+network_name="acceptance-browser-net"
+postgres_name="acceptance-browser-postgres"
+api_container="acceptance-browser-api"
+web_container="acceptance-browser-web"
 db_url="postgres://compass:compass@$postgres_name:5432/compass"
 tenant_id="acceptance-tenant"
 delegated_client_id="web-client"
@@ -29,6 +34,7 @@ oauth_signing_secret="acceptance-oauth-signing-secret-123456"
 auth_assignments='[{"tenantId":"acceptance-tenant","subjectType":"user","subjectId":"smoke-user","permissions":["profile.read"],"principalId":"principal-smoke-user"},{"tenantId":"acceptance-tenant","subjectType":"app","subjectId":"integration-client","permissions":["profile.read"],"principalId":"principal-smoke-app"}]'
 
 cleanup() {
+  docker rm -f "$web_container" >/dev/null 2>&1 || true
   docker rm -f "$api_container" >/dev/null 2>&1 || true
   docker rm -f "$postgres_name" >/dev/null 2>&1 || true
   docker network rm "$network_name" >/dev/null 2>&1 || true
@@ -37,6 +43,7 @@ trap cleanup EXIT
 
 az acr login --name "${acrName}" --only-show-errors
 docker pull "${apiRef}"
+docker pull "${webRef}"
 
 docker network create "$network_name"
 
@@ -53,7 +60,7 @@ for i in $(seq 1 90); do
     break
   fi
   if [ "$i" -eq 90 ]; then
-    echo "Timed out waiting for postgres in API/system acceptance" >&2
+    echo "Timed out waiting for postgres in browser acceptance" >&2
     exit 1
   fi
   sleep 1
@@ -91,82 +98,37 @@ for i in $(seq 1 90); do
     break
   fi
   if [ "$i" -eq 90 ]; then
-    echo "Timed out waiting for release package API readiness" >&2
+    echo "Timed out waiting for release candidate API readiness (browser path)" >&2
+    echo "=== Capturing API logs ===" >&2
+    docker logs "$api_container" >&2 || true
     exit 1
   fi
   sleep 1
 done
 
-readarray -t smoke_tokens < <(ACCEPTANCE_AUTH_SECRET="$auth_secret" node --input-type=module - <<'NODE'
-import { createHmac } from "node:crypto";
+docker run -d \
+  --name "$web_container" \
+  --network "$network_name" \
+  -p 3000:3000 \
+  -e API_BASE_URL="http://$api_container:3001" \
+  "${webRef}"
 
-function encodeJson(value) {
-  return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
-}
+for i in $(seq 1 90); do
+  if curl --silent --fail http://127.0.0.1:3000 >/dev/null; then
+    break
+  fi
+  if [ "$i" -eq 90 ]; then
+    echo "Timed out waiting for release candidate Web readiness" >&2
+    exit 1
+  fi
+  sleep 1
+done
 
-function signJwt(payload, secret) {
-  const header = encodeJson({ alg: "HS256", typ: "JWT" });
-  const body = encodeJson(payload);
-  const signature = createHmac("sha256", secret).update(header + "." + body).digest("base64url");
-  return header + "." + body + "." + signature;
-}
-
-const secret = process.env.ACCEPTANCE_AUTH_SECRET;
-if (!secret) {
-  throw new Error("ACCEPTANCE_AUTH_SECRET is required");
-}
-
-const now = Math.floor(Date.now() / 1000);
-const expiresAt = now + 900;
-const tenantId = "acceptance-tenant";
-
-const delegated = signJwt(
-  {
-    tid: tenantId,
-    oid: "smoke-user",
-    azp: "web-client",
-    scp: "compass.user",
-    iss: "https://compass.local/auth",
-    aud: "api://compass-api",
-    iat: now,
-    nbf: now - 5,
-    exp: expiresAt
-  },
-  secret
-);
-
-const app = signJwt(
-  {
-    tid: tenantId,
-    azp: "integration-client",
-    appid: "integration-client",
-    idtyp: "app",
-    roles: ["Compass.Integration.Read"],
-    iss: "https://compass.local/auth",
-    aud: "api://compass-api",
-    iat: now,
-    nbf: now - 5,
-    exp: expiresAt
-  },
-  secret
-);
-
-console.log(delegated);
-console.log(app);
-NODE
-)
-
-delegated_smoke_token="\${smoke_tokens[0]:-}"
-app_smoke_token="\${smoke_tokens[1]:-}"
-if [ -z "$delegated_smoke_token" ] || [ -z "$app_smoke_token" ]; then
-  echo "Failed to generate acceptance smoke auth tokens" >&2
-  exit 1
-fi
-
-BASE_URL=http://127.0.0.1:3001 \
-AUTH_SMOKE_TOKEN="$delegated_smoke_token" \
-APP_SMOKE_TOKEN="$app_smoke_token" \
-pnpm test:acceptance:system
+PR_NUMBER=0 \
+WEB_BASE_URL=http://127.0.0.1:3000 \
+EXPECTED_ENTRYPOINT=/ \
+REQUIRED_FLOW_IDS_JSON="$(printf '[\"%s\"]' "${flowId}")" \
+pnpm test:acceptance:browser
 `);
 
     await writeJsonFile(artifactPath, {
@@ -175,7 +137,8 @@ pnpm test:acceptance:system
       headSha,
       testedSha,
       status: "pass",
-      releasePackage: { apiRef, codexRef }
+      evidenceFlowId: flowId,
+      releaseCandidate: { apiRef, webRef }
     });
   } catch (error) {
     await writeJsonFile(artifactPath, {
@@ -184,7 +147,8 @@ pnpm test:acceptance:system
       headSha,
       testedSha,
       status: "fail",
-      releasePackage: { apiRef, codexRef },
+      evidenceFlowId: flowId,
+      releaseCandidate: { apiRef, webRef },
       error: error instanceof Error ? error.message : String(error)
     });
     throw error;

@@ -17,11 +17,7 @@
       "pnpm-workspace.yaml",
       "**/package.json"
     ],
-    "desktop": [
-      "apps/desktop/**",
-      ".github/workflows/desktop-deployment-pipeline.yml",
-      ".github/workflows/desktop-release.yml"
-    ],
+    "desktop": ["apps/desktop/**", ".github/workflows/desktop-deployment-pipeline.yml"],
     "infra": ["infra/azure/**"],
     "identity": ["infra/identity/**"],
     "migration": ["db/migrations/**", "db/scripts/**"],
@@ -48,13 +44,18 @@
     ]
   },
   "commitStage": {
-    "requiredChecks": ["determine-scope", "fast-feedback", "desktop-fast-feedback", "commit-stage"],
+    "requiredChecks": [
+      "determine-scope",
+      "commit-test-suite",
+      "desktop-commit-test-suite",
+      "commit-stage"
+    ],
     "slo": {
       "targetSeconds": 300,
       "mode": "enforce"
     }
   },
-  "acceptanceStage": {
+  "automatedAcceptanceTestGate": {
     "requiredFlowIds": ["compass-smoke"],
     "runtimeRequiredChecks": [
       "runtime-api-system-acceptance",
@@ -64,33 +65,33 @@
     "infraRequiredChecks": ["infra-readonly-acceptance"],
     "identityRequiredChecks": ["identity-readonly-acceptance"]
   },
-  "productionStage": {
+  "deploymentStage": {
     "requireFreshHeadOnAuto": true
   },
-  "cloudDeliveryPipeline": {
+  "cloudDeploymentPipeline": {
     "slo": {
       "mode": "observe",
-      "acceptanceTargetSeconds": 900,
-      "productionTargetSeconds": 1200
+      "automatedAcceptanceTestGateTargetSeconds": 900,
+      "deploymentStageTargetSeconds": 1200
     }
   },
-  "desktopPipeline": {
+  "desktopDeploymentPipeline": {
     "requiredChecks": [
       "desktop-commit-stage",
-      "desktop-acceptance-stage",
-      "desktop-production-stage",
+      "desktop-automated-acceptance-test-gate",
+      "desktop-deployment-stage",
       "desktop-release-decision"
     ],
     "artifactContracts": {
-      "candidateManifestPath": ".artifacts/desktop-candidate/<sha>/manifest.json",
-      "acceptanceResultPath": ".artifacts/desktop-acceptance/<sha>/result.json",
-      "productionResultPath": ".artifacts/desktop-production/<sha>/result.json",
+      "releaseCandidateManifestPath": ".artifacts/desktop-release-candidate/<sha>/manifest.json",
+      "automatedAcceptanceTestGateResultPath": ".artifacts/desktop-automated-acceptance-test-gate/<sha>/result.json",
+      "deploymentResultPath": ".artifacts/desktop-deployment-stage/<sha>/result.json",
       "releaseDecisionPath": ".artifacts/desktop-release/<sha>/decision.json"
     },
     "slo": {
       "mode": "observe",
-      "acceptanceTargetSeconds": 1800,
-      "productionTargetSeconds": 1200
+      "automatedAcceptanceTestGateTargetSeconds": 1800,
+      "deploymentStageTargetSeconds": 1200
     }
   },
   "docsDriftRules": {
@@ -126,14 +127,14 @@
       "docs/runbooks/**"
     ]
   },
-  "mergeQueueGate": {
+  "integrationGate": {
     "requiredChecks": [
       "determine-scope",
       "build-compile",
       "migration-safety",
       "auth-critical-smoke",
       "minimal-integration-smoke",
-      "merge-queue-gate"
+      "integration-gate"
     ],
     "telemetry": {
       "sampleSize": 20

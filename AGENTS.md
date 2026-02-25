@@ -26,7 +26,7 @@ compass/
 ### 1) Keep `main` always releasable
 
 - No direct pushes to `main`. Merge via PR + required gate(s).
-- Small batches. Fast feedback. Fix forward.
+- Small batches. Commit-test suite. Fix forward.
 
 ### 2) Make work provable
 

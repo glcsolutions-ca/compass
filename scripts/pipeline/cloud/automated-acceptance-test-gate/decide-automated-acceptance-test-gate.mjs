@@ -1,5 +1,5 @@
 import path from "node:path";
-import { evaluateAcceptanceStageResults } from "./decide-acceptance-stage-lib.mjs";
+import { evaluateAcceptanceStageResults } from "./decide-automated-acceptance-test-gate-lib.mjs";
 import { appendGithubOutput, requireEnv, writeJsonFile } from "../../shared/pipeline-utils.mjs";
 
 function parseBooleanEnv(name, fallback = false) {
@@ -41,7 +41,7 @@ function parseCheckResults() {
   }
 
   const expectedChecks = [
-    "load-release-package",
+    "load-release-candidate",
     "runtime-api-system-acceptance",
     "runtime-browser-acceptance",
     "runtime-migration-image-acceptance",
@@ -64,10 +64,10 @@ async function main() {
   const runtimeRequired = parseBooleanEnv("RUNTIME_REQUIRED", false);
   const infraRequired = parseBooleanEnv("INFRA_REQUIRED", false);
   const identityRequired = parseBooleanEnv("IDENTITY_REQUIRED", false);
-  const releasePackageRefContractStatus =
-    process.env.RELEASE_PACKAGE_REF_CONTRACT_STATUS?.trim().toLowerCase() || "unknown";
-  const releasePackageRefContractReasonCodes = parseJsonArrayEnv(
-    "RELEASE_PACKAGE_REF_CONTRACT_REASON_CODES_JSON"
+  const releaseCandidateRefContractStatus =
+    process.env.RELEASE_CANDIDATE_REF_CONTRACT_STATUS?.trim().toLowerCase() || "unknown";
+  const releaseCandidateRefContractReasonCodes = parseJsonArrayEnv(
+    "RELEASE_CANDIDATE_REF_CONTRACT_REASON_CODES_JSON"
   );
   const identityConfigContractStatus =
     process.env.IDENTITY_CONFIG_CONTRACT_STATUS?.trim().toLowerCase() || "unknown";
@@ -81,8 +81,8 @@ async function main() {
     runtimeRequired,
     infraRequired,
     identityRequired,
-    releasePackageRefContractStatus,
-    releasePackageRefContractReasonCodes,
+    releaseCandidateRefContractStatus,
+    releaseCandidateRefContractReasonCodes,
     identityConfigContractStatus,
     identityConfigContractReasonCodes
   });
@@ -95,8 +95,8 @@ async function main() {
     runtimeRequired,
     infraRequired,
     identityRequired,
-    releasePackageRefContractStatus,
-    releasePackageRefContractReasonCodes,
+    releaseCandidateRefContractStatus,
+    releaseCandidateRefContractReasonCodes,
     identityConfigContractStatus,
     identityConfigContractReasonCodes,
     checkResults,
@@ -113,14 +113,14 @@ async function main() {
   });
 
   if (reasons.length > 0) {
-    console.error("acceptance-stage blocking reasons:");
+    console.error("automated-acceptance-test-gate blocking reasons:");
     for (const reason of reasons) {
       console.error(`- [${reason.code}] ${reason.message}`);
     }
     process.exit(1);
   }
 
-  console.info(`acceptance-stage passed for ${headSha}`);
+  console.info(`automated-acceptance-test-gate passed for ${headSha}`);
 }
 
 void main();

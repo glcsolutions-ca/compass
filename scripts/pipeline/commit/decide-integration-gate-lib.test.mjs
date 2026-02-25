@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateMergeQueueGateResults } from "./decide-merge-queue-gate-lib.mjs";
+import { evaluateMergeQueueGateResults } from "./decide-integration-gate-lib.mjs";
 
 function baseInput() {
   return {

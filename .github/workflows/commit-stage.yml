@@ -202,6 +202,9 @@ jobs:
           HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
           EVENT_NAME: ${{ github.event_name }}
           HEAD_BRANCH: ${{ github.ref_name }}
+          SCOPE_INFRA: ${{ needs.determine_scope.outputs.infra_changed }}
+          SCOPE_IDENTITY: ${{ needs.determine_scope.outputs.identity_changed }}
+          SCOPE_MIGRATION: ${{ needs.determine_scope.outputs.migration_changed }}
           SCOPE_PATH: ${{ needs.determine_scope.outputs.scope_path }}
         run: node scripts/pipeline/commit/check-pairing-evidence.mjs
 

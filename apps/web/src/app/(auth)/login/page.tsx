@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { resolveEntraRedirectUri } from "../../auth/entra-redirect-uri";
 import { readEnterpriseAuthState } from "../../_lib/server/enterprise-session";
 import { LoginPanel } from "./_components/login-panel";
 import { createLoginPageModel } from "./_lib/login-page.model";
@@ -11,7 +12,7 @@ function readSetupErrorMessage(input: {
   entraLoginEnabled: boolean;
   sessionSecret: string | null;
   entraClientId: string | null;
-  entraRedirectUri: string | null;
+  webBaseUrl: string | null;
 }) {
   if (!input.entraLoginEnabled) {
     return null;
@@ -21,8 +22,13 @@ function readSetupErrorMessage(input: {
     return "WEB_SESSION_SECRET must be configured before enterprise sign-in can start.";
   }
 
-  if (!input.entraClientId || !input.entraRedirectUri) {
-    return "ENTRA_CLIENT_ID and ENTRA_REDIRECT_URI must be configured for enterprise sign-in.";
+  if (!input.entraClientId) {
+    return "ENTRA_CLIENT_ID must be configured for enterprise sign-in.";
+  }
+
+  const redirectUriResolution = resolveEntraRedirectUri(input.webBaseUrl);
+  if (!redirectUriResolution.redirectUri) {
+    return redirectUriResolution.error;
   }
 
   return null;

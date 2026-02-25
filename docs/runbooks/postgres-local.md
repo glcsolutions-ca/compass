@@ -35,10 +35,24 @@ pnpm db:postgres:reset
 
 ```bash
 pnpm db:migrate:create -- <migration_name>
+pnpm db:migrate:check
+pnpm db:migrate:checksums:update
 pnpm db:migrate:up
 pnpm db:migrate:status
-pnpm db:migrate:down -- 1
 ```
+
+`db:migrate:create` emits strict migration files using:
+
+- filename pattern: `^\d{17}_[a-z0-9_]+\.mjs$`
+- extension: `.mjs` only
+- checksums auto-refresh in `db/migrations/checksums.json`
+
+`db:migrate:up` enforces migration policy checks before executing and runs with explicit migration safety defaults:
+
+- `--check-order`
+- advisory lock enabled (`--lock`)
+- single-transaction mode (`--single-transaction`)
+- session safety via `PGOPTIONS` (`lock_timeout`, `statement_timeout`)
 
 ## CI Behavior
 

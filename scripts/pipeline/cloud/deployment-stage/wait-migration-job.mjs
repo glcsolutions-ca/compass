@@ -11,7 +11,10 @@ import {
 const resourceGroup = requireEnv("AZURE_RESOURCE_GROUP");
 const jobName = requireEnv("ACA_MIGRATE_JOB_NAME");
 const executionName = requireEnv("MIGRATION_EXECUTION_NAME");
-const timeoutSeconds = Number(process.env.MIGRATION_TIMEOUT_SECONDS ?? 900);
+const timeoutSecondsRaw = process.env.MIGRATION_TIMEOUT_SECONDS?.trim();
+const timeoutSecondsParsed = Number(timeoutSecondsRaw || "900");
+const timeoutSeconds =
+  Number.isFinite(timeoutSecondsParsed) && timeoutSecondsParsed > 0 ? timeoutSecondsParsed : 900;
 const migrationContainerName = process.env.MIGRATION_CONTAINER_NAME?.trim() || "migrate";
 const pollIntervalMs = 5000;
 

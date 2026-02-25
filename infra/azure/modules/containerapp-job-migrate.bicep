@@ -6,6 +6,8 @@ param registryServer string
 param registryIdentityResourceId string
 @secure()
 param databaseUrl string
+param migrationLockTimeout string = '5s'
+param migrationStatementTimeout string = '15min'
 param authBootstrapAllowedTenantId string
 param authBootstrapAllowedAppClientId string
 param authBootstrapDelegatedUserOid string
@@ -65,6 +67,10 @@ resource migrateJob 'Microsoft.App/jobs@2024-03-01' = {
             {
               name: 'DB_SSL_REJECT_UNAUTHORIZED'
               value: 'true'
+            }
+            {
+              name: 'PGOPTIONS'
+              value: '-c lock_timeout=${migrationLockTimeout} -c statement_timeout=${migrationStatementTimeout}'
             }
             {
               name: 'AUTH_BOOTSTRAP_ALLOWED_TENANT_ID'

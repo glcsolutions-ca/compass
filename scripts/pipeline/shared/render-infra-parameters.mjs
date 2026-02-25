@@ -69,6 +69,12 @@ async function main() {
       authBootstrapDelegatedUserEmail: {
         value: requireEnv("AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL")
       },
+      migrationLockTimeout: {
+        value: readOptional("MIGRATION_LOCK_TIMEOUT") || "5s"
+      },
+      migrationStatementTimeout: {
+        value: readOptional("MIGRATION_STATEMENT_TIMEOUT") || "15min"
+      },
       migrationJobName: { value: requireEnv("ACA_MIGRATE_JOB_NAME") },
       acrPullIdentityName: { value: requireEnv("ACR_PULL_IDENTITY_NAME") },
       acrName: { value: requireEnv("ACR_NAME") },

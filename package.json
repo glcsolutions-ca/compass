@@ -11,9 +11,11 @@
     "build": "turbo run build",
     "clean": "rimraf --glob .turbo coverage \"*.tsbuildinfo\" \"apps/*/dist\" \"apps/*/dist-types\" \"apps/*/.next\" \"apps/*/.turbo\" \"apps/*/coverage\" \"apps/*/*.tsbuildinfo\" \"packages/*/dist\" \"packages/*/dist-types\" \"packages/*/.next\" \"packages/*/.turbo\" \"packages/*/coverage\" \"packages/*/*.tsbuildinfo\"",
     "dev": "turbo run dev --parallel",
-    "db:migrate:create": "node db/scripts/migrate.mjs create",
-    "db:migrate:up": "node db/scripts/migrate.mjs up",
-    "db:migrate:down": "node db/scripts/migrate.mjs down",
+    "db:migrate:create": "node db/scripts/migrate-create.mjs",
+    "db:migrate:check": "node db/scripts/check-migration-policy.mjs",
+    "db:migrate:checksums:update": "node db/scripts/check-migration-policy.mjs --write",
+    "db:migrate:up": "pnpm db:migrate:check && node db/scripts/migrate.mjs up",
+    "db:migrate:down": "pnpm db:migrate:check && node db/scripts/migrate.mjs down",
     "db:migrate:status": "node db/scripts/migrate-status.mjs",
     "db:seed": "node db/scripts/seed-postgres.mjs",
     "db:postgres:wait": "node db/scripts/wait-for-postgres.mjs",
@@ -30,7 +32,7 @@
     "generate": "turbo run generate",
     "lint": "turbo run lint",
     "test": "pnpm test:static && pnpm test:unit && pnpm contract:check",
-    "test:static": "pnpm ci:high-risk-mainline-policy && pnpm ci:testing-policy && pnpm ci:terminology-policy && pnpm ci:service-bus-auth-contract && pnpm format:check && pnpm lint && pnpm typecheck:refs && pnpm typecheck",
+    "test:static": "pnpm ci:high-risk-mainline-policy && pnpm ci:testing-policy && pnpm ci:terminology-policy && pnpm ci:service-bus-auth-contract && pnpm db:migrate:check && pnpm format:check && pnpm lint && pnpm typecheck:refs && pnpm typecheck",
     "test:unit": "turbo run test && pnpm test:pipeline-contract",
     "test:contracts": "pnpm --filter @compass/contracts test && pnpm --filter @compass/sdk test && pnpm contract:check",
     "test:runtime:unit": "pnpm --filter @compass/api test && pnpm --filter @compass/web test && pnpm --filter @compass/worker test && pnpm --filter @compass/contracts test && pnpm --filter @compass/sdk test",
@@ -66,7 +68,7 @@
     "desktop:dev": "pnpm --filter @compass/desktop dev:run",
     "desktop:make:mac": "pnpm --filter @compass/desktop make:mac",
     "desktop:make:win": "pnpm --filter @compass/desktop make:win",
-    "test:pipeline-contract": "vitest run scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/decide-integration-gate-lib.test.mjs scripts/pipeline/commit/auto-recover-main.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/check-high-risk-mainline-policy.test.mjs scripts/pipeline/commit/check-auth-openapi-metadata.test.mjs scripts/pipeline/commit/runtime-coverage-lib.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/decide-automated-acceptance-test-gate-lib.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/acceptance-blackbox-contract.test.mjs scripts/pipeline/cloud/deployment-stage/apply-infra.test.mjs"
+    "test:pipeline-contract": "vitest run db/scripts/migration-policy-lib.test.mjs scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/decide-integration-gate-lib.test.mjs scripts/pipeline/commit/auto-recover-main.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/check-high-risk-mainline-policy.test.mjs scripts/pipeline/commit/check-auth-openapi-metadata.test.mjs scripts/pipeline/commit/runtime-coverage-lib.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/decide-automated-acceptance-test-gate-lib.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/acceptance-blackbox-contract.test.mjs scripts/pipeline/cloud/deployment-stage/apply-infra.test.mjs"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

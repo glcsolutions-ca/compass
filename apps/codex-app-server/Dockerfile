@@ -15,9 +15,9 @@ RUN pnpm --filter @compass/contracts build \
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /workspace
 
-ARG CODEX_TAG=rust-v0.104.0
+ARG CODEX_TAG=rust-v0.105.0
 ARG CODEX_ASSET=codex-x86_64-unknown-linux-gnu.tar.gz
-ARG CODEX_SHA256=52f6ccb7cebe1d6620f8676076acc4cde10543a6ed0eccea625498de7ae17f88
+ARG CODEX_SHA256=30acba08753c2651bf99a7e98a526198f67a995e776bd4915939c8bcb4f6852d
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl tar \

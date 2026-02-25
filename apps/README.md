@@ -20,13 +20,13 @@ The `apps/` directory contains the runtime services for Compass:
 
 ## Directory Map
 
-| Path                     | Responsibility                                                                            |
-| ------------------------ | ----------------------------------------------------------------------------------------- |
-| `apps/api/`              | Fastify API, config parsing, health/OpenAPI routes, integration tests.                    |
-| `apps/web/`              | Next.js app, API proxy route handlers, standalone runtime build output.                   |
-| `apps/codex-app-server/` | Fastify codex gateway, stdio JSON-RPC bridge, websocket stream hub, Postgres persistence. |
-| `apps/worker/`           | Service Bus consumer, sync message parsing, idempotent processing logic.                  |
-| `apps/desktop/`          | Electron main/preload runtime, installer packaging, desktop release flow.                 |
+| Path                     | Responsibility                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------- |
+| `apps/api/`              | Fastify API, config parsing, health/OpenAPI routes, integration tests.                      |
+| `apps/web/`              | Next.js app, API proxy route handlers, standalone runtime build output.                     |
+| `apps/codex-app-server/` | Express codex gateway, stdio JSON-RPC bridge, websocket stream hub, thin in-memory adapter. |
+| `apps/worker/`           | Service Bus consumer, sync message parsing, idempotent processing logic.                    |
+| `apps/desktop/`          | Electron main/preload runtime, installer packaging, desktop release flow.                   |
 
 ## Local Ports and Env Files
 

@@ -2,55 +2,49 @@
 
 ## Purpose
 
-`scripts/pipeline/cloud/production/` contains production stage helpers used by `cloud-delivery-pipeline.yml`.
+`scripts/pipeline/cloud/production/` contains helpers used by production deploy and verification jobs.
 
 ## Script Map
 
-| Script                                    | Role                                                                                                                              |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `apply-infra.mjs`                         | Validates/applies Bicep with transient retry handling and infra artifacts.                                                        |
-| `assert-managed-certificate-contract.mjs` | Validates custom-domain/certificate contract before infra apply; when ACA env is absent it records scratch-bootstrap create mode. |
-| `custom-domain-dns.mjs`                   | Emits required DNS records for managed certificate binding.                                                                       |
-| `start-migration-job.mjs`                 | Starts ACA migration job execution and records metadata.                                                                          |
-| `wait-migration-job.mjs`                  | Polls migration execution to terminal state, captures logs/status artifacts.                                                      |
-| `verify-auth-canary-freshness.mjs`        | Validates freshness of required auth canary/probe workflows.                                                                      |
-| `verify-api-smoke.mjs`                    | Verifies API health/OpenAPI and app-token auth paths after promotion.                                                             |
-| `verify-delegated-smoke.mjs`              | Validates delegated `/v1/me` behavior and writes delegated probe artifact.                                                        |
-| `record-release.mjs`                      | Writes successful production deployment record to GitHub Deployments API.                                                         |
-| `decide-production-stage.mjs`             | Produces production stage YES/NO result artifact and reason codes.                                                                |
-| `managed-certificate-contract.mjs`        | Shared contract logic for managed certificate assertions.                                                                         |
-| `utils.mjs`                               | Shared execution/env/artifact helpers for production scripts.                                                                     |
+- `apply-infra.mjs`: validates/applies Bicep and writes infra artifacts.
+- `custom-domain-dns.mjs`: emits DNS records for optional custom-domain cut-in.
+- `start-migration-job.mjs`: starts ACA migration job execution.
+- `wait-migration-job.mjs`: waits for migration completion and captures status/log metadata.
+- `verify-auth-canary-freshness.mjs`: checks canary/delegated smoke freshness windows.
+- `verify-api-smoke.mjs`: validates API health, OpenAPI, allowed/denied auth behavior.
+- `verify-delegated-smoke.mjs`: validates delegated `/v1/me` behavior.
+- `record-release.mjs`: records successful deployment in GitHub Deployments.
+- `decide-production-stage.mjs`: computes production YES/NO decision artifact.
+- `utils.mjs`: shared execution/env/artifact helpers.
 
-## Required Env Groups
+## Environment Contract
 
-### Azure Resource Context
+### Azure runtime context
 
 - `AZURE_RESOURCE_GROUP`
 - `ACA_API_APP_NAME`
 - `ACA_WEB_APP_NAME`
+- `ACA_CODEX_APP_NAME`
 - `ACA_MIGRATE_JOB_NAME`
-- `ACA_ENVIRONMENT_NAME`
 - `ACR_NAME`
 
-### Production Metadata
+### Release context
 
 - `HEAD_SHA`
 - `CHANGE_CLASS`
-
-### Auth Smoke Credentials
-
 - `TARGET_API_BASE_URL`
+
+### API smoke auth inputs
+
+- `API_IDENTIFIER_URI` (scope defaults to `${API_IDENTIFIER_URI}/.default`)
 - `API_SMOKE_ALLOWED_TENANT_ID`
 - `API_SMOKE_ALLOWED_CLIENT_ID`
 - `API_SMOKE_ALLOWED_CLIENT_SECRET`
-- `API_SMOKE_ALLOWED_SCOPE`
 - `API_SMOKE_DENIED_TENANT_ID`
 - `API_SMOKE_DENIED_CLIENT_ID`
 - `API_SMOKE_DENIED_CLIENT_SECRET`
-- `API_SMOKE_DENIED_SCOPE`
-- `API_SMOKE_DENIED_EXPECTED_CODE` (optional, defaults to `assignment_denied`)
 
-### GitHub Deployment Record Context
+### Deployment record inputs
 
 - `GITHUB_TOKEN`
 - `GITHUB_REPOSITORY`
@@ -58,10 +52,10 @@
 
 ## Artifact Paths
 
-- Production lifecycle artifacts: `.artifacts/production/<sha>/*.json`
-- Deploy lifecycle artifacts: `.artifacts/deploy/<sha>/*.json`
-- Infra apply helper artifacts: `.artifacts/infra/<sha>/*`
+- `.artifacts/production/<sha>/*.json`
+- `.artifacts/deploy/<sha>/*.json`
+- `.artifacts/infra/<sha>/*`
 
-## Change Safety
+## Safety
 
-These scripts sit on production mutation paths. Preserve fail-closed behavior, avoid broad refactors, and keep diagnostic artifacts intact.
+These scripts are on production mutation/verification paths. Keep fail-closed behavior and preserve artifact diagnostics.

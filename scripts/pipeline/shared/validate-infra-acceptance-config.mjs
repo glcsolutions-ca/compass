@@ -21,17 +21,12 @@ const REQUIRED_ENV_NAMES = [
   "ACA_MIGRATE_JOB_NAME",
   "ACR_PULL_IDENTITY_NAME",
   "ACR_NAME",
-  "ACR_SKU",
   "POSTGRES_SERVER_NAME",
   "POSTGRES_DATABASE_NAME",
   "POSTGRES_ADMIN_USERNAME",
-  "POSTGRES_VERSION",
-  "POSTGRES_SKU_NAME",
-  "POSTGRES_SKU_TIER",
-  "POSTGRES_STORAGE_MB",
   "POSTGRES_ADMIN_PASSWORD",
-  "AUTH_ISSUER",
-  "AUTH_JWKS_URI",
+  "API_IDENTIFIER_URI",
+  "AUTH_AUDIENCE",
   "AUTH_ALLOWED_CLIENT_IDS",
   "AUTH_ACTIVE_TENANT_IDS",
   "OAUTH_TOKEN_ISSUER",
@@ -56,22 +51,10 @@ async function capture(cmd, args) {
   return stdout.trim();
 }
 
-function requireOneOfEnv(names) {
-  for (const name of names) {
-    const value = process.env[name]?.trim();
-    if (value) {
-      return value;
-    }
-  }
-
-  throw new Error(`Missing required environment variable: one of [${names.join(", ")}]`);
-}
-
 async function main() {
   for (const envName of REQUIRED_ENV_NAMES) {
     requireEnv(envName);
   }
-  requireOneOfEnv(["AUTH_AUDIENCE", "API_IDENTIFIER_URI", "ENTRA_AUDIENCE"]);
 
   for (const namespace of PROVIDERS) {
     const state = await capture("az", [
@@ -92,14 +75,6 @@ async function main() {
   const privateDnsZone = requireEnv("AZURE_PRIVATE_DNS_ZONE_NAME").toLowerCase();
   if (!privateDnsZone.endsWith(".postgres.database.azure.com")) {
     throw new Error("AZURE_PRIVATE_DNS_ZONE_NAME must end with .postgres.database.azure.com");
-  }
-
-  const postgresSkuTier = requireEnv("POSTGRES_SKU_TIER").toLowerCase();
-  const postgresSkuName = requireEnv("POSTGRES_SKU_NAME").toLowerCase();
-  if (postgresSkuTier === "burstable" && !postgresSkuName.startsWith("standard_b")) {
-    throw new Error(
-      "POSTGRES_SKU_NAME must start with Standard_B when POSTGRES_SKU_TIER=Burstable"
-    );
   }
 }
 

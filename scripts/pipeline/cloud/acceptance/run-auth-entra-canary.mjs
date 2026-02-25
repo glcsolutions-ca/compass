@@ -23,17 +23,17 @@ async function requestJson(url, options = undefined) {
 async function main() {
   const headSha = process.env.HEAD_SHA?.trim() || process.env.GITHUB_SHA?.trim() || "local";
   const baseUrl = requireEnv("TARGET_API_BASE_URL").replace(/\/$/, "");
-  const deniedExpectedCode =
-    process.env.ENTRA_CANARY_DENIED_EXPECTED_CODE?.trim() || "assignment_denied";
+  const deniedExpectedCode = "assignment_denied";
   const artifactPath = path.join(".artifacts", "auth-canary", headSha, "result.json");
   const assertions = [];
+  const appScope = `${requireEnv("API_IDENTIFIER_URI")}/.default`;
 
   try {
     const appToken = await fetchClientCredentialsToken({
       tenantId: requireEnv("ENTRA_CANARY_ALLOWED_TENANT_ID"),
       clientId: requireEnv("ENTRA_CANARY_ALLOWED_CLIENT_ID"),
       clientSecret: requireEnv("ENTRA_CANARY_ALLOWED_CLIENT_SECRET"),
-      scope: requireEnv("ENTRA_CANARY_APP_SCOPE")
+      scope: appScope
     });
 
     const appMe = await requestJson(`${baseUrl}/v1/me`, {
@@ -68,7 +68,7 @@ async function main() {
       tenantId: requireEnv("ENTRA_CANARY_DENIED_TENANT_ID"),
       clientId: requireEnv("ENTRA_CANARY_DENIED_CLIENT_ID"),
       clientSecret: requireEnv("ENTRA_CANARY_DENIED_CLIENT_SECRET"),
-      scope: requireEnv("ENTRA_CANARY_DENIED_APP_SCOPE")
+      scope: appScope
     });
 
     const deniedMe = await requestJson(`${baseUrl}/v1/me`, {

@@ -40,15 +40,6 @@ param codexImage string = 'SET_IN_GITHUB_ENV'
 param apiCustomDomain string = ''
 param webCustomDomain string = ''
 param codexCustomDomain string = ''
-param apiManagedCertificateName string = ''
-param webManagedCertificateName string = ''
-param codexManagedCertificateName string = ''
-@allowed([
-  'CNAME'
-  'HTTP'
-  'TXT'
-])
-param customDomainValidationMethod string = 'CNAME'
 
 param apiLogLevel string = 'warn'
 param codexLogLevel string = 'warn'
@@ -213,49 +204,6 @@ module codex './modules/containerapp-codex.bicep' = {
   }
   dependsOn: [
     acrPullIdentityRoleAssignment
-  ]
-}
-
-resource managedEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
-  name: environmentName
-}
-
-resource apiManagedCertificate 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(apiCustomDomain)) {
-  parent: managedEnvironment
-  name: apiManagedCertificateName
-  location: location
-  properties: {
-    subjectName: apiCustomDomain
-    domainControlValidation: customDomainValidationMethod
-  }
-  dependsOn: [
-    api
-  ]
-}
-
-resource webManagedCertificate 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(webCustomDomain)) {
-  parent: managedEnvironment
-  name: webManagedCertificateName
-  location: location
-  properties: {
-    subjectName: webCustomDomain
-    domainControlValidation: customDomainValidationMethod
-  }
-  dependsOn: [
-    web
-  ]
-}
-
-resource codexManagedCertificate 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(codexCustomDomain)) {
-  parent: managedEnvironment
-  name: codexManagedCertificateName
-  location: location
-  properties: {
-    subjectName: codexCustomDomain
-    domainControlValidation: customDomainValidationMethod
-  }
-  dependsOn: [
-    codex
   ]
 }
 

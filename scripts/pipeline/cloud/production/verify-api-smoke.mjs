@@ -4,15 +4,15 @@ import { fetchClientCredentialsToken } from "../../shared/entra-token-utils.mjs"
 const targetBaseUrl = requireEnv("TARGET_API_BASE_URL").replace(/\/$/, "");
 const verifyShaHeader = process.env.VERIFY_SHA_HEADER?.trim() === "true";
 const expectedSha = process.env.EXPECTED_SHA?.trim() || getHeadSha();
-const deniedExpectedCode =
-  process.env.API_SMOKE_DENIED_EXPECTED_CODE?.trim() || "assignment_denied";
+const deniedExpectedCode = "assignment_denied";
+const apiScope = `${requireEnv("API_IDENTIFIER_URI")}/.default`;
 
-function requireClientCredentials({ tenantIdEnv, clientIdEnv, clientSecretEnv, scopeEnv }) {
+function requireClientCredentials({ tenantIdEnv, clientIdEnv, clientSecretEnv }) {
   return {
     tenantId: requireEnv(tenantIdEnv),
     clientId: requireEnv(clientIdEnv),
     clientSecret: requireEnv(clientSecretEnv),
-    scope: requireEnv(scopeEnv)
+    scope: apiScope
   };
 }
 
@@ -67,14 +67,12 @@ async function main() {
     const allowedClient = requireClientCredentials({
       tenantIdEnv: "API_SMOKE_ALLOWED_TENANT_ID",
       clientIdEnv: "API_SMOKE_ALLOWED_CLIENT_ID",
-      clientSecretEnv: "API_SMOKE_ALLOWED_CLIENT_SECRET",
-      scopeEnv: "API_SMOKE_ALLOWED_SCOPE"
+      clientSecretEnv: "API_SMOKE_ALLOWED_CLIENT_SECRET"
     });
     const deniedClient = requireClientCredentials({
       tenantIdEnv: "API_SMOKE_DENIED_TENANT_ID",
       clientIdEnv: "API_SMOKE_DENIED_CLIENT_ID",
-      clientSecretEnv: "API_SMOKE_DENIED_CLIENT_SECRET",
-      scopeEnv: "API_SMOKE_DENIED_SCOPE"
+      clientSecretEnv: "API_SMOKE_DENIED_CLIENT_SECRET"
     });
     const appAuthSmokeToken = await fetchClientCredentialsToken(allowedClient);
     const deniedToken = await fetchClientCredentialsToken(deniedClient);

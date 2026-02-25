@@ -26,10 +26,9 @@ General documentation and architecture records live here.
 ## Runbooks
 
 - `runbooks/README.md`
-- `runbooks/cloud-delivery-pipeline.md`
+- `runbooks/cloud-deployment-pipeline-setup.md`
 - `runbooks/postgres-local.md`
 - `runbooks/desktop-deployment-pipeline.md`
-- `runbooks/production-stage.md`
 - `runbooks/migration-safety.md`
 
 ## Infrastructure Docs

@@ -78,4 +78,4 @@ Track desktop naming migration as a separate ADR/PR sequence:
 - `.github/workflows/cloud-delivery-replay.yml`
 - `.github/workflows/commit-stage.yml`
 - `.github/workflows/merge-queue-gate.yml`
-- `docs/runbooks/cloud-delivery-pipeline.md`
+- `docs/runbooks/cloud-deployment-pipeline-setup.md`

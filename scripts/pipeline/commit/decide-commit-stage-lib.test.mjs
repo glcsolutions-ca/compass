@@ -8,12 +8,14 @@ function makeBaseInput(overrides = {}) {
       "commit-test-suite": "success",
       "desktop-commit-test-suite": "skipped",
       "infra-static-check": "skipped",
-      "identity-static-check": "skipped"
+      "identity-static-check": "skipped",
+      "pairing-evidence-check": "skipped"
     },
     runtimeRequired: false,
     desktopRequired: false,
     infraRequired: false,
     identityRequired: false,
+    pairingRequired: false,
     docsDriftBlocking: false,
     docsDriftStatus: "pass",
     commitStageSloMode: "observe",
@@ -34,7 +36,8 @@ describe("evaluateCommitStageResults", () => {
           "commit-test-suite": "cancelled",
           "desktop-commit-test-suite": "skipped",
           "infra-static-check": "skipped",
-          "identity-static-check": "skipped"
+          "identity-static-check": "skipped",
+          "pairing-evidence-check": "skipped"
         }
       })
     );
@@ -60,7 +63,8 @@ describe("evaluateCommitStageResults", () => {
           "commit-test-suite": "skipped",
           "desktop-commit-test-suite": "failure",
           "infra-static-check": "skipped",
-          "identity-static-check": "skipped"
+          "identity-static-check": "skipped",
+          "pairing-evidence-check": "skipped"
         }
       })
     );
@@ -83,7 +87,8 @@ describe("evaluateCommitStageResults", () => {
           "commit-test-suite": "skipped",
           "desktop-commit-test-suite": "skipped",
           "infra-static-check": "skipped",
-          "identity-static-check": "skipped"
+          "identity-static-check": "skipped",
+          "pairing-evidence-check": "skipped"
         }
       })
     );
@@ -101,7 +106,8 @@ describe("evaluateCommitStageResults", () => {
           "commit-test-suite": "success",
           "desktop-commit-test-suite": "skipped",
           "infra-static-check": "failure",
-          "identity-static-check": "cancelled"
+          "identity-static-check": "cancelled",
+          "pairing-evidence-check": "skipped"
         }
       })
     );
@@ -114,6 +120,29 @@ describe("evaluateCommitStageResults", () => {
       {
         code: "CHECK_IDENTITY_STATIC_CHECK_REQUIRED_NOT_SUCCESS",
         message: "identity-static-check required but result is cancelled"
+      }
+    ]);
+  });
+
+  it("requires pairing evidence for high-risk main pushes", () => {
+    const reasons = evaluateCommitStageResults(
+      makeBaseInput({
+        pairingRequired: true,
+        checkResults: {
+          "determine-scope": "success",
+          "commit-test-suite": "success",
+          "desktop-commit-test-suite": "skipped",
+          "infra-static-check": "success",
+          "identity-static-check": "skipped",
+          "pairing-evidence-check": "failure"
+        }
+      })
+    );
+
+    expect(reasons).toEqual([
+      {
+        code: "CHECK_PAIRING_EVIDENCE_REQUIRED_NOT_SUCCESS",
+        message: "pairing-evidence-check required but result is failure"
       }
     ]);
   });

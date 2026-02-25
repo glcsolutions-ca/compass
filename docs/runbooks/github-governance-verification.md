@@ -1,10 +1,8 @@
-# GitHub Governance Verification
+# GitHub Governance Verification (Trunk-First)
 
-Use this checklist to verify repo governance controls stay aligned with the CI/CD contract.
+Use this checklist to keep governance aligned with push-to-main commit-stage and integration-gate controls.
 
 ## Prerequisite
-
-Authenticate `gh` with repo admin access:
 
 ```bash
 gh auth status
@@ -14,22 +12,21 @@ gh auth status
 
 ```bash
 gh api repos/glcsolutions-ca/compass/branches/main/protection \
-  --jq '{enforce_admins,required_status_checks,required_pull_request_reviews,allow_force_pushes,allow_deletions}'
+  --jq '{enforce_admins,required_status_checks,allow_force_pushes,allow_deletions}'
 ```
 
 Expected:
 
 - `enforce_admins.enabled=true`
 - `required_status_checks.strict=true`
-- required check contexts include `commit-stage` and `integration-gate`
-- `required_pull_request_reviews.required_approving_review_count=0`
+- required contexts include `commit-stage` and `integration-gate`
 - `allow_force_pushes.enabled=false`
 - `allow_deletions.enabled=false`
 
-If the required check context differs, apply the baseline:
+If required contexts drift:
 
 ```bash
-cat > /tmp/required-status-checks.json <<'JSON'
+cat >/tmp/required-status-checks.json <<'JSON'
 {
   "strict": true,
   "contexts": ["commit-stage", "integration-gate"]
@@ -40,35 +37,33 @@ gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/req
   --input /tmp/required-status-checks.json
 ```
 
-## 2) Merge Method Policy
+## 2) Required PR Review Gate Removed
 
 ```bash
-gh api repos/glcsolutions-ca/compass \
-  --jq '{allow_squash_merge,allow_merge_commit,allow_rebase_merge,allow_auto_merge,delete_branch_on_merge}'
+gh api repos/glcsolutions-ca/compass/branches/main/protection \
+  --jq '.required_pull_request_reviews'
 ```
 
 Expected:
 
-- `allow_squash_merge=true`
-- `allow_merge_commit=false`
-- `allow_rebase_merge=false`
-- `allow_auto_merge=true`
-- `delete_branch_on_merge=true`
+- `null`
 
-## 3) Integration Batching Enabled
+If present, remove it:
 
 ```bash
-gh api graphql -f query='
-query {
-  repository(owner:"glcsolutions-ca", name:"compass") {
-    mergeQueue(branch:"main") { id }
-  }
-}' --jq '.data.repository.mergeQueue'
+gh api --method DELETE repos/glcsolutions-ca/compass/branches/main/protection/required_pull_request_reviews
+```
+
+## 3) Legacy Batching Ruleset Removed
+
+```bash
+gh api repos/glcsolutions-ca/compass/rulesets --paginate \
+  --jq '.[] | {id,name,enforcement} | select(.name | test("batching"; "i"))'
 ```
 
 Expected:
 
-- non-null `id` (queue is active on `main`)
+- no output
 
 ## 4) Production Environment Safety
 
@@ -83,17 +78,15 @@ Expected:
 - `deployment_branch_policy.protected_branches=true`
 - branch-policy protection rule is present
 
-## 5) Optional One-Shot Snapshot
+## 5) One-Shot Snapshot
 
 ```bash
 echo 'branch protection'
 gh api repos/glcsolutions-ca/compass/branches/main/protection \
   --jq '{enforce_admins,required_status_checks,required_pull_request_reviews,allow_force_pushes,allow_deletions}'
-echo 'merge methods'
-gh api repos/glcsolutions-ca/compass \
-  --jq '{allow_squash_merge,allow_merge_commit,allow_rebase_merge,allow_auto_merge,delete_branch_on_merge}'
-echo 'integration batching (merge_queue)'
-gh api graphql -f query='query { repository(owner:"glcsolutions-ca", name:"compass") { mergeQueue(branch:"main") { id } } }'
+echo 'rulesets'
+gh api repos/glcsolutions-ca/compass/rulesets --paginate \
+  --jq '.[] | {id,name,enforcement}'
 echo 'production environment'
 gh api repos/glcsolutions-ca/compass/environments/production \
   --jq '{name,can_admins_bypass,deployment_branch_policy,protection_rules}'

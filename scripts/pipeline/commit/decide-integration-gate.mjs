@@ -1,5 +1,5 @@
 import path from "node:path";
-import { evaluateMergeQueueGateResults } from "./decide-integration-gate-lib.mjs";
+import { evaluateIntegrationGateResults } from "./decide-integration-gate-lib.mjs";
 import { appendGithubOutput, requireEnv, writeJsonFile } from "../shared/pipeline-utils.mjs";
 
 function parseBooleanEnv(name, fallback = false) {
@@ -55,7 +55,7 @@ async function main() {
   const docsDriftStatus = (process.env.DOCS_DRIFT_STATUS?.trim() || "unknown").toLowerCase();
 
   const checkResults = parseCheckResults();
-  const reasons = evaluateMergeQueueGateResults({
+  const reasons = evaluateIntegrationGateResults({
     checkResults,
     buildRequired,
     migrationRequired,

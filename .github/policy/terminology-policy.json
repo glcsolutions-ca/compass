@@ -38,7 +38,7 @@
     "https://www.informit.com/articles/article.aspx"
   ],
   "canonicalDefinitions": {
-    "integration gate": "The exact-merge validation gate that evaluates the queued merge result and rejects insufficient changes before promotion.",
+    "integration gate": "The integration validation gate that runs on each push to main and rejects insufficient changes before promotion.",
     "release candidate": "A specific immutable build/version produced by the pipeline and promoted through later stages without rebuilding.",
     "cloud deployment pipeline": "The deployment pipeline path where production-destined cloud change is validated and promoted stage-by-stage.",
     "cloud deployment pipeline replay": "A manual replay path that reruns automated acceptance test gate and deployment-stage verification for an existing release candidate SHA without rebuilding.",
@@ -73,7 +73,10 @@
     { "legacy": "delivery-config", "canonical": "deployment-pipeline-config" },
     { "legacy": "fast-feedback", "canonical": "commit-test-suite" },
     { "legacy": "post-deploy smoke", "canonical": "post-deployment verification gate" },
-    { "legacy": "desktop-release.yml", "canonical": "desktop-deployment-pipeline.yml" }
+    { "legacy": "desktop-release.yml", "canonical": "desktop-deployment-pipeline.yml" },
+    { "legacy": "merge_group", "canonical": "push" },
+    { "legacy": "merge_queue", "canonical": "trunk-first push gates" },
+    { "legacy": "exact-merge", "canonical": "push-on-main integration gate" }
   ],
   "forbiddenPatterns": [
     {
@@ -200,6 +203,36 @@
       "pattern": "\\bdesktop-release\\.yml\\b",
       "flags": "g",
       "message": "Compatibility workflow removed; use desktop-deployment-pipeline.yml."
+    },
+    {
+      "pattern": "\\bmerge_group\\b",
+      "flags": "g",
+      "message": "Use push-on-main integration gate semantics; merge_group is removed.",
+      "canonical": "integration gate"
+    },
+    {
+      "pattern": "\\bmerge_queue\\b",
+      "flags": "g",
+      "message": "Use trunk-first push gates; merge_queue is removed.",
+      "canonical": "integration gate"
+    },
+    {
+      "pattern": "\\bmerge queue\\b",
+      "flags": "gi",
+      "message": "Use trunk-first push gates; merge queue is removed.",
+      "canonical": "integration gate"
+    },
+    {
+      "pattern": "\\bexact-merge\\b",
+      "flags": "gi",
+      "message": "Use push-on-main integration gate wording.",
+      "canonical": "integration gate"
+    },
+    {
+      "pattern": "\\bintegration batching\\b",
+      "flags": "gi",
+      "message": "Use trunk-first push gates wording.",
+      "canonical": "integration gate"
     }
   ]
 }

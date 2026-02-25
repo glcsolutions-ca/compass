@@ -1,158 +1,108 @@
 # Commit Stage Policy Contract
 
-This repository enforces deterministic merge readiness via `.github/policy/pipeline-policy.json`.
+This repository enforces deterministic trunk-first quality controls with policy in `.github/policy/pipeline-policy.json`.
 
 ## Objective
 
-Every PR to `main` must pass fast, reliable merge-readiness evidence:
+Every push to `main` must produce fast, deterministic gate evidence:
 
-1. Change scope is resolved (`runtime`, `desktop`, `infra`, `identity`, `docsOnly`).
-2. Required fast checks run based on scope.
-3. PRs are merge-ready only when `commit-stage` passes.
+1. Change scope is resolved (`runtime`, `desktop`, `infra`, `identity`, `migration`, `docsOnly`).
+2. Scope-required checks run and report.
+3. `commit-stage` and `integration-gate` both pass before downstream release promotion.
 
-`commit-stage.yml` runs on `pull_request` and `merge_group`.
-Heavy commit-test-suite checks stay PR-only; merge-group runs emit required `commit-stage` context for queued merge SHAs without rerunning heavy suites.
-Exact queued-merge validation is handled by `integration-gate.yml` (full checks on `merge_group`).
-Post-merge delivery pipelines (`cloud-deployment-pipeline.yml` for cloud, `desktop-deployment-pipeline.yml` for desktop) run on `push` to `main`.
+`pull_request` runs remain optional preview signals.
 
 ## Source of Truth Precedence
 
-When this doc and implementation differ, implementation wins:
+When docs and implementation differ, implementation wins:
 
 - Policy truth: `.github/policy/pipeline-policy.json`
-- PR gate truth: `.github/workflows/commit-stage.yml` and `scripts/pipeline/commit/decide-commit-stage.mjs`
-- Integration gate truth: `.github/workflows/integration-gate.yml` and `scripts/pipeline/commit/decide-integration-gate.mjs`
-- This doc is explanatory and must be kept aligned with those files.
+- Commit-stage truth: `.github/workflows/commit-stage.yml` and `scripts/pipeline/commit/decide-commit-stage.mjs`
+- Integration-gate truth: `.github/workflows/integration-gate.yml` and `scripts/pipeline/commit/decide-integration-gate.mjs`
 
 ## Required Gate Contexts
 
-- `commit-stage` (PR quality gate)
-- `integration-gate` (exact integration gate)
+- `commit-stage`
+- `integration-gate`
 
 ## Trigger Contract
 
 - `commit-stage.yml`
-  - `pull_request` types: `opened`, `synchronize`, `reopened`, `ready_for_review`
-  - `merge_group`
+  - `push` to `main`
+  - optional `pull_request` types: `opened`, `synchronize`, `reopened`, `ready_for_review`
 - `integration-gate.yml`
-  - `pull_request` types: `opened`, `synchronize`, `reopened`, `ready_for_review`
-  - `merge_group`
+  - `push` to `main`
+  - optional `pull_request` types: `opened`, `synchronize`, `reopened`, `ready_for_review`
 
-## Commit-Stage Checks (PR Heavy Path)
-
-- `determine-scope` (always)
-- `commit-test-suite` (when runtime/infra/identity is true, or when deployment pipeline config blocking paths changed)
-- `desktop-commit-test-suite` (when `desktop` scope is true and change is not docs-only)
-- `infra-static-check` (only when `infra` scope is true)
-- `identity-static-check` (only when `identity` scope is true)
-- `docs-drift` is always evaluated and can block merge for docs-critical drift
-- On `merge_group`, commit-stage runs scope/docs-drift/final decision only to keep required context satisfiable without rerunning heavy checks
-
-## Integration Gate Checks (Exact Merge)
+## Commit-Stage Checks
 
 - `determine-scope` (always)
-- `build-compile` (runtime/infra/identity/deployment-pipeline-config changes)
-- `migration-safety` (when migrations changed)
-- `auth-critical-smoke` (runtime/infra/identity/deployment-pipeline-config changes)
-- `minimal-integration-smoke` (runtime changes)
-- `integration-gate` final decision artifact
-- integration-gate throughput telemetry artifact
+- `commit-test-suite` (runtime/infra/identity/deployment-pipeline-config changes)
+- `desktop-commit-test-suite` (desktop changes when not docs-only)
+- `infra-static-check` (infra changes)
+- `identity-static-check` (identity changes)
+- `pairing-evidence-check` (pushes to `main` when high-risk scopes are present by policy)
+- `commit-stage` final decision (deterministic reason codes + timing SLO evaluation)
 
-## Scope Model
+## Pairing Evidence Policy
 
-`pipeline-policy.json` classifies changed files into:
+High-risk scope enforcement is policy-driven:
 
-- `runtime`
-- `desktop`
-- `infra`
-- `identity`
-- `docsOnly`
-- plus rollout flags (`migration`, `infraRollout`) used downstream
+- `pairingPolicy.highRiskScopes`: `infra`, `identity`, `migration`
+- `pairingPolicy.trailerKey`: `Paired-With`
 
-Scope evaluation excludes files matching `scopeRules.docsOnly` before computing mutable scopes (`runtime`, `desktop`, `infra`, `identity`) so documentation-only updates do not trigger deployment pipeline config mutation paths.
+Required trailer example for high-risk mainline pushes:
 
-`changeClass` is derived in priority order: `runtime` -> `infra` -> `identity` -> `desktop` -> `checks`.
+```text
+Paired-With: @github-handle
+```
+
+## Integration-Gate Checks
+
+- `determine-scope` (always)
+- `build-compile` (runtime/infra/identity/deployment-pipeline-config changes on push)
+- `migration-safety` (migration changes on push)
+- `auth-critical-smoke` (runtime/infra/identity/deployment-pipeline-config changes on push)
+- `minimal-integration-smoke` (runtime changes on push)
+- `integration-gate` final decision
 
 ## Docs Drift
 
-`docs-drift` is always evaluated.
+`docs-drift` is always evaluated in commit-stage and integration-gate:
 
-- Blocking: docs-critical paths changed without matching docs target updates.
-- Advisory: deployment pipeline config blocking paths changed without docs target updates.
-- Infra auth runtime wiring changes (for example `OAUTH_TOKEN_SIGNING_SECRET` convergence) must include one of the configured docs-target updates.
+- blocking when docs-critical paths change without required doc target updates
+- advisory for deployment-pipeline-config drift without doc target updates
 
-Result artifact path:
+Artifact:
 
 - `.artifacts/docs-drift/<testedSha>/result.json`
 
-## Commit-Stage SLO Telemetry
+## Commit-Stage Timing SLO
 
 Policy fields:
 
-- `commitStage.slo.targetSeconds` (current target: `300`)
+- `commitStage.slo.targetSeconds` (current: `300`)
 - `commitStage.slo.mode` (`observe` or `enforce`)
 
-Current mode is `enforce`.
-
-- Over-target runs fail `commit-stage`.
-- Timing evidence is still emitted for every run.
-
-Timing artifact path:
+Artifact:
 
 - `.artifacts/commit-stage/<testedSha>/timing.json`
 
-Timing keys:
+When mode is `enforce`, over-target runs fail `commit-stage`.
 
-- `metrics.time_to_commit_gate_seconds`
-- `metrics.queue_delay_seconds`
-- `metrics.quick_feedback_seconds`
-- `metrics.total_run_seconds`
+## Integration-Gate Throughput Telemetry
 
-`time_to_commit_gate_seconds` is measured from first commit-stage job start to gate completion (execution time only). Queue delay is telemetry-only.
-
-## Integration Gate Throughput Telemetry
-
-Integration-gate throughput snapshot is emitted per `merge_group` run:
+Integration-gate emits throughput telemetry on push runs:
 
 - `.artifacts/integration-gate/<testedSha>/timing.json`
 
-Snapshot keys include:
+## Mainline Red Recovery
 
-- `throughputWindow.queueDelaySeconds.median`
-- `throughputWindow.queueDelaySeconds.p95`
-- `throughputWindow.totalRunSeconds.median`
-- `throughputWindow.totalRunSeconds.p95`
-- `throughputWindow.rerunRatio`
-- `throughputWindow.passRateByStage`
+`main-red-recovery.yml` listens for completed `Commit Stage` and `Integration Gate` push runs on `main`:
 
-## PR Gate Semantics
+- first hard deterministic failure: rerun failed jobs once
+- repeated hard deterministic failure: auto-revert head commit
 
-`commit-stage` makes PR merge-readiness decisions from required job outcomes (`needs.*.result`) plus docs-drift state.
+Artifact:
 
-- `determine-scope` must succeed.
-- `commit-test-suite` must succeed when runtime/infra/identity commit evidence is required, or when deployment pipeline config paths changed.
-- `desktop-commit-test-suite` must succeed when desktop commit evidence is required.
-- `infra-static-check` must succeed when `infra` is required.
-- `identity-static-check` must succeed when `identity` is required.
-- If docs-drift blocking is true, docs-drift status must be `pass`.
-- If `commitStage.slo.mode = enforce`, gate fails when timing SLO is not met.
-
-## Runtime Baseline
-
-Deployment-pipeline-config scripts use Node's built-in `path.posix.matchesGlob` for deterministic pattern behavior.
-
-- Node baseline: `22.x` (`.nvmrc`)
-- Engine contract: `>=22 <23`
-
-## Deployment-Pipeline-Config High-Risk Paths
-
-`docsDriftRules` and `scopeRules` in `.github/policy/pipeline-policy.json` are authoritative.
-
-Non-exhaustive examples:
-
-- `.github/workflows/*.yml`, `.github/workflows/*.yaml`
-- `.github/policy/**`
-- `scripts/pipeline/**`
-- `infra/**`, `infra/azure/**`, `infra/identity/**`
-- `db/migrations/**`, `db/scripts/**`
-- `deploy/**`
+- `.artifacts/main-recovery/<sha>/result.json`

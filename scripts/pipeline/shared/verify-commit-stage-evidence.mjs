@@ -109,7 +109,7 @@ async function main() {
   const repository = requireEnv("GITHUB_REPOSITORY");
   const headSha = requireEnv("HEAD_SHA");
   const workflowFile = process.env.COMMIT_STAGE_WORKFLOW_FILE?.trim() || "commit-stage.yml";
-  const workflowEvent = process.env.COMMIT_STAGE_EVENT?.trim() || "";
+  const workflowEvent = process.env.COMMIT_STAGE_EVENT?.trim() || "push";
 
   const matchedRun = await findSuccessfulCommitStageRun({
     token,

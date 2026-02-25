@@ -1,18 +1,29 @@
-# Branch Protection Baseline
+# Branch Protection Baseline (Trunk-First)
 
-Configure branch protection for `main` with required status checks:
+Configure `main` so direct integration is allowed, but safety checks remain strict.
+
+## Required Status Contexts
 
 - `commit-stage`
 - `integration-gate`
 
-Do not require automated acceptance test gate or deployment stage checks directly. Those are post-merge stage gates.
+Automated acceptance test gate and deployment stage checks remain post-push release controls, not branch-protection contexts.
+
+## Required Safety Controls
+
+- `enforce_admins.enabled=true`
+- `required_status_checks.strict=true`
+- `allow_force_pushes.enabled=false`
+- `allow_deletions.enabled=false`
+- no legacy batching ruleset on `main`
+- no required PR review gate on `main`
 
 ## Apply or Repair via GitHub CLI
 
-If required checks drift, reset the `main` required status checks to this baseline:
+Set required status contexts:
 
 ```bash
-cat > /tmp/required-status-checks.json <<'JSON'
+cat >/tmp/required-status-checks.json <<'JSON'
 {
   "strict": true,
   "contexts": ["commit-stage", "integration-gate"]
@@ -23,38 +34,18 @@ gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/req
   --input /tmp/required-status-checks.json
 ```
 
-## Integration Batching Ruleset Baseline
+Remove required PR review gate:
 
-- Ruleset name: `Main Integration Batching`
-- Rule: `merge_queue`
-- `max_entries_to_merge`: `1`
-- `grouping_strategy`: `ALLGREEN`
+```bash
+gh api --method DELETE repos/glcsolutions-ca/compass/branches/main/protection/required_pull_request_reviews
+```
 
-Use this to keep exact-merge debugging simple and recovery fast.
+## Why These Checks
 
-## Required Cloud Deployment Pipeline Safety Controls
+- `commit-stage` gives fast fail-first commit-stage evidence on `main`.
+- `integration-gate` validates integrated behavior on `main`.
+- `main-red-recovery.yml` auto-reruns once, then auto-reverts repeated hard deterministic failures.
 
-- Enforce admins (`main` has no admin bypass in normal flow).
-- Require integration batching (GitHub `merge_queue`) on `main`.
-- Require `.github/workflows/commit-stage.yml` on `pull_request` + `merge_group`.
-- Require `.github/workflows/integration-gate.yml` on `pull_request` + `merge_group`.
-- Require `.github/workflows/cloud-deployment-pipeline.yml` on `push` to `main` for post-merge automated acceptance test gate/deployment stage gating.
-- Require PR-only integration into `main` (no direct pushes).
-- Keep force-push and deletion blocked.
-- Keep strict status checks enabled.
-
-## Why these checks
-
-- `commit-stage` gives fast PR feedback.
-- `integration-gate` validates the exact queued merge result.
-- Cloud automated acceptance test gate/deployment stage remain decoupled as post-merge release-candidate gates.
-
-## Triage notes
-
-- `commit-stage` artifacts include `reasonCodes` and `reasonDetails` for direct remediation.
-- `integration-gate` artifacts include exact-merge reason codes, check outcomes, and throughput timing.
-- `docs-drift` artifacts include changed blocking paths, docs-critical paths, and expected doc targets.
-
-## Verification runbook
+## Verification Runbook
 
 - `docs/runbooks/github-governance-verification.md`

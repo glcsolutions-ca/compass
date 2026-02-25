@@ -1,29 +1,30 @@
 # Operating Model
 
-Compass uses deterministic cloud and desktop delivery with the same release logic.
+Compass uses trunk-first cloud and desktop delivery with one release-candidate model.
 
 ## Core Rules
 
-1. Commit stage is fast and PR-focused.
-2. Integration gate validates the exact queued merge result.
-3. Automated acceptance test gate validates one frozen release candidate and returns YES/NO.
-4. Deployment stage deploys only the accepted release candidate (no rebuilds).
-5. Required gate contexts are `commit-stage` and `integration-gate`.
+1. `main` is the integration line and must stay releasable.
+2. `commit-stage` and `integration-gate` run on push to `main`.
+3. Automated acceptance test gate validates one immutable release candidate and returns YES/NO.
+4. Deployment stage deploys only accepted release candidates (no rebuild).
+5. Repeated hard deterministic gate failures on `main` are auto-reverted by recovery workflow.
 
 ## Key Terms
 
-- `SHA`: commit fingerprint used across evidence artifacts.
-- `Release candidate`: digest refs + scope metadata for one cloud deployment pipeline SHA.
-- `Replay`: rerun automated-acceptance-test-gate/deployment-stage for the same release candidate SHA.
+- `Release candidate`: immutable refs + scope metadata for one SHA.
+- `Deploy`: copy software to environment and run it.
+- `Release`: make capability available to users.
+- `Replay`: rerun acceptance/deployment verification for an existing release candidate SHA.
 
 ## Canonical Stage Dependencies
 
-1. `commit-stage.yml` runs scope detection on PR and merge-group SHAs; heavy fast checks run on PRs.
-2. `integration-gate.yml` runs exact-merge checks on merge-group batches.
-3. `cloud-deployment-pipeline.yml` runs on `push` to `main`.
+1. `commit-stage.yml` runs on push to `main` (optional PR preview also supported).
+2. `integration-gate.yml` runs on push to `main` (optional PR preview also supported).
+3. `cloud-deployment-pipeline.yml` runs on push to `main`.
 4. `cloud-deployment-pipeline-replay.yml` runs manually for `release_candidate_sha`.
 5. Cloud release candidate manifest is `.artifacts/release-candidate/<sha>/manifest.json`.
-6. Cloud automated acceptance test gate loads that release candidate and enforces runtime/infra/identity contracts.
-7. Cloud deployment stage mutates only accepted release candidate refs, then verifies production behavior.
-8. Final cloud decision artifact is `.artifacts/release/<sha>/decision.json`.
-9. Final desktop decision artifact is `.artifacts/desktop-release/<sha>/decision.json`.
+6. Cloud automated acceptance test gate loads that release candidate and evaluates runtime/infra/identity acceptance.
+7. Cloud deployment stage mutates only accepted release-candidate refs and performs post-deployment verification.
+8. Cloud release decision artifact is `.artifacts/release/<sha>/decision.json`.
+9. Desktop release decision artifact is `.artifacts/desktop-release/<sha>/decision.json`.

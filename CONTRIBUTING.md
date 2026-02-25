@@ -1,6 +1,6 @@
 # Contributing
 
-Keep changes small, testable, and easy to review. `main` stays releasable through PRs and stage gates.
+Keep changes small, testable, and reversible. `main` stays releasable through push-time stage gates.
 
 ## Prerequisites
 
@@ -22,12 +22,12 @@ Local hooks are enabled automatically during `pnpm install` and run commit-test 
 - `.githooks/pre-commit` runs `pnpm git-hooks:pre-commit` (`pnpm exec lint-staged`) on staged files.
 - `.githooks/pre-push` runs `pnpm test:static` via `pnpm git-hooks:pre-push` as a quick local pre-push gate.
 
-Full quality and merge correctness are enforced in CI:
+Full quality and integration correctness are enforced in CI:
 
 - `commit-stage` (`.github/workflows/commit-stage.yml`)
 - `integration-gate` (`.github/workflows/integration-gate.yml`)
 
-Before opening a PR:
+Before pushing:
 
 ```bash
 pnpm test
@@ -53,18 +53,20 @@ Useful DB commands:
 `pnpm db:postgres:up` starts Docker PostgreSQL, waits for readiness, applies migrations from `migrations/`, and seeds local data.
 The API uses PostgreSQL when `DATABASE_URL` is set in `apps/api/.env` (see `apps/api/.env.example`).
 
-## Pull request standard
+## Trunk-first push standard
 
-- No direct pushes to `main`.
-- Title: `<type>(<scope>): <summary>`
-- Types: `feat`, `fix`, `docs`, `refactor`, `test`, `ci`, `chore`
-- Rules: lowercase, imperative, max 72 chars, no trailing period
-- Description sections: `## Summary`, `## Testing`, `## Risk`
+- Push small commits directly to `main` after local validation.
+- Optional PRs are allowed for preview/collaboration; they are non-gating.
+- For changes touching `infra`, `identity`, or `migration`, include commit trailer:
+
+```text
+Paired-With: @github-handle
+```
 
 ## Quality and safety checks
 
-- CI is the merge source of truth; `commit-stage` is required.
-- Keep one intent per PR and avoid unrelated file changes.
+- CI is the integration source of truth; `commit-stage` and `integration-gate` are required on `main`.
+- Keep one intent per commit and avoid unrelated file changes.
 - For behavior changes, update docs in `docs/` and/or policy checks.
 - Treat `migrations/`, `infra/`, `auth`, and pipeline workflows as high risk: keep rollout and rollback explicit.
 

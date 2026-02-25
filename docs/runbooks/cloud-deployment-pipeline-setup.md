@@ -6,16 +6,15 @@
 
 ```mermaid
 flowchart LR
-  A["PR checks\ncommit-stage + integration-gate"] --> B["Merge to main"]
-  B --> C["Build once\nrelease candidate artifact"]
-  C --> D["Acceptance lanes (parallel)\nruntime + infra validate + identity plan"]
+  A["Push to main\ncommit-stage + integration-gate"] --> B["Build once\nrelease candidate artifact"]
+  B --> D["Acceptance lanes (parallel)\nruntime + infra validate + identity plan"]
   D --> E{"acceptance YES\nand deploy required?"}
   E -- yes --> F["Production lanes (parallel where possible)\ndeploy_identity || deploy_infra -> deploy_runtime"]
   F --> G["production_blackbox_verify"]
   G --> H["deployment_stage"]
   H --> I["release_decision"]
   E -- no --> I
-  I --> J["Fix forward:\nconfig/RBAC/DNS -> replay same SHA\ncode/workflow -> PR then rerun"]
+  I --> J["Fix forward:\nconfig/RBAC/DNS -> replay same SHA\ncode/workflow -> push fix then rerun"]
 ```
 
 ## Manual Bootstrap Once
@@ -164,9 +163,9 @@ Set these in both `acceptance` and `production` unless noted:
 | `API_SMOKE_DENIED_CLIENT_ID`          | required   | required   |
 | `API_SMOKE_DENIED_CLIENT_SECRET`      | required   | required   |
 
-6. Trigger the first infra-scope PR (for example a non-functional comment in `infra/azure/main.bicep`) and merge to `main`.
+6. Push the first infra-scope change to `main` (for example a non-functional comment in `infra/azure/main.bicep`).
 
-This first merged run is what creates the full platform (ACA env/apps/job, Postgres, networking, identities wired into infra runtime config).
+This first push run is what creates the full platform (ACA env/apps/job, Postgres, networking, identities wired into infra runtime config).
 
 7. After first successful deploy, capture the default ACA API FQDN for operator records and smoke troubleshooting.
 
@@ -229,7 +228,7 @@ For config/permission/DNS fixes. Replay validates deterministic convergence with
 
 ### What if the failure is code or workflow logic?
 
-Fix in a PR to `main`, then run again. Do not treat a failed run as production proof.
+Fix forward on `main`, then run again. Do not treat a failed run as production proof.
 
 ### Where is evidence written?
 

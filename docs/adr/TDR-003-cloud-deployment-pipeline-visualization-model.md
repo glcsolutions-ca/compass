@@ -16,7 +16,7 @@ Keep the production release path in one authoritative workflow instead of introd
 
 - GitHub Actions visualization is a job DAG and does not support true nested/collapsible stage groups inside one workflow run.
 - The current delivery model already uses Farley-aligned stage language and sequencing:
-  - PR gate in `commit-stage.yml` and exact merge gate in `integration-gate.yml`
+  - push-main gate in `commit-stage.yml` and integration gate in `integration-gate.yml`
   - `main` release flow in the cloud deployment pipeline workflow with commit, acceptance, and production jobs
 - Previous cross-workflow chaining produced ambiguous outcomes and troubleshooting overhead.
 - The team requested clearer stage legibility without reintroducing orchestration complexity.
@@ -24,7 +24,7 @@ Keep the production release path in one authoritative workflow instead of introd
 ## Decision
 
 - Keep a single authoritative cloud push workflow as the main release workflow.
-- Keep explicit merge gates: `commit-stage.yml` for PR and `integration-gate.yml` for exact-merge batch checks.
+- Keep explicit mainline gates: `commit-stage.yml` and `integration-gate.yml` on push to `main`.
 - Do not add reusable-workflow wrappers solely for visual grouping at this time.
 - Continue to improve readability through:
   - stable stage job naming (`commit-stage`, `automated-acceptance-test-gate`, `deployment-stage`, `release-decision`)

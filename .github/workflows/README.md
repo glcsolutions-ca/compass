@@ -2,32 +2,38 @@
 
 ## Delivery Model
 
-1. PRs run `commit-stage.yml` for commit-test suite and merge readiness.
-2. Integration batching runs `integration-gate.yml` on the exact queued merge result.
-3. A merge to `main` runs cloud deployment pipeline in `cloud-deployment-pipeline.yml`.
+1. Pushes to `main` run `commit-stage.yml` for fast commit-test and policy checks.
+2. Pushes to `main` run `integration-gate.yml` for integration confidence checks.
+3. A push to `main` runs cloud deployment pipeline in `cloud-deployment-pipeline.yml`.
 4. Desktop delivery runs independently in `desktop-deployment-pipeline.yml`.
 5. Replay is separate and manual in `cloud-deployment-pipeline-replay.yml`.
 6. Required gate contexts:
 
-- PR gate: `commit-stage`
+- Mainline gate: `commit-stage`
 - Integration gate: `integration-gate`
 
 ## Workflow Index
 
 - `commit-stage.yml`
-  - trigger: `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`), `merge_group`
+  - trigger: `push` to `main`, optional `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`)
   - required check: `commit-stage`
-  - key jobs: `determine-scope`, scope-aware `commit-test-suite`, scope-aware `desktop-commit-test-suite`, optional static checks, final `commit-stage`
-  - behavior: heavy checks run only on `pull_request`; `merge_group` emits required `commit-stage` context for queue SHAs
+  - key jobs: `determine-scope`, scope-aware `commit-test-suite`, scope-aware `desktop-commit-test-suite`, optional static checks, high-risk `pairing-evidence-check`, final `commit-stage`
+  - behavior: push-to-main is authoritative; PR runs provide optional preview feedback
   - key artifact: `.artifacts/commit-stage/<sha>/timing.json`
 
 - `integration-gate.yml`
-  - trigger: `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`), `merge_group`
+  - trigger: `push` to `main`, optional `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`)
   - required check: `integration-gate`
-  - key jobs: `determine-scope` (always), merge-group-only checks `build-compile`, `migration-safety`, `auth-critical-smoke`, `minimal-integration-smoke`, final `integration-gate`
+  - key jobs: `determine-scope` (always), push-scoped checks `build-compile`, `migration-safety`, `auth-critical-smoke`, `minimal-integration-smoke`, final `integration-gate`
   - key artifacts:
     - `.artifacts/integration-gate/<sha>/result.json`
     - `.artifacts/integration-gate/<sha>/timing.json`
+
+- `main-red-recovery.yml`
+  - trigger: `workflow_run` completion of `Commit Stage` and `Integration Gate`
+  - scope: push events on `main`
+  - behavior: rerun failed jobs once on hard deterministic failure, then auto-revert head commit if failure repeats
+  - key artifact: `.artifacts/main-recovery/<sha>/result.json`
 
 - `cloud-deployment-pipeline.yml`
   - trigger: `push` to `main`

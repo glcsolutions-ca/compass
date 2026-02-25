@@ -56,12 +56,17 @@ const policy = loadPipelinePolicyObject({
       "determine-scope",
       "commit-test-suite",
       "desktop-commit-test-suite",
+      "pairing-evidence-check",
       "commit-stage"
     ],
     slo: {
       targetSeconds: 300,
       mode: "enforce"
     }
+  },
+  pairingPolicy: {
+    highRiskScopes: ["infra", "identity", "migration"],
+    trailerKey: "Paired-With"
   },
   integrationGate: {
     requiredChecks: [

@@ -38,7 +38,13 @@ function sleep(milliseconds) {
   });
 }
 
-async function findSuccessfulMergeQueueRun({ token, repository, workflowFile, headSha }) {
+async function findSuccessfulIntegrationGateRun({
+  token,
+  repository,
+  workflowFile,
+  headSha,
+  workflowEvent
+}) {
   const timeoutSeconds = parsePositiveInt(
     process.env.INTEGRATION_GATE_EVIDENCE_TIMEOUT_SECONDS,
     DEFAULT_TIMEOUT_SECONDS
@@ -51,10 +57,10 @@ async function findSuccessfulMergeQueueRun({ token, repository, workflowFile, he
   let latestMatchedRun = null;
 
   while (Date.now() <= deadline) {
-    const params = new URLSearchParams({
-      event: "merge_group",
-      per_page: "100"
-    });
+    const params = new URLSearchParams({ per_page: "100" });
+    if (workflowEvent) {
+      params.set("event", workflowEvent);
+    }
     const runs = await githubRequest(
       token,
       `/repos/${repository}/actions/workflows/${encodeURIComponent(workflowFile)}/runs?${params.toString()}`
@@ -77,7 +83,7 @@ async function findSuccessfulMergeQueueRun({ token, repository, workflowFile, he
         matchedRun.conclusion !== "success"
       ) {
         throw new Error(
-          `${workflowFile} merge_group run for head SHA ${headSha} completed with conclusion '${matchedRun.conclusion}'`
+          `${workflowFile} run for head SHA ${headSha} completed with conclusion '${matchedRun.conclusion}'`
         );
       }
     }
@@ -90,13 +96,11 @@ async function findSuccessfulMergeQueueRun({ token, repository, workflowFile, he
 
   if (latestMatchedRun) {
     throw new Error(
-      `Timed out waiting for successful ${workflowFile} merge_group run for head SHA ${headSha}. Last seen status='${latestMatchedRun.status}' conclusion='${latestMatchedRun.conclusion ?? "pending"}'`
+      `Timed out waiting for successful ${workflowFile} run for head SHA ${headSha}. Last seen status='${latestMatchedRun.status}' conclusion='${latestMatchedRun.conclusion ?? "pending"}'`
     );
   }
 
-  throw new Error(
-    `Timed out waiting for ${workflowFile} merge_group run to appear for head SHA ${headSha}`
-  );
+  throw new Error(`Timed out waiting for ${workflowFile} run to appear for head SHA ${headSha}`);
 }
 
 async function main() {
@@ -104,12 +108,14 @@ async function main() {
   const repository = requireEnv("GITHUB_REPOSITORY");
   const headSha = requireEnv("HEAD_SHA");
   const workflowFile = process.env.INTEGRATION_GATE_WORKFLOW_FILE?.trim() || "integration-gate.yml";
+  const workflowEvent = process.env.INTEGRATION_GATE_EVENT?.trim() || "push";
 
-  const matchedRun = await findSuccessfulMergeQueueRun({
+  const matchedRun = await findSuccessfulIntegrationGateRun({
     token,
     repository,
     workflowFile,
-    headSha
+    headSha,
+    workflowEvent
   });
 
   const artifactPath = path.join(".artifacts", "integration-gate", headSha, "evidence.json");

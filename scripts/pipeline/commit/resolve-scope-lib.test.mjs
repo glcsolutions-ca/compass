@@ -25,22 +25,22 @@ describe("resolveScopeShas", () => {
     expect(getParentSha).not.toHaveBeenCalled();
   });
 
-  it("supports merge_group/base-only context with head/tested fallback to github.sha", async () => {
-    const getCurrentSha = vi.fn(async () => "merge-group-sha");
+  it("supports push/base-only context with head/tested fallback to github.sha", async () => {
+    const getCurrentSha = vi.fn(async () => "push-sha");
     const getParentSha = vi.fn(async () => "unused-parent");
 
     const result = await resolveScopeShas({
       env: {
-        GITHUB_BASE_SHA: "merge-group-base"
+        GITHUB_BASE_SHA: "push-base"
       },
       getCurrentSha,
       getParentSha
     });
 
     expect(result).toEqual({
-      baseSha: "merge-group-base",
-      headSha: "merge-group-sha",
-      testedSha: "merge-group-sha"
+      baseSha: "push-base",
+      headSha: "push-sha",
+      testedSha: "push-sha"
     });
     expect(getCurrentSha).toHaveBeenCalledTimes(2);
     expect(getParentSha).not.toHaveBeenCalled();

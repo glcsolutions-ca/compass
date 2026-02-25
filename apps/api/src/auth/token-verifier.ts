@@ -155,7 +155,13 @@ export class AccessTokenVerifier {
     }
 
     const subjectId = claimAsString(payload, "oid");
-    if (subjectId) {
+    const idtyp = claimAsString(payload, "idtyp");
+
+    if (hasScopes) {
+      if (!subjectId) {
+        throw invalidToken("Delegated token is missing oid");
+      }
+
       return {
         tokenType: "delegated",
         tenantId,
@@ -168,11 +174,6 @@ export class AccessTokenVerifier {
       };
     }
 
-    if (hasScopes && !subjectId) {
-      throw invalidToken("Delegated token is missing oid");
-    }
-
-    const idtyp = claimAsString(payload, "idtyp");
     if (idtyp && idtyp !== "app") {
       throw invalidToken("App token idtyp claim must be app");
     }

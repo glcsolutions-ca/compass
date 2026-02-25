@@ -160,4 +160,4 @@ terraform -chdir=infra/identity apply \
 - `.github/workflows/cloud-delivery-replay.yml`
 - `infra/README.md`
 - `infra/azure/README.md`
-- `docs/runbooks/cloud-delivery-pipeline.md`
+- `docs/runbooks/cloud-deployment-pipeline-setup.md`

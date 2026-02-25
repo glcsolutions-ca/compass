@@ -1,53 +1,29 @@
 # Azure Infrastructure (Bicep)
 
-## Scope and Entry Points
+## Scope
 
-- Stack entry point: `infra/azure/main.bicep`
-- Environment parameter template: `infra/azure/environments/prod.bicepparam`
-- Reusable resource modules: `infra/azure/modules/*.bicep`
-- Pipeline stages:
-  - `.github/workflows/cloud-delivery-pipeline.yml` (`infra-readonly-acceptance`, validate only)
-  - `.github/workflows/cloud-delivery-pipeline.yml` (`deploy-release-package`, apply)
+- Entry point: `infra/azure/main.bicep`
+- Environment template: `infra/azure/environments/prod.bicepparam`
+- Modules: `infra/azure/modules/*.bicep`
+- Pipeline usage:
+  - acceptance validate: `.github/workflows/cloud-delivery-pipeline.yml` (`infra-readonly-acceptance`)
+  - production apply: `.github/workflows/cloud-delivery-pipeline.yml` and `.github/workflows/cloud-delivery-replay.yml` (`deploy-infra`)
 
-## Resource Topology
+## What This Deploys
 
-`main.bicep` composes the production resource graph:
+1. VNet + ACA/Postgres delegated subnets + private DNS zone/link.
+2. Log Analytics + ACA managed environment.
+3. ACR.
+4. PostgreSQL Flexible Server + database.
+5. ACR pull managed identity + `AcrPull` assignment.
+6. Container Apps: API, Web, Codex.
+7. Manual migration ACA Job.
 
-1. Network foundation: VNet, delegated ACA/Postgres subnets, private DNS zone/link.
-2. Container Apps managed environment + Log Analytics workspace.
-3. Azure Container Registry (ACR) with admin user disabled.
-4. Azure Database for PostgreSQL Flexible Server + database.
-5. Shared user-assigned managed identity for ACR image pulls.
-6. `AcrPull` role assignment at ACR scope for the pull identity.
-7. API Container App.
-8. Web Container App.
-9. Codex Container App.
-10. ACA managed certificates (per custom domain), created after app hostname registration.
-11. Manual-trigger migration ACA Job pinned to API image.
+## Runtime Parameter Contract
 
-## Module Contract
+Runtime parameters are rendered to `.artifacts/infra/<sha>/runtime.parameters.json` by `scripts/pipeline/shared/render-infra-parameters.mjs`.
 
-| Module                                   | Responsibility                                                                                            |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `modules/network.bicep`                  | Creates VNet, delegated subnets, private DNS zone, and VNet DNS link.                                     |
-| `modules/containerapps-env.bicep`        | Creates Log Analytics workspace and ACA managed environment with explicit `Consumption` workload profile. |
-| `modules/acr.bicep`                      | Creates ACR and exposes registry ID/name/login server outputs.                                            |
-| `modules/postgres-flex.bicep`            | Creates private Postgres Flexible Server and database.                                                    |
-| `modules/containerapp-api.bicep`         | Creates API Container App with managed-identity registry pull and secure DB secret wiring.                |
-| `modules/containerapp-web.bicep`         | Creates Web Container App with managed-identity registry pull and API base URL wiring.                    |
-| `modules/containerapp-codex.bicep`       | Creates Codex Container App with managed-identity registry pull and secure DB secret wiring.              |
-| `modules/containerapp-job-migrate.bicep` | Creates manual migration job that runs DB migrations using the API image.                                 |
-
-## Parameter Model
-
-Tracked files stay organization-neutral:
-
-- `main.bicep` and `environments/prod.bicepparam` use placeholders for concrete production values.
-- Acceptance/production workflows materialize runtime parameters into `.artifacts/infra/<sha>/runtime.parameters.json`.
-- `POSTGRES_ADMIN_PASSWORD` is injected at runtime from GitHub environment secrets.
-- `apiImage`, `webImage`, and `codexImage` must be ACR digest refs from accepted release package evidence.
-
-## Required Production Variables
+### Required Variables
 
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
@@ -57,135 +33,64 @@ Tracked files stay organization-neutral:
 - `AZURE_ACA_SUBNET_NAME`
 - `AZURE_POSTGRES_SUBNET_NAME`
 - `AZURE_PRIVATE_DNS_ZONE_NAME`
-- `ACA_ENVIRONMENT_NAME`
 - `AZURE_LOG_ANALYTICS_WORKSPACE_NAME`
+- `ACA_ENVIRONMENT_NAME`
 - `ACA_API_APP_NAME`
 - `ACA_WEB_APP_NAME`
 - `ACA_CODEX_APP_NAME`
 - `ACA_MIGRATE_JOB_NAME`
-- `ACR_PULL_IDENTITY_NAME`
 - `ACR_NAME`
-- `ACR_SKU`
+- `ACR_PULL_IDENTITY_NAME`
 - `POSTGRES_SERVER_NAME`
 - `POSTGRES_DATABASE_NAME`
 - `POSTGRES_ADMIN_USERNAME`
-- `POSTGRES_VERSION`
-- `POSTGRES_SKU_NAME`
-- `POSTGRES_SKU_TIER`
-- `POSTGRES_STORAGE_MB`
-- `AUTH_ISSUER`
-- `AUTH_JWKS_URI`
-- `AUTH_AUDIENCE` (runtime token audience override; preferred for API token validation)
-- `API_IDENTIFIER_URI` (preferred) or `ENTRA_AUDIENCE` (legacy fallback)
+- `API_IDENTIFIER_URI`
+- `AUTH_AUDIENCE`
 - `AUTH_ALLOWED_CLIENT_IDS`
 - `AUTH_ACTIVE_TENANT_IDS`
-- `OAUTH_TOKEN_ISSUER`
-- `OAUTH_TOKEN_AUDIENCE`
 - `AUTH_BOOTSTRAP_DELEGATED_USER_OID`
 - `AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL`
 - `API_SMOKE_ALLOWED_TENANT_ID`
+- `OAUTH_TOKEN_ISSUER`
+- `OAUTH_TOKEN_AUDIENCE`
+- `ACA_API_CUSTOM_DOMAIN` (optional)
+- `ACA_WEB_CUSTOM_DOMAIN` (optional)
+- `ACA_CODEX_CUSTOM_DOMAIN` (optional)
 
-## Required Production Secrets
+### Required Secrets
 
 - `AZURE_DEPLOY_CLIENT_ID`
 - `POSTGRES_ADMIN_PASSWORD`
 - `OAUTH_TOKEN_SIGNING_SECRET`
 - `API_SMOKE_ALLOWED_CLIENT_ID`
 
-## Optional Custom Domain Variables
+### Derived Values (not operator inputs)
 
-- `ACA_API_CUSTOM_DOMAIN`
-- `ACA_WEB_CUSTOM_DOMAIN`
-- `ACA_CODEX_CUSTOM_DOMAIN`
-- `ACA_API_MANAGED_CERTIFICATE_NAME`
-- `ACA_WEB_MANAGED_CERTIFICATE_NAME`
-- `ACA_CODEX_MANAGED_CERTIFICATE_NAME`
-- `ACA_CUSTOM_DOMAIN_VALIDATION_METHOD`
+- `AUTH_ISSUER` is derived from `AZURE_TENANT_ID`.
+- `AUTH_JWKS_URI` is derived from `AZURE_TENANT_ID`.
+- `ACR_LOGIN_SERVER` is derived from `ACR_NAME`.
+- Postgres SKU/version/storage and ACR SKU use IaC defaults in `main.bicep`.
 
-## Preflight and Fail-Closed Checks
+## Custom Domain Model
 
-Infra validation/apply fails closed when any contract guard fails:
+There is one infra path, no mode flags.
 
-- Azure account guard: authenticated tenant/subscription must match configured values.
-- Resource group guard: resource group location must match configured location.
-- Provider guard: required providers must be registered.
-- DNS guard: `AZURE_PRIVATE_DNS_ZONE_NAME` must end with `.postgres.database.azure.com`.
-- SKU guard: if `POSTGRES_SKU_TIER=Burstable`, `POSTGRES_SKU_NAME` must start with `Standard_B`.
-- Custom-domain validation method guard: must be one of `CNAME`, `HTTP`, `TXT`.
-- Managed certificate contract guard: custom domain and managed certificate names must be coherent.
-- Image ref guard: deployment image refs are normalized to digest form and validated in ACR.
+1. Default: leave `ACA_*_CUSTOM_DOMAIN` empty, deploy uses ACA default FQDN.
+2. Optional cut-in: set `ACA_API_CUSTOM_DOMAIN`, `ACA_WEB_CUSTOM_DOMAIN`, optional `ACA_CODEX_CUSTOM_DOMAIN`, then run normal pipeline convergence.
 
-## Apply Behavior and Retry
+## Apply Behavior
 
-Production apply behavior is deterministic:
+1. Validate config contract.
+2. Render runtime parameters.
+3. Run `az deployment group validate`.
+4. Run `az deployment group create`.
+5. Capture artifacts under `.artifacts/infra/<sha>/`.
 
-1. Build runtime parameters in `.artifacts/infra/<sha>/runtime.parameters.json`.
-2. `scripts/pipeline/cloud/production/apply-infra.mjs` runs `az deployment group validate`.
-3. If validation succeeds, it runs `az deployment group create`.
-4. Create retries once with backoff only for recognized transient ARM/ACA failures.
-5. Terminal failures emit explicit stderr diagnostics and artifact logs.
-
-## Outputs Contract
-
-Key outputs from `main.bicep` for operators and downstream validation:
-
-- `containerAppsEnvironmentName` / `containerAppsEnvironmentId` / `containerAppsDefaultDomain`
-- `apiBaseUrlOutput`
-- `codexBaseUrlOutput`
-- `acrId` / `acrNameOutput` / `acrLoginServer`
-- `acrPullIdentityId` / `acrPullIdentityPrincipalId`
-- `apiContainerAppName` / `apiLatestRevision` / `apiLatestRevisionFqdn`
-- `webContainerAppName` / `webLatestRevision` / `webLatestRevisionFqdn`
-- `codexContainerAppName` / `codexLatestRevision` / `codexLatestRevisionFqdn`
-- `migrationJobName` / `migrationJobId`
-- `postgresServerResourceId` / `postgresServerName` / `postgresFqdn` / `postgresDatabaseName`
-
-## Operational Procedures
-
-### Custom domain flow
-
-1. Set custom-domain vars in GitHub `production` environment.
-2. Generate DNS records from live ACA state:
-
-```bash
-AZURE_RESOURCE_GROUP="<resource-group>" \
-ACA_API_APP_NAME="<api-app-name>" \
-ACA_WEB_APP_NAME="<web-app-name>" \
-ACA_CODEX_APP_NAME="<codex-app-name>" \
-ACA_API_CUSTOM_DOMAIN="<api-domain>" \
-ACA_WEB_CUSTOM_DOMAIN="<web-domain>" \
-ACA_CODEX_CUSTOM_DOMAIN="<codex-domain>" \
-pnpm deploy:custom-domain:dns
-```
-
-3. Publish emitted `CNAME`/`TXT` records at your DNS provider.
-4. Run `cloud-delivery-pipeline.yml` for the accepted release package.
-5. Verify bindings with `az containerapp hostname list`.
-
-### Replay guidance
-
-- Run `cloud-delivery-replay.yml` with the same `release_package_sha` to verify deterministic convergence.
-- Use artifact diffs under `.artifacts/infra/<sha>/` to investigate drift or transient retries.
-
-### Rollback by release package SHA
-
-- Trigger manual `.github/workflows/cloud-delivery-replay.yml` with `release_package_sha=<known-good-sha>`.
-- Production stage deploys the accepted digest refs for that SHA.
-
-### Artifact locations
-
-- `.artifacts/infra/<sha>/runtime.parameters.json`
-- `.artifacts/infra/<sha>/deployment.json`
-- `.artifacts/infra/<sha>/deployment-metadata.json`
-- `.artifacts/infra/<sha>/deployment-attempts.log`
-- `.artifacts/infra/<sha>/deployment.stderr.log`
-- `.artifacts/infra/<sha>/managed-certificate-contract.json`
+`apply-infra.mjs` retries once for known transient ARM/ACA failures and fails closed otherwise.
 
 ## References
 
-- `.github/workflows/cloud-delivery-pipeline.yml`
-- `.github/workflows/cloud-delivery-replay.yml`
+- `scripts/pipeline/shared/render-infra-parameters.mjs`
+- `scripts/pipeline/shared/validate-infra-acceptance-config.mjs`
 - `scripts/pipeline/cloud/production/apply-infra.mjs`
-- `scripts/pipeline/cloud/production/assert-managed-certificate-contract.mjs`
-- `scripts/pipeline/cloud/production/custom-domain-dns.mjs`
 - `docs/runbooks/cloud-deployment-pipeline-setup.md`

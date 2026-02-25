@@ -1,130 +1,67 @@
 # Identity Infrastructure (Terraform + Entra)
 
-## Scope and Entry Points
+## Scope
 
-- Terraform root module: `infra/identity/main.tf`
-- Variable contract: `infra/identity/variables.tf`
-- Output contract: `infra/identity/outputs.tf`
-- Provider + caller identity data: `infra/identity/providers.tf`
-- Terraform + provider versions/backend declaration: `infra/identity/versions.tf`
-- Environment variable template: `infra/identity/env/prod.tfvars`
-- Pipeline stages:
-  - `.github/workflows/cloud-delivery-pipeline.yml` (`identity-readonly-acceptance`, plan)
-  - `.github/workflows/cloud-delivery-pipeline.yml` (`deploy-release-package`, apply)
+- Root module: `infra/identity/main.tf`
+- Variables: `infra/identity/variables.tf`
+- Outputs: `infra/identity/outputs.tf`
+- Environment tfvars: `infra/identity/env/prod.tfvars`
+- Pipeline usage:
+  - acceptance plan: `.github/workflows/cloud-delivery-pipeline.yml` and `.github/workflows/cloud-delivery-replay.yml` (`identity-readonly-acceptance`)
+  - production apply: `.github/workflows/cloud-delivery-pipeline.yml` and `.github/workflows/cloud-delivery-replay.yml` (`deploy-identity`)
 
-## Provisioned Identity Objects
+## What This Manages
 
-`main.tf` provisions these Entra resources:
+1. API app registration + service principal (scopes/roles).
+2. Web app registration + service principal.
+3. Deploy app registration + service principal.
+4. Smoke app registration + service principal.
+5. GitHub OIDC federated credentials for workflow identities.
+6. App role assignments required for smoke auth checks.
 
-| Object                                                            | Purpose                                                                                                                                                                                              |
-| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `azuread_application.api` + `azuread_service_principal.api`       | Compass API app registration (`AzureADMultipleOrgs`), delegated scopes (`compass.user`, `compass.admin`), and app roles (`Compass.Integration.Read`, `Compass.Integration.Write`, `TimeSync.Admin`). |
-| `azuread_application.web` + `azuread_service_principal.web`       | Compass Web app registration with redirect URI and required API delegated scope.                                                                                                                     |
-| `azuread_application.deploy` + `azuread_service_principal.deploy` | Deploy identity used by production workflows via OIDC federation.                                                                                                                                    |
-| `azuread_application.smoke` + `azuread_service_principal.smoke`   | Smoke identity granted API application role access (`Compass.Integration.Read`, `TimeSync.Admin`).                                                                                                   |
-| `azuread_application_federated_identity_credential.deploy_main`   | GitHub Actions OIDC trust for deploy identity (`environment: production`).                                                                                                                           |
-| `azuread_application_federated_identity_credential.smoke_main`    | GitHub Actions OIDC trust for smoke identity (`environment: production`).                                                                                                                            |
-| `azuread_app_role_assignment.smoke_timesync_admin`                | Binds smoke service principal to API `TimeSync.Admin` role.                                                                                                                                          |
+## Backend and Auth
 
-## Backend and Auth Model
+- Terraform backend: Azure Storage (`azurerm` remote state).
+- Auth: OIDC + Azure AD (`use_oidc=true`, `use_azuread_auth=true`).
+- Acceptance and production use separate client IDs.
 
-- Backend is `azurerm` (remote state in Azure Storage).
-- Authentication model is OIDC + Azure AD auth (`use_oidc=true`, `use_azuread_auth=true`).
-- Cloud Delivery Pipeline acceptance stage runs non-mutating Terraform plan evidence.
-- Cloud Delivery Pipeline production stage runs guarded Terraform apply for accepted release packages.
-
-## Acceptance vs Production Credential Boundary
-
-- Acceptance identity plan uses read-only identity credentials in `acceptance` environment.
-- Production identity apply uses mutating credentials in `production` environment.
-- Cloud Delivery Pipeline enforces this split with `AZURE_ACCEPTANCE_IDENTITY_CLIENT_ID` for acceptance and `AZURE_IDENTITY_CLIENT_ID` for production.
-
-## Required Production Variables (identity acceptance/apply)
+## Required Variables
 
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
-- `GH_ORGANIZATION`
-- `GH_REPOSITORY_NAME`
-- `API_IDENTIFIER_URI` (canonical)
-- `ENTRA_AUDIENCE` (legacy fallback during transition)
-- `IDENTITY_OWNER_OBJECT_IDS_JSON`
 - `TFSTATE_RESOURCE_GROUP`
 - `TFSTATE_STORAGE_ACCOUNT`
 - `TFSTATE_CONTAINER`
 - `TFSTATE_KEY`
+- `API_IDENTIFIER_URI`
+- `IDENTITY_OWNER_OBJECT_IDS_JSON`
 
-`API_IDENTIFIER_URI` must use `api://...` format. If both `API_IDENTIFIER_URI` and `ENTRA_AUDIENCE` are set, they must be identical.
+`API_IDENTIFIER_URI` must use `api://...` format.
 
-## Required Production Secrets (identity acceptance/apply)
+## Required Secrets
 
-- `AZURE_IDENTITY_CLIENT_ID` (required for production identity apply)
-- `AZURE_ACCEPTANCE_IDENTITY_CLIENT_ID` (optional but recommended for acceptance read-only identity plan)
+- `AZURE_IDENTITY_CLIENT_ID` (production apply)
+- `AZURE_ACCEPTANCE_IDENTITY_CLIENT_ID` (acceptance plan)
 
-## Bootstrap Trust Anchor (One-Time Manual)
+## Bootstrap Notes
 
-Bootstrap is manual once, then stage workflows own repeatable convergence.
+Bootstrap is manual once:
 
-Required operator permissions:
+1. Create bootstrap app/SP.
+2. Add OIDC federation for `acceptance` and `production` environments.
+3. Assign Entra `Application Administrator`.
+4. Grant tfstate and subscription/RG RBAC needed by Terraform and workflows.
+5. Set GitHub identity client ID secrets.
+6. Run manual `terraform apply` once to establish managed identity resources.
 
-- Entra role administration capability (to assign `Application Administrator`)
-- Azure RBAC to create/grant Terraform state storage access
-- GitHub repository admin access for `production` environment vars/secrets
+After that, identity changes converge through the normal pipeline.
 
-Bootstrap steps:
-
-1. Create bootstrap app registration and service principal (example naming: `compass-identity-bootstrap-prod`).
-2. Add federated credential subject: `repo:<org>/<repo>:environment:production`.
-3. Assign `Application Administrator` to the bootstrap service principal.
-4. Create/prepare Terraform state storage and grant `Storage Blob Data Contributor` on the tfstate container scope.
-5. Set GitHub `production` secret `AZURE_IDENTITY_CLIENT_ID` to the bootstrap app client ID.
-6. Run Cloud Delivery Pipeline with identity scope to confirm non-mutating auth and backend access.
-7. Scratch-drill marker (2026-02-24 post-cert-order-fix): non-functional docs touch to force identity scope.
-
-## Bootstrap Identity Rotation
-
-Rotate bootstrap identity with explicit handoff:
-
-1. Create a new bootstrap app registration/service principal.
-2. Add the same federated credential subject (`repo:<org>/<repo>:environment:production`).
-3. Grant the same Entra role assignments and Azure RBAC access used by the previous bootstrap identity.
-4. Update GitHub `production` secret `AZURE_IDENTITY_CLIENT_ID` to the new client ID.
-5. Run Cloud Delivery Pipeline (identity scope) to verify auth and backend access.
-6. Remove old role assignments and old bootstrap app after replacement is verified.
-
-## Workflow Evidence
-
-- Cloud Delivery Pipeline acceptance stage writes `.artifacts/identity/<sha>/plan.json`.
-- Cloud Delivery Pipeline acceptance stage writes config-contract results to `.artifacts/identity/<sha>/config-validation.json`.
-- Cloud Delivery Pipeline production stage writes `.artifacts/identity/<sha>/outputs.json`.
-
-## Outputs Contract and Downstream Mapping
-
-Terraform outputs from `outputs.tf`:
-
-- `tenant_id`
-- `entra_issuer`
-- `entra_jwks_uri`
-- `entra_audience`
-- `api_application_client_id`
-- `web_application_client_id`
-- `deploy_application_client_id`
-- `smoke_application_client_id`
-- `timesync_admin_role_id`
-
-Expected production mapping:
-
-- `deploy_application_client_id` -> GitHub `production` secret `AZURE_DEPLOY_CLIENT_ID`
-- `entra_audience` -> GitHub `production` variable `API_IDENTIFIER_URI` (canonical)
-- `entra_audience` -> GitHub `production` variable `ENTRA_AUDIENCE` (legacy transition only)
-- `entra_issuer` and `entra_jwks_uri` -> tracked in production environment config contract for token validation consumers
-- `smoke_application_client_id` -> tracked in production environment config contract for smoke identity consumers
-
-## Local Terraform Commands
-
-Use these commands when validating identity changes locally with the same backend/auth model as CI:
+## Local Commands
 
 ```bash
-API_IDENTIFIER_URI="${API_IDENTIFIER_URI:-$ENTRA_AUDIENCE}"
+GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
+gh_org="${GITHUB_REPOSITORY%%/*}"
+gh_repo="${GITHUB_REPOSITORY##*/}"
 
 terraform -chdir=infra/identity init \
   -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \
@@ -139,16 +76,17 @@ terraform -chdir=infra/identity init \
 
 terraform -chdir=infra/identity plan \
   -var-file=env/prod.tfvars \
-  -var "github_organization=$GH_ORGANIZATION" \
-  -var "github_repository=$GH_REPOSITORY_NAME" \
+  -var "github_organization=$gh_org" \
+  -var "github_repository=$gh_repo" \
   -var "github_environment_name=production" \
   -var "api_identifier_uri=$API_IDENTIFIER_URI" \
   -var "owners=$IDENTITY_OWNER_OBJECT_IDS_JSON"
 
 terraform -chdir=infra/identity apply \
+  -auto-approve \
   -var-file=env/prod.tfvars \
-  -var "github_organization=$GH_ORGANIZATION" \
-  -var "github_repository=$GH_REPOSITORY_NAME" \
+  -var "github_organization=$gh_org" \
+  -var "github_repository=$gh_repo" \
   -var "github_environment_name=production" \
   -var "api_identifier_uri=$API_IDENTIFIER_URI" \
   -var "owners=$IDENTITY_OWNER_OBJECT_IDS_JSON"
@@ -156,8 +94,6 @@ terraform -chdir=infra/identity apply \
 
 ## References
 
-- `.github/workflows/cloud-delivery-pipeline.yml`
-- `.github/workflows/cloud-delivery-replay.yml`
-- `infra/README.md`
-- `infra/azure/README.md`
+- `scripts/pipeline/shared/validate-identity-config.mjs`
 - `docs/runbooks/cloud-deployment-pipeline-setup.md`
+- `infra/azure/README.md`

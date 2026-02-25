@@ -16,6 +16,56 @@ function isApiIdentifierUri(value) {
   return /^api:\/\/[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(value);
 }
 
+function validateCustomDomain(value) {
+  const normalized = value.trim().toLowerCase();
+  if (
+    normalized.includes("://") ||
+    normalized.includes("/") ||
+    normalized.includes("?") ||
+    normalized.includes("#")
+  ) {
+    return {
+      code: "IDENTITY_WEB_CUSTOM_DOMAIN_INVALID_FORMAT",
+      message:
+        "ACA_WEB_CUSTOM_DOMAIN must be a bare domain name (no scheme, path, query, or fragment).",
+      field: "ACA_WEB_CUSTOM_DOMAIN"
+    };
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(`https://${normalized}`);
+  } catch {
+    return {
+      code: "IDENTITY_WEB_CUSTOM_DOMAIN_INVALID",
+      message: "ACA_WEB_CUSTOM_DOMAIN must be a valid domain name.",
+      field: "ACA_WEB_CUSTOM_DOMAIN"
+    };
+  }
+
+  if (parsed.hostname !== normalized) {
+    return {
+      code: "IDENTITY_WEB_CUSTOM_DOMAIN_INVALID",
+      message: "ACA_WEB_CUSTOM_DOMAIN must be a valid domain name.",
+      field: "ACA_WEB_CUSTOM_DOMAIN"
+    };
+  }
+
+  if (
+    parsed.hostname === "0.0.0.0" ||
+    parsed.hostname === "localhost" ||
+    parsed.hostname === "127.0.0.1"
+  ) {
+    return {
+      code: "IDENTITY_WEB_CUSTOM_DOMAIN_NON_ROUTABLE",
+      message: "ACA_WEB_CUSTOM_DOMAIN must be routable for cloud identity configuration.",
+      field: "ACA_WEB_CUSTOM_DOMAIN"
+    };
+  }
+
+  return null;
+}
+
 function redactBoolean(value) {
   return value ? "set" : "unset";
 }
@@ -24,6 +74,7 @@ async function main() {
   const headSha = process.env.HEAD_SHA?.trim() || process.env.GITHUB_SHA?.trim() || "unknown";
   const mode = process.env.IDENTITY_CONFIG_MODE?.trim() || "unspecified";
   const apiIdentifierUri = process.env.API_IDENTIFIER_URI?.trim() || "";
+  const webCustomDomain = process.env.ACA_WEB_CUSTOM_DOMAIN?.trim() || "";
   const requiredEnvNames = parseRequiredEnvNames(process.env.REQUIRED_ENV_NAMES);
 
   const reasons = [];
@@ -56,6 +107,13 @@ async function main() {
     });
   }
 
+  if (webCustomDomain) {
+    const customDomainError = validateCustomDomain(webCustomDomain);
+    if (customDomainError) {
+      reasons.push(customDomainError);
+    }
+  }
+
   const pass = reasons.length === 0;
   const artifactPath = path.join(".artifacts", "identity", headSha, "config-validation.json");
 
@@ -70,6 +128,7 @@ async function main() {
     reasonDetails: reasons,
     inputSummary: {
       apiIdentifierUri: redactBoolean(Boolean(apiIdentifierUri)),
+      webCustomDomain: redactBoolean(Boolean(webCustomDomain)),
       requiredEnvNames
     }
   };

@@ -4,11 +4,29 @@ function readOptional(name) {
   return process.env[name]?.trim() || "";
 }
 
+function readBooleanFlag(name, { required = false } = {}) {
+  const raw = required ? requireEnv(name) : readOptional(name);
+  if (!raw) {
+    return "false";
+  }
+
+  const normalized = raw.toLowerCase();
+  if (normalized !== "true" && normalized !== "false") {
+    throw new Error(`${name} must be 'true' or 'false'`);
+  }
+
+  return normalized;
+}
+
 async function main() {
   const outputPath = requireEnv("ARM_PARAMETERS_FILE");
   const tenantId = requireEnv("AZURE_TENANT_ID");
   const authIssuer = `https://login.microsoftonline.com/${tenantId}/v2.0`;
   const authJwksUri = `https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`;
+  const entraLoginEnabled = readBooleanFlag("ENTRA_LOGIN_ENABLED", { required: true });
+  const authDevFallbackEnabled = readBooleanFlag("AUTH_DEV_FALLBACK_ENABLED", {
+    required: true
+  });
 
   const payload = {
     $schema: "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
@@ -24,6 +42,12 @@ async function main() {
       apiAppName: { value: requireEnv("ACA_API_APP_NAME") },
       webAppName: { value: requireEnv("ACA_WEB_APP_NAME") },
       codexAppName: { value: requireEnv("ACA_CODEX_APP_NAME") },
+      webSessionSecret: { value: requireEnv("WEB_SESSION_SECRET") },
+      entraLoginEnabled: { value: entraLoginEnabled },
+      entraClientId: { value: readOptional("ENTRA_CLIENT_ID") },
+      entraClientSecret: { value: readOptional("ENTRA_CLIENT_SECRET") },
+      entraAllowedTenantIds: { value: readOptional("ENTRA_ALLOWED_TENANT_IDS") },
+      authDevFallbackEnabled: { value: authDevFallbackEnabled },
       apiCustomDomain: { value: readOptional("ACA_API_CUSTOM_DOMAIN") },
       webCustomDomain: { value: readOptional("ACA_WEB_CUSTOM_DOMAIN") },
       codexCustomDomain: { value: readOptional("ACA_CODEX_CUSTOM_DOMAIN") },

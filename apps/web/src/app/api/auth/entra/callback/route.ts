@@ -2,6 +2,7 @@ import { createLocalJWKSet, createRemoteJWKSet, decodeJwt, jwtVerify } from "jos
 import type { JWTPayload, JSONWebKeySet } from "jose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { resolveEntraRedirectUri } from "../../../../auth/entra-redirect-uri";
 import { loadWebAuthRuntimeConfig } from "../../../../auth/runtime-config";
 import {
   OIDC_STATE_COOKIE_NAME,
@@ -15,6 +16,8 @@ const ENTRA_TOKEN_ENDPOINT = "https://login.microsoftonline.com/organizations/oa
 const ENTRA_JWKS_URI = "https://login.microsoftonline.com/common/discovery/v2.0/keys";
 const entraRemoteJwks = createRemoteJWKSet(new URL(ENTRA_JWKS_URI));
 
+export const dynamic = "force-dynamic";
+
 function readStringClaim(payload: JWTPayload, claim: string) {
   const value = payload[claim];
   return typeof value === "string" && value.trim().length > 0 ? value : null;
@@ -26,14 +29,6 @@ function redirectToLogin(request: NextRequest, code: string) {
   const response = NextResponse.redirect(url);
   response.headers.append("set-cookie", clearOidcStateCookieHeader());
   return response;
-}
-
-function ensureAbsoluteUrl(value: string) {
-  try {
-    return new URL(value);
-  } catch {
-    return null;
-  }
 }
 
 function readIdToken(payload: unknown) {
@@ -115,7 +110,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (!config.entraClientId || !config.entraClientSecret || !config.entraRedirectUri) {
+  if (!config.entraClientId || !config.entraClientSecret) {
     return Response.json(
       {
         error: "Entra login settings are incomplete",
@@ -127,17 +122,19 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (!ensureAbsoluteUrl(config.entraRedirectUri)) {
+  const redirectUriResolution = resolveEntraRedirectUri(config.webBaseUrl);
+  if (!redirectUriResolution.redirectUri) {
     return Response.json(
       {
-        error: "ENTRA_REDIRECT_URI must be an absolute URL",
-        code: "ENTRA_REDIRECT_URI_INVALID"
+        error: redirectUriResolution.error,
+        code: redirectUriResolution.code
       },
       {
         status: 500
       }
     );
   }
+  const redirectUri = redirectUriResolution.redirectUri;
 
   const stateCookie = parseOidcStateCookie(
     request.cookies.get(OIDC_STATE_COOKIE_NAME)?.value,
@@ -176,7 +173,7 @@ export async function GET(request: NextRequest) {
       client_secret: config.entraClientSecret,
       grant_type: "authorization_code",
       code,
-      redirect_uri: config.entraRedirectUri,
+      redirect_uri: redirectUri.toString(),
       code_verifier: stateCookie.codeVerifier,
       scope: "openid profile email offline_access"
     }).toString(),

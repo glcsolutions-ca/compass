@@ -19,6 +19,13 @@
 5. GitHub OIDC federated credentials for workflow identities.
 6. App role assignments required for smoke auth checks.
 
+## Not Managed Here
+
+- Web app client secrets are operator-managed (for `ENTRA_CLIENT_SECRET`).
+- Web redirect URIs are sourced from:
+  - `infra/identity/env/prod.tfvars` (`web_redirect_uris`) for localhost defaults.
+  - `ACA_WEB_CUSTOM_DOMAIN` (pipeline environment variable), derived to `https://<domain>/api/auth/entra/callback`.
+
 ## Backend and Auth
 
 - Terraform backend: Azure Storage (`azurerm` remote state).
@@ -35,6 +42,7 @@
 - `TFSTATE_KEY`
 - `API_IDENTIFIER_URI`
 - `IDENTITY_OWNER_OBJECT_IDS_JSON`
+- `ACA_WEB_CUSTOM_DOMAIN`
 
 `API_IDENTIFIER_URI` must use `api://...` format.
 
@@ -80,7 +88,8 @@ terraform -chdir=infra/identity plan \
   -var "github_repository=$gh_repo" \
   -var "github_environment_name=production" \
   -var "api_identifier_uri=$API_IDENTIFIER_URI" \
-  -var "owners=$IDENTITY_OWNER_OBJECT_IDS_JSON"
+  -var "owners=$IDENTITY_OWNER_OBJECT_IDS_JSON" \
+  -var "web_custom_domain=${ACA_WEB_CUSTOM_DOMAIN}"
 
 terraform -chdir=infra/identity apply \
   -auto-approve \
@@ -89,11 +98,13 @@ terraform -chdir=infra/identity apply \
   -var "github_repository=$gh_repo" \
   -var "github_environment_name=production" \
   -var "api_identifier_uri=$API_IDENTIFIER_URI" \
-  -var "owners=$IDENTITY_OWNER_OBJECT_IDS_JSON"
+  -var "owners=$IDENTITY_OWNER_OBJECT_IDS_JSON" \
+  -var "web_custom_domain=${ACA_WEB_CUSTOM_DOMAIN}"
 ```
 
 ## References
 
 - `scripts/pipeline/shared/validate-identity-config.mjs`
 - `docs/runbooks/cloud-deployment-pipeline-setup.md`
+- `docs/runbooks/entra-sso-setup.md`
 - `infra/azure/README.md`

@@ -19,6 +19,9 @@ const REQUIRED_ENV_NAMES = [
   "ACA_WEB_APP_NAME",
   "ACA_CODEX_APP_NAME",
   "ACA_MIGRATE_JOB_NAME",
+  "WEB_SESSION_SECRET",
+  "ENTRA_LOGIN_ENABLED",
+  "AUTH_DEV_FALLBACK_ENABLED",
   "ACR_PULL_IDENTITY_NAME",
   "ACR_NAME",
   "POSTGRES_SERVER_NAME",
@@ -51,9 +54,65 @@ async function capture(cmd, args) {
   return stdout.trim();
 }
 
+function readBooleanFlag(name) {
+  const value = requireEnv(name).toLowerCase();
+  if (value !== "true" && value !== "false") {
+    throw new Error(`${name} must be 'true' or 'false'`);
+  }
+
+  return value === "true";
+}
+
+function validateCustomDomain(name, value) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.length === 0) {
+    throw new Error(`${name} is required when ENTRA login is enabled`);
+  }
+
+  if (
+    normalized.includes("://") ||
+    normalized.includes("/") ||
+    normalized.includes("?") ||
+    normalized.includes("#")
+  ) {
+    throw new Error(`${name} must be a bare domain name (no scheme, path, query, or fragment)`);
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(`https://${normalized}`);
+  } catch {
+    throw new Error(`${name} must be a valid domain name`);
+  }
+
+  if (parsed.hostname !== normalized) {
+    throw new Error(`${name} must be a valid domain name`);
+  }
+
+  if (
+    parsed.hostname === "0.0.0.0" ||
+    parsed.hostname === "localhost" ||
+    parsed.hostname === "127.0.0.1"
+  ) {
+    throw new Error(`${name} must be a routable domain in cloud deployment`);
+  }
+}
+
 async function main() {
   for (const envName of REQUIRED_ENV_NAMES) {
     requireEnv(envName);
+  }
+
+  const entraLoginEnabled = readBooleanFlag("ENTRA_LOGIN_ENABLED");
+  const authDevFallbackEnabled = readBooleanFlag("AUTH_DEV_FALLBACK_ENABLED");
+  if (authDevFallbackEnabled) {
+    throw new Error("AUTH_DEV_FALLBACK_ENABLED must be false for cloud deployment");
+  }
+
+  if (entraLoginEnabled) {
+    requireEnv("ENTRA_CLIENT_ID");
+    requireEnv("ENTRA_CLIENT_SECRET");
+    validateCustomDomain("ACA_WEB_CUSTOM_DOMAIN", requireEnv("ACA_WEB_CUSTOM_DOMAIN"));
   }
 
   for (const namespace of PROVIDERS) {

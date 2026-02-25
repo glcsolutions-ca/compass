@@ -5,7 +5,26 @@ param image string
 param registryServer string
 param registryIdentityResourceId string
 param apiBaseUrl string
+param webBaseUrl string
+@secure()
+param webSessionSecret string
+param entraLoginEnabled string = 'false'
+param entraClientId string = ''
+@secure()
+param entraClientSecret string = ''
+param entraAllowedTenantIds string = ''
+param authDevFallbackEnabled string = 'false'
 param customDomainName string = ''
+
+var hasEntraClientSecret = !empty(entraClientSecret)
+var entraClientSecretEnv = hasEntraClientSecret
+  ? [
+      {
+        name: 'ENTRA_CLIENT_SECRET'
+        secretRef: 'entra-client-secret'
+      }
+    ]
+  : []
 
 resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
   name: containerAppName
@@ -41,18 +60,61 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
           identity: registryIdentityResourceId
         }
       ]
+      secrets: concat(
+        [
+          {
+            name: 'web-session-secret'
+            value: webSessionSecret
+          }
+        ],
+        hasEntraClientSecret
+          ? [
+              {
+                name: 'entra-client-secret'
+                value: entraClientSecret
+              }
+            ]
+          : []
+      )
     }
     template: {
       containers: [
         {
           name: 'compass-web'
           image: image
-          env: [
-            {
-              name: 'API_BASE_URL'
-              value: apiBaseUrl
-            }
-          ]
+          env: concat(
+            [
+              {
+                name: 'API_BASE_URL'
+                value: apiBaseUrl
+              }
+              {
+                name: 'WEB_SESSION_SECRET'
+                secretRef: 'web-session-secret'
+              }
+              {
+                name: 'ENTRA_LOGIN_ENABLED'
+                value: entraLoginEnabled
+              }
+              {
+                name: 'ENTRA_CLIENT_ID'
+                value: entraClientId
+              }
+              {
+                name: 'WEB_BASE_URL'
+                value: webBaseUrl
+              }
+              {
+                name: 'ENTRA_ALLOWED_TENANT_IDS'
+                value: entraAllowedTenantIds
+              }
+              {
+                name: 'AUTH_DEV_FALLBACK_ENABLED'
+                value: authDevFallbackEnabled
+              }
+            ],
+            entraClientSecretEnv
+          )
           resources: {
             cpu: json('0.25')
             memory: '0.5Gi'

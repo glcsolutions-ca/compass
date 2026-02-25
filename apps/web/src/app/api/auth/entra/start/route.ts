@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { resolveEntraRedirectUri } from "../../../../auth/entra-redirect-uri";
 import { loadWebAuthRuntimeConfig } from "../../../../auth/runtime-config";
 import {
   createOidcStateCookieValue,
@@ -11,19 +12,13 @@ import {
 const ENTRA_AUTHORIZATION_ENDPOINT =
   "https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize";
 
+export const dynamic = "force-dynamic";
+
 function normalizeNextPath(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
     return "/";
   }
   return value;
-}
-
-function ensureAbsoluteUrl(value: string) {
-  try {
-    return new URL(value);
-  } catch {
-    return null;
-  }
 }
 
 function pkceCodeChallenge(codeVerifier: string) {
@@ -57,7 +52,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (!config.entraClientId || !config.entraRedirectUri) {
+  if (!config.entraClientId) {
     return Response.json(
       {
         error: "Entra login settings are incomplete",
@@ -69,18 +64,19 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const redirectUri = ensureAbsoluteUrl(config.entraRedirectUri);
-  if (!redirectUri) {
+  const redirectUriResolution = resolveEntraRedirectUri(config.webBaseUrl);
+  if (!redirectUriResolution.redirectUri) {
     return Response.json(
       {
-        error: "ENTRA_REDIRECT_URI must be an absolute URL",
-        code: "ENTRA_REDIRECT_URI_INVALID"
+        error: redirectUriResolution.error,
+        code: redirectUriResolution.code
       },
       {
         status: 500
       }
     );
   }
+  const redirectUri = redirectUriResolution.redirectUri;
 
   const state = randomToken(24);
   const nonce = randomToken(24);

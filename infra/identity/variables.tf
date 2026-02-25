@@ -86,7 +86,13 @@ variable "owners" {
 }
 
 variable "web_redirect_uris" {
-  description = "Redirect URIs for interactive web app registration"
+  description = "Baseline redirect URIs for interactive web app registration (for example localhost)"
   type        = list(string)
   default     = []
+}
+
+variable "web_custom_domain" {
+  description = "Primary web custom domain used to derive the cloud redirect URI"
+  type        = string
+  default     = ""
 }

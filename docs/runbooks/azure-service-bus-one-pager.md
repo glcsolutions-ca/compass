@@ -1,23 +1,20 @@
 # Azure Service Bus One Pager
 
-Use this page for day-to-day Service Bus operations in Compass.
+Use this page for Service Bus operations in Compass. Keep it contract-based and environment-agnostic.
 
-## Canonical Topology
+## Scope
 
-- Production namespace: `sb-compass-prod-cc-4514-01`
-- Acceptance namespace: `sb-compass-acc-cc-4514-01`
-- Queue: `compass-events`
-- Worker runtime: `apps/worker` (Container App)
+- Worker runtime: `apps/worker`
+- Service Bus infrastructure: `infra/azure`
+- Deployment verification: cloud deployment pipeline cutover checks
 
 ## Source of Truth
 
-- IaC owns namespace, queue, and runtime wiring.
-- Primary definitions:
-  - `infra/azure/main.bicep`
-  - `infra/azure/modules/servicebus.bicep`
-  - `infra/azure/modules/containerapp-worker.bicep`
+1. IaC owns namespace, queue, identity wiring, and container app config.
+2. Environment values come from GitHub environment vars/secrets.
+3. Docs describe contracts and invariants, not concrete resource names.
 
-## Runtime Contract (Required)
+## Required Runtime Contract
 
 - Worker app env:
   - `SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE`
@@ -34,19 +31,19 @@ Use this page for day-to-day Service Bus operations in Compass.
 
 ## Security Model
 
-- Namespace local/SAS auth disabled (`disableLocalAuth=true`).
-- Worker authenticates with user-assigned managed identity.
-- Worker identity must have `Azure Service Bus Data Receiver` at queue scope.
+1. Namespace local/SAS auth is disabled (`disableLocalAuth=true`).
+2. Worker authenticates with user-assigned managed identity.
+3. Worker identity has `Azure Service Bus Data Receiver` at queue scope.
 
-## Deployment Gates
+## Deployment Enforcement
 
-- `Cloud Deployment Pipeline` performs cutover verification after infra apply.
-- Verification checks:
-  - both namespaces have local auth disabled
-  - worker app is healthy and has required env
-  - worker identity + queue RBAC is present
+`Cloud Deployment Pipeline` verifies after infra apply that:
 
-## Fast Operator Checks
+1. local auth is disabled on both target namespaces
+2. worker app is healthy and has required env values
+3. worker identity RBAC is present on queue scope
+
+## Operator Checks
 
 ```bash
 az servicebus namespace show -g "$AZURE_RESOURCE_GROUP" -n "$SERVICE_BUS_PROD_NAMESPACE_NAME" --query disableLocalAuth -o tsv
@@ -64,10 +61,13 @@ az containerapp show -g "$AZURE_RESOURCE_GROUP" -n "$ACA_WORKER_APP_NAME" --quer
 
 ## Failure Handling
 
-- Config or RBAC issue: correct env/IaC and rerun pipeline.
-- Code issue: fix forward on `main`.
+1. Config or RBAC issue: fix env/IaC and rerun pipeline.
+2. Code issue: fix forward on `main`.
 
 ## References
 
 - `docs/runbooks/cloud-deployment-pipeline-setup.md`
+- `infra/azure/main.bicep`
+- `infra/azure/modules/servicebus.bicep`
+- `infra/azure/modules/containerapp-worker.bicep`
 - `scripts/pipeline/cloud/deployment-stage/verify-worker-servicebus-cutover.mjs`

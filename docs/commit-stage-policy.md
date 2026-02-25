@@ -11,9 +11,9 @@ Every PR to `main` must pass fast, reliable merge-readiness evidence:
 3. PRs are merge-ready only when `commit-stage` passes.
 
 `commit-stage.yml` runs on `pull_request` and `merge_group`.
-Heavy fast-feedback checks stay PR-only; merge-group runs emit required `commit-stage` context for queued merge SHAs without rerunning heavy suites.
-Exact queued-merge validation is handled by `merge-queue-gate.yml` (full checks on `merge_group`).
-Post-merge delivery pipelines (`cloud-delivery-pipeline.yml` for cloud, `desktop-deployment-pipeline.yml` for desktop) run on `push` to `main`.
+Heavy commit-test-suite checks stay PR-only; merge-group runs emit required `commit-stage` context for queued merge SHAs without rerunning heavy suites.
+Exact queued-merge validation is handled by `integration-gate.yml` (full checks on `merge_group`).
+Post-merge delivery pipelines (`cloud-deployment-pipeline.yml` for cloud, `desktop-deployment-pipeline.yml` for desktop) run on `push` to `main`.
 
 ## Source of Truth Precedence
 
@@ -21,42 +21,42 @@ When this doc and implementation differ, implementation wins:
 
 - Policy truth: `.github/policy/pipeline-policy.json`
 - PR gate truth: `.github/workflows/commit-stage.yml` and `scripts/pipeline/commit/decide-commit-stage.mjs`
-- Merge queue gate truth: `.github/workflows/merge-queue-gate.yml` and `scripts/pipeline/commit/decide-merge-queue-gate.mjs`
+- Integration gate truth: `.github/workflows/integration-gate.yml` and `scripts/pipeline/commit/decide-integration-gate.mjs`
 - This doc is explanatory and must be kept aligned with those files.
 
 ## Required Gate Contexts
 
 - `commit-stage` (PR quality gate)
-- `merge-queue-gate` (exact merge queue gate)
+- `integration-gate` (exact integration gate)
 
 ## Trigger Contract
 
 - `commit-stage.yml`
   - `pull_request` types: `opened`, `synchronize`, `reopened`, `ready_for_review`
   - `merge_group`
-- `merge-queue-gate.yml`
+- `integration-gate.yml`
   - `pull_request` types: `opened`, `synchronize`, `reopened`, `ready_for_review`
   - `merge_group`
 
 ## Commit-Stage Checks (PR Heavy Path)
 
 - `determine-scope` (always)
-- `fast-feedback` (when runtime/infra/identity is true, or when delivery config blocking paths changed)
-- `desktop-fast-feedback` (when `desktop` scope is true and change is not docs-only)
+- `commit-test-suite` (when runtime/infra/identity is true, or when deployment pipeline config blocking paths changed)
+- `desktop-commit-test-suite` (when `desktop` scope is true and change is not docs-only)
 - `infra-static-check` (only when `infra` scope is true)
 - `identity-static-check` (only when `identity` scope is true)
 - `docs-drift` is always evaluated and can block merge for docs-critical drift
 - On `merge_group`, commit-stage runs scope/docs-drift/final decision only to keep required context satisfiable without rerunning heavy checks
 
-## Merge Queue Gate Checks (Exact Merge)
+## Integration Gate Checks (Exact Merge)
 
 - `determine-scope` (always)
-- `build-compile` (runtime/infra/identity/delivery-config changes)
+- `build-compile` (runtime/infra/identity/deployment-pipeline-config changes)
 - `migration-safety` (when migrations changed)
-- `auth-critical-smoke` (runtime/infra/identity/delivery-config changes)
+- `auth-critical-smoke` (runtime/infra/identity/deployment-pipeline-config changes)
 - `minimal-integration-smoke` (runtime changes)
-- `merge-queue-gate` final decision artifact
-- merge-queue throughput telemetry artifact
+- `integration-gate` final decision artifact
+- integration-gate throughput telemetry artifact
 
 ## Scope Model
 
@@ -69,7 +69,7 @@ When this doc and implementation differ, implementation wins:
 - `docsOnly`
 - plus rollout flags (`migration`, `infraRollout`) used downstream
 
-Scope evaluation excludes files matching `scopeRules.docsOnly` before computing mutable scopes (`runtime`, `desktop`, `infra`, `identity`) so documentation-only updates do not trigger delivery config mutation paths.
+Scope evaluation excludes files matching `scopeRules.docsOnly` before computing mutable scopes (`runtime`, `desktop`, `infra`, `identity`) so documentation-only updates do not trigger deployment pipeline config mutation paths.
 
 `changeClass` is derived in priority order: `runtime` -> `infra` -> `identity` -> `desktop` -> `checks`.
 
@@ -78,7 +78,7 @@ Scope evaluation excludes files matching `scopeRules.docsOnly` before computing 
 `docs-drift` is always evaluated.
 
 - Blocking: docs-critical paths changed without matching docs target updates.
-- Advisory: delivery config blocking paths changed without docs target updates.
+- Advisory: deployment pipeline config blocking paths changed without docs target updates.
 - Infra auth runtime wiring changes (for example `OAUTH_TOKEN_SIGNING_SECRET` convergence) must include one of the configured docs-target updates.
 
 Result artifact path:
@@ -110,11 +110,11 @@ Timing keys:
 
 `time_to_commit_gate_seconds` is measured from first commit-stage job start to gate completion (execution time only). Queue delay is telemetry-only.
 
-## Merge Queue Throughput Telemetry
+## Integration Gate Throughput Telemetry
 
-Merge queue throughput snapshot is emitted per `merge_group` run:
+Integration-gate throughput snapshot is emitted per `merge_group` run:
 
-- `.artifacts/merge-queue-gate/<testedSha>/timing.json`
+- `.artifacts/integration-gate/<testedSha>/timing.json`
 
 Snapshot keys include:
 
@@ -130,8 +130,8 @@ Snapshot keys include:
 `commit-stage` makes PR merge-readiness decisions from required job outcomes (`needs.*.result`) plus docs-drift state.
 
 - `determine-scope` must succeed.
-- `fast-feedback` must succeed when runtime/infra/identity commit evidence is required, or when delivery config paths changed.
-- `desktop-fast-feedback` must succeed when desktop commit evidence is required.
+- `commit-test-suite` must succeed when runtime/infra/identity commit evidence is required, or when deployment pipeline config paths changed.
+- `desktop-commit-test-suite` must succeed when desktop commit evidence is required.
 - `infra-static-check` must succeed when `infra` is required.
 - `identity-static-check` must succeed when `identity` is required.
 - If docs-drift blocking is true, docs-drift status must be `pass`.
@@ -139,12 +139,12 @@ Snapshot keys include:
 
 ## Runtime Baseline
 
-Delivery-config scripts use Node's built-in `path.posix.matchesGlob` for deterministic pattern behavior.
+Deployment-pipeline-config scripts use Node's built-in `path.posix.matchesGlob` for deterministic pattern behavior.
 
 - Node baseline: `22.x` (`.nvmrc`)
 - Engine contract: `>=22 <23`
 
-## Delivery-Config High-Risk Paths
+## Deployment-Pipeline-Config High-Risk Paths
 
 `docsDriftRules` and `scopeRules` in `.github/policy/pipeline-policy.json` are authoritative.
 

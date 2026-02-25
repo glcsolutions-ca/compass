@@ -13,7 +13,7 @@ const STAGE_JOB_NAMES = [
   "migration-safety",
   "auth-critical-smoke",
   "minimal-integration-smoke",
-  "merge-queue-gate"
+  "integration-gate"
 ];
 
 function parseIsoToEpochSeconds(value) {
@@ -86,7 +86,7 @@ async function githubRequest(token, pathname) {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${token}`,
       "X-GitHub-Api-Version": GITHUB_API_VERSION,
-      "User-Agent": "compass-merge-queue-metrics"
+      "User-Agent": "compass-integration-gate-metrics"
     }
   });
 
@@ -180,7 +180,7 @@ function getCurrentRunTimeToGate(jobs) {
     getJobByName(jobs, "determine-scope")?.started_at
   );
   const gateCompletedAt = parseIsoToEpochSeconds(
-    getJobByName(jobs, "merge-queue-gate")?.completed_at
+    getJobByName(jobs, "integration-gate")?.completed_at
   );
 
   if (
@@ -254,7 +254,7 @@ function parseSampleSize(policy, rawOverride) {
     return override;
   }
 
-  const policyValue = Number.parseInt(policy.mergeQueueGate?.telemetry?.sampleSize ?? "", 10);
+  const policyValue = Number.parseInt(policy.integrationGate?.telemetry?.sampleSize ?? "", 10);
   if (Number.isFinite(policyValue) && policyValue > 0) {
     return policyValue;
   }
@@ -281,7 +281,7 @@ async function main() {
   const repository = requireEnv("GITHUB_REPOSITORY");
   const runId = requireEnv("GITHUB_RUN_ID");
   const headSha = process.env.HEAD_SHA?.trim() || process.env.GITHUB_SHA?.trim() || "unknown";
-  const workflowFile = process.env.MERGE_QUEUE_GATE_WORKFLOW_FILE?.trim() || "merge-queue-gate.yml";
+  const workflowFile = process.env.INTEGRATION_GATE_WORKFLOW_FILE?.trim() || "integration-gate.yml";
   const policyPath =
     process.env.PIPELINE_POLICY_PATH ?? path.join(".github", "policy", "pipeline-policy.json");
 
@@ -335,17 +335,17 @@ async function main() {
     }
   };
 
-  const artifactPath = path.join(".artifacts", "merge-queue-gate", headSha, "timing.json");
+  const artifactPath = path.join(".artifacts", "integration-gate", headSha, "timing.json");
   await writeJsonFile(artifactPath, payload);
 
   await appendGithubStepSummary(
     [
-      "### Merge Queue Throughput Snapshot",
+      "### Integration Gate Throughput Snapshot",
       `- sampled runs: ${payload.throughputWindow.sampledRuns}`,
       `- rerun ratio: ${formatRate(payload.throughputWindow.rerunRatio)}`,
       `- queue delay median/p95: ${formatMetric(payload.throughputWindow.queueDelaySeconds.median)} / ${formatMetric(payload.throughputWindow.queueDelaySeconds.p95)}`,
       `- total run median/p95: ${formatMetric(payload.throughputWindow.totalRunSeconds.median)} / ${formatMetric(payload.throughputWindow.totalRunSeconds.p95)}`,
-      `- merge-queue-gate pass rate: ${formatRate(payload.throughputWindow.passRateByStage["merge-queue-gate"]?.passRate ?? null)}`
+      `- integration-gate pass rate: ${formatRate(payload.throughputWindow.passRateByStage["integration-gate"]?.passRate ?? null)}`
     ].join("\n")
   );
 }

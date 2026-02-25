@@ -1,7 +1,7 @@
 import path from "node:path";
 import {
   appendGithubOutput,
-  classifyCandidateKind,
+  classifyReleaseCandidateKind,
   getChangedFiles,
   getCurrentSha,
   getParentSha,
@@ -22,7 +22,7 @@ async function main() {
   const policy = await loadPipelinePolicy(policyPath);
   const changedFiles = await getChangedFiles(baseSha, headSha);
   const scope = resolveChangeScope(policy, changedFiles);
-  const changeClass = classifyCandidateKind(scope);
+  const changeClass = classifyReleaseCandidateKind(scope);
   const requiresInfraConvergence = scope.runtime && scope.infra;
   const requiresMigrations = scope.runtime && scope.migration;
 
@@ -40,7 +40,7 @@ async function main() {
   });
 
   console.info(
-    `candidate-kind: changeClass=${changeClass} runtime=${scope.runtime} infra=${scope.infra} identity=${scope.identity} docsOnly=${scope.docsOnly} changed=${changedFiles.length}`
+    `release-candidate-kind: changeClass=${changeClass} runtime=${scope.runtime} infra=${scope.infra} identity=${scope.identity} docsOnly=${scope.docsOnly} changed=${changedFiles.length}`
   );
 }
 

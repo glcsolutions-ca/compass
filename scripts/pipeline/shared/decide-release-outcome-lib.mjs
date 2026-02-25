@@ -42,13 +42,15 @@ function parseBoolean(value, fallback) {
 export function evaluateReleaseOutcome(input) {
   const replayMode = parseBoolean(input.replayMode, false);
   const commitStageResult = String(input.commitStageResult || "unknown");
-  const loadReleasePackageResult = String(input.loadReleasePackageResult || "unknown");
-  const acceptanceStageResult = String(input.acceptanceStageResult || "unknown");
-  const productionStageResult = String(input.productionStageResult || "unknown");
+  const loadReleaseCandidateResult = String(input.loadReleaseCandidateResult || "unknown");
+  const automatedAcceptanceTestGateResult = String(
+    input.automatedAcceptanceTestGateResult || "unknown"
+  );
+  const deploymentStageResult = String(input.deploymentStageResult || "unknown");
 
   const acceptanceDecision = normalizeDecision(input.acceptanceDecision, "NO");
   const productionDecision = normalizeDecision(input.productionDecision, "NO");
-  const deployRequired = parseBoolean(input.deployRequired, true);
+  const deploymentRequired = parseBoolean(input.deploymentRequired, true);
 
   let commitStageDecision = "YES";
   if (replayMode) {
@@ -64,19 +66,19 @@ export function evaluateReleaseOutcome(input) {
   if (!replayMode && commitStageResult !== "success") {
     reasonCodes.add("COMMIT_STAGE_FAILED");
   }
-  if (loadReleasePackageResult !== "success") {
-    reasonCodes.add("LOAD_RELEASE_PACKAGE_NOT_SUCCESS");
+  if (loadReleaseCandidateResult !== "success") {
+    reasonCodes.add("LOAD_RELEASE_CANDIDATE_NOT_SUCCESS");
   }
 
-  if (acceptanceStageResult !== "success" && acceptanceReasonCodes.length === 0) {
-    reasonCodes.add("ACCEPTANCE_STAGE_NOT_SUCCESS");
+  if (automatedAcceptanceTestGateResult !== "success" && acceptanceReasonCodes.length === 0) {
+    reasonCodes.add("AUTOMATED_ACCEPTANCE_TEST_GATE_NOT_SUCCESS");
   }
   if (acceptanceDecision !== "YES" && acceptanceReasonCodes.length === 0) {
     reasonCodes.add("ACCEPTANCE_DECISION_NOT_YES");
   }
 
-  if (productionStageResult !== "success" && productionReasonCodes.length === 0) {
-    reasonCodes.add("PRODUCTION_STAGE_NOT_SUCCESS");
+  if (deploymentStageResult !== "success" && productionReasonCodes.length === 0) {
+    reasonCodes.add("DEPLOYMENT_STAGE_NOT_SUCCESS");
   }
   if (productionDecision !== "YES" && productionReasonCodes.length === 0) {
     reasonCodes.add("PRODUCTION_DECISION_NOT_YES");
@@ -89,20 +91,20 @@ export function evaluateReleaseOutcome(input) {
     reasonCodes.add(code);
   }
 
-  const releaseable = replayMode
+  const releasable = replayMode
     ? acceptanceDecision === "YES" && productionDecision === "YES"
     : commitStageDecision === "YES" &&
       acceptanceDecision === "YES" &&
       productionDecision === "YES" &&
-      (deployRequired === true || deployRequired === false);
+      (deploymentRequired === true || deploymentRequired === false);
 
   return {
     replayMode,
-    deployRequired,
+    deploymentRequired,
     commitStageDecision,
     acceptanceDecision,
     productionDecision,
-    releaseable,
+    releasable,
     reasonCodes: [...reasonCodes]
   };
 }

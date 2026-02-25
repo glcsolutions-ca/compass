@@ -59,7 +59,7 @@ docker run --rm \
       headSha,
       status: "pass",
       reasonCode: "",
-      releasePackageApiRef: apiRef
+      releaseCandidateApiRef: apiRef
     });
   } catch (error) {
     await writeJsonFile(artifactPath, {
@@ -68,7 +68,7 @@ docker run --rm \
       headSha,
       status: "fail",
       reasonCode: "MIGRATION_IMAGE_SMOKE_FAILED",
-      releasePackageApiRef: apiRef,
+      releaseCandidateApiRef: apiRef,
       error: error instanceof Error ? error.message : String(error)
     });
     throw error;

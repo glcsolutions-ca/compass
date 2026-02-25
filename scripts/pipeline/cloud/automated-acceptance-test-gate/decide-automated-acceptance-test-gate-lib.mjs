@@ -3,8 +3,8 @@ export function evaluateAcceptanceStageResults({
   runtimeRequired,
   infraRequired,
   identityRequired,
-  releasePackageRefContractStatus,
-  releasePackageRefContractReasonCodes,
+  releaseCandidateRefContractStatus,
+  releaseCandidateRefContractReasonCodes,
   identityConfigContractStatus,
   identityConfigContractReasonCodes
 }) {
@@ -29,10 +29,10 @@ export function evaluateAcceptanceStageResults({
     });
   }
 
-  if (checkResults["load-release-package"] !== "success") {
+  if (checkResults["load-release-candidate"] !== "success") {
     reasons.push({
-      code: "CHECK_LOAD_RELEASE_PACKAGE_NOT_SUCCESS",
-      message: `load-release-package result is ${checkResults["load-release-package"]}`
+      code: "CHECK_LOAD_RELEASE_CANDIDATE_NOT_SUCCESS",
+      message: `load-release-candidate result is ${checkResults["load-release-candidate"]}`
     });
   }
 
@@ -76,16 +76,16 @@ export function evaluateAcceptanceStageResults({
     failureMessage: `identity-readonly-acceptance required but result is ${checkResults["identity-readonly-acceptance"]}`
   });
 
-  if ((runtimeRequired || infraRequired) && releasePackageRefContractStatus !== "pass") {
+  if ((runtimeRequired || infraRequired) && releaseCandidateRefContractStatus !== "pass") {
     const reasonSuffix =
-      Array.isArray(releasePackageRefContractReasonCodes) &&
-      releasePackageRefContractReasonCodes.length > 0
-        ? ` (${releasePackageRefContractReasonCodes.join(", ")})`
+      Array.isArray(releaseCandidateRefContractReasonCodes) &&
+      releaseCandidateRefContractReasonCodes.length > 0
+        ? ` (${releaseCandidateRefContractReasonCodes.join(", ")})`
         : "";
 
     reasons.push({
-      code: "CONFIG_CONTRACT_RELEASE_PACKAGE_REFS_NOT_PASS",
-      message: `release package ref contract required for runtime/infra acceptance but status is ${releasePackageRefContractStatus}${reasonSuffix}`
+      code: "CONFIG_CONTRACT_RELEASE_CANDIDATE_REFS_NOT_PASS",
+      message: `release candidate ref contract required for runtime/infra acceptance but status is ${releaseCandidateRefContractStatus}${reasonSuffix}`
     });
   }
 

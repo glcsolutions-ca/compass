@@ -10,17 +10,17 @@ This directory defines production infrastructure delivery for Compass.
 ## Workflow Topology
 
 1. `commit-stage.yml` runs fast non-mutating checks and scope classification.
-2. `cloud-delivery-pipeline.yml` runs acceptance checks (`infra-readonly-acceptance`, `identity-readonly-acceptance`) against one release package.
-3. `cloud-delivery-pipeline.yml` runs production mutation (`deploy-release-package`) only when acceptance is YES and deploy is required.
-4. `cloud-delivery-replay.yml` reruns acceptance -> production verification for an existing `release_package_sha`.
+2. `cloud-deployment-pipeline.yml` runs automated acceptance test gate checks (`infra-readonly-acceptance`, `identity-readonly-acceptance`) against one release candidate.
+3. `cloud-deployment-pipeline.yml` runs deployment-stage mutation (`deploy-release-candidate`) only when the automated acceptance test gate is YES and deployment is required.
+4. `cloud-deployment-pipeline-replay.yml` reruns automated-acceptance-test-gate -> deployment-stage verification for an existing `release_candidate_sha`.
 
 ## Evidence Artifacts
 
-- `.artifacts/release-package/<sha>/manifest.json`
+- `.artifacts/release-candidate/<sha>/manifest.json`
 - `.artifacts/infra/<sha>/`
 - `.artifacts/identity/<sha>/`
-- `.artifacts/acceptance/<sha>/`
-- `.artifacts/production/<sha>/`
+- `.artifacts/automated-acceptance-test-gate/<sha>/`
+- `.artifacts/deployment-stage/<sha>/`
 - `.artifacts/release/<sha>/decision.json`
 
 ## Safety Boundaries

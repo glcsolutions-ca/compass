@@ -5,8 +5,8 @@ function makeBaseInput(overrides = {}) {
   return {
     checkResults: {
       "determine-scope": "success",
-      "fast-feedback": "success",
-      "desktop-fast-feedback": "skipped",
+      "commit-test-suite": "success",
+      "desktop-commit-test-suite": "skipped",
       "infra-static-check": "skipped",
       "identity-static-check": "skipped"
     },
@@ -25,14 +25,14 @@ function makeBaseInput(overrides = {}) {
 }
 
 describe("evaluateCommitStageResults", () => {
-  it("always requires determine-scope and conditionally requires runtime fast-feedback", () => {
+  it("always requires determine-scope and conditionally requires runtime commit-test-suite", () => {
     const reasons = evaluateCommitStageResults(
       makeBaseInput({
         runtimeRequired: true,
         checkResults: {
           "determine-scope": "failure",
-          "fast-feedback": "cancelled",
-          "desktop-fast-feedback": "skipped",
+          "commit-test-suite": "cancelled",
+          "desktop-commit-test-suite": "skipped",
           "infra-static-check": "skipped",
           "identity-static-check": "skipped"
         }
@@ -46,19 +46,19 @@ describe("evaluateCommitStageResults", () => {
       },
       {
         code: "CHECK_RUNTIME_FAST_FEEDBACK_REQUIRED_NOT_SUCCESS",
-        message: "fast-feedback required but result is cancelled"
+        message: "commit-test-suite required but result is cancelled"
       }
     ]);
   });
 
-  it("requires desktop fast-feedback only when desktop scope is required", () => {
+  it("requires desktop commit-test-suite only when desktop scope is required", () => {
     const reasons = evaluateCommitStageResults(
       makeBaseInput({
         desktopRequired: true,
         checkResults: {
           "determine-scope": "success",
-          "fast-feedback": "skipped",
-          "desktop-fast-feedback": "failure",
+          "commit-test-suite": "skipped",
+          "desktop-commit-test-suite": "failure",
           "infra-static-check": "skipped",
           "identity-static-check": "skipped"
         }
@@ -68,20 +68,20 @@ describe("evaluateCommitStageResults", () => {
     expect(reasons).toEqual([
       {
         code: "CHECK_DESKTOP_FAST_FEEDBACK_REQUIRED_NOT_SUCCESS",
-        message: "desktop-fast-feedback required but result is failure"
+        message: "desktop-commit-test-suite required but result is failure"
       }
     ]);
   });
 
-  it("allows skipped fast-feedback lanes when those surfaces are not required", () => {
+  it("allows skipped commit-test-suite lanes when those surfaces are not required", () => {
     const reasons = evaluateCommitStageResults(
       makeBaseInput({
         runtimeRequired: false,
         desktopRequired: false,
         checkResults: {
           "determine-scope": "success",
-          "fast-feedback": "skipped",
-          "desktop-fast-feedback": "skipped",
+          "commit-test-suite": "skipped",
+          "desktop-commit-test-suite": "skipped",
           "infra-static-check": "skipped",
           "identity-static-check": "skipped"
         }
@@ -98,8 +98,8 @@ describe("evaluateCommitStageResults", () => {
         identityRequired: true,
         checkResults: {
           "determine-scope": "success",
-          "fast-feedback": "success",
-          "desktop-fast-feedback": "skipped",
+          "commit-test-suite": "success",
+          "desktop-commit-test-suite": "skipped",
           "infra-static-check": "failure",
           "identity-static-check": "cancelled"
         }

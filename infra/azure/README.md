@@ -6,8 +6,8 @@
 - Environment template: `infra/azure/environments/prod.bicepparam`
 - Modules: `infra/azure/modules/*.bicep`
 - Pipeline usage:
-  - acceptance validate: `.github/workflows/cloud-delivery-pipeline.yml` (`infra-readonly-acceptance`)
-  - production apply: `.github/workflows/cloud-delivery-pipeline.yml` and `.github/workflows/cloud-delivery-replay.yml` (`deploy-infra`)
+  - acceptance validate: `.github/workflows/cloud-deployment-pipeline.yml` (`infra-readonly-acceptance`)
+  - production apply: `.github/workflows/cloud-deployment-pipeline.yml` and `.github/workflows/cloud-deployment-pipeline-replay.yml` (`deploy-infra`)
 
 ## What This Deploys
 
@@ -92,5 +92,5 @@ There is one infra path, no mode flags.
 
 - `scripts/pipeline/shared/render-infra-parameters.mjs`
 - `scripts/pipeline/shared/validate-infra-acceptance-config.mjs`
-- `scripts/pipeline/cloud/production/apply-infra.mjs`
+- `scripts/pipeline/cloud/deployment-stage/apply-infra.mjs`
 - `docs/runbooks/cloud-deployment-pipeline-setup.md`

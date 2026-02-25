@@ -24,7 +24,7 @@ List the commands you ran and any important outputs.
 - [ ] `pnpm build` passes locally.
 - [ ] Naming and import conventions match the baseline.
 - [ ] Contract artifacts are generated and committed when schemas change (`pnpm contract:check`).
-- [ ] If delivery-config files changed, pipeline docs were updated (`docs/commit-stage-policy.md` and `.github/workflows/README.md`).
+- [ ] If deployment-pipeline-config files changed, pipeline docs were updated (`docs/commit-stage-policy.md` and `.github/workflows/README.md`).
 - [ ] No unrelated files or generated noise are included.
 
 ## Risk and Rollback

@@ -21,7 +21,7 @@ Expected:
 
 - `enforce_admins.enabled=true`
 - `required_status_checks.strict=true`
-- required check contexts include `commit-stage` and `merge-queue-gate`
+- required check contexts include `commit-stage` and `integration-gate`
 - `required_pull_request_reviews.required_approving_review_count=0`
 - `allow_force_pushes.enabled=false`
 - `allow_deletions.enabled=false`
@@ -32,7 +32,7 @@ If the required check context differs, apply the baseline:
 cat > /tmp/required-status-checks.json <<'JSON'
 {
   "strict": true,
-  "contexts": ["commit-stage", "merge-queue-gate"]
+  "contexts": ["commit-stage", "integration-gate"]
 }
 JSON
 
@@ -55,7 +55,7 @@ Expected:
 - `allow_auto_merge=true`
 - `delete_branch_on_merge=true`
 
-## 3) Merge Queue Enabled
+## 3) Integration Batching Enabled
 
 ```bash
 gh api graphql -f query='
@@ -92,7 +92,7 @@ gh api repos/glcsolutions-ca/compass/branches/main/protection \
 echo 'merge methods'
 gh api repos/glcsolutions-ca/compass \
   --jq '{allow_squash_merge,allow_merge_commit,allow_rebase_merge,allow_auto_merge,delete_branch_on_merge}'
-echo 'merge queue'
+echo 'integration batching (merge_queue)'
 gh api graphql -f query='query { repository(owner:"glcsolutions-ca", name:"compass") { mergeQueue(branch:"main") { id } } }'
 echo 'production environment'
 gh api repos/glcsolutions-ca/compass/environments/production \

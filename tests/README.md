@@ -13,7 +13,7 @@ Less is more: we prefer the **cheapest test that gives the confidence we need**.
 1. **Prove it, don’t argue it**
    - Every change should produce **machine-verifiable evidence** (tests + artifacts).
 
-2. **Fast feedback first**
+2. **Commit-test suite first**
    - The default PR suite (“commit-stage”) must be **fast**.
    - Deeper tests exist, but run only when risk requires them.
 
@@ -86,7 +86,7 @@ Examples:
 - Full stack running
 - Keep this suite tiny and stable
 
-### 6) Post-deploy smoke tests (minimal)
+### 6) Post-deployment verification gate tests (minimal)
 
 **Purpose:** confirm the deployed system is alive.
 
@@ -116,7 +116,7 @@ Runs when the change is `standard`/`high` risk:
 - Integration tests (real Postgres)
 - E2E UI evidence (only when UI/high-risk demands it)
 
-### `main` release package
+### `main` release candidate
 
 We do **not** re-run the whole PR suite.
 `main` focuses on promotion + verification:

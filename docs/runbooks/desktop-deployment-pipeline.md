@@ -7,39 +7,35 @@ Operate the Desktop Deployment Pipeline for signed Compass installers:
 - macOS arm64 (`.dmg`)
 - Windows x64 (`.msi`)
 
-This pipeline follows commit -> acceptance -> production in one workflow run and emits a binary release decision (`YES` or `NO`).
+This pipeline follows commit -> automated acceptance test gate -> deployment stage in one workflow run and emits a binary release decision (`YES` or `NO`).
 Acceptance includes a desktop-to-backend compatibility contract check so installer releases do not drift from the active cloud API surface.
-Desktop production is intentionally decoupled from cloud production so signing/notarization failures do not block backend releases.
+Desktop deployment is intentionally decoupled from cloud deployment so signing/notarization failures do not block backend releases.
 
 ## Canonical Workflow
 
 - Workflow file: `.github/workflows/desktop-deployment-pipeline.yml`
 - Triggers:
   - `push` to `main`
-  - `workflow_dispatch` replay (`candidate_sha`, optional `release_tag`, `web_base_url`, `draft`)
-
-Compatibility lane:
-
-- `.github/workflows/desktop-release.yml` remains manual for one transition cycle only.
+  - `workflow_dispatch` replay (`release_candidate_sha`, optional `release_tag`, `web_base_url`, `draft`)
 
 ## Stage Topology
 
 1. Commit stage:
    - `desktop-determine-scope`
-   - `desktop-fast-feedback`
+   - `desktop-commit-test-suite`
    - `desktop-commit-stage`
-2. Acceptance stage:
+2. Automated acceptance test gate:
    - `desktop-backend-contract-acceptance`
    - `build-signed-macos`
    - `build-signed-windows`
-   - `desktop-acceptance-stage`
-3. Production stage:
+   - `desktop-automated-acceptance-test-gate`
+3. Deployment stage:
    - `publish-desktop-release`
-   - `desktop-production-stage`
+   - `desktop-deployment-stage`
 4. Final decision:
    - `desktop-release-decision`
 
-If desktop scope is not required, acceptance/production return explicit `not-required` semantics and final decision remains releaseable.
+If desktop scope is not required, acceptance/deployment return explicit `not-required` semantics and final decision remains releasable.
 
 ## Required GitHub Environment
 
@@ -79,38 +75,38 @@ Desktop runtime config:
 ## Build-Once / Promote-Same Contract
 
 - Acceptance builds signed macOS/Windows installers once.
-- Production publishes the accepted installer artifacts.
-- Production must not rebuild installers.
+- Deployment publishes the accepted installer artifacts.
+- Deployment must not rebuild installers.
 
 Canonical artifacts:
 
-- `.artifacts/desktop-candidate/<sha>/manifest.json`
-- `.artifacts/desktop-acceptance/<sha>/result.json`
-- `.artifacts/desktop-production/<sha>/result.json`
+- `.artifacts/desktop-release-candidate/<sha>/manifest.json`
+- `.artifacts/desktop-automated-acceptance-test-gate/<sha>/result.json`
+- `.artifacts/desktop-deployment-stage/<sha>/result.json`
 - `.artifacts/desktop-release/<sha>/decision.json`
 
 ## Verification Checklist
 
-1. `desktop-acceptance-stage` decision is `YES`.
+1. `desktop-automated-acceptance-test-gate` decision is `YES`.
 2. desktop backend compatibility contract passed (`/api/v1/health` and `/api/v1/openapi.json`).
 3. macOS verification succeeded (`codesign`, `spctl`, notarization stapler validation).
 4. Windows Authenticode verification is `Valid`.
 5. `publish-desktop-release` produced `.dmg`, `.msi`, and `SHA256SUMS.txt`.
-6. `desktop-release-decision` artifact exists and `releaseable` is true.
+6. `desktop-release-decision` artifact exists and `releasable` is true.
 
 ## Failure Recovery
 
-- If candidate scope/contract fails:
+- If release candidate scope/contract fails:
   - fix-forward on `main`, then rerun pipeline.
 - If signing fails:
   - verify environment secrets/variables and signing identities.
 - If replay is needed:
-  - run `desktop-deployment-pipeline.yml` via `workflow_dispatch` with `candidate_sha`.
+  - run `desktop-deployment-pipeline.yml` via `workflow_dispatch` with `release_candidate_sha`.
 
 ## Rollback
 
 Desktop rollback is release-asset level:
 
 1. Mark bad release as draft or remove assets.
-2. Replay/publish a prior accepted candidate with a new release tag.
+2. Replay/publish a prior accepted release candidate with a new release tag.
 3. Keep decision artifacts for both bad and corrected releases.

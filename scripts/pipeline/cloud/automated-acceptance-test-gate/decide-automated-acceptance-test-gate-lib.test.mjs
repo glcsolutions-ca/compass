@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { evaluateAcceptanceStageResults } from "./decide-acceptance-stage-lib.mjs";
+import { evaluateAcceptanceStageResults } from "./decide-automated-acceptance-test-gate-lib.mjs";
 
 function base(overrides = {}) {
   return {
     checkResults: {
-      "load-release-package": "success",
+      "load-release-candidate": "success",
       "runtime-api-system-acceptance": "skipped",
       "runtime-browser-acceptance": "skipped",
       "runtime-migration-image-acceptance": "skipped",
@@ -14,8 +14,8 @@ function base(overrides = {}) {
     runtimeRequired: false,
     infraRequired: false,
     identityRequired: false,
-    releasePackageRefContractStatus: "pass",
-    releasePackageRefContractReasonCodes: [],
+    releaseCandidateRefContractStatus: "pass",
+    releaseCandidateRefContractReasonCodes: [],
     identityConfigContractStatus: "pass",
     identityConfigContractReasonCodes: [],
     ...overrides
@@ -23,11 +23,11 @@ function base(overrides = {}) {
 }
 
 describe("evaluateAcceptanceStageResults", () => {
-  it("always requires load-release-package", () => {
+  it("always requires load-release-candidate", () => {
     const reasons = evaluateAcceptanceStageResults(
       base({
         checkResults: {
-          "load-release-package": "failure",
+          "load-release-candidate": "failure",
           "runtime-api-system-acceptance": "skipped",
           "runtime-browser-acceptance": "skipped",
           "runtime-migration-image-acceptance": "skipped",
@@ -39,8 +39,8 @@ describe("evaluateAcceptanceStageResults", () => {
 
     expect(reasons).toEqual([
       {
-        code: "CHECK_LOAD_RELEASE_PACKAGE_NOT_SUCCESS",
-        message: "load-release-package result is failure"
+        code: "CHECK_LOAD_RELEASE_CANDIDATE_NOT_SUCCESS",
+        message: "load-release-candidate result is failure"
       }
     ]);
   });
@@ -52,7 +52,7 @@ describe("evaluateAcceptanceStageResults", () => {
         infraRequired: true,
         identityRequired: true,
         checkResults: {
-          "load-release-package": "success",
+          "load-release-candidate": "success",
           "runtime-api-system-acceptance": "failure",
           "runtime-browser-acceptance": "cancelled",
           "runtime-migration-image-acceptance": "timed_out",
@@ -91,7 +91,7 @@ describe("evaluateAcceptanceStageResults", () => {
       base({
         infraRequired: true,
         checkResults: {
-          "load-release-package": "success",
+          "load-release-candidate": "success",
           "runtime-api-system-acceptance": "skipped",
           "runtime-browser-acceptance": "skipped",
           "runtime-migration-image-acceptance": "skipped",
@@ -115,15 +115,15 @@ describe("evaluateAcceptanceStageResults", () => {
         runtimeRequired: true,
         identityRequired: true,
         checkResults: {
-          "load-release-package": "success",
+          "load-release-candidate": "success",
           "runtime-api-system-acceptance": "success",
           "runtime-browser-acceptance": "success",
           "runtime-migration-image-acceptance": "success",
           "infra-readonly-acceptance": "skipped",
           "identity-readonly-acceptance": "success"
         },
-        releasePackageRefContractStatus: "fail",
-        releasePackageRefContractReasonCodes: ["RELEASE_PACKAGE_API_REF_MISSING"],
+        releaseCandidateRefContractStatus: "fail",
+        releaseCandidateRefContractReasonCodes: ["RELEASE_CANDIDATE_API_REF_MISSING"],
         identityConfigContractStatus: "fail",
         identityConfigContractReasonCodes: ["IDENTITY_API_IDENTIFIER_URI_INVALID_FORMAT"]
       })
@@ -131,9 +131,9 @@ describe("evaluateAcceptanceStageResults", () => {
 
     expect(reasons).toEqual([
       {
-        code: "CONFIG_CONTRACT_RELEASE_PACKAGE_REFS_NOT_PASS",
+        code: "CONFIG_CONTRACT_RELEASE_CANDIDATE_REFS_NOT_PASS",
         message:
-          "release package ref contract required for runtime/infra acceptance but status is fail (RELEASE_PACKAGE_API_REF_MISSING)"
+          "release candidate ref contract required for runtime/infra acceptance but status is fail (RELEASE_CANDIDATE_API_REF_MISSING)"
       },
       {
         code: "CONFIG_CONTRACT_IDENTITY_NOT_PASS",

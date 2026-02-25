@@ -7,6 +7,7 @@ import { validateMigrationPolicy } from "./migration-policy-lib.mjs";
 const require = createRequire(import.meta.url);
 const cliPath = require.resolve("node-pg-migrate/bin/node-pg-migrate");
 const migrationsDir = path.resolve("db/migrations");
+const migrationsGlob = path.join(migrationsDir, "*.mjs");
 // Scratch-drill trigger marker: intentionally non-functional.
 // Final-proof scratch-drill marker: intentionally non-functional.
 // Post-infra-fix scratch-drill marker: intentionally non-functional.
@@ -62,7 +63,8 @@ async function main() {
     cliPath,
     command,
     "--migrations-dir",
-    migrationsDir,
+    migrationsGlob,
+    "--use-glob",
     "--migrations-table",
     migrationsTable,
     "--schema",

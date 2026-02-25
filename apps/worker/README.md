@@ -4,6 +4,9 @@
 
 `apps/worker` processes asynchronous Service Bus messages for Compass event workflows.
 
+The root `pnpm dev` command does not start the worker by default.
+Start it explicitly with `pnpm dev:worker` (or `pnpm dev:all`).
+
 ## Queue Processing Lifecycle
 
 1. Load runtime config from environment.
@@ -27,6 +30,8 @@ Configuration is parsed in `src/config.ts`.
 | `WORKER_MAX_WAIT_SECONDS`               | `15`    | Positive integer used by `once` mode for long-poll timeout (`maxWaitTimeInMs`). |
 
 Local template: `apps/worker/.env.example`.
+
+For local runs, you also need valid Azure credentials for `DefaultAzureCredential` and queue `Listen` permissions.
 
 ## Settlement Behavior
 

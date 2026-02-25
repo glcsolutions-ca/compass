@@ -25,6 +25,11 @@ const CodexAppConfigSchema = z.object({
 
 export type CodexAppConfig = z.infer<typeof CodexAppConfigSchema>;
 
+function normalizeOptionalString(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : undefined;
+}
+
 export function loadCodexAppConfig(env: NodeJS.ProcessEnv = process.env): CodexAppConfig {
   const entraAllowedTenantIds = env.ENTRA_ALLOWED_TENANT_IDS
     ? env.ENTRA_ALLOWED_TENANT_IDS.split(",")
@@ -37,16 +42,16 @@ export function loadCodexAppConfig(env: NodeJS.ProcessEnv = process.env): CodexA
     host: env.CODEX_HOST,
     port: env.CODEX_PORT ? Number(env.CODEX_PORT) : undefined,
     logLevel: env.LOG_LEVEL,
-    databaseUrl: env.DATABASE_URL,
+    databaseUrl: normalizeOptionalString(env.DATABASE_URL),
     codexBinPath: env.CODEX_BIN_PATH,
     codexHome: env.CODEX_HOME,
-    serviceApiKey: env.OPENAI_API_KEY,
+    serviceApiKey: normalizeOptionalString(env.OPENAI_API_KEY),
     clientName: env.CODEX_CLIENT_NAME,
     clientVersion: env.CODEX_CLIENT_VERSION,
     startOnBoot: env.CODEX_START_ON_BOOT,
-    entraClientId: env.ENTRA_CLIENT_ID,
-    entraClientSecret: env.ENTRA_CLIENT_SECRET,
-    entraRedirectUri: env.ENTRA_REDIRECT_URI,
+    entraClientId: normalizeOptionalString(env.ENTRA_CLIENT_ID),
+    entraClientSecret: normalizeOptionalString(env.ENTRA_CLIENT_SECRET),
+    entraRedirectUri: normalizeOptionalString(env.ENTRA_REDIRECT_URI),
     entraAllowedTenantIds,
     entraLoginEnabled: env.ENTRA_LOGIN_ENABLED,
     authDevFallbackEnabled: env.AUTH_DEV_FALLBACK_ENABLED

@@ -197,7 +197,9 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Collect runtime coverage (non-blocking)
-        run: pnpm test:coverage
+        env:
+          TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
+        run: pnpm ci:runtime-coverage
 
       - name: Upload runtime coverage artifact
         if: ${{ always() }}
@@ -205,6 +207,7 @@ jobs:
         with:
           name: integration-gate-runtime-coverage-${{ needs.determine_scope.outputs.tested_sha }}
           path: |
+            .artifacts/runtime-coverage/${{ needs.determine_scope.outputs.tested_sha }}/result.json
             apps/api/coverage
             apps/web/coverage
             apps/worker/coverage

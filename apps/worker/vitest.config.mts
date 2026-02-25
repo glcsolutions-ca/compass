@@ -6,6 +6,10 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
-    setupFiles: ["../../packages/testkit/guardrails/commit-stage.setup.mjs"]
+    setupFiles: ["../../packages/testkit/guardrails/commit-stage.setup.mjs"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json-summary", "html", "clover"]
+    }
   }
 });

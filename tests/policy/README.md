@@ -19,6 +19,7 @@ Testing philosophy lives in `tests/README.md`. This folder defines how that phil
 
 - `tests/policy/test-policy.json`: machine-readable policy contract for layers 1-3.
 - `tests/policy/test-quarantine.json`: temporary skip metadata used by `TC011`.
+- `tests/policy/runtime-coverage-policy.json`: runtime coverage thresholds and observe/enforce mode.
 - `tests/policy/README.md`: policy, quarantine, and troubleshooting guidance.
 - `.github/policy/pipeline-policy.json`: machine-readable high-risk mainline policy (`HR001`).
 - `.github/CODEOWNERS`: review ownership for policy and enforcement files.
@@ -75,6 +76,13 @@ Runtime mode settings are loaded from `tests/policy/test-policy.json` through
 - No DB client imports in commit-stage test globs
 
 Commit-stage lint globs and import restrictions are derived from `tests/policy/test-policy.json`.
+
+### Layer 4: Runtime coverage ratchet (observe first)
+
+- Coverage is collected by `pnpm ci:runtime-coverage`.
+- Thresholds are defined in `tests/policy/runtime-coverage-policy.json`.
+- `mode: "observe"` records threshold misses without blocking release.
+- `mode: "enforce"` converts threshold misses into gate failures.
 
 ## Policy schema summary (`test-policy.json`)
 

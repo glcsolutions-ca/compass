@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "1",
+  "mode": "observe",
+  "minimumStableRunsBeforeEnforce": 3,
+  "packages": {
+    "@compass/api": {
+      "summaryPath": "apps/api/coverage/coverage-summary.json",
+      "thresholds": {
+        "statements": 65,
+        "branches": 80,
+        "functions": 35,
+        "lines": 65
+      }
+    },
+    "@compass/web": {
+      "summaryPath": "apps/web/coverage/coverage-summary.json",
+      "thresholds": {
+        "statements": 50,
+        "branches": 60,
+        "functions": 25,
+        "lines": 50
+      }
+    },
+    "@compass/worker": {
+      "summaryPath": "apps/worker/coverage/coverage-summary.json",
+      "thresholds": {
+        "statements": 80,
+        "branches": 70,
+        "functions": 55,
+        "lines": 80
+      }
+    },
+    "@compass/contracts": {
+      "summaryPath": "packages/contracts/coverage/coverage-summary.json",
+      "thresholds": {
+        "statements": 90,
+        "branches": 45,
+        "functions": 45,
+        "lines": 90
+      }
+    },
+    "@compass/sdk": {
+      "summaryPath": "packages/sdk/coverage/coverage-summary.json",
+      "thresholds": {
+        "statements": 75,
+        "branches": 50,
+        "functions": 75,
+        "lines": 75
+      }
+    }
+  }
+}

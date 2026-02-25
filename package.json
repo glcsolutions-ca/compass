@@ -36,7 +36,7 @@
     "test:runtime:unit": "pnpm --filter @compass/api test && pnpm --filter @compass/web test && pnpm --filter @compass/worker test && pnpm --filter @compass/contracts test && pnpm --filter @compass/sdk test",
     "test:runtime:integration": "pnpm --filter @compass/api test:integration",
     "test:runtime:smoke": "pnpm ci:smoke:system && pnpm test:acceptance:system && pnpm test:e2e",
-    "test:coverage": "pnpm --filter @compass/api exec vitest run --config vitest.config.mts --coverage && pnpm --filter @compass/web exec vitest run --config vitest.config.mts --coverage --passWithNoTests && pnpm --filter @compass/worker exec vitest run --config vitest.config.mts --coverage && pnpm --filter @compass/contracts exec vitest run --config vitest.config.mts --coverage && pnpm --filter @compass/sdk exec vitest run --config vitest.config.mts --coverage",
+    "test:coverage": "pnpm --filter @compass/api exec vitest run --config vitest.config.mts --coverage && pnpm --filter @compass/web exec vitest run --config vitest.config.mts --coverage && pnpm --filter @compass/worker exec vitest run --config vitest.config.mts --coverage && pnpm --filter @compass/contracts exec vitest run --config vitest.config.mts --coverage && pnpm --filter @compass/sdk exec vitest run --config vitest.config.mts --coverage",
     "test:integration": "pnpm --filter @compass/api test:integration && pnpm --filter @compass/codex-app-server test:integration",
     "test:e2e": "playwright test tests/e2e/smoke.spec.ts --config tests/e2e/playwright.config.ts --reporter=line --workers=1",
     "test:full": "pnpm test && pnpm test:integration",
@@ -57,6 +57,7 @@
     "ci:testing-policy": "node scripts/pipeline/commit/check-testing-policy.mjs",
     "ci:terminology-policy": "node scripts/pipeline/commit/check-terminology-policy.mjs",
     "ci:smoke:system": "tsx tests/commit/smoke.inproc.ts",
+    "ci:runtime-coverage": "pnpm test:coverage && node scripts/pipeline/commit/check-runtime-coverage.mjs",
     "ci:gate:commit-stage": "node scripts/pipeline/commit/decide-commit-stage.mjs",
     "ci:commit-test-suite": "pnpm test && pnpm ci:smoke:system",
     "codex:pin:sync": "node scripts/codex/sync-openai-codex-release.mjs",
@@ -64,7 +65,7 @@
     "desktop:dev": "pnpm --filter @compass/desktop dev:run",
     "desktop:make:mac": "pnpm --filter @compass/desktop make:mac",
     "desktop:make:win": "pnpm --filter @compass/desktop make:win",
-    "test:pipeline-contract": "vitest run scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/decide-integration-gate-lib.test.mjs scripts/pipeline/commit/auto-recover-main.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/check-high-risk-mainline-policy.test.mjs scripts/pipeline/commit/check-auth-openapi-metadata.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/decide-automated-acceptance-test-gate-lib.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/acceptance-blackbox-contract.test.mjs scripts/pipeline/cloud/deployment-stage/apply-infra.test.mjs"
+    "test:pipeline-contract": "vitest run scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/decide-integration-gate-lib.test.mjs scripts/pipeline/commit/auto-recover-main.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/check-high-risk-mainline-policy.test.mjs scripts/pipeline/commit/check-auth-openapi-metadata.test.mjs scripts/pipeline/commit/runtime-coverage-lib.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/decide-automated-acceptance-test-gate-lib.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/acceptance-blackbox-contract.test.mjs scripts/pipeline/cloud/deployment-stage/apply-infra.test.mjs"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

@@ -199,7 +199,19 @@ We standardize on predictable entrypoints so CI and humans run the same commands
 - `pnpm test:coverage`  
   Coverage collection (informational first; thresholds are ratcheted later)
 
+- `pnpm ci:runtime-coverage`  
+  Runtime coverage collection + threshold evaluation against `tests/policy/runtime-coverage-policy.json`
+
 CI should call these scripts directly (avoid “CI-only magic”).
+
+---
+
+## Coverage ratchet rollout
+
+1. Keep `tests/policy/runtime-coverage-policy.json` in `mode: "observe"` while collecting 2-3 green integration-gate runs.
+2. Review `.artifacts/runtime-coverage/<sha>/result.json` for drift and threshold misses.
+3. Raise package thresholds only when a package is consistently above its current floor.
+4. Switch policy mode to `enforce` only after stability is demonstrated.
 
 ---
 

@@ -4,7 +4,6 @@ param location string = 'SET_IN_GITHUB_ENV'
 // Post-infra-fix scratch-drill marker: intentionally non-functional.
 // Post-cert-order-fix final-proof marker: intentionally non-functional.
 // Proof-A infra convergence marker (2026-02-25): intentionally non-functional.
-// Custom-domain convergence marker (2026-02-25): intentionally non-functional.
 
 param vnetName string = 'SET_IN_GITHUB_ENV'
 param acaSubnetName string = 'SET_IN_GITHUB_ENV'

@@ -4,6 +4,11 @@
 
 `tests/system/` contains black-box system smoke checks used by acceptance and production verification paths.
 
+This directory is intentionally different from the in-process commit smoke harness:
+
+- `pnpm ci:smoke:system` runs `tests/commit/smoke.inproc.ts` (in-process app injection for commit/integration gates).
+- `pnpm test:acceptance:system` runs `tests/system/smoke.ts` (black-box HTTP checks against a running target URL).
+
 ## Run Command
 
 ```bash

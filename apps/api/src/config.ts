@@ -4,17 +4,35 @@ export interface ApiConfig {
   logLevel: string;
 }
 
-export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
-  const host = env.API_HOST?.trim() || "0.0.0.0";
-  const port = Number(env.API_PORT ?? "3001");
+const DEFAULT_API_HOST = "0.0.0.0";
+const DEFAULT_API_PORT = 3001;
+const DEFAULT_LOG_LEVEL = "info";
 
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`Invalid API_PORT: ${env.API_PORT}`);
+function parseApiPort(rawPort: string | undefined): number {
+  const portCandidate = rawPort?.trim();
+  if (!portCandidate) {
+    return DEFAULT_API_PORT;
   }
+
+  if (!/^\d+$/.test(portCandidate)) {
+    throw new Error(`Invalid API_PORT: ${portCandidate}`);
+  }
+
+  const port = Number.parseInt(portCandidate, 10);
+  if (port < 1 || port > 65535) {
+    throw new Error(`Invalid API_PORT: ${portCandidate}`);
+  }
+
+  return port;
+}
+
+export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
+  const host = env.API_HOST?.trim() || DEFAULT_API_HOST;
+  const port = parseApiPort(env.API_PORT);
 
   return {
     host,
     port,
-    logLevel: env.LOG_LEVEL?.trim() || "info"
+    logLevel: env.LOG_LEVEL?.trim().toLowerCase() || DEFAULT_LOG_LEVEL
   };
 }

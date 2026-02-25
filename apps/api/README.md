@@ -18,8 +18,8 @@ Configuration is parsed in `src/config.ts`.
 | Env Var     | Default   | Notes                                      |
 | ----------- | --------- | ------------------------------------------ |
 | `API_HOST`  | `0.0.0.0` | Listening host (trimmed).                  |
-| `API_PORT`  | `3001`    | Listening port; must be integer `1-65535`. |
-| `LOG_LEVEL` | `info`    | Log level string (trimmed).                |
+| `API_PORT`  | `3001`    | Listening port; decimal integer `1-65535`. |
+| `LOG_LEVEL` | `info`    | Log level string (trimmed, normalized).    |
 
 Local template: `apps/api/.env.example`.
 
@@ -27,6 +27,8 @@ Local template: `apps/api/.env.example`.
 
 - `buildApiApp` generates OpenAPI via `buildOpenApiDocument()` from `@compass/contracts`.
 - `GET /openapi.json` should include `/health` and `/v1/ping` path operations.
+- Unknown routes return JSON `404` with `{ code, message }`.
+- Malformed JSON request bodies return JSON `400` with `{ code, message }`.
 
 ## Commands
 

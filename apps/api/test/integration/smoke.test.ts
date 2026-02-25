@@ -21,5 +21,9 @@ describe("API integration smoke", () => {
     expect(ping.status).toBe(200);
     expect(ping.body).toEqual({ ok: true, service: "api" });
     expect(missing.status).toBe(404);
+    expect(missing.body).toEqual({
+      code: "NOT_FOUND",
+      message: "Route not found"
+    });
   });
 });

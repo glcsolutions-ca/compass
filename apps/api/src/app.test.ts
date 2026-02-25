@@ -13,6 +13,7 @@ describe("API app", () => {
       status: "ok",
       timestamp: "2026-02-25T00:00:00.000Z"
     });
+    expect(response.headers["x-powered-by"]).toBeUndefined();
   });
 
   it("serves openapi document", async () => {
@@ -33,5 +34,32 @@ describe("API app", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ ok: true, service: "api" });
+  });
+
+  it("returns JSON for unknown routes", async () => {
+    const app = buildApiApp();
+
+    const response = await request(app).get("/does-not-exist");
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      code: "NOT_FOUND",
+      message: "Route not found"
+    });
+  });
+
+  it("returns JSON error for malformed request bodies", async () => {
+    const app = buildApiApp();
+
+    const response = await request(app)
+      .post("/v1/ping")
+      .set("content-type", "application/json")
+      .send('{"broken":');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      code: "INVALID_JSON",
+      message: "Malformed JSON request body"
+    });
   });
 });

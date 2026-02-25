@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EntraLoginAction } from "./entra-login-action";
 import type { LoginPageModel } from "../_lib/login-page.model";
 
 interface LoginPanelProps {
@@ -30,10 +31,18 @@ export function LoginPanel({
         </aside>
 
         <section className="auth-panel">
+          <p className="auth-meta">
+            <span className="auth-badge">Single Sign-On</span>
+            <span>Microsoft Entra</span>
+          </p>
           <h2>Enterprise Access</h2>
           <p className="auth-note">Use your organization account to continue.</p>
 
-          {model.errorMessage ? <p className="auth-error">{model.errorMessage}</p> : null}
+          {model.errorMessage ? (
+            <p className="auth-error" role="alert">
+              {model.errorMessage}
+            </p>
+          ) : null}
 
           {!entraLoginEnabled ? (
             <p className="auth-note">
@@ -48,16 +57,15 @@ export function LoginPanel({
             </p>
           ) : null}
 
-          {setupErrorMessage ? <p className="auth-error">{setupErrorMessage}</p> : null}
+          {setupErrorMessage ? (
+            <p className="auth-error" role="alert">
+              {setupErrorMessage}
+            </p>
+          ) : null}
 
-          <a
-            className={`auth-action${canUseSso ? "" : " disabled"}`}
-            data-testid="entra-login-link"
-            href={canUseSso ? ssoHref : undefined}
-            aria-disabled={!canUseSso}
-          >
-            Continue with Microsoft Entra
-          </a>
+          <div className="auth-divider" aria-hidden="true" />
+
+          <EntraLoginAction href={ssoHref} disabled={!canUseSso} />
         </section>
       </section>
     </main>

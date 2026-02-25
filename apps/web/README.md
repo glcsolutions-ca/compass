@@ -9,8 +9,8 @@ It runs in framework mode with `ssr: false`, producing a client-rendered SPA.
 
 - `app/root.tsx` defines the root HTML layout and app outlet.
 - `app/routes.ts` defines the route manifest.
-- `app/routes/home.tsx` renders the home route and API connectivity state.
-- `src/routes/home.test.tsx` verifies loading/success/error UI states and base-URL fallback behavior.
+- `app/routes/home.tsx` loads API health in a route `clientLoader` and renders connectivity state.
+- `src/routes/home.test.tsx` verifies URL normalization, loader success/failure handling, payload validation, and UI states.
 
 ## Runtime Behavior
 
@@ -18,7 +18,9 @@ The home route:
 
 - resolves API base URL from `VITE_API_BASE_URL`
 - falls back to `http://localhost:3001` when unset
-- calls `GET /health`
+- trims trailing slash characters on the resolved base URL
+- calls `GET /health` from the route `clientLoader` with request cancellation support
+- validates payload shape before rendering status/timestamp diagnostics
 - renders status, timestamp, and request error diagnostics
 
 ## Env Table

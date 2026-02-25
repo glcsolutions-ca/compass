@@ -1,70 +1,108 @@
-import { useEffect, useMemo, useState } from "react";
 import type { MetaFunction } from "react-router";
+import { useLoaderData, useNavigation } from "react-router";
 
 interface HealthResponse {
-  status: string;
+  status: "ok";
   timestamp: string;
 }
 
+export interface HomeLoaderData {
+  apiBaseUrl: string;
+  health: HealthResponse | null;
+  error: string | null;
+}
+
+export interface HomeViewProps extends HomeLoaderData {
+  loading: boolean;
+}
+
 const DEFAULT_API_BASE_URL = "http://localhost:3001";
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "AbortError"
+  );
+}
+
+function parseHealthResponse(payload: unknown): HealthResponse {
+  if (!isRecord(payload) || payload.status !== "ok" || typeof payload.timestamp !== "string") {
+    throw new Error("Health response payload is invalid");
+  }
+
+  return {
+    status: "ok",
+    timestamp: payload.timestamp
+  };
+}
+
+export function resolveApiBaseUrl(candidate: unknown): string {
+  if (typeof candidate !== "string") {
+    return DEFAULT_API_BASE_URL;
+  }
+
+  const trimmed = candidate.trim();
+  if (trimmed.length === 0) {
+    return DEFAULT_API_BASE_URL;
+  }
+
+  return trimmed.replace(/\/+$/, "");
+}
 
 export const meta: MetaFunction = () => {
   return [{ title: "Compass" }, { name: "description", content: "Compass React Router baseline" }];
 };
 
-export default function Home() {
-  const apiBaseUrl = useMemo(() => {
-    const candidate = (import.meta.env as Record<string, unknown>).VITE_API_BASE_URL;
-    const baseUrl =
-      typeof candidate === "string" && candidate.length > 0 ? candidate : DEFAULT_API_BASE_URL;
-    return baseUrl.replace(/\/$/, "");
-  }, []);
+export async function clientLoader({ request }: { request: Request }): Promise<HomeLoaderData> {
+  const apiBaseUrl = resolveApiBaseUrl(
+    (import.meta.env as Record<string, unknown>).VITE_API_BASE_URL
+  );
+  const healthUrl = new URL("health", `${apiBaseUrl}/`);
 
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  try {
+    const response = await fetch(healthUrl, {
+      method: "GET",
+      headers: {
+        accept: "application/json"
+      },
+      signal: request.signal
+    });
 
-  useEffect(() => {
-    let active = true;
-
-    async function run() {
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await fetch(`${apiBaseUrl}/health`, {
-          method: "GET",
-          headers: {
-            accept: "application/json"
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error(`Health request failed with ${response.status}`);
-        }
-
-        const payload = (await response.json()) as HealthResponse;
-        if (active) {
-          setHealth(payload);
-        }
-      } catch (requestError) {
-        if (active) {
-          setHealth(null);
-          setError(requestError instanceof Error ? requestError.message : String(requestError));
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
+    if (!response.ok) {
+      throw new Error(`Health request failed with ${response.status}`);
     }
 
-    void run();
+    const health = parseHealthResponse(await response.json());
 
-    return () => {
-      active = false;
+    return {
+      apiBaseUrl,
+      health,
+      error: null
     };
-  }, [apiBaseUrl]);
+  } catch (requestError) {
+    if (isAbortError(requestError)) {
+      throw requestError;
+    }
 
+    return {
+      apiBaseUrl,
+      health: null,
+      error: formatErrorMessage(requestError)
+    };
+  }
+}
+
+export function HomeView({ apiBaseUrl, health, error, loading }: HomeViewProps) {
   return (
     <main className="page" data-testid="app-shell">
       <section className="panel">
@@ -97,4 +135,11 @@ export default function Home() {
       </section>
     </main>
   );
+}
+
+export default function Home() {
+  const loaderData = useLoaderData<HomeLoaderData>();
+  const navigation = useNavigation();
+
+  return <HomeView {...loaderData} loading={navigation.state !== "idle"} />;
 }

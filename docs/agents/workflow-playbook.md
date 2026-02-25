@@ -45,6 +45,5 @@ Missing pairing evidence fails `pairing-evidence-check` and blocks `commit-stage
 
 ## Governance Invariant
 
-- Branch protection keeps safety controls (enforce admins, no force-push, no deletion) while allowing direct pushes.
-- `commit-stage` and `integration-gate` remain the authoritative push-time gate contexts.
+- Required contexts remain `commit-stage` and `integration-gate`.
 - Legacy batching and PR-review gates are not required for `main`.

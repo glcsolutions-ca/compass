@@ -92,7 +92,7 @@ Integration-gate emits throughput telemetry on push runs:
 
 ## Mainline Red Recovery
 
-`main-red-recovery.yml` listens for completed `Commit Stage` and `Integration Gate` push runs on `main`:
+`main-red-recovery.yml` listens for failed `Integration Gate` push runs on `main`:
 
 - first hard deterministic failure: rerun failed jobs once
 - repeated hard deterministic failure: auto-revert head commit

@@ -11,14 +11,6 @@ import {
 
 const GITHUB_API_VERSION = "2022-11-28";
 const DETERMINISTIC_FAILURE_JOBS = {
-  "Commit Stage": new Set([
-    "determine-scope",
-    "commit-test-suite",
-    "desktop-commit-test-suite",
-    "infra-static-check",
-    "identity-static-check",
-    "commit-stage"
-  ]),
   "Integration Gate": new Set([
     "determine-scope",
     "build-compile",

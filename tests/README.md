@@ -98,9 +98,9 @@ Examples:
 
 ## What runs when (CI policy)
 
-### PR “commit-stage” (default, fast)
+### PR preview (`commit-stage` workflow, optional)
 
-Runs on every PR:
+PR runs are preview feedback only.
 
 - Static checks
 - Unit tests
@@ -109,20 +109,24 @@ Runs on every PR:
 
 Target: minutes, not hours.
 
-### PR “full” (risk-based)
+### Push to `main` (authoritative gates)
 
-Runs when the change is `standard`/`high` risk:
+Pushes to `main` are the release evidence source of truth.
 
-- Integration tests (real Postgres)
-- E2E UI evidence (only when UI/high-risk demands it)
+- `commit-stage` gate (fast commit-test + policy checks)
+- `integration-gate` (push-only integration confidence checks)
+  - includes build/compile, migration safety (when needed), auth-critical in-process smoke, and runtime integration tests
 
-### `main` release candidate
+### Post-deployment verification
 
-We do **not** re-run the whole PR suite.
-`main` focuses on promotion + verification:
+Cloud deployment verification (after promotion/deploy) runs:
 
-- Promote immutable artifacts
-- Smoke verification (and minimal UI evidence when relevant)
+- API smoke verification
+- Browser smoke verification (Playwright evidence)
+
+### Local deep suite (author-driven)
+
+- `pnpm test:full` remains available locally when deeper pre-push confidence is needed.
 
 ---
 

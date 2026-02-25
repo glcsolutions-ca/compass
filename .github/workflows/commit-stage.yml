@@ -113,7 +113,7 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Run fast feedback suite
-        run: pnpm commit:fast-feedback
+        run: pnpm ci:fast-feedback
 
   desktop_fast_feedback:
     name: desktop-fast-feedback

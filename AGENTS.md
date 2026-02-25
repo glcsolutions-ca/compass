@@ -16,7 +16,7 @@ compass/
 
 - `pnpm install` - install workspace dependencies
 - `pnpm dev` - run local apps/services
-- `pnpm check` - run format, lint, typecheck, tests, and policy checks
+- `pnpm test` - run format, lint, typecheck, tests, and policy checks
 - `pnpm build` - build all apps/packages
 - `pnpm db:postgres:up` - start local Postgres, migrate, and seed
 - `pnpm db:postgres:down` - stop local Postgres

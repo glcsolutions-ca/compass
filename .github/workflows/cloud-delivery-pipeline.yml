@@ -1562,7 +1562,7 @@ jobs:
       - name: Browser smoke verification
         env:
           PR_NUMBER: 0
-        run: pnpm acceptance:browser-evidence
+        run: pnpm test:acceptance:browser
 
       - name: Upload post-deploy artifacts
         if: ${{ always() }}

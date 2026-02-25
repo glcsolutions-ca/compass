@@ -25,7 +25,7 @@ pnpm dev
 - `pnpm test:full` - run commit-stage + integration tests
 - `pnpm test:integration` - run integration tests only
 - `pnpm test:e2e` - run Playwright smoke flow only
-- `pnpm check` - alias of `pnpm test` (kept for compatibility)
+- `pnpm test:static` - run policy + formatting + lint + typecheck checks
 - `pnpm build` - build all apps/packages
 - `pnpm db:postgres:up` - start local Postgres, apply migrations, seed data
 - `pnpm db:postgres:down` - stop local Postgres

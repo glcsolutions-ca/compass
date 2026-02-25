@@ -166,7 +166,7 @@ fi
 BASE_URL=http://127.0.0.1:3001 \
 AUTH_SMOKE_TOKEN="$delegated_smoke_token" \
 APP_SMOKE_TOKEN="$app_smoke_token" \
-pnpm acceptance:system-smoke
+pnpm test:acceptance:system
 `);
 
     await writeJsonFile(artifactPath, {

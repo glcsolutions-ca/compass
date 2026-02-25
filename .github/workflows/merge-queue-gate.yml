@@ -145,7 +145,7 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Run auth-critical smoke
-        run: pnpm commit:system-smoke
+        run: pnpm ci:smoke:system
 
       - name: Upload auth smoke artifact
         if: ${{ always() }}

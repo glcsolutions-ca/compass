@@ -13,9 +13,9 @@ pnpm build
 3. For delivery-config changes, run contract-focused commands:
 
 ```bash
-pnpm commit:scope
-pnpm commit:testing-policy
-pnpm commit:docs-drift
+pnpm ci:scope
+pnpm ci:testing-policy
+pnpm ci:docs-drift
 ```
 
 4. Update docs when policy/workflow/scripting behavior changes.

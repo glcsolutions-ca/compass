@@ -45,7 +45,7 @@ pnpm --filter @compass/sdk generate
 4. Run contract drift check:
 
 ```bash
-pnpm check:contract
+pnpm contract:check
 ```
 
 ### Change Safety

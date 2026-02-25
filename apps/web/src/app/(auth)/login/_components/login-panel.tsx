@@ -17,6 +17,7 @@ export function LoginPanel({
 }: LoginPanelProps) {
   const ssoHref = `/api/auth/entra/start?next=${encodeURIComponent(model.nextPath)}`;
   const canUseSso = entraLoginEnabled && !setupErrorMessage;
+  const ssoReadyMessageId = canUseSso ? "sso-ready-note" : undefined;
 
   return (
     <main className="auth-page">
@@ -37,6 +38,12 @@ export function LoginPanel({
           </p>
           <h2>Enterprise Access</h2>
           <p className="auth-note">Use your organization account to continue.</p>
+
+          {canUseSso ? (
+            <p className="auth-ready" id={ssoReadyMessageId}>
+              Single sign-on is active. You&apos;ll be redirected to Microsoft Entra to continue.
+            </p>
+          ) : null}
 
           {model.errorMessage ? (
             <p className="auth-error" role="alert">
@@ -65,7 +72,11 @@ export function LoginPanel({
 
           <div className="auth-divider" aria-hidden="true" />
 
-          <EntraLoginAction href={ssoHref} disabled={!canUseSso} />
+          <EntraLoginAction
+            href={ssoHref}
+            disabled={!canUseSso}
+            describedById={ssoReadyMessageId}
+          />
         </section>
       </section>
     </main>

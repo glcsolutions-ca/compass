@@ -41,21 +41,15 @@ When docs and implementation differ, implementation wins:
 - `desktop-commit-test-suite` (desktop changes when not docs-only)
 - `infra-static-check` (infra changes)
 - `identity-static-check` (identity changes)
-- `pairing-evidence-check` (pushes to `main` when high-risk scopes are present by policy)
 - `commit-stage` final decision (deterministic reason codes + timing SLO evaluation)
 
-## Pairing Evidence Policy
+## High-Risk Local Policy
 
-High-risk scope enforcement is policy-driven:
+High-risk changes are enforced by local static policy `HR001`:
 
-- `pairingPolicy.highRiskScopes`: `infra`, `identity`, `migration`
-- `pairingPolicy.trailerKey`: `Paired-With`
-
-Required trailer example for high-risk mainline pushes:
-
-```text
-Paired-With: @github-handle
-```
+- high-risk path categories are defined in `highRiskMainlinePolicy` within `.github/policy/pipeline-policy.json`
+- commits on `main` that touch high-risk paths are blocked locally and routed to PR + CODEOWNER review
+- CODEOWNER target is policy-driven (`highRiskMainlinePolicy.codeOwners`)
 
 ## Integration-Gate Checks
 

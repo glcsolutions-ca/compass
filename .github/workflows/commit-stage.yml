@@ -174,48 +174,6 @@ jobs:
       - name: Terraform validate
         run: terraform -chdir=infra/identity validate
 
-  pairing_evidence_check:
-    name: pairing-evidence-check
-    needs:
-      - determine_scope
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      pairing_required: ${{ steps.pairing.outputs.pairing_required }}
-      trailer_key: ${{ steps.pairing.outputs.trailer_key }}
-      high_risk_scopes: ${{ steps.pairing.outputs.high_risk_scopes }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-
-      - name: Check pairing evidence
-        id: pairing
-        env:
-          HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
-          EVENT_NAME: ${{ github.event_name }}
-          HEAD_BRANCH: ${{ github.ref_name }}
-          SCOPE_INFRA: ${{ needs.determine_scope.outputs.infra_changed }}
-          SCOPE_IDENTITY: ${{ needs.determine_scope.outputs.identity_changed }}
-          SCOPE_MIGRATION: ${{ needs.determine_scope.outputs.migration_changed }}
-          SCOPE_PATH: ${{ needs.determine_scope.outputs.scope_path }}
-        run: node scripts/pipeline/commit/check-pairing-evidence.mjs
-
-      - name: Upload pairing-evidence artifact
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: pairing-evidence-${{ needs.determine_scope.outputs.tested_sha }}
-          path: .artifacts/pairing-evidence/${{ needs.determine_scope.outputs.tested_sha }}/result.json
-          if-no-files-found: warn
-
   commit_stage:
     name: commit-stage
     if: ${{ always() }}
@@ -225,7 +183,6 @@ jobs:
       - desktop_commit_test_suite
       - infra_static_check
       - identity_static_check
-      - pairing_evidence_check
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -256,14 +213,13 @@ jobs:
           DESKTOP_REQUIRED: ${{ needs.determine_scope.outputs.desktop_changed == 'true' && needs.determine_scope.outputs.docs_only_changed != 'true' }}
           INFRA_REQUIRED: ${{ needs.determine_scope.outputs.infra_changed }}
           IDENTITY_REQUIRED: ${{ needs.determine_scope.outputs.identity_changed }}
-          PAIRING_REQUIRED: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.pairing_evidence_check.outputs.pairing_required == 'true' }}
           DOCS_DRIFT_BLOCKING: ${{ needs.determine_scope.outputs.docs_drift_blocking }}
           DOCS_DRIFT_STATUS: ${{ needs.determine_scope.outputs.docs_drift_status }}
           COMMIT_STAGE_SLO_MODE: ${{ steps.timing.outputs.commit_stage_slo_mode }}
           COMMIT_STAGE_SLO_PASS: ${{ steps.timing.outputs.commit_stage_slo_pass }}
           COMMIT_STAGE_SLO_TARGET_SECONDS: ${{ steps.timing.outputs.commit_stage_slo_target_seconds }}
           TIME_TO_COMMIT_GATE_SECONDS: ${{ steps.timing.outputs.time_to_commit_gate_seconds }}
-          CHECK_RESULTS_JSON: ${{ format('{{"determine-scope":"{0}","commit-test-suite":"{1}","desktop-commit-test-suite":"{2}","infra-static-check":"{3}","identity-static-check":"{4}","pairing-evidence-check":"{5}"}}', needs.determine_scope.result, needs.commit_test_suite.result, needs.desktop_commit_test_suite.result, needs.infra_static_check.result, needs.identity_static_check.result, needs.pairing_evidence_check.result) }}
+          CHECK_RESULTS_JSON: ${{ format('{{"determine-scope":"{0}","commit-test-suite":"{1}","desktop-commit-test-suite":"{2}","infra-static-check":"{3}","identity-static-check":"{4}"}}', needs.determine_scope.result, needs.commit_test_suite.result, needs.desktop_commit_test_suite.result, needs.infra_static_check.result, needs.identity_static_check.result) }}
         run: node scripts/pipeline/commit/decide-commit-stage.mjs
 
       - name: Upload commit-stage artifact

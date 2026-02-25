@@ -15,7 +15,6 @@
 | `decide-commit-stage.mjs`             | `.github/workflows/commit-stage.yml`       | Final commit-stage gate decision from required check outcomes and docs-drift state.            | `.artifacts/commit-stage/<sha>/result.json`     |
 | `decide-integration-gate.mjs`         | `.github/workflows/integration-gate.yml`   | Final integration gate decision for push-main checks and docs-drift state.                     | `.artifacts/integration-gate/<sha>/result.json` |
 | `decide-integration-gate-lib.mjs`     | unit tests + integration gate              | Reason-code evaluator for integration-gate decisions.                                          | n/a                                             |
-| `check-pairing-evidence.mjs`          | `.github/workflows/commit-stage.yml`       | Enforces `Paired-With` trailer for high-risk pushes to `main` based on policy scopes.          | `.artifacts/pairing-evidence/<sha>/result.json` |
 | `auto-recover-main.mjs`               | `.github/workflows/main-red-recovery.yml`  | Reruns hard deterministic failures once, then auto-reverts repeated failures on `main`.        | `.artifacts/main-recovery/<sha>/result.json`    |
 
 ## Expected Artifacts
@@ -26,7 +25,6 @@
 - `.artifacts/integration-gate/<sha>/result.json`
 - `.artifacts/testing-policy/<sha>/result.json`
 - `.artifacts/docs-drift/<sha>/result.json`
-- `.artifacts/pairing-evidence/<sha>/result.json`
 - `.artifacts/main-recovery/<sha>/result.json`
 
 ## Local Execution Notes

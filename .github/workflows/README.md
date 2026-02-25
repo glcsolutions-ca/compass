@@ -17,7 +17,7 @@
 - `commit-stage.yml`
   - trigger: `push` to `main`, optional `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`)
   - required check: `commit-stage`
-  - key jobs: `determine-scope`, scope-aware `commit-test-suite`, scope-aware `desktop-commit-test-suite`, optional static checks, high-risk `pairing-evidence-check`, final `commit-stage`
+  - key jobs: `determine-scope`, scope-aware `commit-test-suite`, scope-aware `desktop-commit-test-suite`, optional static checks, final `commit-stage`
   - behavior: push-to-main is authoritative; PR runs provide optional preview feedback
   - key artifact: `.artifacts/commit-stage/<sha>/timing.json`
 

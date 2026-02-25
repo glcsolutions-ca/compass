@@ -33,15 +33,11 @@ pnpm ci:terminology-policy
 8. Release decision writes `.artifacts/release/<sha>/decision.json`.
 9. `main-red-recovery.yml` auto-reruns once, then auto-reverts repeated hard deterministic gate failures.
 
-## High-Risk Pairing Rule
+## High-Risk Mainline Rule
 
-For pushes that touch `infra`, `identity`, or `migration`, include:
+For commits on `main`, local static policy `HR001` blocks staged high-risk changes and routes work to PR flow.
 
-```text
-Paired-With: @github-handle
-```
-
-Missing pairing evidence fails `pairing-evidence-check` and blocks `commit-stage`.
+Use the guidance printed by `HR001`: create a branch, commit, push, open PR, and request CODEOWNER review.
 
 ## Governance Invariant
 

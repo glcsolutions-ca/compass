@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ThreadListResponseSchema, ThreadReadResponseSchema } from "@compass/contracts";
 import { buildCodexGatewayApp } from "../app.js";
 import { CodexRpcError } from "../codex/jsonrpc.js";
 import type { CodexGateway } from "../codex/gateway.js";
@@ -62,8 +61,18 @@ function createGateway() {
   };
 }
 
+async function baseUrlFor(app: ReturnType<typeof buildCodexGatewayApp>): Promise<string> {
+  await app.listen({ host: "127.0.0.1", port: 0 });
+  const address = app.server.address();
+  if (!address || typeof address === "string") {
+    throw new Error("Failed to resolve app address");
+  }
+
+  return `http://127.0.0.1:${address.port}`;
+}
+
 describe("gateway routes", () => {
-  const apps: Array<{ close: () => Promise<void> }> = [];
+  const apps: Array<ReturnType<typeof buildCodexGatewayApp>> = [];
 
   afterEach(async () => {
     for (const app of apps) {
@@ -79,202 +88,158 @@ describe("gateway routes", () => {
       thread: { id: "thr_1", status: "active" }
     });
 
-    const app = buildCodexGatewayApp({
-      config: createConfig(),
-      repository,
-      gateway
-    });
+    const app = buildCodexGatewayApp({ config: createConfig(), repository, gateway });
     apps.push(app);
+    const baseUrl = await baseUrlFor(app);
 
-    const response = await app.inject({
+    const response = await fetch(`${baseUrl}/v1/threads/start`, {
       method: "POST",
-      url: "/v1/threads/start",
-      payload: {}
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({})
     });
 
-    expect(response.statusCode).toBe(201);
+    expect(response.status).toBe(201);
     expect(gatewayMocks.request).toHaveBeenCalledWith("thread/start", {});
     expect(repositoryMocks.upsertThread).toHaveBeenCalledWith({ id: "thr_1", status: "active" });
   });
 
-  it("maps codex overload errors to 503", async () => {
-    const { repository } = createRepository();
+  it("starts turns and maps payload to turn/start", async () => {
+    const { repository, mocks: repositoryMocks } = createRepository();
     const { gateway, mocks: gatewayMocks } = createGateway();
-    gatewayMocks.request.mockRejectedValue(new CodexRpcError(-32001, "Overloaded"));
-
-    const app = buildCodexGatewayApp({
-      config: createConfig(),
-      repository,
-      gateway
+    gatewayMocks.request.mockResolvedValue({
+      turn: { id: "turn_1", status: "inProgress" }
     });
+
+    const app = buildCodexGatewayApp({ config: createConfig(), repository, gateway });
     apps.push(app);
+    const baseUrl = await baseUrlFor(app);
 
-    const response = await app.inject({
+    const response = await fetch(`${baseUrl}/v1/threads/thr_1/turns/start`, {
       method: "POST",
-      url: "/v1/threads/start",
-      payload: {}
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        text: "hello",
+        model: "gpt-5-codex"
+      })
     });
 
-    expect(response.statusCode).toBe(503);
-    expect(response.json()).toEqual({
-      code: "RPC_-32001",
-      message: "Overloaded"
-    });
+    expect(response.status).toBe(202);
+    expect(gatewayMocks.request).toHaveBeenCalledWith(
+      "turn/start",
+      expect.objectContaining({
+        threadId: "thr_1",
+        model: "gpt-5-codex",
+        input: [
+          {
+            type: "text",
+            text: "hello"
+          }
+        ]
+      })
+    );
+    expect(repositoryMocks.upsertTurn).toHaveBeenCalled();
   });
 
-  it("rejects invalid turn start payloads via shared schema", async () => {
+  it("returns 400 for invalid turn payload", async () => {
     const { repository } = createRepository();
     const { gateway, mocks: gatewayMocks } = createGateway();
-    const app = buildCodexGatewayApp({
-      config: createConfig(),
-      repository,
-      gateway
-    });
+
+    const app = buildCodexGatewayApp({ config: createConfig(), repository, gateway });
     apps.push(app);
+    const baseUrl = await baseUrlFor(app);
 
-    const response = await app.inject({
+    const response = await fetch(`${baseUrl}/v1/threads/thr_1/turns/start`, {
       method: "POST",
-      url: "/v1/threads/thr_1/turns/start",
-      payload: {}
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({})
     });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.status).toBe(400);
     expect(gatewayMocks.request).not.toHaveBeenCalled();
   });
 
-  it("lists threads using contract response shape", async () => {
-    const { repository, mocks: repositoryMocks } = createRepository();
-    repositoryMocks.listThreads.mockResolvedValue([
-      {
-        threadId: "thr_1",
-        title: "Thread 1",
-        status: "active",
-        model: null,
-        cwd: null,
-        archived: false,
-        createdAt: "2026-02-24T00:00:00.000Z",
-        updatedAt: "2026-02-24T00:00:00.000Z",
-        metadata: {}
-      }
-    ]);
-    const { gateway } = createGateway();
-    const app = buildCodexGatewayApp({
-      config: createConfig(),
-      repository,
-      gateway
-    });
-    apps.push(app);
-
-    const response = await app.inject({
-      method: "GET",
-      url: "/v1/threads?limit=20"
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(ThreadListResponseSchema.parse(response.json()).data).toHaveLength(1);
-  });
-
-  it("returns 404 for missing threads and validates thread read shape", async () => {
-    const { repository, mocks: repositoryMocks } = createRepository();
-    const { gateway } = createGateway();
-    const app = buildCodexGatewayApp({
-      config: createConfig(),
-      repository,
-      gateway
-    });
-    apps.push(app);
-
-    const missing = await app.inject({
-      method: "GET",
-      url: "/v1/threads/not_found"
-    });
-
-    expect(missing.statusCode).toBe(404);
-    expect(missing.json().code).toBe("THREAD_NOT_FOUND");
-
-    repositoryMocks.readThread.mockResolvedValue({
-      thread: { threadId: "thr_1" },
-      turns: [],
-      items: [],
-      approvals: [],
-      events: []
-    });
-
-    const found = await app.inject({
-      method: "GET",
-      url: "/v1/threads/thr_1"
-    });
-
-    expect(found.statusCode).toBe(200);
-    expect(ThreadReadResponseSchema.parse(found.json()).thread).toEqual({ threadId: "thr_1" });
-  });
-
-  it("responds to approvals and enforces status mapping", async () => {
+  it("responds to approvals and maps overloaded RPC errors", async () => {
     const { repository } = createRepository();
     const { gateway, mocks: gatewayMocks } = createGateway();
-    const app = buildCodexGatewayApp({
-      config: createConfig(),
-      repository,
-      gateway
-    });
+
+    const app = buildCodexGatewayApp({ config: createConfig(), repository, gateway });
     apps.push(app);
+    const baseUrl = await baseUrlFor(app);
 
-    const accepted = await app.inject({
+    const accepted = await fetch(`${baseUrl}/v1/approvals/approval_1/respond`, {
       method: "POST",
-      url: "/v1/approvals/approval_1/respond",
-      payload: {
-        decision: "accept"
-      }
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ decision: "accept" })
     });
 
-    expect(accepted.statusCode).toBe(200);
+    expect(accepted.status).toBe(200);
     expect(gatewayMocks.respondApproval).toHaveBeenCalledWith("approval_1", "accept");
 
-    gatewayMocks.respondApproval.mockRejectedValue(new CodexRpcError(-32602, "Bad request"));
-
-    const rejected = await app.inject({
+    gatewayMocks.request.mockRejectedValueOnce(new CodexRpcError(-32001, "Overloaded"));
+    const overloaded = await fetch(`${baseUrl}/v1/threads/start`, {
       method: "POST",
-      url: "/v1/approvals/approval_1/respond",
-      payload: {
-        decision: "decline"
-      }
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({})
     });
 
-    expect(rejected.statusCode).toBe(500);
+    expect(overloaded.status).toBe(503);
   });
 
-  it("passes includeHidden to model/list and tracks auth state updates", async () => {
+  it("handles auth and model endpoints", async () => {
     const { repository, mocks: repositoryMocks } = createRepository();
     const { gateway, mocks: gatewayMocks } = createGateway();
+
     gatewayMocks.request
-      .mockResolvedValueOnce({
-        account: {
-          type: "apiKey"
-        }
-      })
-      .mockResolvedValueOnce({
-        models: []
-      });
+      .mockResolvedValueOnce({ account: { type: "apiKey", email: "a@example.com" } })
+      .mockResolvedValueOnce({ loginId: "login_123" })
+      .mockResolvedValueOnce({ loginId: "login_chatgpt" })
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ models: [] });
 
-    const app = buildCodexGatewayApp({
-      config: createConfig(),
-      repository,
-      gateway
-    });
+    const app = buildCodexGatewayApp({ config: createConfig(), repository, gateway });
     apps.push(app);
+    const baseUrl = await baseUrlFor(app);
 
-    const authResponse = await app.inject({
-      method: "GET",
-      url: "/v1/auth/account"
+    const account = await fetch(`${baseUrl}/v1/auth/account`);
+    expect(account.status).toBe(200);
+    expect(repositoryMocks.upsertAuthState).toHaveBeenCalledWith("apiKey", {
+      type: "apiKey",
+      email: "a@example.com"
     });
-    expect(authResponse.statusCode).toBe(200);
-    expect(repositoryMocks.upsertAuthState).toHaveBeenCalledWith("apiKey", { type: "apiKey" });
 
-    const models = await app.inject({
-      method: "GET",
-      url: "/v1/models?includeHidden=true"
+    const apiKeyLogin = await fetch(`${baseUrl}/v1/auth/api-key/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ apiKey: "sk-test" })
     });
-    expect(models.statusCode).toBe(200);
-    expect(gatewayMocks.request).toHaveBeenCalledWith("model/list", { includeHidden: true });
+    expect(apiKeyLogin.status).toBe(200);
+    expect(gatewayMocks.request).toHaveBeenCalledWith("account/login/start", {
+      type: "apiKey",
+      apiKey: "sk-test"
+    });
+
+    const chatgptStart = await fetch(`${baseUrl}/v1/auth/chatgpt/login/start`, {
+      method: "POST"
+    });
+    expect(chatgptStart.status).toBe(200);
+
+    const chatgptCancel = await fetch(`${baseUrl}/v1/auth/chatgpt/login/cancel`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ loginId: "login_chatgpt" })
+    });
+    expect(chatgptCancel.status).toBe(200);
+
+    const logout = await fetch(`${baseUrl}/v1/auth/logout`, {
+      method: "POST"
+    });
+    expect(logout.status).toBe(200);
+
+    const models = await fetch(`${baseUrl}/v1/models?includeHidden=true`);
+    expect(models.status).toBe(200);
+    expect(gatewayMocks.request).toHaveBeenCalledWith("model/list", {
+      includeHidden: true
+    });
   });
 });

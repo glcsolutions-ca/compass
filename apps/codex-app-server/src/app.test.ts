@@ -27,10 +27,16 @@ describe("codex gateway app", () => {
       repository: new InMemoryRepository()
     });
 
-    const response = await app.inject({ method: "GET", url: "/health" });
+    await app.listen({ host: "127.0.0.1", port: 0 });
+    const address = app.server.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Failed to resolve server address");
+    }
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: "ok" });
+    const response = await fetch(`http://127.0.0.1:${address.port}/health`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "ok" });
 
     await app.close();
   });

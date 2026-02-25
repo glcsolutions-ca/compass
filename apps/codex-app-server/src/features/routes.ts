@@ -1,389 +1,246 @@
 import {
   AuthAccountReadResponseSchema,
   AuthLoginStartResponseSchema,
-  ApiErrorSchema,
   ApiKeyLoginRequestSchema,
   ApprovalResponseRequestSchema,
   ChatGptLoginCancelRequestSchema,
-  ThreadListResponseSchema,
-  ThreadReadResponseSchema,
   ThreadStartRequestSchema,
   TurnStartRequestSchema
 } from "@compass/contracts";
-import type { FastifyInstance, FastifyReply } from "fastify";
-import { type ZodTypeProvider } from "fastify-type-provider-zod";
+import type { Express, Response } from "express";
 import { z } from "zod";
 import type { CodexGateway } from "../codex/gateway.js";
-import type { WebSocketHub } from "../realtime/ws-hub.js";
-import type { PersistenceRepository } from "../storage/repository.js";
 import { CodexRpcError } from "../codex/jsonrpc.js";
+import type { PersistenceRepository } from "../storage/repository.js";
 
 export interface RegisterGatewayRoutesOptions {
   gateway: CodexGateway;
   repository: PersistenceRepository;
-  hub: WebSocketHub;
 }
 
-const ErrorResponseSchema = z.object({
-  code: z.string(),
-  message: z.string()
+const ParamsThreadIdSchema = z.object({
+  threadId: z.string().min(1)
 });
 
-export function registerGatewayRoutes(
-  app: FastifyInstance,
-  options: RegisterGatewayRoutesOptions
-): void {
-  const typedApp = app.withTypeProvider<ZodTypeProvider>();
+const ParamsThreadTurnSchema = z.object({
+  threadId: z.string().min(1),
+  turnId: z.string().min(1)
+});
 
-  typedApp.get(
-    "/health",
-    {
-      schema: {
-        response: {
-          200: z.object({ status: z.literal("ok") })
-        }
-      }
-    },
-    async () => ({ status: "ok" as const })
-  );
+const ParamsApprovalSchema = z.object({
+  requestId: z.string().min(1)
+});
 
-  typedApp.get(
-    "/v1/stream",
-    {
-      websocket: true
-    },
-    (connection, request) => {
-      const parsed = new URL(request.raw.url ?? request.url, "http://localhost");
-      const threadId = parsed.searchParams.get("threadId");
-      options.hub.subscribe(connection, threadId);
+const ModelsQuerySchema = z.object({
+  includeHidden: z.coerce.boolean().default(false)
+});
+
+export function registerGatewayRoutes(app: Express, options: RegisterGatewayRoutesOptions): void {
+  app.get("/health", (_request, response) => {
+    response.status(200).json({ status: "ok" });
+  });
+
+  app.get("/v1/stream", (_request, response) => {
+    response.status(426).json({
+      code: "UPGRADE_REQUIRED",
+      message: "Use a websocket upgrade request for /v1/stream"
+    });
+  });
+
+  app.post("/v1/threads/start", async (request, response) => {
+    const body = parseOrReply(request.body, ThreadStartRequestSchema, response);
+    if (!body) {
+      return;
     }
-  );
 
-  typedApp.post(
-    "/v1/threads/start",
-    {
-      schema: {
-        body: ThreadStartRequestSchema,
-        response: {
-          201: z.unknown(),
-          500: ApiErrorSchema
-        }
-      }
-    },
-    async (request, reply) => {
-      const body = ThreadStartRequestSchema.parse(request.body);
-
-      try {
-        const result = await options.gateway.request("thread/start", body);
-        await options.repository.upsertThread((result as Record<string, unknown>).thread);
-        return reply.code(201).send(result);
-      } catch (error) {
-        return sendError(reply, error);
-      }
+    try {
+      const result = await options.gateway.request("thread/start", body);
+      await options.repository.upsertThread((result as Record<string, unknown>).thread);
+      response.status(201).json(result);
+    } catch (error) {
+      sendError(response, error);
     }
-  );
+  });
 
-  typedApp.post(
-    "/v1/threads/:threadId/turns/start",
-    {
-      schema: {
-        params: z.object({ threadId: z.string().min(1) }),
-        body: TurnStartRequestSchema,
-        response: {
-          202: z.unknown(),
-          500: ErrorResponseSchema
-        }
-      }
-    },
-    async (request, reply) => {
-      const body = TurnStartRequestSchema.parse(request.body);
-      const { threadId } = request.params;
-      const payload = {
-        threadId,
-        input: [
-          {
-            type: "text",
-            text: body.text
-          }
-        ],
-        cwd: body.cwd,
-        model: body.model,
-        approvalPolicy: body.approvalPolicy,
-        sandboxPolicy: body.sandboxPolicy,
-        effort: body.effort,
-        personality: body.personality
-      };
-
-      try {
-        const result = await options.gateway.request("turn/start", payload);
-        await options.repository.upsertTurn(
-          threadId,
-          (result as Record<string, unknown>).turn,
-          payload.input
-        );
-        return reply.code(202).send(result);
-      } catch (error) {
-        return sendError(reply, error);
-      }
+  app.post("/v1/threads/:threadId/turns/start", async (request, response) => {
+    const params = parseOrReply(request.params, ParamsThreadIdSchema, response);
+    if (!params) {
+      return;
     }
-  );
 
-  typedApp.post(
-    "/v1/threads/:threadId/turns/:turnId/interrupt",
-    {
-      schema: {
-        params: z.object({
-          threadId: z.string().min(1),
-          turnId: z.string().min(1)
-        }),
-        response: {
-          202: z.object({ ok: z.literal(true) }),
-          500: ErrorResponseSchema
-        }
-      }
-    },
-    async (request, reply) => {
-      const { threadId, turnId } = request.params;
-
-      try {
-        await options.gateway.request("turn/interrupt", {
-          threadId,
-          turnId
-        });
-        return reply.code(202).send({ ok: true as const });
-      } catch (error) {
-        return sendError(reply, error);
-      }
+    const body = parseOrReply(request.body, TurnStartRequestSchema, response);
+    if (!body) {
+      return;
     }
-  );
 
-  typedApp.get(
-    "/v1/threads",
-    {
-      schema: {
-        querystring: z.object({
-          limit: z.coerce.number().int().positive().max(200).default(50)
-        }),
-        response: {
-          200: ThreadListResponseSchema,
-          500: ErrorResponseSchema
+    const payload = {
+      threadId: params.threadId,
+      input: [
+        {
+          type: "text",
+          text: body.text
         }
-      }
-    },
-    async (request, reply) => {
-      try {
-        const data = await options.repository.listThreads(request.query.limit);
-        return reply.code(200).send({ data });
-      } catch (error) {
-        return reply.code(500).send(toApiError(error));
-      }
+      ],
+      cwd: body.cwd,
+      model: body.model,
+      approvalPolicy: body.approvalPolicy,
+      sandboxPolicy: body.sandboxPolicy,
+      effort: body.effort,
+      personality: body.personality
+    };
+
+    try {
+      const result = await options.gateway.request("turn/start", payload);
+      await options.repository.upsertTurn(
+        params.threadId,
+        (result as Record<string, unknown>).turn,
+        payload.input
+      );
+      response.status(202).json(result);
+    } catch (error) {
+      sendError(response, error);
     }
-  );
+  });
 
-  typedApp.get(
-    "/v1/threads/:threadId",
-    {
-      schema: {
-        params: z.object({ threadId: z.string().min(1) }),
-        response: {
-          200: ThreadReadResponseSchema,
-          404: ErrorResponseSchema,
-          500: ErrorResponseSchema
-        }
-      }
-    },
-    async (request, reply) => {
-      try {
-        const details = await options.repository.readThread(request.params.threadId);
-        if (!details) {
-          return reply.code(404).send({
-            code: "THREAD_NOT_FOUND",
-            message: `Thread '${request.params.threadId}' was not found`
-          });
-        }
-
-        return reply.code(200).send(details);
-      } catch (error) {
-        return reply.code(500).send(toApiError(error));
-      }
+  app.post("/v1/threads/:threadId/turns/:turnId/interrupt", async (request, response) => {
+    const params = parseOrReply(request.params, ParamsThreadTurnSchema, response);
+    if (!params) {
+      return;
     }
-  );
 
-  typedApp.post(
-    "/v1/approvals/:requestId/respond",
-    {
-      schema: {
-        params: z.object({ requestId: z.string().min(1) }),
-        body: ApprovalResponseRequestSchema,
-        response: {
-          200: z.object({ ok: z.literal(true) }),
-          500: ErrorResponseSchema
-        }
-      }
-    },
-    async (request, reply) => {
-      const body = ApprovalResponseRequestSchema.parse(request.body);
-
-      try {
-        await options.gateway.respondApproval(request.params.requestId, body.decision);
-        return reply.code(200).send({ ok: true as const });
-      } catch (error) {
-        return reply.code(500).send(toApiError(error));
-      }
+    try {
+      await options.gateway.request("turn/interrupt", {
+        threadId: params.threadId,
+        turnId: params.turnId
+      });
+      response.status(202).json({ ok: true });
+    } catch (error) {
+      sendError(response, error);
     }
-  );
+  });
 
-  typedApp.get(
-    "/v1/auth/account",
-    {
-      schema: {
-        response: {
-          200: AuthAccountReadResponseSchema,
-          500: ErrorResponseSchema
-        }
-      }
-    },
-    async (_request, reply) => {
-      try {
-        const result = await options.gateway.request("account/read", {
-          refreshToken: false
-        });
-        const payload = AuthAccountReadResponseSchema.parse(result);
-        await options.repository.upsertAuthState(
-          extractAuthMode(payload.account),
-          payload.account ?? null
-        );
-        return reply.code(200).send(payload);
-      } catch (error) {
-        return sendError(reply, error);
-      }
+  app.post("/v1/approvals/:requestId/respond", async (request, response) => {
+    const params = parseOrReply(request.params, ParamsApprovalSchema, response);
+    if (!params) {
+      return;
     }
-  );
 
-  typedApp.post(
-    "/v1/auth/api-key/login",
-    {
-      schema: {
-        body: ApiKeyLoginRequestSchema,
-        response: {
-          200: AuthLoginStartResponseSchema,
-          500: ErrorResponseSchema
-        }
-      }
-    },
-    async (request, reply) => {
-      const body = ApiKeyLoginRequestSchema.parse(request.body);
-
-      try {
-        const result = await options.gateway.request("account/login/start", {
-          type: "apiKey",
-          apiKey: body.apiKey
-        });
-        return reply.code(200).send(AuthLoginStartResponseSchema.parse(result));
-      } catch (error) {
-        return sendError(reply, error);
-      }
+    const body = parseOrReply(request.body, ApprovalResponseRequestSchema, response);
+    if (!body) {
+      return;
     }
-  );
 
-  typedApp.post(
-    "/v1/auth/chatgpt/login/start",
-    {
-      schema: {
-        response: {
-          200: AuthLoginStartResponseSchema,
-          500: ErrorResponseSchema
-        }
-      }
-    },
-    async (_request, reply) => {
-      try {
-        const result = await options.gateway.request("account/login/start", {
-          type: "chatgpt"
-        });
-        return reply.code(200).send(AuthLoginStartResponseSchema.parse(result));
-      } catch (error) {
-        return sendError(reply, error);
-      }
+    try {
+      await options.gateway.respondApproval(params.requestId, body.decision);
+      response.status(200).json({ ok: true });
+    } catch (error) {
+      sendError(response, error);
     }
-  );
+  });
 
-  typedApp.post(
-    "/v1/auth/chatgpt/login/cancel",
-    {
-      schema: {
-        body: ChatGptLoginCancelRequestSchema,
-        response: {
-          200: z.unknown(),
-          500: ErrorResponseSchema
-        }
-      }
-    },
-    async (request, reply) => {
-      const body = ChatGptLoginCancelRequestSchema.parse(request.body);
-
-      try {
-        const result = await options.gateway.request("account/login/cancel", {
-          loginId: body.loginId
-        });
-        return reply.code(200).send(result);
-      } catch (error) {
-        return sendError(reply, error);
-      }
+  app.get("/v1/auth/account", async (_request, response) => {
+    try {
+      const result = await options.gateway.request("account/read", {
+        refreshToken: false
+      });
+      const payload = AuthAccountReadResponseSchema.parse(result);
+      await options.repository.upsertAuthState(
+        extractAuthMode(payload.account),
+        payload.account ?? null
+      );
+      response.status(200).json(payload);
+    } catch (error) {
+      sendError(response, error);
     }
-  );
+  });
 
-  typedApp.post(
-    "/v1/auth/logout",
-    {
-      schema: {
-        response: {
-          200: z.unknown(),
-          500: ErrorResponseSchema
-        }
-      }
-    },
-    async (_request, reply) => {
-      try {
-        const result = await options.gateway.request("account/logout", {});
-        await options.repository.upsertAuthState(null, null);
-        return reply.code(200).send(result);
-      } catch (error) {
-        return sendError(reply, error);
-      }
+  app.post("/v1/auth/api-key/login", async (request, response) => {
+    const body = parseOrReply(request.body, ApiKeyLoginRequestSchema, response);
+    if (!body) {
+      return;
     }
-  );
 
-  typedApp.get(
-    "/v1/models",
-    {
-      schema: {
-        querystring: z.object({
-          includeHidden: z.coerce.boolean().default(false)
-        }),
-        response: {
-          200: z.unknown(),
-          500: ErrorResponseSchema
-        }
-      }
-    },
-    async (request, reply) => {
-      try {
-        const result = await options.gateway.request("model/list", {
-          includeHidden: request.query.includeHidden
-        });
-        return reply.code(200).send(result);
-      } catch (error) {
-        return sendError(reply, error);
-      }
+    try {
+      const result = await options.gateway.request("account/login/start", {
+        type: "apiKey",
+        apiKey: body.apiKey
+      });
+      response.status(200).json(AuthLoginStartResponseSchema.parse(result));
+    } catch (error) {
+      sendError(response, error);
     }
-  );
+  });
+
+  app.post("/v1/auth/chatgpt/login/start", async (_request, response) => {
+    try {
+      const result = await options.gateway.request("account/login/start", {
+        type: "chatgpt"
+      });
+      response.status(200).json(AuthLoginStartResponseSchema.parse(result));
+    } catch (error) {
+      sendError(response, error);
+    }
+  });
+
+  app.post("/v1/auth/chatgpt/login/cancel", async (request, response) => {
+    const body = parseOrReply(request.body, ChatGptLoginCancelRequestSchema, response);
+    if (!body) {
+      return;
+    }
+
+    try {
+      const result = await options.gateway.request("account/login/cancel", {
+        loginId: body.loginId
+      });
+      response.status(200).json(result);
+    } catch (error) {
+      sendError(response, error);
+    }
+  });
+
+  app.post("/v1/auth/logout", async (_request, response) => {
+    try {
+      const result = await options.gateway.request("account/logout", {});
+      await options.repository.upsertAuthState(null, null);
+      response.status(200).json(result);
+    } catch (error) {
+      sendError(response, error);
+    }
+  });
+
+  app.get("/v1/models", async (request, response) => {
+    const query = parseOrReply(request.query, ModelsQuerySchema, response);
+    if (!query) {
+      return;
+    }
+
+    try {
+      const result = await options.gateway.request("model/list", {
+        includeHidden: query.includeHidden
+      });
+      response.status(200).json(result);
+    } catch (error) {
+      sendError(response, error);
+    }
+  });
 }
 
-function sendError(reply: FastifyReply, error: unknown) {
-  return (reply as { code: (statusCode: number) => FastifyReply })
-    .code(statusFromError(error))
-    .send(toApiError(error));
+function parseOrReply<T>(value: unknown, schema: z.ZodSchema<T>, response: Response): T | null {
+  const parsed = schema.safeParse(value);
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  const firstIssue = parsed.error.issues.at(0);
+  response.status(400).json({
+    code: "INVALID_REQUEST",
+    message: firstIssue?.message ?? "Invalid request"
+  });
+  return null;
+}
+
+function sendError(response: Response, error: unknown): void {
+  response.status(statusFromError(error)).json(toApiError(error));
 }
 
 function statusFromError(error: unknown): number {
@@ -433,3 +290,8 @@ function extractAuthMode(account: unknown): string | null {
   const type = (account as Record<string, unknown>).type;
   return typeof type === "string" ? type : null;
 }
+
+export const __private__ = {
+  statusFromError,
+  toApiError
+};

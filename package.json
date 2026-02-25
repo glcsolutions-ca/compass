@@ -54,6 +54,8 @@
     "ci:smoke:system": "tsx tests/commit/smoke.inproc.ts",
     "ci:gate:commit-stage": "node scripts/pipeline/commit/decide-commit-stage.mjs",
     "ci:commit-test-suite": "pnpm test && pnpm ci:smoke:system",
+    "codex:pin:sync": "node scripts/codex/sync-openai-codex-release.mjs",
+    "codex:pin:install": "node scripts/codex/install-pinned-openai-codex.mjs",
     "desktop:dev": "pnpm --filter @compass/desktop dev:run",
     "desktop:make:mac": "pnpm --filter @compass/desktop make:mac",
     "desktop:make:win": "pnpm --filter @compass/desktop make:win",

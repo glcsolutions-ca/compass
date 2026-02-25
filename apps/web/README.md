@@ -13,6 +13,7 @@ The route handler at `src/app/api/v1/[...path]/route.ts` proxies browser request
 - injects upstream bearer token from a signed `__Host-compass_session` cookie (BFF pattern)
 - requires CSRF token + origin/referer validation on mutating requests
 - enforces step-up marker for high-risk role/scim mutations
+- enforces enterprise SSO (`__Host-compass_sso`) when `ENTRA_LOGIN_ENABLED=true`
 - uses a bounded upstream timeout (`10_000ms`)
 - returns `500` with `API_BASE_URL_REQUIRED` if `API_BASE_URL` is missing in production
 - returns `502` with `UPSTREAM_UNAVAILABLE` when upstream fetch fails
@@ -23,6 +24,13 @@ Proxy target rules:
 - In `production`, `API_BASE_URL` must be provided.
 - Proxied API destination is `/v1/*` on the upstream API service.
 
+## Entra Login Flow
+
+- `GET /login` is the enterprise login page.
+- `GET /api/auth/entra/start` begins Microsoft Entra authorization code + PKCE.
+- `GET /api/auth/entra/callback` exchanges code, validates ID token, and writes `__Host-compass_sso`.
+- `POST /api/auth/entra/logout` clears `__Host-compass_sso` and redirects to `/login`.
+
 ## Env Table
 
 | Env Var                          | Default                                 | Notes                                                                                 |
@@ -30,6 +38,13 @@ Proxy target rules:
 | `API_BASE_URL`                   | `http://localhost:3001` (dev/test only) | Runtime proxy target for `/api/v1/*`; required in production.                         |
 | `WEB_SESSION_SECRET`             | dev/test default                        | Required in production; signs/verifies host-only BFF session cookie.                  |
 | `WEB_ALLOWED_ORIGINS`            | unset                                   | Optional comma-separated allowlist for origin/referer checks on mutating proxy calls. |
+| `ENTRA_LOGIN_ENABLED`            | `false`                                 | Enables enterprise SSO gate and `/login` flow.                                        |
+| `ENTRA_CLIENT_ID`                | unset                                   | Entra app registration client ID.                                                     |
+| `ENTRA_CLIENT_SECRET`            | unset                                   | Entra app registration client secret used at token exchange.                          |
+| `ENTRA_REDIRECT_URI`             | unset                                   | Redirect URI for Entra callback (must match app registration).                        |
+| `ENTRA_ALLOWED_TENANT_IDS`       | unset                                   | Comma-separated allowlist of tenant IDs for multi-tenant org sign-in.                 |
+| `ENTRA_JWKS_JSON`                | unset                                   | Optional JSON JWKS override (primarily for deterministic tests/offline validation).   |
+| `AUTH_DEV_FALLBACK_ENABLED`      | `false`                                 | Non-production only; bypasses enterprise SSO gate for local/dev fallback.             |
 | `NEXT_PUBLIC_CODEX_API_BASE_URL` | `http://localhost:3010`                 | Browser-side base URL for direct codex gateway HTTP calls.                            |
 | `NEXT_PUBLIC_CODEX_WS_BASE_URL`  | `ws://localhost:3010`                   | Browser-side base URL for direct codex gateway websocket stream.                      |
 

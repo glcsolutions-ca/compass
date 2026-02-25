@@ -1,5 +1,12 @@
 import type { NextRequest } from "next/server";
 import { parseSessionCookie, serializeSession, type SessionPayload } from "./session-cookie";
+import {
+  parseSsoCookie,
+  refreshSsoCookie,
+  serializeSsoCookie,
+  SSO_COOKIE_NAME
+} from "../../../auth/sso-cookie";
+import { loadWebAuthRuntimeConfig, resolveSessionSecret } from "../../../auth/runtime-config";
 
 export const runtime = "nodejs";
 
@@ -50,19 +57,6 @@ function resolveApiBaseUrl() {
   }
 
   return DEFAULT_API_BASE_URL;
-}
-
-function resolveSessionSecret() {
-  const configured = process.env.WEB_SESSION_SECRET?.trim();
-  if (configured && configured.length >= 16) {
-    return configured;
-  }
-
-  if (process.env.NODE_ENV === "production") {
-    return null;
-  }
-
-  return "compass-web-session-dev-secret";
 }
 
 function toUpstreamUrl(baseUrl: string, requestUrl: string, pathSegments: string[] = []) {
@@ -121,6 +115,18 @@ function requiresSession(path: string[]) {
   return !(path[0] === "oauth" && path[1] === "token");
 }
 
+function requiresSso(path: string[]) {
+  if (path[0] === "health") {
+    return false;
+  }
+
+  if (path[0] === "oauth" && path[1] === "token") {
+    return false;
+  }
+
+  return true;
+}
+
 function allowedOrigins(requestUrl: string) {
   const incoming = new URL(requestUrl);
   const sameOrigin = `${incoming.protocol}//${incoming.host}`;
@@ -177,6 +183,10 @@ function sessionCookieValue(payload: SessionPayload, secret: string) {
   return `${SESSION_COOKIE_NAME}=${serializeSession(payload, secret)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=43200`;
 }
 
+function ssoCookieValue(payload: ReturnType<typeof refreshSsoCookie>, secret: string) {
+  return `${SSO_COOKIE_NAME}=${serializeSsoCookie(payload, secret)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=43200`;
+}
+
 async function proxyRequest(request: NextRequest, context: RouteContext) {
   const apiBaseUrl = resolveApiBaseUrl();
   if (!apiBaseUrl) {
@@ -187,12 +197,25 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
   }
 
   const { path } = await context.params;
+  const authConfig = loadWebAuthRuntimeConfig();
   const secret = resolveSessionSecret();
   if (!secret) {
     return jsonError(500, {
       error: "WEB_SESSION_SECRET is not configured",
       code: "SESSION_SECRET_REQUIRED"
     });
+  }
+
+  let ssoSession: ReturnType<typeof parseSsoCookie> | null = null;
+  if (authConfig.entraLoginEnabled && !authConfig.devFallbackEnabled && requiresSso(path)) {
+    const rawSsoCookie = request.cookies.get(SSO_COOKIE_NAME)?.value;
+    ssoSession = parseSsoCookie(rawSsoCookie, secret);
+    if (!ssoSession) {
+      return jsonError(401, {
+        error: "Valid enterprise SSO session is required",
+        code: "SSO_REQUIRED"
+      });
+    }
   }
 
   let session: SessionPayload | null = null;
@@ -249,6 +272,9 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
     });
 
     const responseHeaders = buildDownstreamResponseHeaders(upstreamResponse.headers);
+    if (ssoSession) {
+      responseHeaders.append("set-cookie", ssoCookieValue(refreshSsoCookie(ssoSession), secret));
+    }
     if (session) {
       const refreshed: SessionPayload = {
         ...session,

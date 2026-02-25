@@ -37,6 +37,32 @@ export const ChatGptLoginCancelRequestSchema = z.object({
   loginId: z.string().min(1)
 });
 
+export const KnownAuthModeSchema = z.enum(["apiKey", "chatgpt", "service", "entra", "none"]);
+
+export const AuthModeSchema = z.union([KnownAuthModeSchema, z.string().min(1)]);
+
+export const AuthAccountSchema = z
+  .object({
+    type: AuthModeSchema.optional(),
+    email: z.string().min(1).optional(),
+    name: z.string().min(1).optional()
+  })
+  .passthrough();
+
+export const AuthLoginStartResponseSchema = z
+  .object({
+    loginId: z.string().min(1).optional(),
+    authUrl: z.string().url().optional(),
+    account: AuthAccountSchema.nullish()
+  })
+  .passthrough();
+
+export const AuthAccountReadResponseSchema = z
+  .object({
+    account: AuthAccountSchema.nullish()
+  })
+  .passthrough();
+
 export const ThreadListResponseSchema = z.object({
   data: z.array(z.unknown())
 });
@@ -74,4 +100,8 @@ export type TurnStartRequest = z.infer<typeof TurnStartRequestSchema>;
 export type ApprovalResponseRequest = z.infer<typeof ApprovalResponseRequestSchema>;
 export type ApiKeyLoginRequest = z.infer<typeof ApiKeyLoginRequestSchema>;
 export type ChatGptLoginCancelRequest = z.infer<typeof ChatGptLoginCancelRequestSchema>;
+export type AuthMode = z.infer<typeof AuthModeSchema>;
+export type AuthAccount = z.infer<typeof AuthAccountSchema>;
+export type AuthLoginStartResponse = z.infer<typeof AuthLoginStartResponseSchema>;
+export type AuthAccountReadResponse = z.infer<typeof AuthAccountReadResponseSchema>;
 export type StreamEvent = z.infer<typeof StreamEventSchema>;

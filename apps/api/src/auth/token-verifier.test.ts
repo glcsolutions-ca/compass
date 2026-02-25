@@ -98,7 +98,7 @@ describe("AccessTokenVerifier", () => {
     expect(result.appRoles.has("Compass.Integration.Read")).toBe(true);
   });
 
-  it("rejects tokens that cannot be unambiguously classified", async () => {
+  it("accepts delegated tokens that include both scopes and roles", async () => {
     const verifier = new AccessTokenVerifier(config);
     const token = await signApiToken({
       tid: "tenant-a",
@@ -108,9 +108,10 @@ describe("AccessTokenVerifier", () => {
       roles: ["Compass.Integration.Read"]
     });
 
-    const error = await expectAuthError(verifier.verifyAuthorizationHeader(`Bearer ${token}`));
-    expect(error.statusCode).toBe(401);
-    expect(error.code).toBe("token_unclassified");
+    const result = await verifier.verifyAuthorizationHeader(`Bearer ${token}`);
+    expect(result.tokenType).toBe("delegated");
+    expect(result.scopes.has("compass.user")).toBe(true);
+    expect(result.appRoles.has("Compass.Integration.Read")).toBe(true);
   });
 
   it("rejects tokens with no delegated scopes and no app roles", async () => {
@@ -124,6 +125,7 @@ describe("AccessTokenVerifier", () => {
     const error = await expectAuthError(verifier.verifyAuthorizationHeader(`Bearer ${token}`));
     expect(error.statusCode).toBe(401);
     expect(error.code).toBe("token_unclassified");
+    expect(error.message).toBe("Token must include delegated scopes or application roles");
   });
 
   it("rejects non-allowlisted actor clients", async () => {

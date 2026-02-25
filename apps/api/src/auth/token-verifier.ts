@@ -143,7 +143,7 @@ export class AccessTokenVerifier {
     const hasScopes = scopes.size > 0;
     const hasRoles = appRoles.size > 0;
 
-    if ((hasScopes && hasRoles) || (!hasScopes && !hasRoles)) {
+    if (!hasScopes && !hasRoles) {
       throw tokenUnclassified();
     }
 
@@ -154,12 +154,8 @@ export class AccessTokenVerifier {
       throw invalidToken("Client application is not allowlisted");
     }
 
-    if (hasScopes) {
-      const subjectId = claimAsString(payload, "oid");
-      if (!subjectId) {
-        throw invalidToken("Delegated token is missing oid");
-      }
-
+    const subjectId = claimAsString(payload, "oid");
+    if (subjectId) {
       return {
         tokenType: "delegated",
         tenantId,
@@ -170,6 +166,10 @@ export class AccessTokenVerifier {
         appRoles,
         rawClaims: payload as Record<string, unknown>
       };
+    }
+
+    if (hasScopes && !subjectId) {
+      throw invalidToken("Delegated token is missing oid");
     }
 
     const idtyp = claimAsString(payload, "idtyp");

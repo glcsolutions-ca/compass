@@ -10,6 +10,9 @@ describe("loadCodexAppConfig", () => {
     expect(config.codexBinPath).toBe("codex");
     expect(config.clientName).toBe("compass_codex_gateway");
     expect(config.startOnBoot).toBe(true);
+    expect(config.entraAllowedTenantIds).toEqual([]);
+    expect(config.entraLoginEnabled).toBe(false);
+    expect(config.authDevFallbackEnabled).toBe(false);
   });
 
   it("parses env overrides", () => {
@@ -19,7 +22,13 @@ describe("loadCodexAppConfig", () => {
       CODEX_BIN_PATH: "/tmp/codex",
       CODEX_HOME: "/tmp/codex-home",
       CODEX_START_ON_BOOT: "false",
-      OPENAI_API_KEY: "sk-test"
+      OPENAI_API_KEY: "sk-test",
+      ENTRA_CLIENT_ID: "client-id",
+      ENTRA_CLIENT_SECRET: "client-secret",
+      ENTRA_REDIRECT_URI: "https://example.com/callback",
+      ENTRA_ALLOWED_TENANT_IDS: "tenant-a,tenant-b",
+      ENTRA_LOGIN_ENABLED: "true",
+      AUTH_DEV_FALLBACK_ENABLED: "true"
     });
 
     expect(config.port).toBe(3456);
@@ -28,5 +37,11 @@ describe("loadCodexAppConfig", () => {
     expect(config.codexHome).toBe("/tmp/codex-home");
     expect(config.startOnBoot).toBe(false);
     expect(config.serviceApiKey).toBe("sk-test");
+    expect(config.entraClientId).toBe("client-id");
+    expect(config.entraClientSecret).toBe("client-secret");
+    expect(config.entraRedirectUri).toBe("https://example.com/callback");
+    expect(config.entraAllowedTenantIds).toEqual(["tenant-a", "tenant-b"]);
+    expect(config.entraLoginEnabled).toBe(true);
+    expect(config.authDevFallbackEnabled).toBe(true);
   });
 });

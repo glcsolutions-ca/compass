@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET, POST } from "./route";
 import { createSignedSessionCookie } from "./session-cookie";
+import { createSignedSsoCookie } from "../../../auth/sso-cookie";
 
 function createContext(path: string[]) {
   return {
@@ -24,8 +25,25 @@ function authCookieHeader(accessToken = "session-access-token", csrf = "csrf-tok
     secret: "web-session-secret-123456",
     nowMs: Date.now()
   });
+  const signedSso = createSignedSsoCookie({
+    sub: "entra-user-1",
+    tid: "tenant-a",
+    secret: "web-session-secret-123456",
+    nowMs: Date.now()
+  });
 
-  return `__Host-compass_session=${signedSession}; __Host-compass_csrf=${csrf}`;
+  return `__Host-compass_sso=${signedSso}; __Host-compass_session=${signedSession}; __Host-compass_csrf=${csrf}`;
+}
+
+function ssoOnlyCookieHeader() {
+  const signedSso = createSignedSsoCookie({
+    sub: "entra-user-1",
+    tid: "tenant-a",
+    secret: "web-session-secret-123456",
+    nowMs: Date.now()
+  });
+
+  return `__Host-compass_sso=${signedSso}`;
 }
 
 describe("web api proxy route", () => {
@@ -33,6 +51,7 @@ describe("web api proxy route", () => {
     vi.stubEnv("API_BASE_URL", "http://upstream.internal:3001/");
     vi.stubEnv("NODE_ENV", "test");
     vi.stubEnv("WEB_SESSION_SECRET", "web-session-secret-123456");
+    vi.stubEnv("ENTRA_LOGIN_ENABLED", "true");
   });
 
   afterEach(() => {
@@ -166,12 +185,33 @@ describe("web api proxy route", () => {
     });
   });
 
-  it("returns deterministic 401 response when session cookie is missing", async () => {
+  it("returns deterministic 401 response when enterprise SSO cookie is missing", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
     const request = new NextRequest("http://localhost:3000/api/v1/system/status", {
       method: "GET"
+    });
+
+    const response = await GET(request, createContext(["system", "status"]));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "Valid enterprise SSO session is required",
+      code: "SSO_REQUIRED"
+    });
+  });
+
+  it("returns deterministic 401 response when API session cookie is missing", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = new NextRequest("http://localhost:3000/api/v1/system/status", {
+      method: "GET",
+      headers: {
+        cookie: ssoOnlyCookieHeader()
+      }
     });
 
     const response = await GET(request, createContext(["system", "status"]));

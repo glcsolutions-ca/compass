@@ -1,4 +1,6 @@
 import {
+  AuthAccountReadResponseSchema,
+  AuthLoginStartResponseSchema,
   ApiErrorSchema,
   ApiKeyLoginRequestSchema,
   ApprovalResponseRequestSchema,
@@ -236,7 +238,7 @@ export function registerGatewayRoutes(
     {
       schema: {
         response: {
-          200: z.unknown(),
+          200: AuthAccountReadResponseSchema,
           500: ErrorResponseSchema
         }
       }
@@ -246,12 +248,12 @@ export function registerGatewayRoutes(
         const result = await options.gateway.request("account/read", {
           refreshToken: false
         });
-        const payload = result as Record<string, unknown>;
+        const payload = AuthAccountReadResponseSchema.parse(result);
         await options.repository.upsertAuthState(
           extractAuthMode(payload.account),
           payload.account ?? null
         );
-        return reply.code(200).send(result);
+        return reply.code(200).send(payload);
       } catch (error) {
         return sendError(reply, error);
       }
@@ -264,7 +266,7 @@ export function registerGatewayRoutes(
       schema: {
         body: ApiKeyLoginRequestSchema,
         response: {
-          200: z.unknown(),
+          200: AuthLoginStartResponseSchema,
           500: ErrorResponseSchema
         }
       }
@@ -277,7 +279,7 @@ export function registerGatewayRoutes(
           type: "apiKey",
           apiKey: body.apiKey
         });
-        return reply.code(200).send(result);
+        return reply.code(200).send(AuthLoginStartResponseSchema.parse(result));
       } catch (error) {
         return sendError(reply, error);
       }
@@ -289,7 +291,7 @@ export function registerGatewayRoutes(
     {
       schema: {
         response: {
-          200: z.unknown(),
+          200: AuthLoginStartResponseSchema,
           500: ErrorResponseSchema
         }
       }
@@ -299,7 +301,7 @@ export function registerGatewayRoutes(
         const result = await options.gateway.request("account/login/start", {
           type: "chatgpt"
         });
-        return reply.code(200).send(result);
+        return reply.code(200).send(AuthLoginStartResponseSchema.parse(result));
       } catch (error) {
         return sendError(reply, error);
       }

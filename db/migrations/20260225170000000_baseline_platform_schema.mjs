@@ -1,6 +1,18 @@
+import {
+  up as upAuthFoundation,
+  down as downAuthFoundation
+} from "../migration-baseline/auth-foundation.mjs";
+import {
+  up as upCodexGatewayTables,
+  down as downCodexGatewayTables
+} from "../migration-baseline/codex-gateway-tables.mjs";
+
 export const shorthands = undefined;
 
 export async function up(pgm) {
+  upAuthFoundation(pgm);
+  await upCodexGatewayTables(pgm);
+
   pgm.createTable("runtime_events", {
     id: {
       type: "bigserial",
@@ -29,4 +41,6 @@ export async function up(pgm) {
 
 export async function down(pgm) {
   pgm.dropTable("runtime_events");
+  await downCodexGatewayTables(pgm);
+  downAuthFoundation(pgm);
 }

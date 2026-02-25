@@ -124,6 +124,8 @@ jobs:
         run: |
           set -euo pipefail
           pnpm db:postgres:up
+          pnpm db:migrate:check
+          pnpm db:migrate:up
           pnpm db:migrate:status
 
       - name: Tear down local Postgres

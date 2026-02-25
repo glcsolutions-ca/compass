@@ -1436,6 +1436,8 @@ jobs:
       ACR_NAME: ${{ vars.ACR_NAME }}
       ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
       ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
+      MIGRATION_TIMEOUT_SECONDS: ${{ vars.MIGRATION_TIMEOUT_SECONDS || '900' }}
+      MIGRATION_CONTAINER_NAME: ${{ vars.MIGRATION_CONTAINER_NAME || 'migrate' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -1500,7 +1502,8 @@ jobs:
           AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
           ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
           MIGRATION_EXECUTION_NAME: ${{ steps.migration_start.outputs.migration_execution_name }}
-          MIGRATION_TIMEOUT_SECONDS: 900
+          MIGRATION_TIMEOUT_SECONDS: ${{ env.MIGRATION_TIMEOUT_SECONDS }}
+          MIGRATION_CONTAINER_NAME: ${{ env.MIGRATION_CONTAINER_NAME }}
         run: node scripts/pipeline/cloud/deployment-stage/wait-migration-job.mjs
 
       - name: Deploy API

@@ -73,6 +73,8 @@ param authBootstrapAllowedTenantId string = 'SET_IN_GITHUB_ENV'
 param authBootstrapAllowedAppClientId string = 'SET_IN_GITHUB_ENV'
 param authBootstrapDelegatedUserOid string = 'SET_IN_GITHUB_ENV'
 param authBootstrapDelegatedUserEmail string = 'SET_IN_GITHUB_ENV'
+param migrationLockTimeout string = '5s'
+param migrationStatementTimeout string = '15min'
 
 var acrPullRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
@@ -311,6 +313,8 @@ module migrateJob './modules/containerapp-job-migrate.bicep' = {
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
     databaseUrl: databaseUrl
+    migrationLockTimeout: migrationLockTimeout
+    migrationStatementTimeout: migrationStatementTimeout
     authBootstrapAllowedTenantId: authBootstrapAllowedTenantId
     authBootstrapAllowedAppClientId: authBootstrapAllowedAppClientId
     authBootstrapDelegatedUserOid: authBootstrapDelegatedUserOid

@@ -1,93 +1,18 @@
 # Contributing
 
-Keep changes small, testable, and reversible. `main` stays releasable through push-time stage gates.
+We use **trunk-first Continuous Delivery (Dave Farley style)**: keep `main` **green and releasable**.  
+Make changes **small, testable, and reversible**. CI stage gates are the source of truth.
 
-## Prerequisites
+## Prereqs
 
-- Node.js `22.x` (from `.nvmrc`, enforced by `engines`)
-- `pnpm` `10.30.1` (from `packageManager`)
+- Node.js `22.x` (see `.nvmrc`, enforced by `engines`)
+- `pnpm` `10.30.1` (see `packageManager`)
 - Docker (only for local Postgres)
 
-## Local workflow
+## Quick start
 
 ```bash
 pnpm install
-pnpm db:postgres:up   # optional for API/data work
+pnpm db:postgres:up   # optional (API/data work)
 pnpm dev
 ```
-
-Local hooks are enabled automatically during `pnpm install` and run commit-test suite locally:
-
-- Hook install prefers worktree-local Git config (`git config --worktree`) so worktrees do not overwrite each other.
-- `.githooks/pre-commit` runs `pnpm git-hooks:pre-commit` (`pnpm test:static`) on staged files.
-- `.githooks/pre-push` runs `pnpm test:static` via `pnpm git-hooks:pre-push` as a quick local pre-push gate.
-
-Full quality and integration correctness are enforced in CI:
-
-- `commit-stage` (`.github/workflows/commit-stage.yml`)
-- `integration-gate` (`.github/workflows/integration-gate.yml`)
-
-Before pushing:
-
-```bash
-pnpm test
-pnpm build
-```
-
-Testing commands:
-
-- `pnpm test` - commit-stage checks (static + unit/component + contract)
-- `pnpm test:full` - commit-stage + integration tests
-- `pnpm test:unit` - workspace unit/component tests + pipeline contract tests
-- `pnpm test:integration` - integration tests only
-- `pnpm test:e2e` - Playwright smoke flow only
-- `pnpm test:static` - policy + format + lint + typecheck checks
-
-Useful DB commands:
-
-- `pnpm db:postgres:down` - stop local Postgres
-- `pnpm db:postgres:reset` - rebuild local Postgres from migrations + seed
-- `pnpm db:migrate:create -- <name>` - create a migration
-- `pnpm db:migrate:status` - show migration status
-
-`pnpm db:postgres:up` starts Docker PostgreSQL, waits for readiness, applies migrations from `migrations/`, and seeds local data.
-The API uses PostgreSQL when `DATABASE_URL` is set in `apps/api/.env` (see `apps/api/.env.example`).
-
-## Trunk-first push standard
-
-- Push small commits directly to `main` after local validation.
-- Optional PRs are allowed for preview/collaboration; they are non-gating.
-- High-risk staged changes on `main` are blocked locally by `HR001` (inside `pnpm test:static`).
-- High-risk paths require a PR and CODEOWNER review before integrating to `main`.
-- CODEOWNER for high-risk paths: `@jrkropp`.
-
-When `HR001` blocks a commit on `main`, follow the console guidance:
-
-```bash
-git switch -c <type>/<scope>-<summary>
-git commit -m "<type>(<scope>): <summary>"
-git push -u origin <branch>
-gh pr create --fill
-```
-
-Write the PR with clear intent, impact, testing evidence, and rollback details using `.github/pull_request_template.md`.
-
-## Quality and safety checks
-
-- CI is the integration source of truth; `commit-stage` and `integration-gate` are required on `main`.
-- Keep one intent per commit and avoid unrelated file changes.
-- For behavior changes, update docs in `docs/` and/or policy checks.
-- Treat `db/migrations/`, `db/scripts/`, `infra/`, and pipeline governance paths as high risk: keep rollout and rollback explicit.
-
-## References
-
-- Contributor map: `README.md`
-- Agent and repo conventions: `AGENTS.md`
-- Testing philosophy: `tests/README.md`
-- Testing policy and enforcement (layers 1-3): `tests/policy/README.md`
-- Human commit-stage policy: `docs/commit-stage-policy.md`
-- Machine pipeline policy: `.github/policy/pipeline-policy.json`
-- Commit stage workflow: `.github/workflows/commit-stage.yml`
-- Cloud deployment pipeline workflow: `.github/workflows/cloud-deployment-pipeline.yml`
-- Cloud deployment pipeline replay workflow: `.github/workflows/cloud-deployment-pipeline-replay.yml`
-- Desktop deployment pipeline workflow: `.github/workflows/desktop-deployment-pipeline.yml`

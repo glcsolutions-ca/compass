@@ -1,241 +1,93 @@
----
-
 # Testing Philosophy
 
-This repo treats tests as **release evidence**. The goal is fast, trustworthy feedback so `main` stays **releasable** and changes ship in **small batches**.
+Tests in this repo are **release evidence**: fast, deterministic signals that keep `main` **releasable** and enable **small-batch** delivery.
 
-Less is more: we prefer the **cheapest test that gives the confidence we need**.
-
----
-
-## Principles
-
-1. **Prove it, don’t argue it**
-   - Every change should produce **machine-verifiable evidence** (tests + artifacts).
-
-2. **Commit-test suite first**
-   - The default PR suite (“commit-stage”) must be **fast**.
-   - Deeper tests exist, but run only when risk requires them.
-
-3. **Many small tests, few big tests**
-   - We follow the **test pyramid**:
-     - Many unit/component tests
-     - Some integration/contract tests
-     - Very few end-to-end (E2E) UI tests
-
-4. **Deterministic or it doesn’t count**
-   - Flaky tests are treated as **bugs**.
-   - No sleeps. No timing lotteries. No hidden dependencies.
-
-5. **Test what we actually merge**
-   - CI validates the **merge result** (the integrated commit), not just the PR head.
-
-6. **Build once, promote the same artifact**
-   - Runtime releases promote immutable artifacts (e.g., image digests). Tests should support this by producing reliable evidence upstream.
+Rule of thumb: use the **cheapest test** that provides enough confidence.
 
 ---
 
-## Test layers (what we write)
+## Core rules
 
-### 0) Static checks (always)
+- **Evidence over debate**: changes must produce machine-verifiable evidence (tests + artifacts).
+- **Fast gate first**: the default suite must be fast and run constantly.
+- **Deterministic or broken**: flakes are bugs. No sleeps. No timing lotteries.
+- **Test what we ship**: validate the integrated result (what lands on `main`), not just a local/branch head.
+- **Build once, promote**: prefer immutable artifacts (e.g., image digests) promoted through environments.
 
-**Purpose:** cheapest correctness signal.
+---
 
-- Format / lint / typecheck
-- Forbidden patterns / policy checks
-- Contract/schema validation (where applicable)
+## Test pyramid (preferred mix)
 
-### 1) Unit tests (many)
+1. **Static checks** (always)  
+   Format / lint / typecheck / policy / schema validation
 
-**Purpose:** protect core logic and enable refactoring.
+2. **Unit + component tests** (many)  
+   Hermetic, in-process. No network. No real DB.
 
-- In-process, hermetic, no DB, no network.
-- Pure functions and domain rules belong here.
+3. **Contract tests** (important)  
+   Lock API ↔ Web ↔ SDK expectations. Prefer contracts over UI tests.
 
-### 2) Component/service tests (many)
+4. **Integration tests** (some)  
+   Real Postgres + migrations + critical queries/invariants. Keep small.
 
-**Purpose:** test a unit plus its immediate boundary.
-Examples:
+5. **E2E UI tests** (few)  
+   Golden paths only. Must be stable.
 
-- API handlers via in-memory HTTP server
-- Worker job logic with faked queue/external clients
-- Web components with DOM (no browser automation)
-
-### 3) Contract tests (important, cheap confidence)
-
-**Purpose:** prevent drift between API ↔ Web ↔ SDK.
-
-- Contracts live in `packages/contracts`
-- Server responses and client expectations must both match the contract.
-- Prefer contract tests over UI tests when possible.
-
-### 4) Integration tests (some, high value)
-
-**Purpose:** verify real wiring with real dependencies.
-
-- Real Postgres
-- Migrations apply cleanly
-- Critical queries and invariants behave correctly
-- Keep the set small and valuable
-
-### 5) E2E UI tests (few, golden paths only)
-
-**Purpose:** prove critical user journeys.
-
-- Real browser (Playwright)
-- Full stack running
-- Keep this suite tiny and stable
-
-### 6) Post-deployment verification gate tests (minimal)
-
-**Purpose:** confirm the deployed system is alive.
-
-- Health endpoint
-- OpenAPI endpoint
-- Ping endpoint
-- One “page loads” check (when UI is relevant)
+6. **Post-deployment verification gate** (minimal)  
+   “Is it alive?” checks (health + one critical authenticated path + optional page load).
 
 ---
 
 ## What runs when (CI policy)
 
-### PR preview (`commit-stage` workflow, optional)
-
-PR runs are preview feedback only.
+### Fast gate (runs frequently; should be minutes)
 
 - Static checks
-- Unit tests
-- Component/service tests
+- Unit/component
 - Contract tests
 
-Target: minutes, not hours.
+### Deeper validation (risk-based)
 
-### Push to `main` (authoritative gates)
+- Integration tests (real DB)
+- E2E UI (only when needed)
 
-Pushes to `main` are the release evidence source of truth.
+### `main` / release candidate
 
-- `commit-stage` gate (fast commit-test + policy checks)
-- `integration-gate` (push-only integration confidence checks)
-  - includes build/compile, migration safety (when needed), auth-critical in-process smoke, and runtime integration tests
-
-### Post-deployment verification
-
-Cloud deployment verification (after promotion/deploy) runs:
-
-- API smoke verification
-- Browser smoke verification (Playwright evidence)
-
-### Local deep suite (author-driven)
-
-- `pnpm test:full` remains available locally when deeper pre-push confidence is needed.
+- Promote the immutable artifact
+- Minimal smoke verification (avoid re-running everything)
 
 ---
 
-## Non-negotiables (rules that prevent test rot)
+## Non‑negotiables
 
-### Determinism rules
-
-- No `sleep()` to “wait for things.” Poll on a real readiness condition.
-- Control time: inject a clock, use fake timers, or fix the system time in tests.
-- Seed randomness. If data is random, it must be reproducible.
-
-### Isolation rules
-
-- Unit tests: no DB, no network.
-- Integration tests: real DB is allowed; external APIs must be mocked at the boundary.
-- Tests must be runnable locally with a single command.
-
-### Flake policy
-
-- A flaky test is a production bug in the factory.
-- Fix it quickly or quarantine it with:
-  - clear owner
-  - clear reason
-  - expiry date
-
-No indefinite quarantines.
+- **No `sleep()`**: poll for readiness conditions.
+- **Control time**: inject clocks / fake timers / fixed time.
+- **Seed randomness**: reproducible runs only.
+- **Quarantine policy**: flaky tests must have an owner + reason + expiry date (no indefinite quarantine).
 
 ---
 
-## Directory conventions
-
-- Unit/component tests: colocated with code
-  - `apps/*/src/**`
-  - `packages/*/src/**`
-
-- Integration tests:
-  - `apps/api/test/integration/**` (or equivalent per app)
-
-- E2E tests (Playwright):
-  - `tests/e2e/**`
-
-- System/smoke tests:
-  - `tests/system/**` and/or `tests/smoke/**`
-
-- Shared test helpers (“testkit”):
-  - `packages/testkit/**` (factories, clocks, DB helpers, HTTP helpers)
-
----
-
-## Standard scripts (recommended)
-
-We standardize on predictable entrypoints so CI and humans run the same commands:
+## Standard commands (CI and humans use the same entrypoints)
 
 - `pnpm test`  
-  Commit-stage suite (fast)
+  Fast gate (default)
 
 - `pnpm test:full`  
-  Commit-stage + integration (+ optional E2E if required)
+  Fast gate + integration (+ optional E2E if required)
 
 - `pnpm test:unit` / `pnpm test:integration` / `pnpm test:e2e`  
-  Targeted runs for debugging
+  Targeted runs
 
-- `pnpm test:contracts`  
-  Contract-focused checks for `@compass/contracts` + `@compass/sdk`
-
-- `pnpm test:runtime:unit` / `pnpm test:runtime:integration` / `pnpm test:runtime:smoke`  
-  Runtime-first layer commands for web/api/worker + shared contracts/sdk
-
-- `pnpm test:coverage`  
-  Coverage collection (informational first; thresholds are ratcheted later)
-
-- `pnpm ci:runtime-coverage`  
-  Runtime coverage collection + threshold evaluation against `tests/policy/runtime-coverage-policy.json`
-
-CI should call these scripts directly (avoid “CI-only magic”).
+> If a command is required before pushing to `main`, document it here and keep it fast:
+> `<FAST_CHECK_CMD>`
 
 ---
 
-## Coverage ratchet rollout
+## Conventions (adjust paths to match the repo)
 
-1. Keep `tests/policy/runtime-coverage-policy.json` in `mode: "observe"` while collecting 2-3 green integration-gate runs.
-2. Review `.artifacts/runtime-coverage/<sha>/result.json` for drift and threshold misses.
-3. Raise package thresholds only when a package is consistently above its current floor.
-4. Switch policy mode to `enforce` only after stability is demonstrated.
-
----
-
-## “Start here” for new contributors
-
-If you’re adding a feature:
-
-1. Add/extend unit/component tests first.
-2. Add contract tests for boundary changes.
-3. Add a small number of integration tests for DB or wiring changes.
-4. Add/extend E2E only when the behavior can’t be proven cheaper.
-
-If you’re fixing a bug:
-
-- First add a test that fails in the old behavior and passes with the fix.
-- Prefer the smallest layer that reproduces the issue.
-
----
-
-## References (concepts, not doctrine)
-
-- E2E suite README: `tests/e2e/README.md`
-- System smoke README: `tests/system/README.md`
-- Test pyramid: https://martinfowler.com/articles/practical-test-pyramid.html
-- Continuous Delivery / deployment pipeline concepts: https://continuousdelivery.com/implementing/patterns/
-- “Wide not long” pipeline guidance: https://continuousdelivery.com/2010/09/deployment-pipeline-anti-patterns/
-- Harness engineering (agent-friendly repo practices): https://openai.com/index/harness-engineering/
+- Unit/component: colocated with code (`apps/**/src/**`, `packages/**/src/**`)
+- Contracts: `packages/contracts/**`
+- Integration: `**/test/integration/**`
+- E2E (Playwright): `tests/e2e/**`
+- System/smoke: `tests/system/**` and/or `tests/smoke/**`
+- Shared testkit: `packages/testkit/**`

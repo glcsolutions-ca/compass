@@ -18,22 +18,22 @@ compass/
 
 Agents can run these locally when needed.
 
-* `pnpm install` — install workspace dependencies
-* `pnpm dev` — run local apps/services
-* `pnpm build` — build all apps/packages
+- `pnpm install` — install workspace dependencies
+- `pnpm dev` — run local apps/services
+- `pnpm build` — build all apps/packages
 
 ### Testing
 
-* `pnpm test` — **commit-stage** checks (static + unit/component + contract)
-* `pnpm test:static` — policy + formatting + lint + typecheck (fastest local gate)
-* `pnpm test:full` — commit-stage + integration tests
-* `pnpm test:integration` — integration tests only (requires local Postgres)
-* `pnpm test:e2e` — Playwright smoke flow only
+- `pnpm test` — **commit-stage** checks (static + unit/component + contract)
+- `pnpm test:static` — policy + formatting + lint + typecheck (fastest local gate)
+- `pnpm test:full` — commit-stage + integration tests
+- `pnpm test:integration` — integration tests only (requires local Postgres)
+- `pnpm test:e2e` — Playwright smoke flow only
 
 ### Local Postgres (for integration)
 
-* `pnpm db:postgres:up` — start local Postgres, apply migrations, seed data
-* `pnpm db:postgres:down` — stop local Postgres
+- `pnpm db:postgres:up` — start local Postgres, apply migrations, seed data
+- `pnpm db:postgres:down` — stop local Postgres
 
 Example (integration run):
 
@@ -45,9 +45,9 @@ pnpm db:postgres:down
 
 ## Trunk-based CD (Dave Farley style)
 
-* **Trunk = `main`**. `main` must stay **green and releasable** at all times.
-* **Integrate in small batches**. Prefer **small, reversible** changes and frequent evidence-driven commits.
-* **Pipeline = release evidence**. A change is “done” only when the `main` pipeline is green. If `main` goes red: **fix forward or revert immediately**.
+- **Trunk = `main`**. `main` must stay **green and releasable** at all times.
+- **Integrate in small batches**. Prefer **small, reversible** changes and frequent evidence-driven commits.
+- **Pipeline = release evidence**. A change is “done” only when the `main` pipeline is green. If `main` goes red: **fix forward or revert immediately**.
 
 ### Agent workflow (direct-to-main)
 

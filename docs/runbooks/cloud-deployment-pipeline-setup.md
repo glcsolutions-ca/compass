@@ -166,7 +166,6 @@ Set these in both `acceptance` and `production` unless noted:
 6. Push the first infra-scope change to `main` (for example a non-functional comment in `infra/azure/main.bicep`).
 
 This first push run is what creates the full platform (ACA env/apps/job, Postgres, networking, identities wired into infra runtime config).
-If the change touches docs-critical infra paths, include a docs-target update in this commit (for example this runbook) to satisfy docs-drift policy gates.
 
 7. After first successful deploy, capture the default ACA API FQDN for operator records and smoke troubleshooting.
 

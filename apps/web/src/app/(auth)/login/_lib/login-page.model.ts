@@ -32,6 +32,10 @@ export function resolveLoginErrorMessage(errorCode: string | null) {
     return null;
   }
 
+  if (errorCode === "entra_disabled") {
+    return "Enterprise sign-in is currently unavailable.";
+  }
+
   if (errorCode === "tenant_not_allowed") {
     return "Your Microsoft Entra tenant is not approved for access.";
   }

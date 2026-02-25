@@ -18,6 +18,9 @@ describe("login page model", () => {
   });
 
   it("maps known error codes to actionable copy", () => {
+    expect(resolveLoginErrorMessage("entra_disabled")).toBe(
+      "Enterprise sign-in is currently unavailable."
+    );
     expect(resolveLoginErrorMessage("tenant_not_allowed")).toBe(
       "Your Microsoft Entra tenant is not approved for access."
     );

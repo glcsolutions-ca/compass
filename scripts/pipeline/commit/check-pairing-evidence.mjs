@@ -43,7 +43,9 @@ function parseScopeFromPayload(scopePayload) {
 }
 
 function parseBooleanFlag(value) {
-  const normalized = String(value || "").trim().toLowerCase();
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
   if (normalized === "true") {
     return true;
   }
@@ -58,7 +60,9 @@ function deriveScopeFromEnv(highRiskScopes) {
   let hasAny = false;
 
   for (const scopeKey of highRiskScopes) {
-    const envName = `SCOPE_${String(scopeKey).replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase()}`;
+    const envName = `SCOPE_${String(scopeKey)
+      .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+      .toUpperCase()}`;
     const parsed = parseBooleanFlag(process.env[envName]);
     if (parsed === null) {
       continue;

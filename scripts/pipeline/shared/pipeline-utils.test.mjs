@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  classifyCandidateKind,
+  classifyReleaseCandidateKind,
   evaluateDocsDrift,
   loadPipelinePolicyObject,
   matchesAnyPattern,
@@ -27,7 +27,7 @@ const policy = loadPipelinePolicyObject({
     desktop: [
       "apps/desktop/**",
       ".github/workflows/desktop-deployment-pipeline.yml",
-      ".github/workflows/desktop-release.yml"
+      ".github/workflows/desktop-deployment-pipeline.yml"
     ],
     infra: ["infra/azure/**"],
     identity: ["infra/identity/**"],
@@ -52,23 +52,28 @@ const policy = loadPipelinePolicyObject({
     ]
   },
   commitStage: {
-    requiredChecks: ["determine-scope", "fast-feedback", "desktop-fast-feedback", "commit-stage"],
+    requiredChecks: [
+      "determine-scope",
+      "commit-test-suite",
+      "desktop-commit-test-suite",
+      "commit-stage"
+    ],
     slo: {
       targetSeconds: 300,
       mode: "enforce"
     }
   },
-  mergeQueueGate: {
+  integrationGate: {
     requiredChecks: [
       "determine-scope",
       "build-compile",
       "migration-safety",
       "auth-critical-smoke",
       "minimal-integration-smoke",
-      "merge-queue-gate"
+      "integration-gate"
     ]
   },
-  acceptanceStage: {
+  automatedAcceptanceTestGate: {
     requiredFlowIds: ["compass-smoke"],
     runtimeRequiredChecks: [
       "runtime-api-system-acceptance",
@@ -78,33 +83,34 @@ const policy = loadPipelinePolicyObject({
     infraRequiredChecks: ["infra-readonly-acceptance"],
     identityRequiredChecks: ["identity-readonly-acceptance"]
   },
-  productionStage: {
+  deploymentStage: {
     requireFreshHeadOnAuto: true
   },
-  cloudDeliveryPipeline: {
+  cloudDeploymentPipeline: {
     slo: {
       mode: "observe",
-      acceptanceTargetSeconds: 900,
-      productionTargetSeconds: 1200
+      automatedAcceptanceTestGateTargetSeconds: 900,
+      deploymentStageTargetSeconds: 1200
     }
   },
-  desktopPipeline: {
+  desktopDeploymentPipeline: {
     requiredChecks: [
       "desktop-commit-stage",
-      "desktop-acceptance-stage",
-      "desktop-production-stage",
+      "desktop-automated-acceptance-test-gate",
+      "desktop-deployment-stage",
       "desktop-release-decision"
     ],
     artifactContracts: {
-      candidateManifestPath: ".artifacts/desktop-candidate/<sha>/manifest.json",
-      acceptanceResultPath: ".artifacts/desktop-acceptance/<sha>/result.json",
-      productionResultPath: ".artifacts/desktop-production/<sha>/result.json",
+      releaseCandidateManifestPath: ".artifacts/desktop-release-candidate/<sha>/manifest.json",
+      automatedAcceptanceTestGateResultPath:
+        ".artifacts/desktop-automated-acceptance-test-gate/<sha>/result.json",
+      deploymentResultPath: ".artifacts/desktop-deployment-stage/<sha>/result.json",
       releaseDecisionPath: ".artifacts/desktop-release/<sha>/decision.json"
     },
     slo: {
       mode: "observe",
-      acceptanceTargetSeconds: 1800,
-      productionTargetSeconds: 1200
+      automatedAcceptanceTestGateTargetSeconds: 1800,
+      deploymentStageTargetSeconds: 1200
     }
   },
   docsDriftRules: {
@@ -121,7 +127,7 @@ describe("scope resolution", () => {
     expect(scope.infra).toBe(false);
     expect(scope.identity).toBe(false);
     expect(scope.docsOnly).toBe(false);
-    expect(classifyCandidateKind(scope)).toBe("runtime");
+    expect(classifyReleaseCandidateKind(scope)).toBe("runtime");
   });
 
   it("classifies infra-only changes", () => {
@@ -129,7 +135,7 @@ describe("scope resolution", () => {
     expect(scope.runtime).toBe(false);
     expect(scope.infra).toBe(true);
     expect(scope.infraRollout).toBe(true);
-    expect(classifyCandidateKind(scope)).toBe("infra");
+    expect(classifyReleaseCandidateKind(scope)).toBe("infra");
   });
 
   it("classifies identity-only changes", () => {
@@ -137,13 +143,13 @@ describe("scope resolution", () => {
     expect(scope.runtime).toBe(false);
     expect(scope.infra).toBe(false);
     expect(scope.identity).toBe(true);
-    expect(classifyCandidateKind(scope)).toBe("identity");
+    expect(classifyReleaseCandidateKind(scope)).toBe("identity");
   });
 
   it("classifies docs-only changes", () => {
     const scope = resolveChangeScope(policy, ["docs/README.md"]);
     expect(scope.docsOnly).toBe(true);
-    expect(classifyCandidateKind(scope)).toBe("checks");
+    expect(classifyReleaseCandidateKind(scope)).toBe("checks");
   });
 
   it("treats infra README changes as docs-only (not infra mutation scope)", () => {
@@ -153,7 +159,7 @@ describe("scope resolution", () => {
     expect(scope.identity).toBe(false);
     expect(scope.runtime).toBe(false);
     expect(scope.desktop).toBe(false);
-    expect(classifyCandidateKind(scope)).toBe("checks");
+    expect(classifyReleaseCandidateKind(scope)).toBe("checks");
   });
 
   it("classifies desktop-only changes", () => {
@@ -163,7 +169,7 @@ describe("scope resolution", () => {
     expect(scope.infra).toBe(false);
     expect(scope.identity).toBe(false);
     expect(scope.docsOnly).toBe(false);
-    expect(classifyCandidateKind(scope)).toBe("desktop");
+    expect(classifyReleaseCandidateKind(scope)).toBe("desktop");
   });
 
   it("treats desktop README changes as docs-only (not desktop runtime scope)", () => {
@@ -173,7 +179,7 @@ describe("scope resolution", () => {
     expect(scope.runtime).toBe(false);
     expect(scope.infra).toBe(false);
     expect(scope.identity).toBe(false);
-    expect(classifyCandidateKind(scope)).toBe("checks");
+    expect(classifyReleaseCandidateKind(scope)).toBe("checks");
   });
 
   it("flags migration changes", () => {
@@ -184,7 +190,7 @@ describe("scope resolution", () => {
 });
 
 describe("docs drift", () => {
-  it("records advisory reason codes for delivery config changes outside docs-critical paths", () => {
+  it("records advisory reason codes for deployment pipeline config changes outside docs-critical paths", () => {
     const result = evaluateDocsDrift(policy, [".github/workflows/commit-stage.yml"]);
     expect(result.shouldBlock).toBe(false);
     expect(result.reasonCodes).toEqual(["DOCS_DRIFT_ADVISORY_DOC_TARGET_MISSING"]);
@@ -215,7 +221,7 @@ describe("docs drift", () => {
 });
 
 describe("glob matching engine", () => {
-  it("matches delivery config patterns for dot-prefixed directories", () => {
+  it("matches deployment pipeline config patterns for dot-prefixed directories", () => {
     expect(matchesAnyPattern(".github/workflows/commit-stage.yml", [".github/workflows/**"])).toBe(
       true
     );

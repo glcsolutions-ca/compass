@@ -15,28 +15,28 @@ async function resolveAcceptanceEligibility() {
   const docsOnlyChanged = asBool(process.env.DOCS_ONLY_CHANGED);
   const requiresInfraConvergence = asBool(process.env.REQUIRES_INFRA_CONVERGENCE);
 
-  let deployRequired = true;
+  let deploymentRequired = true;
   let deploySkipReasonCode = "";
-  let deliveryConfigRequired = false;
+  let deploymentPipelineConfigRequired = false;
 
   if (docsOnlyChanged) {
-    deployRequired = false;
+    deploymentRequired = false;
     deploySkipReasonCode = "DOCS_ONLY_CHANGE";
   } else if (changeClass === "checks") {
-    deployRequired = false;
+    deploymentRequired = false;
     deploySkipReasonCode = "CHECKS_ONLY_CHANGE";
   } else if (changeClass === "desktop") {
-    deployRequired = false;
+    deploymentRequired = false;
     deploySkipReasonCode = "DESKTOP_ONLY_CHANGE";
   }
 
   if (infraChanged || identityChanged || requiresInfraConvergence) {
-    deliveryConfigRequired = true;
+    deploymentPipelineConfigRequired = true;
   }
 
   await appendGithubOutput({
-    deploy_required: String(deployRequired),
-    delivery_config_required: String(deliveryConfigRequired),
+    deployment_required: String(deploymentRequired),
+    deployment_pipeline_config_required: String(deploymentPipelineConfigRequired),
     deploy_skip_reason_code: deploySkipReasonCode
   });
 }

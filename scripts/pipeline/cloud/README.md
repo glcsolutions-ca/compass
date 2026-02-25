@@ -7,12 +7,12 @@ Desktop pipeline code is intentionally kept in `scripts/pipeline/desktop/`.
 
 ## Stage Split
 
-- `acceptance/`: non-mutating acceptance checks and YES/NO decision logic for cloud release packages.
-- `production/`: guarded production mutation helpers and production-stage decision logic.
+- `automated-acceptance-test-gate/`: non-mutating acceptance checks and YES/NO decision logic for cloud release candidates.
+- `deployment-stage/`: guarded production mutation helpers and deployment-stage decision logic.
 
 ## References
 
-- Cloud push workflow: `.github/workflows/cloud-delivery-pipeline.yml`
-- Cloud replay workflow: `.github/workflows/cloud-delivery-replay.yml`
-- Acceptance scripts: [`scripts/pipeline/cloud/acceptance/README.md`](./acceptance/README.md)
-- Production scripts: [`scripts/pipeline/cloud/production/README.md`](./production/README.md)
+- Cloud push workflow: `.github/workflows/cloud-deployment-pipeline.yml`
+- Cloud replay workflow: `.github/workflows/cloud-deployment-pipeline-replay.yml`
+- Automated acceptance test gate scripts: [`scripts/pipeline/cloud/automated-acceptance-test-gate/README.md`](./automated-acceptance-test-gate/README.md)
+- Deployment stage scripts: [`scripts/pipeline/cloud/deployment-stage/README.md`](./deployment-stage/README.md)

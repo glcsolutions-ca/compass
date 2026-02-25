@@ -5,24 +5,24 @@ This directory is the machine source of truth for delivery policy.
 - Canonical contract: `.github/policy/pipeline-policy.json`
 - Enforced by workflows:
   - `.github/workflows/commit-stage.yml`
-  - `.github/workflows/merge-queue-gate.yml`
-  - `.github/workflows/cloud-delivery-pipeline.yml`
-  - `.github/workflows/cloud-delivery-replay.yml`
+  - `.github/workflows/integration-gate.yml`
+  - `.github/workflows/cloud-deployment-pipeline.yml`
+  - `.github/workflows/cloud-deployment-pipeline-replay.yml`
   - `.github/workflows/desktop-deployment-pipeline.yml`
-- Required gate contexts: `commit-stage`, `merge-queue-gate`
+- Required gate contexts: `commit-stage`, `integration-gate`
 
-PR fast feedback and exact merge queue validation are separate by design. Acceptance and production are post-merge stages.
+PR commit-test suite and exact integration-gate validation are separate by design. Automated acceptance test gate and deployment stage are post-merge gates.
 
 ## Policy Sections
 
 - `scopeRules`: file-to-scope classification (`runtime`, `desktop`, `infra`, `identity`, `docsOnly`, rollout flags)
 - `commitStage`: required PR checks + commit SLO policy (`targetSeconds`, `mode`)
-- `mergeQueueGate`: required exact-merge checks
-- `acceptanceStage`: required acceptance jobs by scope
-- `productionStage`: production promotion safety toggles
-- `cloudDeliveryPipeline`: cloud delivery timing SLO targets (`acceptance`, `production`)
-- `desktopPipeline`: desktop delivery checks, artifact contracts, and stage timing SLOs
-- `docsDriftRules`: delivery-config/docs-critical drift rules
+- `integrationGate`: required exact-merge checks
+- `automatedAcceptanceTestGate`: required acceptance jobs by scope
+- `deploymentStage`: production promotion safety toggles
+- `cloudDeploymentPipeline`: cloud deployment timing SLO targets (`acceptance`, `production`)
+- `desktopDeploymentPipeline`: desktop delivery checks, artifact contracts, and stage timing SLOs
+- `docsDriftRules`: deployment-pipeline-config/docs-critical drift rules
 
 ## Commit-Stage SLO Mode
 
@@ -33,7 +33,7 @@ PR fast feedback and exact merge queue validation are separate by design. Accept
 
 ## High-Risk Coverage
 
-`pipeline-policy.json` treats delivery-config paths as high-risk, including:
+`pipeline-policy.json` treats deployment-pipeline-config paths as high-risk, including:
 
 - `.github/workflows/**`
 - `.github/policy/**`

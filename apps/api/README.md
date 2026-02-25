@@ -56,7 +56,7 @@ Configuration is parsed in `src/config/index.ts`.
 
 ## Runtime Acceptance Note
 
-- Browser and API/system candidate acceptance paths must inject the same auth bootstrap env (`AUTH_*` and `OAUTH_*`) so `/health` readiness is validated under the same production-mode config.
+- Browser and API/system release candidate acceptance paths must inject the same auth bootstrap env (`AUTH_*` and `OAUTH_*`) so `/health` readiness is validated under the same production-mode config.
 
 ## Commands
 

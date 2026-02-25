@@ -45,7 +45,7 @@ jobs:
       migration_changed: ${{ steps.scope.outputs.migration_changed }}
       infra_rollout_changed: ${{ steps.scope.outputs.infra_rollout_changed }}
       docs_only_changed: ${{ steps.scope.outputs.docs_only_changed }}
-      delivery_config_changed: ${{ steps.scope.outputs.delivery_config_changed }}
+      deployment_pipeline_config_changed: ${{ steps.scope.outputs.deployment_pipeline_config_changed }}
       requires_infra_convergence: ${{ steps.scope.outputs.requires_infra_convergence }}
       requires_migrations: ${{ steps.scope.outputs.requires_migrations }}
       changed_files_json: ${{ steps.scope.outputs.changed_files_json }}
@@ -96,11 +96,11 @@ jobs:
           path: .artifacts/docs-drift/${{ steps.scope.outputs.tested_sha }}/result.json
           if-no-files-found: warn
 
-  fast_feedback:
-    name: fast-feedback
+  commit_test_suite:
+    name: commit-test-suite
     needs:
       - determine_scope
-    if: ${{ github.event_name == 'pull_request' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true') }}
+    if: ${{ github.event_name == 'pull_request' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -112,11 +112,11 @@ jobs:
       - name: Setup Node + pnpm
         uses: ./.github/actions/setup-node-pnpm
 
-      - name: Run fast feedback suite
-        run: pnpm ci:fast-feedback
+      - name: Run commit-test suite
+        run: pnpm ci:commit-test-suite
 
-  desktop_fast_feedback:
-    name: desktop-fast-feedback
+  desktop_commit_test_suite:
+    name: desktop-commit-test-suite
     needs:
       - determine_scope
     if: ${{ github.event_name == 'pull_request' && needs.determine_scope.outputs.desktop_changed == 'true' && needs.determine_scope.outputs.docs_only_changed != 'true' }}
@@ -131,7 +131,7 @@ jobs:
       - name: Setup Node + pnpm
         uses: ./.github/actions/setup-node-pnpm
 
-      - name: Run desktop fast feedback suite
+      - name: Run desktop commit-test suite
         run: |
           pnpm --filter @compass/desktop lint
           pnpm --filter @compass/desktop test
@@ -179,8 +179,8 @@ jobs:
     if: ${{ always() }}
     needs:
       - determine_scope
-      - fast_feedback
-      - desktop_fast_feedback
+      - commit_test_suite
+      - desktop_commit_test_suite
       - infra_static_check
       - identity_static_check
     runs-on: ubuntu-latest
@@ -209,7 +209,7 @@ jobs:
         env:
           HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
           TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
-          RUNTIME_REQUIRED: ${{ github.event_name == 'pull_request' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.delivery_config_changed == 'true') }}
+          RUNTIME_REQUIRED: ${{ github.event_name == 'pull_request' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
           DESKTOP_REQUIRED: ${{ github.event_name == 'pull_request' && needs.determine_scope.outputs.desktop_changed == 'true' && needs.determine_scope.outputs.docs_only_changed != 'true' }}
           INFRA_REQUIRED: ${{ github.event_name == 'pull_request' && needs.determine_scope.outputs.infra_changed }}
           IDENTITY_REQUIRED: ${{ github.event_name == 'pull_request' && needs.determine_scope.outputs.identity_changed }}
@@ -219,7 +219,7 @@ jobs:
           COMMIT_STAGE_SLO_PASS: ${{ steps.timing.outputs.commit_stage_slo_pass }}
           COMMIT_STAGE_SLO_TARGET_SECONDS: ${{ steps.timing.outputs.commit_stage_slo_target_seconds }}
           TIME_TO_COMMIT_GATE_SECONDS: ${{ steps.timing.outputs.time_to_commit_gate_seconds }}
-          CHECK_RESULTS_JSON: ${{ format('{{"determine-scope":"{0}","fast-feedback":"{1}","desktop-fast-feedback":"{2}","infra-static-check":"{3}","identity-static-check":"{4}"}}', needs.determine_scope.result, needs.fast_feedback.result, needs.desktop_fast_feedback.result, needs.infra_static_check.result, needs.identity_static_check.result) }}
+          CHECK_RESULTS_JSON: ${{ format('{{"determine-scope":"{0}","commit-test-suite":"{1}","desktop-commit-test-suite":"{2}","infra-static-check":"{3}","identity-static-check":"{4}"}}', needs.determine_scope.result, needs.commit_test_suite.result, needs.desktop_commit_test_suite.result, needs.infra_static_check.result, needs.identity_static_check.result) }}
         run: node scripts/pipeline/commit/decide-commit-stage.mjs
 
       - name: Upload commit-stage artifact

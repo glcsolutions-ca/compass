@@ -11,7 +11,7 @@ async function githubRequest(token, pathname) {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${token}`,
       "X-GitHub-Api-Version": GITHUB_API_VERSION,
-      "User-Agent": "compass-verify-merge-queue-gate-evidence"
+      "User-Agent": "compass-verify-integration-gate-evidence"
     }
   });
 
@@ -40,11 +40,11 @@ function sleep(milliseconds) {
 
 async function findSuccessfulMergeQueueRun({ token, repository, workflowFile, headSha }) {
   const timeoutSeconds = parsePositiveInt(
-    process.env.MERGE_QUEUE_GATE_EVIDENCE_TIMEOUT_SECONDS,
+    process.env.INTEGRATION_GATE_EVIDENCE_TIMEOUT_SECONDS,
     DEFAULT_TIMEOUT_SECONDS
   );
   const pollIntervalSeconds = parsePositiveInt(
-    process.env.MERGE_QUEUE_GATE_EVIDENCE_POLL_INTERVAL_SECONDS,
+    process.env.INTEGRATION_GATE_EVIDENCE_POLL_INTERVAL_SECONDS,
     DEFAULT_POLL_INTERVAL_SECONDS
   );
   const deadline = Date.now() + timeoutSeconds * 1000;
@@ -103,7 +103,7 @@ async function main() {
   const token = requireEnv("GITHUB_TOKEN");
   const repository = requireEnv("GITHUB_REPOSITORY");
   const headSha = requireEnv("HEAD_SHA");
-  const workflowFile = process.env.MERGE_QUEUE_GATE_WORKFLOW_FILE?.trim() || "merge-queue-gate.yml";
+  const workflowFile = process.env.INTEGRATION_GATE_WORKFLOW_FILE?.trim() || "integration-gate.yml";
 
   const matchedRun = await findSuccessfulMergeQueueRun({
     token,
@@ -112,13 +112,13 @@ async function main() {
     headSha
   });
 
-  const artifactPath = path.join(".artifacts", "merge-queue-gate", headSha, "evidence.json");
+  const artifactPath = path.join(".artifacts", "integration-gate", headSha, "evidence.json");
   await writeJsonFile(artifactPath, {
     schemaVersion: "1",
     generatedAt: new Date().toISOString(),
     headSha,
     workflowFile,
-    mergeQueueGateRun: {
+    integrationGateRun: {
       id: matchedRun.id,
       runNumber: matchedRun.run_number,
       htmlUrl: matchedRun.html_url,
@@ -131,8 +131,8 @@ async function main() {
   });
 
   await appendGithubOutput({
-    merge_queue_gate_run_id: String(matchedRun.id),
-    merge_queue_gate_evidence_path: artifactPath
+    integration_gate_run_id: String(matchedRun.id),
+    integration_gate_evidence_path: artifactPath
   });
 }
 

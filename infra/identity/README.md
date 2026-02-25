@@ -7,8 +7,8 @@
 - Outputs: `infra/identity/outputs.tf`
 - Environment tfvars: `infra/identity/env/prod.tfvars`
 - Pipeline usage:
-  - acceptance plan: `.github/workflows/cloud-delivery-pipeline.yml` and `.github/workflows/cloud-delivery-replay.yml` (`identity-readonly-acceptance`)
-  - production apply: `.github/workflows/cloud-delivery-pipeline.yml` and `.github/workflows/cloud-delivery-replay.yml` (`deploy-identity`)
+  - automated acceptance test gate plan: `.github/workflows/cloud-deployment-pipeline.yml` and `.github/workflows/cloud-deployment-pipeline-replay.yml` (`identity-readonly-acceptance`)
+  - deployment-stage apply: `.github/workflows/cloud-deployment-pipeline.yml` and `.github/workflows/cloud-deployment-pipeline-replay.yml` (`deploy-identity`)
 
 ## What This Manages
 
@@ -23,7 +23,7 @@
 
 - Terraform backend: Azure Storage (`azurerm` remote state).
 - Auth: OIDC + Azure AD (`use_oidc=true`, `use_azuread_auth=true`).
-- Acceptance and production use separate client IDs.
+- Automated acceptance test gate and deployment stage use separate client IDs.
 
 ## Required Variables
 

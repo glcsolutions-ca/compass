@@ -6,13 +6,13 @@
 
 ```mermaid
 flowchart LR
-  A["PR checks\ncommit-stage + merge-queue-gate"] --> B["Merge to main"]
-  B --> C["Build once\nrelease package artifact"]
+  A["PR checks\ncommit-stage + integration-gate"] --> B["Merge to main"]
+  B --> C["Build once\nrelease candidate artifact"]
   C --> D["Acceptance lanes (parallel)\nruntime + infra validate + identity plan"]
   D --> E{"acceptance YES\nand deploy required?"}
   E -- yes --> F["Production lanes (parallel where possible)\ndeploy_identity || deploy_infra -> deploy_runtime"]
   F --> G["production_blackbox_verify"]
-  G --> H["production_stage"]
+  G --> H["deployment_stage"]
   H --> I["release_decision"]
   E -- no --> I
   I --> J["Fix forward:\nconfig/RBAC/DNS -> replay same SHA\ncode/workflow -> PR then rerun"]
@@ -205,7 +205,7 @@ It is rare and privileged. Manual keeps each mutation explicit and auditable.
 
 ### What happens automatically after bootstrap?
 
-Every `main` change goes through one path: acceptance checks, production deploy (when required), production verify, release decision.
+Every `main` change goes through one path: automated acceptance test gate checks, deployment-stage deploy (when required), deployment-stage verification, release decision.
 
 ### What triggers infra deploy vs identity deploy?
 

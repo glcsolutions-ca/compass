@@ -6,8 +6,8 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      candidate_sha:
-        description: Candidate SHA to replay (defaults to current ref)
+      release_candidate_sha:
+        description: Release candidate SHA to replay (defaults to current ref)
         required: false
         type: string
       release_tag:
@@ -30,30 +30,30 @@ permissions:
   id-token: write
 
 jobs:
-  desktop_candidate_context:
-    name: desktop-candidate-context
+  desktop_release_candidate_context:
+    name: desktop-release-candidate-context
     runs-on: ubuntu-latest
     outputs:
-      candidate_sha: ${{ steps.resolve.outputs.candidate_sha }}
+      release_candidate_sha: ${{ steps.resolve.outputs.release_candidate_sha }}
       replay_mode: ${{ steps.resolve.outputs.replay_mode }}
       draft: ${{ steps.resolve.outputs.draft }}
     steps:
-      - name: Resolve desktop candidate context
+      - name: Resolve desktop release candidate context
         id: resolve
         env:
           EVENT_NAME: ${{ github.event_name }}
-          INPUT_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          INPUT_RELEASE_CANDIDATE_SHA: ${{ inputs.release_candidate_sha }}
           INPUT_DRAFT: ${{ inputs.draft }}
           PUSH_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
           replay_mode="false"
-          candidate_sha="$PUSH_SHA"
+          release_candidate_sha="$PUSH_SHA"
 
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "${INPUT_CANDIDATE_SHA:-}" ]; then
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "${INPUT_RELEASE_CANDIDATE_SHA:-}" ]; then
             replay_mode="true"
-            candidate_sha="$INPUT_CANDIDATE_SHA"
+            release_candidate_sha="$INPUT_RELEASE_CANDIDATE_SHA"
           fi
 
           draft="false"
@@ -63,14 +63,14 @@ jobs:
 
           {
             echo "replay_mode=$replay_mode"
-            echo "candidate_sha=$candidate_sha"
+            echo "release_candidate_sha=$release_candidate_sha"
             echo "draft=$draft"
           } >> "$GITHUB_OUTPUT"
 
   desktop_determine_scope:
     name: desktop-determine-scope
     needs:
-      - desktop_candidate_context
+      - desktop_release_candidate_context
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -81,10 +81,10 @@ jobs:
       docs_only_changed: ${{ steps.scope.outputs.docs_only_changed }}
       scope_path: ${{ steps.scope.outputs.scope_path }}
     steps:
-      - name: Checkout candidate
+      - name: Checkout release candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.desktop_candidate_context.outputs.candidate_sha }}
+          ref: ${{ needs.desktop_release_candidate_context.outputs.release_candidate_sha }}
           fetch-depth: 0
 
       - name: Setup Node
@@ -95,8 +95,8 @@ jobs:
       - name: Resolve commit scope
         id: scope
         env:
-          GITHUB_HEAD_SHA: ${{ needs.desktop_candidate_context.outputs.candidate_sha }}
-          GITHUB_TESTED_SHA: ${{ needs.desktop_candidate_context.outputs.candidate_sha }}
+          GITHUB_HEAD_SHA: ${{ needs.desktop_release_candidate_context.outputs.release_candidate_sha }}
+          GITHUB_TESTED_SHA: ${{ needs.desktop_release_candidate_context.outputs.release_candidate_sha }}
         run: node scripts/pipeline/commit/resolve-scope.mjs
 
       - name: Upload desktop scope artifact
@@ -107,25 +107,25 @@ jobs:
           path: ${{ steps.scope.outputs.scope_path }}
           if-no-files-found: warn
 
-  desktop_fast_feedback:
-    name: desktop-fast-feedback
+  desktop_commit_test_suite:
+    name: desktop-commit-test-suite
     needs:
-      - desktop_candidate_context
+      - desktop_release_candidate_context
       - desktop_determine_scope
     if: ${{ needs.desktop_determine_scope.outputs.desktop_changed == 'true' && needs.desktop_determine_scope.outputs.docs_only_changed != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout candidate
+      - name: Checkout release candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.desktop_candidate_context.outputs.candidate_sha }}
+          ref: ${{ needs.desktop_release_candidate_context.outputs.release_candidate_sha }}
           fetch-depth: 0
 
       - name: Setup Node + pnpm
         uses: ./.github/actions/setup-node-pnpm
 
-      - name: Run desktop fast feedback suite
+      - name: Run desktop commit-test suite suite
         run: |
           pnpm --filter @compass/desktop lint
           pnpm --filter @compass/desktop test
@@ -135,7 +135,7 @@ jobs:
     name: desktop-commit-stage
     needs:
       - desktop_determine_scope
-      - desktop_fast_feedback
+      - desktop_commit_test_suite
     if: ${{ always() && needs.desktop_determine_scope.result == 'success' }}
     runs-on: ubuntu-latest
     outputs:
@@ -146,7 +146,7 @@ jobs:
       HEAD_SHA: ${{ needs.desktop_determine_scope.outputs.head_sha }}
       DESKTOP_CHANGED: ${{ needs.desktop_determine_scope.outputs.desktop_changed }}
       DOCS_ONLY_CHANGED: ${{ needs.desktop_determine_scope.outputs.docs_only_changed }}
-      FAST_FEEDBACK_RESULT: ${{ needs.desktop_fast_feedback.result }}
+      FAST_FEEDBACK_RESULT: ${{ needs.desktop_commit_test_suite.result }}
     steps:
       - name: Decide desktop commit stage
         id: decide
@@ -167,8 +167,8 @@ jobs:
             reason_codes='["DESKTOP_SCOPE_NOT_REQUIRED"]'
           fi
 
-          mkdir -p ".artifacts/desktop-candidate/$HEAD_SHA"
-          cat > ".artifacts/desktop-candidate/$HEAD_SHA/commit-stage.json" <<JSON
+          mkdir -p ".artifacts/desktop-release-candidate/$HEAD_SHA"
+          cat > ".artifacts/desktop-release-candidate/$HEAD_SHA/commit-stage.json" <<JSON
           {
             "schemaVersion": "1",
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
@@ -190,7 +190,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: desktop-commit-stage-${{ env.HEAD_SHA }}
-          path: .artifacts/desktop-candidate/${{ env.HEAD_SHA }}/commit-stage.json
+          path: .artifacts/desktop-release-candidate/${{ env.HEAD_SHA }}/commit-stage.json
           if-no-files-found: warn
 
       - name: Fail desktop commit stage on NO
@@ -199,24 +199,24 @@ jobs:
           echo "desktop commit stage decision is NO" >&2
           exit 1
 
-  publish_desktop_candidate:
-    name: publish-desktop-candidate
+  publish_desktop_release_candidate:
+    name: publish-desktop-release-candidate
     needs:
-      - desktop_candidate_context
+      - desktop_release_candidate_context
       - desktop_determine_scope
       - desktop_commit_stage
     if: ${{ needs.desktop_commit_stage.result == 'success' && needs.desktop_commit_stage.outputs.commit_decision == 'YES' }}
     runs-on: ubuntu-latest
     outputs:
       head_sha: ${{ steps.publish.outputs.head_sha }}
-      candidate_sha: ${{ steps.publish.outputs.candidate_sha }}
-      deploy_required: ${{ steps.publish.outputs.deploy_required }}
+      release_candidate_sha: ${{ steps.publish.outputs.release_candidate_sha }}
+      deployment_required: ${{ steps.publish.outputs.deployment_required }}
       release_tag: ${{ steps.publish.outputs.release_tag }}
       web_base_url: ${{ steps.publish.outputs.web_base_url }}
       draft: ${{ steps.publish.outputs.draft }}
       reason_codes_json: ${{ steps.publish.outputs.reason_codes_json }}
     env:
-      CANDIDATE_SHA: ${{ needs.desktop_candidate_context.outputs.candidate_sha }}
+      RELEASE_CANDIDATE_SHA: ${{ needs.desktop_release_candidate_context.outputs.release_candidate_sha }}
       CHANGE_CLASS: ${{ needs.desktop_determine_scope.outputs.change_class }}
       DESKTOP_CHANGED: ${{ needs.desktop_determine_scope.outputs.desktop_changed }}
       DOCS_ONLY_CHANGED: ${{ needs.desktop_determine_scope.outputs.docs_only_changed }}
@@ -224,15 +224,15 @@ jobs:
       INPUT_WEB_BASE_URL: ${{ inputs.web_base_url }}
       DEFAULT_WEB_BASE_URL: ${{ vars.DESKTOP_WEB_BASE_URL }}
       EVENT_NAME: ${{ github.event_name }}
-      DRAFT: ${{ needs.desktop_candidate_context.outputs.draft }}
+      DRAFT: ${{ needs.desktop_release_candidate_context.outputs.draft }}
     steps:
-      - name: Publish desktop candidate manifest
+      - name: Publish desktop release candidate manifest
         id: publish
         run: |
           set -euo pipefail
 
-          head_sha="$CANDIDATE_SHA"
-          deploy_required="false"
+          head_sha="$RELEASE_CANDIDATE_SHA"
+          deployment_required="false"
           reason_codes='["DESKTOP_SCOPE_NOT_REQUIRED"]'
           web_base_url=""
           release_tag="${INPUT_RELEASE_TAG:-}"
@@ -244,7 +244,7 @@ jobs:
           fi
 
           if [ "$DESKTOP_CHANGED" = "true" ] && [ "$DOCS_ONLY_CHANGED" != "true" ]; then
-            deploy_required="true"
+            deployment_required="true"
             reason_codes='[]'
             web_base_url="${INPUT_WEB_BASE_URL:-${DEFAULT_WEB_BASE_URL:-}}"
             if [ -z "$web_base_url" ]; then
@@ -255,17 +255,17 @@ jobs:
             node -e "const url=new URL(process.argv[1]); if (url.protocol !== 'https:') { throw new Error('DESKTOP web_base_url must be HTTPS'); }" "$web_base_url"
           fi
 
-          mkdir -p ".artifacts/desktop-candidate/$head_sha"
-          cat > ".artifacts/desktop-candidate/$head_sha/manifest.json" <<JSON
+          mkdir -p ".artifacts/desktop-release-candidate/$head_sha"
+          cat > ".artifacts/desktop-release-candidate/$head_sha/manifest.json" <<JSON
           {
             "schemaVersion": "1",
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "headSha": "$head_sha",
-            "candidateSha": "$head_sha",
+            "releaseCandidateSha": "$head_sha",
             "changeClass": "$CHANGE_CLASS",
             "releaseTag": "$release_tag",
             "webBaseUrl": "$web_base_url",
-            "deployRequired": $deploy_required,
+            "deploymentRequired": $deployment_required,
             "draft": $draft,
             "scope": {
               "desktop": $DESKTOP_CHANGED,
@@ -277,36 +277,36 @@ jobs:
 
           {
             echo "head_sha=$head_sha"
-            echo "candidate_sha=$head_sha"
-            echo "deploy_required=$deploy_required"
+            echo "release_candidate_sha=$head_sha"
+            echo "deployment_required=$deployment_required"
             echo "release_tag=$release_tag"
             echo "web_base_url=$web_base_url"
             echo "draft=$draft"
             echo "reason_codes_json=$reason_codes"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Upload desktop candidate artifact
+      - name: Upload desktop release candidate artifact
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-candidate-${{ steps.publish.outputs.head_sha }}
-          path: .artifacts/desktop-candidate/${{ steps.publish.outputs.head_sha }}/manifest.json
+          name: desktop-release-candidate-${{ steps.publish.outputs.head_sha }}
+          path: .artifacts/desktop-release-candidate/${{ steps.publish.outputs.head_sha }}/manifest.json
           if-no-files-found: error
 
   desktop_backend_contract_acceptance:
     name: desktop-backend-contract-acceptance
     needs:
-      - publish_desktop_candidate
-    if: ${{ needs.publish_desktop_candidate.outputs.deploy_required == 'true' }}
+      - publish_desktop_release_candidate
+    if: ${{ needs.publish_desktop_release_candidate.outputs.deployment_required == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      HEAD_SHA: ${{ needs.publish_desktop_candidate.outputs.head_sha }}
-      WEB_BASE_URL: ${{ needs.publish_desktop_candidate.outputs.web_base_url }}
+      HEAD_SHA: ${{ needs.publish_desktop_release_candidate.outputs.head_sha }}
+      WEB_BASE_URL: ${{ needs.publish_desktop_release_candidate.outputs.web_base_url }}
     steps:
-      - name: Checkout desktop candidate
+      - name: Checkout desktop release candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.publish_desktop_candidate.outputs.candidate_sha }}
+          ref: ${{ needs.publish_desktop_release_candidate.outputs.release_candidate_sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -314,31 +314,31 @@ jobs:
           node-version-file: .nvmrc
 
       - name: Run desktop backend compatibility contract
-        run: node scripts/pipeline/desktop/acceptance/run-desktop-backend-contract-acceptance.mjs
+        run: node scripts/pipeline/desktop/automated-acceptance-test-gate/run-desktop-backend-contract-acceptance.mjs
 
       - name: Upload desktop backend compatibility artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: desktop-backend-contract-acceptance-${{ env.HEAD_SHA }}
-          path: .artifacts/desktop-acceptance/${{ env.HEAD_SHA }}/backend-contract.json
+          path: .artifacts/desktop-automated-acceptance-test-gate/${{ env.HEAD_SHA }}/backend-contract.json
           if-no-files-found: warn
 
   build_signed_macos:
     name: build-signed-macos
     needs:
-      - publish_desktop_candidate
-    if: ${{ needs.publish_desktop_candidate.outputs.deploy_required == 'true' }}
+      - publish_desktop_release_candidate
+    if: ${{ needs.publish_desktop_release_candidate.outputs.deployment_required == 'true' }}
     runs-on: macos-14
     environment: desktop-release
     env:
-      HEAD_SHA: ${{ needs.publish_desktop_candidate.outputs.head_sha }}
-      COMPASS_DESKTOP_START_URL: ${{ needs.publish_desktop_candidate.outputs.web_base_url }}
+      HEAD_SHA: ${{ needs.publish_desktop_release_candidate.outputs.head_sha }}
+      COMPASS_DESKTOP_START_URL: ${{ needs.publish_desktop_release_candidate.outputs.web_base_url }}
     steps:
-      - name: Checkout desktop candidate
+      - name: Checkout desktop release candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.publish_desktop_candidate.outputs.candidate_sha }}
+          ref: ${{ needs.publish_desktop_release_candidate.outputs.release_candidate_sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -445,18 +445,18 @@ jobs:
   build_signed_windows:
     name: build-signed-windows
     needs:
-      - publish_desktop_candidate
-    if: ${{ needs.publish_desktop_candidate.outputs.deploy_required == 'true' }}
+      - publish_desktop_release_candidate
+    if: ${{ needs.publish_desktop_release_candidate.outputs.deployment_required == 'true' }}
     runs-on: windows-latest
     environment: desktop-release
     env:
-      HEAD_SHA: ${{ needs.publish_desktop_candidate.outputs.head_sha }}
-      COMPASS_DESKTOP_START_URL: ${{ needs.publish_desktop_candidate.outputs.web_base_url }}
+      HEAD_SHA: ${{ needs.publish_desktop_release_candidate.outputs.head_sha }}
+      COMPASS_DESKTOP_START_URL: ${{ needs.publish_desktop_release_candidate.outputs.web_base_url }}
     steps:
-      - name: Checkout desktop candidate
+      - name: Checkout desktop release candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.publish_desktop_candidate.outputs.candidate_sha }}
+          ref: ${{ needs.publish_desktop_release_candidate.outputs.release_candidate_sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -532,31 +532,31 @@ jobs:
           path: ${{ steps.collect.outputs.msi_path }}
           if-no-files-found: error
 
-  desktop_acceptance_stage:
-    name: desktop-acceptance-stage
+  desktop_automated_acceptance_test_gate:
+    name: desktop-automated-acceptance-test-gate
     needs:
-      - publish_desktop_candidate
+      - publish_desktop_release_candidate
       - desktop_backend_contract_acceptance
       - build_signed_macos
       - build_signed_windows
-    if: ${{ always() && needs.publish_desktop_candidate.result == 'success' }}
+    if: ${{ always() && needs.publish_desktop_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     outputs:
       acceptance_decision: ${{ steps.decide.outputs.acceptance_decision }}
       reason_codes_json: ${{ steps.decide.outputs.reason_codes_json }}
-      deploy_required: ${{ needs.publish_desktop_candidate.outputs.deploy_required }}
-      release_tag: ${{ needs.publish_desktop_candidate.outputs.release_tag }}
-      web_base_url: ${{ needs.publish_desktop_candidate.outputs.web_base_url }}
-      draft: ${{ needs.publish_desktop_candidate.outputs.draft }}
+      deployment_required: ${{ needs.publish_desktop_release_candidate.outputs.deployment_required }}
+      release_tag: ${{ needs.publish_desktop_release_candidate.outputs.release_tag }}
+      web_base_url: ${{ needs.publish_desktop_release_candidate.outputs.web_base_url }}
+      draft: ${{ needs.publish_desktop_release_candidate.outputs.draft }}
     env:
-      HEAD_SHA: ${{ needs.publish_desktop_candidate.outputs.head_sha }}
-      DEPLOY_REQUIRED: ${{ needs.publish_desktop_candidate.outputs.deploy_required }}
+      HEAD_SHA: ${{ needs.publish_desktop_release_candidate.outputs.head_sha }}
+      DEPLOYMENT_REQUIRED: ${{ needs.publish_desktop_release_candidate.outputs.deployment_required }}
       BUILD_SIGNED_MACOS_RESULT: ${{ needs.build_signed_macos.result }}
       BUILD_SIGNED_WINDOWS_RESULT: ${{ needs.build_signed_windows.result }}
       DESKTOP_BACKEND_CONTRACT_RESULT: ${{ needs.desktop_backend_contract_acceptance.result }}
-      WEB_BASE_URL: ${{ needs.publish_desktop_candidate.outputs.web_base_url }}
+      WEB_BASE_URL: ${{ needs.publish_desktop_release_candidate.outputs.web_base_url }}
     steps:
-      - name: Decide desktop acceptance stage
+      - name: Decide desktop automated acceptance test gate
         id: decide
         run: |
           set -euo pipefail
@@ -564,7 +564,7 @@ jobs:
           acceptance_decision="YES"
           reason_codes='[]'
 
-          if [ "$DEPLOY_REQUIRED" != "true" ]; then
+          if [ "$DEPLOYMENT_REQUIRED" != "true" ]; then
             reason_codes='["DESKTOP_SCOPE_NOT_REQUIRED"]'
           else
             node -e "const url=new URL(process.argv[1]); if (url.protocol !== 'https:') { throw new Error('Desktop web_base_url must be HTTPS'); }" "$WEB_BASE_URL"
@@ -585,13 +585,13 @@ jobs:
             fi
           fi
 
-          mkdir -p ".artifacts/desktop-acceptance/$HEAD_SHA"
-          cat > ".artifacts/desktop-acceptance/$HEAD_SHA/result.json" <<JSON
+          mkdir -p ".artifacts/desktop-automated-acceptance-test-gate/$HEAD_SHA"
+          cat > ".artifacts/desktop-automated-acceptance-test-gate/$HEAD_SHA/result.json" <<JSON
           {
             "schemaVersion": "1",
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "headSha": "$HEAD_SHA",
-            "deployRequired": $DEPLOY_REQUIRED,
+            "deploymentRequired": $DEPLOYMENT_REQUIRED,
             "decision": "$acceptance_decision",
             "reasonCodes": $reason_codes,
             "checks": {
@@ -611,29 +611,29 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-acceptance-${{ env.HEAD_SHA }}
-          path: .artifacts/desktop-acceptance/${{ env.HEAD_SHA }}/result.json
+          name: desktop-automated-acceptance-test-gate-${{ env.HEAD_SHA }}
+          path: .artifacts/desktop-automated-acceptance-test-gate/${{ env.HEAD_SHA }}/result.json
           if-no-files-found: warn
 
       - name: Fail desktop acceptance on NO
         if: ${{ steps.decide.outputs.acceptance_decision == 'NO' }}
         run: |
-          echo "Desktop acceptance stage decision is NO" >&2
+          echo "Desktop automated acceptance test gate decision is NO" >&2
           exit 1
 
   publish_desktop_release:
     name: publish-desktop-release
     needs:
-      - publish_desktop_candidate
-      - desktop_acceptance_stage
+      - publish_desktop_release_candidate
+      - desktop_automated_acceptance_test_gate
       - build_signed_macos
       - build_signed_windows
-    if: ${{ needs.desktop_acceptance_stage.outputs.acceptance_decision == 'YES' && needs.publish_desktop_candidate.outputs.deploy_required == 'true' }}
+    if: ${{ needs.desktop_automated_acceptance_test_gate.outputs.acceptance_decision == 'YES' && needs.publish_desktop_release_candidate.outputs.deployment_required == 'true' }}
     runs-on: ubuntu-latest
     env:
-      HEAD_SHA: ${{ needs.publish_desktop_candidate.outputs.head_sha }}
-      RELEASE_TAG: ${{ needs.publish_desktop_candidate.outputs.release_tag }}
-      DRAFT: ${{ needs.publish_desktop_candidate.outputs.draft }}
+      HEAD_SHA: ${{ needs.publish_desktop_release_candidate.outputs.head_sha }}
+      RELEASE_TAG: ${{ needs.publish_desktop_release_candidate.outputs.release_tag }}
+      DRAFT: ${{ needs.publish_desktop_release_candidate.outputs.draft }}
     outputs:
       release_url: ${{ steps.publish.outputs.release_url }}
     steps:
@@ -641,16 +641,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: desktop-macos-${{ env.HEAD_SHA }}
-          path: .artifacts/desktop-production/${{ env.HEAD_SHA }}/installers
+          path: .artifacts/desktop-deployment-stage/${{ env.HEAD_SHA }}/installers
 
       - name: Download Windows installer artifact
         uses: actions/download-artifact@v4
         with:
           name: desktop-windows-${{ env.HEAD_SHA }}
-          path: .artifacts/desktop-production/${{ env.HEAD_SHA }}/installers
+          path: .artifacts/desktop-deployment-stage/${{ env.HEAD_SHA }}/installers
 
       - name: Generate checksums
-        working-directory: .artifacts/desktop-production/${{ env.HEAD_SHA }}/installers
+        working-directory: .artifacts/desktop-deployment-stage/${{ env.HEAD_SHA }}/installers
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -671,7 +671,7 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
 
-          installers_dir=".artifacts/desktop-production/$HEAD_SHA/installers"
+          installers_dir=".artifacts/desktop-deployment-stage/$HEAD_SHA/installers"
           cd "$installers_dir"
 
           dmg_files=( *.dmg )
@@ -681,7 +681,7 @@ jobs:
             exit 1
           fi
 
-          notes="Desktop deployment pipeline release for candidate $HEAD_SHA"
+          notes="Desktop deployment pipeline release for release candidate $HEAD_SHA"
           assets=( "${dmg_files[0]}" "${msi_files[0]}" "SHA256SUMS.txt" )
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
@@ -701,8 +701,8 @@ jobs:
       - name: Write desktop production publish artifact
         run: |
           set -euo pipefail
-          mkdir -p ".artifacts/desktop-production/$HEAD_SHA"
-          cat > ".artifacts/desktop-production/$HEAD_SHA/release.json" <<JSON
+          mkdir -p ".artifacts/desktop-deployment-stage/$HEAD_SHA"
+          cat > ".artifacts/desktop-deployment-stage/$HEAD_SHA/release.json" <<JSON
           {
             "schemaVersion": "1",
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
@@ -715,31 +715,31 @@ jobs:
       - name: Upload desktop production artifact
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-production-${{ env.HEAD_SHA }}
+          name: desktop-deployment-stage-${{ env.HEAD_SHA }}
           path: |
-            .artifacts/desktop-production/${{ env.HEAD_SHA }}/release.json
-            .artifacts/desktop-production/${{ env.HEAD_SHA }}/installers
+            .artifacts/desktop-deployment-stage/${{ env.HEAD_SHA }}/release.json
+            .artifacts/desktop-deployment-stage/${{ env.HEAD_SHA }}/installers
           if-no-files-found: warn
 
-  desktop_production_stage:
-    name: desktop-production-stage
+  desktop_deployment_stage:
+    name: desktop-deployment-stage
     needs:
-      - publish_desktop_candidate
-      - desktop_acceptance_stage
+      - publish_desktop_release_candidate
+      - desktop_automated_acceptance_test_gate
       - publish_desktop_release
-    if: ${{ always() && needs.publish_desktop_candidate.result == 'success' }}
+    if: ${{ always() && needs.publish_desktop_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     outputs:
       production_decision: ${{ steps.decide.outputs.production_decision }}
       reason_codes_json: ${{ steps.decide.outputs.reason_codes_json }}
     env:
-      HEAD_SHA: ${{ needs.publish_desktop_candidate.outputs.head_sha }}
-      DEPLOY_REQUIRED: ${{ needs.publish_desktop_candidate.outputs.deploy_required }}
-      ACCEPTANCE_DECISION: ${{ needs.desktop_acceptance_stage.outputs.acceptance_decision }}
+      HEAD_SHA: ${{ needs.publish_desktop_release_candidate.outputs.head_sha }}
+      DEPLOYMENT_REQUIRED: ${{ needs.publish_desktop_release_candidate.outputs.deployment_required }}
+      ACCEPTANCE_DECISION: ${{ needs.desktop_automated_acceptance_test_gate.outputs.acceptance_decision }}
       PUBLISH_RELEASE_RESULT: ${{ needs.publish_desktop_release.result }}
       RELEASE_URL: ${{ needs.publish_desktop_release.outputs.release_url }}
     steps:
-      - name: Decide desktop production stage
+      - name: Decide desktop deployment stage
         id: decide
         run: |
           set -euo pipefail
@@ -750,8 +750,8 @@ jobs:
           if [ "$ACCEPTANCE_DECISION" != "YES" ]; then
             production_decision="NO"
             reason_codes='["ACCEPTANCE_DECISION_NOT_YES"]'
-          elif [ "$DEPLOY_REQUIRED" != "true" ]; then
-            reason_codes='["NO_DEPLOY_REQUIRED"]'
+          elif [ "$DEPLOYMENT_REQUIRED" != "true" ]; then
+            reason_codes='["NO_DEPLOYMENT_REQUIRED"]'
           elif [ "$PUBLISH_RELEASE_RESULT" != "success" ]; then
             production_decision="NO"
             reason_codes='["PUBLISH_DESKTOP_RELEASE_NOT_SUCCESS"]'
@@ -759,13 +759,13 @@ jobs:
             reason_codes='["DESKTOP_RELEASE_PUBLISHED"]'
           fi
 
-          mkdir -p ".artifacts/desktop-production/$HEAD_SHA"
-          cat > ".artifacts/desktop-production/$HEAD_SHA/result.json" <<JSON
+          mkdir -p ".artifacts/desktop-deployment-stage/$HEAD_SHA"
+          cat > ".artifacts/desktop-deployment-stage/$HEAD_SHA/result.json" <<JSON
           {
             "schemaVersion": "1",
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "headSha": "$HEAD_SHA",
-            "deployRequired": $DEPLOY_REQUIRED,
+            "deploymentRequired": $DEPLOYMENT_REQUIRED,
             "decision": "$production_decision",
             "reasonCodes": $reason_codes,
             "releaseUrl": "$RELEASE_URL"
@@ -777,46 +777,46 @@ jobs:
             echo "reason_codes_json=$reason_codes"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Upload desktop production stage artifact
+      - name: Upload desktop deployment stage artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-production-stage-${{ env.HEAD_SHA }}
-          path: .artifacts/desktop-production/${{ env.HEAD_SHA }}/result.json
+          name: desktop-deployment-stage-${{ env.HEAD_SHA }}
+          path: .artifacts/desktop-deployment-stage/${{ env.HEAD_SHA }}/result.json
           if-no-files-found: warn
 
-      - name: Fail desktop production stage on NO
+      - name: Fail desktop deployment stage on NO
         if: ${{ steps.decide.outputs.production_decision == 'NO' }}
         run: |
-          echo "Desktop production stage decision is NO" >&2
+          echo "Desktop deployment stage decision is NO" >&2
           exit 1
 
   desktop_release_decision:
     name: desktop-release-decision
     needs:
-      - desktop_candidate_context
-      - publish_desktop_candidate
-      - desktop_acceptance_stage
-      - desktop_production_stage
-    if: ${{ always() && needs.publish_desktop_candidate.result == 'success' }}
+      - desktop_release_candidate_context
+      - publish_desktop_release_candidate
+      - desktop_automated_acceptance_test_gate
+      - desktop_deployment_stage
+    if: ${{ always() && needs.publish_desktop_release_candidate.result == 'success' }}
     runs-on: ubuntu-latest
     env:
-      HEAD_SHA: ${{ needs.publish_desktop_candidate.outputs.head_sha }}
-      CANDIDATE_SHA: ${{ needs.desktop_candidate_context.outputs.candidate_sha }}
-      DEPLOY_REQUIRED: ${{ needs.publish_desktop_candidate.outputs.deploy_required }}
-      ACCEPTANCE_DECISION: ${{ needs.desktop_acceptance_stage.outputs.acceptance_decision }}
-      ACCEPTANCE_REASON_CODES_JSON: ${{ needs.desktop_acceptance_stage.outputs.reason_codes_json }}
-      PRODUCTION_DECISION: ${{ needs.desktop_production_stage.outputs.production_decision }}
-      PRODUCTION_REASON_CODES_JSON: ${{ needs.desktop_production_stage.outputs.reason_codes_json }}
-      RELEASE_TAG: ${{ needs.publish_desktop_candidate.outputs.release_tag }}
+      HEAD_SHA: ${{ needs.publish_desktop_release_candidate.outputs.head_sha }}
+      RELEASE_CANDIDATE_SHA: ${{ needs.desktop_release_candidate_context.outputs.release_candidate_sha }}
+      DEPLOYMENT_REQUIRED: ${{ needs.publish_desktop_release_candidate.outputs.deployment_required }}
+      ACCEPTANCE_DECISION: ${{ needs.desktop_automated_acceptance_test_gate.outputs.acceptance_decision }}
+      ACCEPTANCE_REASON_CODES_JSON: ${{ needs.desktop_automated_acceptance_test_gate.outputs.reason_codes_json }}
+      PRODUCTION_DECISION: ${{ needs.desktop_deployment_stage.outputs.production_decision }}
+      PRODUCTION_REASON_CODES_JSON: ${{ needs.desktop_deployment_stage.outputs.reason_codes_json }}
+      RELEASE_TAG: ${{ needs.publish_desktop_release_candidate.outputs.release_tag }}
     steps:
       - name: Write desktop release decision
         run: |
           set -euo pipefail
 
-          releaseable="false"
+          releasable="false"
           if [ "$ACCEPTANCE_DECISION" = "YES" ] && [ "$PRODUCTION_DECISION" = "YES" ]; then
-            releaseable="true"
+            releasable="true"
           fi
 
           mkdir -p ".artifacts/desktop-release/$HEAD_SHA"
@@ -825,9 +825,9 @@ jobs:
             "schemaVersion": "1",
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "headSha": "$HEAD_SHA",
-            "candidateSha": "$CANDIDATE_SHA",
+            "releaseCandidateSha": "$RELEASE_CANDIDATE_SHA",
             "releaseTag": "$RELEASE_TAG",
-            "deployRequired": $DEPLOY_REQUIRED,
+            "deploymentRequired": $DEPLOYMENT_REQUIRED,
             "acceptance": {
               "decision": "$ACCEPTANCE_DECISION",
               "reasonCodes": $ACCEPTANCE_REASON_CODES_JSON
@@ -836,11 +836,11 @@ jobs:
               "decision": "$PRODUCTION_DECISION",
               "reasonCodes": $PRODUCTION_REASON_CODES_JSON
             },
-            "releaseable": $releaseable
+            "releasable": $releasable
           }
           JSON
 
-          if [ "$releaseable" != "true" ]; then
+          if [ "$releasable" != "true" ]; then
             echo "Desktop release decision is NO" >&2
             exit 1
           fi

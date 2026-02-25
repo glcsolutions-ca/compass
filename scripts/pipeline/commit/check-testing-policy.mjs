@@ -56,7 +56,7 @@ function classifyLayer(filePath, layerGlobs) {
   return layers.map((layer) => layer.layer);
 }
 
-export function isCandidateTestFile(filePath, smokeGlobs) {
+export function isEligibleTestFile(filePath, smokeGlobs) {
   const normalized = normalizePath(filePath);
   if (/\.(test|spec)\.tsx?$/.test(normalized)) {
     return true;
@@ -395,14 +395,14 @@ export async function runTestingPolicy(options = {}) {
 
   const envHeadSha = (process.env.HEAD_SHA || "").trim();
   const envTestedSha = (process.env.TESTED_SHA || "").trim();
-  const headShaCandidate = options.headSha ?? envHeadSha;
-  const headSha = headShaCandidate || (await getCurrentSha());
-  const testedShaCandidate = options.testedSha ?? envTestedSha;
-  const testedSha = testedShaCandidate || headSha;
+  const resolvedHeadSha = options.headSha ?? envHeadSha;
+  const headSha = resolvedHeadSha || (await getCurrentSha());
+  const resolvedTestedSha = options.testedSha ?? envTestedSha;
+  const testedSha = resolvedTestedSha || headSha;
 
   const trackedFiles = await listTrackedSourceFiles(policy.scanRoots);
-  const candidateTestFiles = trackedFiles.filter((filePath) =>
-    isCandidateTestFile(filePath, policy.layers.smoke)
+  const testFilesToEvaluate = trackedFiles.filter((filePath) =>
+    isEligibleTestFile(filePath, policy.layers.smoke)
   );
 
   const violations = [];
@@ -427,7 +427,7 @@ export async function runTestingPolicy(options = {}) {
   const appInternalImportPattern =
     /(?:from\s*["'][^"']*(?:^|\/)apps\/|require\(\s*["'][^"']*(?:^|\/)apps\/)/;
 
-  for (const filePath of candidateTestFiles) {
+  for (const filePath of testFilesToEvaluate) {
     const layers = classifyLayer(filePath, layerGlobs);
     if (enabledRules.has("TC001") && layers.length !== 1) {
       violations.push(
@@ -565,7 +565,7 @@ export async function runTestingPolicy(options = {}) {
     status,
     policyPath: normalizePath(policyPath),
     quarantinePath,
-    scannedFileCount: candidateTestFiles.length,
+    scannedFileCount: testFilesToEvaluate.length,
     violationCount: violations.length,
     violations
   });
@@ -575,7 +575,7 @@ export async function runTestingPolicy(options = {}) {
     `- Status: ${status}`,
     `- Policy: \`${normalizePath(policyPath)}\``,
     `- Quarantine: \`${quarantinePath}\``,
-    `- Scanned test files: ${candidateTestFiles.length}`,
+    `- Scanned test files: ${testFilesToEvaluate.length}`,
     `- Violations: ${violations.length}`,
     `- Artifact: ${resultPath}`
   ];
@@ -598,7 +598,7 @@ export async function runTestingPolicy(options = {}) {
     resultPath,
     policyPath: normalizePath(policyPath),
     quarantinePath,
-    scannedFileCount: candidateTestFiles.length,
+    scannedFileCount: testFilesToEvaluate.length,
     violations
   };
 }

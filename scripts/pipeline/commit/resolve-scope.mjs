@@ -9,7 +9,7 @@ import {
   getPrNumberFromEvent,
   loadPipelinePolicy,
   resolveChangeScope,
-  classifyCandidateKind,
+  classifyReleaseCandidateKind,
   writeJsonFile
 } from "../shared/pipeline-utils.mjs";
 import { resolveScopeShas } from "./resolve-scope-lib.mjs";
@@ -25,11 +25,11 @@ async function main() {
   const policy = await loadPipelinePolicy(policyPath);
   const changedFiles = await getChangedFiles(baseSha, headSha);
   const scope = resolveChangeScope(policy, changedFiles);
-  const changeClass = classifyCandidateKind(scope);
+  const changeClass = classifyReleaseCandidateKind(scope);
   const docsDrift = evaluateDocsDrift(policy, changedFiles);
 
   const docsDriftBlocking = docsDrift.shouldBlock;
-  const deliveryConfigChanged = docsDrift.touchesBlockingPaths;
+  const deploymentPipelineConfigChanged = docsDrift.touchesBlockingPaths;
   const requiresInfraConvergence = scope.runtime && scope.infra;
   const requiresMigrations = scope.runtime && scope.migration;
 
@@ -47,11 +47,11 @@ async function main() {
     changedFiles,
     changeClass,
     scope,
-    deliveryConfigChanged,
+    deploymentPipelineConfigChanged,
     requiresInfraConvergence,
     requiresMigrations,
     docsDriftBlocking,
-    requiredFlowIds: policy.acceptanceStage.requiredFlowIds
+    requiredFlowIds: policy.automatedAcceptanceTestGate.requiredFlowIds
   };
 
   await writeJsonFile(scopePath, payload);
@@ -70,11 +70,11 @@ async function main() {
     migration_changed: String(scope.migration),
     infra_rollout_changed: String(scope.infraRollout),
     docs_only_changed: String(scope.docsOnly),
-    delivery_config_changed: String(deliveryConfigChanged),
+    deployment_pipeline_config_changed: String(deploymentPipelineConfigChanged),
     requires_infra_convergence: String(requiresInfraConvergence),
     requires_migrations: String(requiresMigrations),
     changed_files_json: JSON.stringify(changedFiles),
-    required_flow_ids_json: JSON.stringify(policy.acceptanceStage.requiredFlowIds),
+    required_flow_ids_json: JSON.stringify(policy.automatedAcceptanceTestGate.requiredFlowIds),
     docs_drift_blocking: String(docsDriftBlocking)
   });
 
@@ -91,7 +91,7 @@ async function main() {
       `- Infra changed: \`${scope.infra}\``,
       `- Identity changed: \`${scope.identity}\``,
       `- Docs only: \`${scope.docsOnly}\``,
-      `- Delivery config changed: \`${deliveryConfigChanged}\``,
+      `- Deployment pipeline config changed: \`${deploymentPipelineConfigChanged}\``,
       `- Requires infra convergence: \`${requiresInfraConvergence}\``,
       `- Requires migrations: \`${requiresMigrations}\``,
       `- Docs drift blocking: \`${docsDriftBlocking}\``
@@ -99,7 +99,7 @@ async function main() {
   );
 
   console.info(
-    `Scope resolved: changeClass=${changeClass}, runtime=${scope.runtime}, desktop=${scope.desktop}, infra=${scope.infra}, identity=${scope.identity}, deliveryConfigChanged=${deliveryConfigChanged}`
+    `Scope resolved: changeClass=${changeClass}, runtime=${scope.runtime}, desktop=${scope.desktop}, infra=${scope.infra}, identity=${scope.identity}, deploymentPipelineConfigChanged=${deploymentPipelineConfigChanged}`
   );
 }
 

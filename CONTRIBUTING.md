@@ -16,7 +16,7 @@ pnpm db:postgres:up   # optional for API/data work
 pnpm dev
 ```
 
-Local hooks are enabled automatically during `pnpm install` and run fast feedback locally:
+Local hooks are enabled automatically during `pnpm install` and run commit-test suite locally:
 
 - Hook install prefers worktree-local Git config (`git config --worktree`) so worktrees do not overwrite each other.
 - `.githooks/pre-commit` runs `pnpm git-hooks:pre-commit` (`pnpm exec lint-staged`) on staged files.
@@ -25,7 +25,7 @@ Local hooks are enabled automatically during `pnpm install` and run fast feedbac
 Full quality and merge correctness are enforced in CI:
 
 - `commit-stage` (`.github/workflows/commit-stage.yml`)
-- `merge-queue-gate` (`.github/workflows/merge-queue-gate.yml`)
+- `integration-gate` (`.github/workflows/integration-gate.yml`)
 
 Before opening a PR:
 
@@ -77,6 +77,6 @@ The API uses PostgreSQL when `DATABASE_URL` is set in `apps/api/.env` (see `apps
 - Human commit-stage policy: `docs/commit-stage-policy.md`
 - Machine pipeline policy: `.github/policy/pipeline-policy.json`
 - Commit stage workflow: `.github/workflows/commit-stage.yml`
-- Cloud delivery pipeline workflow: `.github/workflows/cloud-delivery-pipeline.yml`
-- Cloud delivery replay workflow: `.github/workflows/cloud-delivery-replay.yml`
+- Cloud deployment pipeline workflow: `.github/workflows/cloud-deployment-pipeline.yml`
+- Cloud deployment pipeline replay workflow: `.github/workflows/cloud-deployment-pipeline-replay.yml`
 - Desktop deployment pipeline workflow: `.github/workflows/desktop-deployment-pipeline.yml`

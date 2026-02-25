@@ -10,7 +10,7 @@ pnpm test
 pnpm build
 ```
 
-3. For delivery-config changes, run contract-focused commands:
+3. For deployment-pipeline-config changes, run contract-focused commands:
 
 ```bash
 pnpm ci:scope
@@ -25,23 +25,23 @@ pnpm ci:docs-drift
 1. Open PR from a short-lived branch.
 2. `commit-stage.yml` computes scope and runs fast required checks.
 3. `commit-stage` is the PR merge-readiness gate.
-4. Merge queue runs `merge-queue-gate.yml` on `merge_group` for exact merge confidence.
+4. Integration batching runs `integration-gate.yml` on `merge_group` for exact-merge confidence.
 5. Merge to `main` triggers:
 
-- `cloud-delivery-pipeline.yml` (cloud runtime/infra/identity)
+- `cloud-deployment-pipeline.yml` (cloud runtime/infra/identity)
 - `desktop-deployment-pipeline.yml` (desktop installers)
 
-6. Cloud pipeline verifies merge-queue-gate evidence, builds release package refs, and publishes release package manifest.
-7. Cloud acceptance validates that same release package and emits one YES/NO decision.
-8. Cloud production promotes the accepted release package under the production lock.
+6. Cloud pipeline verifies integration-gate evidence, builds release candidate refs, and publishes release candidate manifest.
+7. Cloud automated acceptance test gate validates that same release candidate and emits one YES/NO decision.
+8. Cloud deployment stage promotes the accepted release candidate under the production environment lock.
 9. Cloud release decision writes `.artifacts/release/<sha>/decision.json`.
 10. Desktop release decision writes `.artifacts/desktop-release/<sha>/decision.json`.
 
 ## Governance Invariant
 
-- Required gate contexts are `commit-stage` and `merge-queue-gate`.
-- Acceptance and production checks are post-merge release controls, not branch-protection required checks.
+- Required gate contexts are `commit-stage` and `integration-gate`.
+- Automated acceptance test gate and deployment stage checks are post-merge release controls, not branch-protection required checks.
 
 ## High-Risk Paths
 
-When scope includes `infra` or `identity`, expect production mutation plus deterministic post-deploy verification.
+When scope includes `infra` or `identity`, expect deployment-stage mutation plus deterministic post-deployment verification.

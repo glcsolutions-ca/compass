@@ -42,4 +42,4 @@ pnpm db:migrate:down -- 1
 
 ## CI Behavior
 
-`runtime-blackbox-acceptance` starts PostgreSQL in a Docker network, runs migrations and seed through the release package API image, then executes black-box API/system/browser smoke checks against release package containers.
+`runtime-blackbox-acceptance` starts PostgreSQL in a Docker network, runs migrations and seed through the release candidate API image, then executes black-box API/system/browser smoke checks against release candidate containers.

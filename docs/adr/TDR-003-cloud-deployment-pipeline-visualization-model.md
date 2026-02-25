@@ -16,30 +16,30 @@ Keep the production release path in one authoritative workflow instead of introd
 
 - GitHub Actions visualization is a job DAG and does not support true nested/collapsible stage groups inside one workflow run.
 - The current delivery model already uses Farley-aligned stage language and sequencing:
-  - PR gate in `commit-stage.yml` and exact merge gate in `merge-queue-gate.yml`
-  - `main` release flow in the cloud delivery workflow with commit, acceptance, and production jobs
+  - PR gate in `commit-stage.yml` and exact merge gate in `integration-gate.yml`
+  - `main` release flow in the cloud deployment pipeline workflow with commit, acceptance, and production jobs
 - Previous cross-workflow chaining produced ambiguous outcomes and troubleshooting overhead.
 - The team requested clearer stage legibility without reintroducing orchestration complexity.
 
 ## Decision
 
 - Keep a single authoritative cloud push workflow as the main release workflow.
-- Keep explicit merge gates: `commit-stage.yml` for PR and `merge-queue-gate.yml` for merge queue exact-merge checks.
+- Keep explicit merge gates: `commit-stage.yml` for PR and `integration-gate.yml` for exact-merge batch checks.
 - Do not add reusable-workflow wrappers solely for visual grouping at this time.
 - Continue to improve readability through:
-  - stable stage job naming (`commit-stage`, `acceptance-stage`, `production-stage`, `release-decision`)
+  - stable stage job naming (`commit-stage`, `automated-acceptance-test-gate`, `deployment-stage`, `release-decision`)
   - concise workflow docs and runbooks
   - deterministic decision artifacts
 
 ## Public APIs / Interfaces / Types
 
 - No application API or package contract changes.
-- Branch protection contract uses required contexts `commit-stage` and `merge-queue-gate`.
+- Branch protection contract uses required contexts `commit-stage` and `integration-gate`.
 - No deployment artifact schema changes from this decision.
 
 ## Alternatives Considered
 
-1. Wrap each stage (`commit`, `acceptance`, `production`) in reusable workflows for cleaner top-level graph nodes.
+1. Wrap each stage (`commit-stage`, `automated-acceptance-test-gate`, `deployment-stage`) in reusable workflows for cleaner top-level graph nodes.
 2. Return to cross-trigger multi-workflow orchestration.
 3. Keep single-workflow orchestration and improve naming/docs.
 
@@ -48,9 +48,9 @@ Option 3 was selected because it preserves deterministic orchestration while min
 ## Consequences
 
 - Pros:
-  - one run shows the full commit -> acceptance -> production chain
+  - one run shows the full commit-stage -> automated-acceptance-test-gate -> deployment-stage chain
   - simpler debugging and fewer trigger edge cases
-  - stronger Farley alignment for "build once, promote same candidate"
+  - stronger Farley alignment for "build once, promote same release candidate"
 - Cons:
   - graph remains a flat DAG and can still look busy for large runs
   - no click-to-drill nested stage UI in GitHub Actions today
@@ -65,9 +65,9 @@ Reconsider reusable stage wrappers only if both conditions are true:
 ## References
 
 - `.github/workflows/commit-stage.yml`
-- `.github/workflows/cloud-delivery-pipeline.yml`
-- `.github/workflows/merge-queue-gate.yml`
-- `.github/workflows/cloud-delivery-replay.yml`
+- `.github/workflows/cloud-deployment-pipeline.yml`
+- `.github/workflows/integration-gate.yml`
+- `.github/workflows/cloud-deployment-pipeline-replay.yml`
 - `.github/workflows/README.md`
 - `docs/commit-stage-policy.md`
 - `docs/runbooks/cloud-deployment-pipeline-setup.md`

@@ -20,17 +20,17 @@ export function evaluateCommitStageResults({
     });
   }
 
-  if (runtimeRequired && checkResults["fast-feedback"] !== "success") {
+  if (runtimeRequired && checkResults["commit-test-suite"] !== "success") {
     reasons.push({
       code: "CHECK_RUNTIME_FAST_FEEDBACK_REQUIRED_NOT_SUCCESS",
-      message: `fast-feedback required but result is ${checkResults["fast-feedback"]}`
+      message: `commit-test-suite required but result is ${checkResults["commit-test-suite"]}`
     });
   }
 
-  if (desktopRequired && checkResults["desktop-fast-feedback"] !== "success") {
+  if (desktopRequired && checkResults["desktop-commit-test-suite"] !== "success") {
     reasons.push({
       code: "CHECK_DESKTOP_FAST_FEEDBACK_REQUIRED_NOT_SUCCESS",
-      message: `desktop-fast-feedback required but result is ${checkResults["desktop-fast-feedback"]}`
+      message: `desktop-commit-test-suite required but result is ${checkResults["desktop-commit-test-suite"]}`
     });
   }
 

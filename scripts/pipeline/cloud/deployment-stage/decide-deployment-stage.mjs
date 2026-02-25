@@ -28,7 +28,7 @@ function parseReasonCodes(raw, fallback = []) {
 async function main() {
   const headSha = requireEnv("HEAD_SHA");
   const acceptanceDecision = String(process.env.ACCEPTANCE_DECISION || "NO").trim();
-  const deployRequired = asBool(process.env.DEPLOY_REQUIRED);
+  const deploymentRequired = asBool(process.env.DEPLOYMENT_REQUIRED);
 
   const runtimeChanged = asBool(process.env.RUNTIME_CHANGED);
   const desktopChanged = asBool(process.env.DESKTOP_CHANGED);
@@ -49,15 +49,15 @@ async function main() {
     reasonCodes = parseReasonCodes(process.env.ACCEPTANCE_REASON_CODES_JSON, [
       "ACCEPTANCE_DECISION_NOT_YES"
     ]);
-  } else if (!deployRequired) {
+  } else if (!deploymentRequired) {
     productionDecision = "YES";
     reasonCodes = parseReasonCodes(process.env.ACCEPTANCE_REASON_CODES_JSON, [
-      "NO_DEPLOY_REQUIRED"
+      "NO_DEPLOYMENT_REQUIRED"
     ]);
   } else {
     if (deployResult !== "success") {
       productionDecision = "NO";
-      reasonCodes = ["DEPLOY_RELEASE_PACKAGE_FAILED"];
+      reasonCodes = ["DEPLOY_RELEASE_CANDIDATE_FAILED"];
     } else if (
       (runtimeChanged || infraChanged || requiresInfraConvergence) &&
       verifyResult !== "success"
@@ -67,14 +67,14 @@ async function main() {
     }
   }
 
-  const artifactPath = `.artifacts/production/${headSha}/result.json`;
+  const artifactPath = `.artifacts/deployment-stage/${headSha}/result.json`;
   await writeJsonFile(artifactPath, {
     schemaVersion: "1",
     generatedAt: new Date().toISOString(),
     headSha,
     changeClass,
     decision: productionDecision,
-    deployRequired,
+    deploymentRequired,
     reasonCodes,
     scope: {
       runtime: runtimeChanged,
@@ -86,10 +86,10 @@ async function main() {
       deployReleasePackageResult: deployResult,
       productionBlackboxVerifyResult: verifyResult
     },
-    releasePackage: {
-      apiRef: process.env.RELEASE_PACKAGE_API_REF || "",
-      webRef: process.env.RELEASE_PACKAGE_WEB_REF || "",
-      codexRef: process.env.RELEASE_PACKAGE_CODEX_REF || ""
+    releaseCandidate: {
+      apiRef: process.env.RELEASE_CANDIDATE_API_REF || "",
+      webRef: process.env.RELEASE_CANDIDATE_WEB_REF || "",
+      codexRef: process.env.RELEASE_CANDIDATE_CODEX_REF || ""
     },
     deploymentId
   });

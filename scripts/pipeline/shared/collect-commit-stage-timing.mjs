@@ -181,13 +181,13 @@ async function main() {
   const runCreatedAt = parseIsoToEpochSeconds(run?.created_at);
   const runUpdatedAt = parseIsoToEpochSeconds(run?.updated_at);
 
-  const runtimeQuickFeedbackJob = jobs.find((job) => job.name === "fast-feedback");
-  const desktopQuickFeedbackJob = jobs.find((job) => job.name === "desktop-fast-feedback");
+  const runtimeQuickFeedbackJob = jobs.find((job) => job.name === "commit-test-suite");
+  const desktopQuickFeedbackJob = jobs.find((job) => job.name === "desktop-commit-test-suite");
   const gateJob = jobs.find((job) => job.name === "commit-stage");
   const executionStartedAt = earliestStartEpoch(jobs, [
     "determine-scope",
-    "fast-feedback",
-    "desktop-fast-feedback",
+    "commit-test-suite",
+    "desktop-commit-test-suite",
     "infra-static-check",
     "identity-static-check",
     "commit-stage"

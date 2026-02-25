@@ -68,9 +68,9 @@ jobs:
 
           checks_json="$(gh pr checks --repo "$REPOSITORY" "$PR_NUMBER" --json name,state)"
           has_commit_stage="$(jq -r 'map(select(.name=="commit-stage")) | length' <<<"$checks_json")"
-          has_merge_queue_gate="$(jq -r 'map(select(.name=="merge-queue-gate")) | length' <<<"$checks_json")"
+          has_integration_gate="$(jq -r 'map(select(.name=="integration-gate")) | length' <<<"$checks_json")"
 
-          if [ "$has_commit_stage" -lt 1 ] || [ "$has_merge_queue_gate" -lt 1 ]; then
+          if [ "$has_commit_stage" -lt 1 ] || [ "$has_integration_gate" -lt 1 ]; then
             echo "gate_contexts_ok=false" >> "$GITHUB_OUTPUT"
             echo "Required gate contexts are missing for PR #$PR_NUMBER. Auto-merge will not be enabled."
             echo "Found checks:"

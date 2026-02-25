@@ -155,4 +155,41 @@ describe("ensure-local-env", () => {
 
     expect(first.ports).not.toEqual(second.ports);
   });
+
+  it("derives POSTGRES_PORT from explicit DATABASE_URL when POSTGRES_PORT is unset", async () => {
+    await withTempRepo(async (repoDir) => {
+      await ensureLocalEnv({
+        rootDir: repoDir,
+        env: {
+          DATABASE_URL: "postgres://compass:compass@localhost:5432/compass"
+        },
+        isPortAvailableFn: async () => true,
+        logger: () => {}
+      });
+
+      const dbEnv = parseEnvFile(await readFile(path.join(repoDir, "db/postgres/.env"), "utf8"));
+      expect(dbEnv.POSTGRES_PORT).toBe("5432");
+      expect(dbEnv.DATABASE_URL).toBe("postgres://compass:compass@localhost:5432/compass");
+    });
+  });
+
+  it("derives POSTGRES_PORT from existing DATABASE_URL when POSTGRES_PORT is missing", async () => {
+    await withTempRepo(async (repoDir) => {
+      await writeFileWithParents(
+        path.join(repoDir, "db/postgres/.env"),
+        "DATABASE_URL=postgres://compass:compass@localhost:55001/compass\n"
+      );
+
+      await ensureLocalEnv({
+        rootDir: repoDir,
+        env: {},
+        isPortAvailableFn: async () => true,
+        logger: () => {}
+      });
+
+      const dbEnv = parseEnvFile(await readFile(path.join(repoDir, "db/postgres/.env"), "utf8"));
+      expect(dbEnv.POSTGRES_PORT).toBe("55001");
+      expect(dbEnv.DATABASE_URL).toBe("postgres://compass:compass@localhost:55001/compass");
+    });
+  });
 });

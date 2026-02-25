@@ -18,10 +18,18 @@ pnpm db:postgres:up   # optional for API/data work
 pnpm dev
 ```
 
+## Runtime snapshot
+
+- Web (`apps/web`): React Router 7 framework mode (`ssr: false`) on port `3000`
+- API (`apps/api`): Express 5 + contract-backed OpenAPI on port `3001`
+- Worker (`apps/worker`): Azure Service Bus consumer (`loop` or `once`)
+- Codex gateway (`apps/codex-app-server`): thread/turn + stream APIs on port `3010`
+
 ## Main commands
 
 - `pnpm dev` - run local apps/services
 - `pnpm test` - run commit-stage checks (static + unit/component + contract)
+- `pnpm test:unit` - run workspace unit/component + pipeline contract tests
 - `pnpm test:full` - run commit-stage + integration tests
 - `pnpm test:integration` - run integration tests only
 - `pnpm test:e2e` - run Playwright smoke flow only
@@ -30,12 +38,12 @@ pnpm dev
 - `pnpm db:postgres:up` - start local Postgres, apply migrations, seed data
 - `pnpm db:postgres:down` - stop local Postgres
 
-## PR flow
+## Trunk-first flow
 
-1. Implement the change.
+1. Implement the change in small, reversible commits.
 2. Run `pnpm test` and `pnpm build`.
-3. Open a PR to `main`.
-4. Let CI enforce merge safety (`commit-stage`).
+3. Commit and push to `main`.
+4. If high-risk policy blocks direct `main` integration, use a short-lived branch and open a PR.
 
 ## PR title and format standard
 
@@ -58,6 +66,7 @@ pnpm dev
 - Branch protection: `docs/branch-protection.md`
 - Machine policy: `.github/policy/pipeline-policy.json`
 - Commit stage workflow: `.github/workflows/commit-stage.yml`
+- Integration gate workflow: `.github/workflows/integration-gate.yml`
 - Cloud deployment pipeline workflow: `.github/workflows/cloud-deployment-pipeline.yml`
 - Cloud deployment pipeline replay workflow: `.github/workflows/cloud-deployment-pipeline-replay.yml`
 - Desktop deployment pipeline workflow: `.github/workflows/desktop-deployment-pipeline.yml`

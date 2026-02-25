@@ -8,34 +8,32 @@
 
 1. Load runtime config from environment.
 2. Connect to Service Bus using managed identity (`DefaultAzureCredential`).
-3. Subscribe to configured queue.
-4. Parse incoming message body into `EventEnvelope` contract.
-5. Complete valid messages; abandon/dead-letter invalid payloads based on delivery count.
+3. Create a queue receiver from `@azure/service-bus`.
+4. Run in `once` mode (bounded batch) or `loop` mode (long-running subscription).
+5. Parse each message body against `EventEnvelopeSchema` from `@compass/contracts`.
+6. Settle each message as complete, abandon, or dead-letter.
 
 ## Env Table
 
 Configuration is parsed in `src/config.ts`.
 
-| Env Var                                 | Default          | Notes                                                       |
-| --------------------------------------- | ---------------- | ----------------------------------------------------------- |
-| `SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE` | unset            | Required Service Bus namespace FQDN.                        |
-| `AZURE_CLIENT_ID`                       | unset            | Required user-assigned managed identity client ID.          |
-| `SERVICE_BUS_QUEUE_NAME`                | `compass-events` | Queue receiver name.                                        |
-| `WORKER_RUN_MODE`                       | `loop`           | `loop` for long-running receiver; `once` for one-shot mode. |
-| `WORKER_MAX_MESSAGES`                   | `10`             | Max messages to receive in `once` mode.                     |
-| `WORKER_MAX_WAIT_SECONDS`               | `15`             | Max receive wait in `once` mode.                            |
+| Env Var                                 | Default | Notes                                                                           |
+| --------------------------------------- | ------- | ------------------------------------------------------------------------------- |
+| `SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE` | unset   | Required Service Bus namespace FQDN.                                            |
+| `AZURE_CLIENT_ID`                       | unset   | Required user-assigned managed identity client ID.                              |
+| `SERVICE_BUS_QUEUE_NAME`                | unset   | Required queue name.                                                            |
+| `WORKER_RUN_MODE`                       | `loop`  | Allowed values: `loop`, `once`.                                                 |
+| `WORKER_MAX_MESSAGES`                   | `10`    | Positive integer used by `once` mode for `receiveMessages` batch size.          |
+| `WORKER_MAX_WAIT_SECONDS`               | `15`    | Positive integer used by `once` mode for long-poll timeout (`maxWaitTimeInMs`). |
 
 Local template: `apps/worker/.env.example`.
 
-## Retry/Dead-Letter Behavior
+## Settlement Behavior
 
-- Invalid payloads below max delivery count are abandoned for retry.
-- Invalid payloads at max delivery count are dead-lettered.
-- Delivery-count classification is handled by `src/classify.ts`.
-
-## Message Contract Dependency
-
-The worker validates queue payloads using `EventEnvelopeSchema` from `@compass/contracts`.
+- Valid payloads are completed.
+- Invalid payloads are abandoned when delivery attempts are below threshold.
+- Invalid payloads are dead-lettered at or above threshold (`deliveryCount >= 5`).
+- Current dead-letter reason is `max-delivery-attempts-reached`.
 
 ## Commands
 

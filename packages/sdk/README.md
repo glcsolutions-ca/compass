@@ -2,9 +2,7 @@
 
 ## Purpose
 
-`@compass/sdk` provides a typed API client and generated API types for Compass consumers.
-The client supports static bearer tokens, async token providers with one-time 401 refresh retry,
-and optional typed auth exceptions for 401/403 responses.
+`@compass/sdk` provides a typed API client generated from Compass OpenAPI contracts.
 
 ## Generated Schema Source
 
@@ -12,52 +10,30 @@ and optional typed auth exceptions for 401/403 responses.
 
 - `../contracts/openapi/openapi.json`
 
-This keeps SDK path/operation typing aligned with the contracts package.
+This keeps SDK path and operation typing aligned with the contracts package.
 
 ## Client Usage Example
 
 ```ts
-import { createApiClient } from "@compass/sdk";
+import { createApiClient, getHealth, getPing } from "@compass/sdk";
 
 const client = createApiClient({
   baseUrl: "http://localhost:3001"
 });
 
-const result = await client.GET("/health");
+const health = await getHealth(client);
+const ping = await getPing(client);
+
+console.log(health.status, ping.service);
 ```
 
-Token-provider example:
+Direct operation call example:
 
 ```ts
-const client = createApiClient({
-  baseUrl: "http://localhost:3001",
-  tokenProvider: async ({ reason }) => {
-    const token = await exchangeToken(reason);
-    return {
-      token: token.value,
-      expiresAtEpochSeconds: token.expiresAtEpochSeconds
-    };
-  }
-});
-```
+const result = await client.GET("/v1/ping");
 
-Enable typed auth exceptions:
-
-```ts
-import { ApiForbiddenError, createApiClient } from "@compass/sdk";
-
-const client = createApiClient({
-  baseUrl: "http://localhost:3001",
-  tokenProvider: async () => ({ token: "token-value" }),
-  throwOnAuthError: true
-});
-
-try {
-  await client.GET("/v1/me");
-} catch (error) {
-  if (error instanceof ApiForbiddenError) {
-    console.error(error.errorCode, error.details);
-  }
+if (result.data) {
+  console.log(result.data.ok);
 }
 ```
 

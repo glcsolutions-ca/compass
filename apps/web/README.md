@@ -29,7 +29,6 @@ Configuration is consumed in `app/routes/home.tsx`.
 
 | Env Var             | Default                 | Notes                                                             |
 | ------------------- | ----------------------- | ----------------------------------------------------------------- |
-| `WEB_PORT`          | `3000`                  | Dev server listen port (`vite server.port`, strict).              |
 | `VITE_API_BASE_URL` | `http://localhost:3001` | Runtime API base URL for `GET /health`; trailing slash is trimmed |
 
 Local template: `apps/web/.env.example`.

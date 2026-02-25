@@ -16,6 +16,17 @@ pnpm db:postgres:up   # optional for API/data work
 pnpm dev
 ```
 
+Local hooks are enabled automatically during `pnpm install` and run fast feedback locally:
+
+- Hook install prefers worktree-local Git config (`git config --worktree`) so worktrees do not overwrite each other.
+- `.githooks/pre-commit` runs `pnpm git-hooks:pre-commit` (`pnpm exec lint-staged`) on staged files.
+- `.githooks/pre-push` runs `pnpm test:static` via `pnpm git-hooks:pre-push` as a quick local pre-push gate.
+
+Full quality and merge correctness are enforced in CI:
+
+- `commit-stage` (`.github/workflows/commit-stage.yml`)
+- `merge-queue-gate` (`.github/workflows/merge-queue-gate.yml`)
+
 Before opening a PR:
 
 ```bash

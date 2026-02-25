@@ -113,6 +113,7 @@ export function assertPipelinePolicyShape(policy) {
     "scopeRules",
     "commitStage",
     "pairingPolicy",
+    "highRiskMainlinePolicy",
     "automatedAcceptanceTestGate",
     "deploymentStage",
     "desktopDeploymentPipeline",
@@ -192,6 +193,83 @@ export function assertPipelinePolicyShape(policy) {
 
   if (String(pairingPolicy.trailerKey || "").trim().length === 0) {
     throw new Error("pairingPolicy.trailerKey must be a non-empty string");
+  }
+
+  const highRiskMainlinePolicy = policy.highRiskMainlinePolicy;
+  if (
+    !highRiskMainlinePolicy ||
+    typeof highRiskMainlinePolicy !== "object" ||
+    Array.isArray(highRiskMainlinePolicy)
+  ) {
+    throw new Error("highRiskMainlinePolicy must be an object");
+  }
+
+  if (String(highRiskMainlinePolicy.ruleId || "").trim().length === 0) {
+    throw new Error("highRiskMainlinePolicy.ruleId must be a non-empty string");
+  }
+
+  if (String(highRiskMainlinePolicy.mainBranch || "").trim().length === 0) {
+    throw new Error("highRiskMainlinePolicy.mainBranch must be a non-empty string");
+  }
+
+  if (typeof highRiskMainlinePolicy.requirePullRequestOnMain !== "boolean") {
+    throw new Error("highRiskMainlinePolicy.requirePullRequestOnMain must be a boolean");
+  }
+
+  if (
+    !Array.isArray(highRiskMainlinePolicy.codeOwners) ||
+    highRiskMainlinePolicy.codeOwners.length === 0
+  ) {
+    throw new Error("highRiskMainlinePolicy.codeOwners must be a non-empty array");
+  }
+
+  if (
+    highRiskMainlinePolicy.codeOwners.some(
+      (entry) => String(entry || "").trim().length === 0 || !String(entry).trim().startsWith("@")
+    )
+  ) {
+    throw new Error("highRiskMainlinePolicy.codeOwners entries must be GitHub handles");
+  }
+
+  if (
+    !Array.isArray(highRiskMainlinePolicy.categories) ||
+    highRiskMainlinePolicy.categories.length === 0
+  ) {
+    throw new Error("highRiskMainlinePolicy.categories must be a non-empty array");
+  }
+
+  const seenCategoryIds = new Set();
+  for (const [index, category] of highRiskMainlinePolicy.categories.entries()) {
+    if (!category || typeof category !== "object" || Array.isArray(category)) {
+      throw new Error(`highRiskMainlinePolicy.categories[${index}] must be an object`);
+    }
+
+    const id = String(category.id || "").trim();
+    if (id.length === 0) {
+      throw new Error(`highRiskMainlinePolicy.categories[${index}].id must be a non-empty string`);
+    }
+    if (seenCategoryIds.has(id)) {
+      throw new Error(`highRiskMainlinePolicy.categories contains duplicate id: ${id}`);
+    }
+    seenCategoryIds.add(id);
+
+    if (!Array.isArray(category.patterns) || category.patterns.length === 0) {
+      throw new Error(
+        `highRiskMainlinePolicy.categories[${index}].patterns must be a non-empty array`
+      );
+    }
+
+    if (category.patterns.some((pattern) => String(pattern || "").trim().length === 0)) {
+      throw new Error(
+        `highRiskMainlinePolicy.categories[${index}].patterns entries must be non-empty strings`
+      );
+    }
+
+    if (String(category.rationale || "").trim().length === 0) {
+      throw new Error(
+        `highRiskMainlinePolicy.categories[${index}].rationale must be a non-empty string`
+      );
+    }
   }
 
   const integrationGate = policy.integrationGate;

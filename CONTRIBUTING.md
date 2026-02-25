@@ -19,7 +19,7 @@ pnpm dev
 Local hooks are enabled automatically during `pnpm install` and run commit-test suite locally:
 
 - Hook install prefers worktree-local Git config (`git config --worktree`) so worktrees do not overwrite each other.
-- `.githooks/pre-commit` runs `pnpm git-hooks:pre-commit` (`pnpm exec lint-staged`) on staged files.
+- `.githooks/pre-commit` runs `pnpm git-hooks:pre-commit` (`pnpm test:static`) on staged files.
 - `.githooks/pre-push` runs `pnpm test:static` via `pnpm git-hooks:pre-push` as a quick local pre-push gate.
 
 Full quality and integration correctness are enforced in CI:
@@ -57,18 +57,27 @@ The API uses PostgreSQL when `DATABASE_URL` is set in `apps/api/.env` (see `apps
 
 - Push small commits directly to `main` after local validation.
 - Optional PRs are allowed for preview/collaboration; they are non-gating.
-- For changes touching `infra`, `identity`, or `migration`, include commit trailer:
+- High-risk staged changes on `main` are blocked locally by `HR001` (inside `pnpm test:static`).
+- High-risk paths require a PR and CODEOWNER review before integrating to `main`.
+- CODEOWNER for high-risk paths: `@jrkropp`.
 
-```text
-Paired-With: @github-handle
+When `HR001` blocks a commit on `main`, follow the console guidance:
+
+```bash
+git switch -c <type>/<scope>-<summary>
+git commit -m "<type>(<scope>): <summary>"
+git push -u origin <branch>
+gh pr create --fill
 ```
+
+Write the PR with clear intent, impact, testing evidence, and rollback details using `.github/pull_request_template.md`.
 
 ## Quality and safety checks
 
 - CI is the integration source of truth; `commit-stage` and `integration-gate` are required on `main`.
 - Keep one intent per commit and avoid unrelated file changes.
 - For behavior changes, update docs in `docs/` and/or policy checks.
-- Treat `migrations/`, `infra/`, `auth`, and pipeline workflows as high risk: keep rollout and rollback explicit.
+- Treat `db/migrations/`, `db/scripts/`, `infra/`, and pipeline governance paths as high risk: keep rollout and rollback explicit.
 
 ## References
 

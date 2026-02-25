@@ -19,6 +19,7 @@ Automated acceptance test gate and deployment stage are post-push gates.
 - `scopeRules`: file-to-scope classification (`runtime`, `desktop`, `infra`, `identity`, `docsOnly`, rollout flags)
 - `commitStage`: required commit-stage checks + commit SLO policy (`targetSeconds`, `mode`)
 - `pairingPolicy`: high-risk scope policy (`highRiskScopes`, `trailerKey`)
+- `highRiskMainlinePolicy`: local static `HR001` rule config (`mainBranch`, `codeOwners`, `categories`, `requirePullRequestOnMain`)
 - `integrationGate`: required integration checks
 - `automatedAcceptanceTestGate`: required acceptance jobs by scope
 - `deploymentStage`: production promotion safety toggles
@@ -35,11 +36,8 @@ Automated acceptance test gate and deployment stage are post-push gates.
 
 ## High-Risk Coverage
 
-`pipeline-policy.json` treats deployment-pipeline-config paths as high-risk, including:
+`pipeline-policy.json` defines high-risk mainline categories for `HR001`:
 
-- `.github/workflows/**`
-- `.github/policy/**`
-- `scripts/pipeline/**`
-- `infra/azure/**`
-- `infra/identity/**`
-- `deploy/**`
+- `infra-mutation`: `infra/azure/**`, `infra/identity/**`
+- `data-mutation`: `db/migrations/**`, `db/scripts/**`
+- `pipeline-governance-mutation`: `.github/workflows/**`, `.github/policy/**`, `scripts/pipeline/**`

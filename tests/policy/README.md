@@ -20,9 +20,26 @@ Testing philosophy lives in `tests/README.md`. This folder defines how that phil
 - `tests/policy/test-policy.json`: machine-readable policy contract for layers 1-3.
 - `tests/policy/test-quarantine.json`: temporary skip metadata used by `TC011`.
 - `tests/policy/README.md`: policy, quarantine, and troubleshooting guidance.
+- `.github/policy/pipeline-policy.json`: machine-readable high-risk mainline policy (`HR001`).
 - `.github/CODEOWNERS`: review ownership for policy and enforcement files.
 
 ## Enforcement layers
+
+### Layer 0: High-risk mainline policy (fastest)
+
+What it enforces:
+
+- `HR001` blocks commits on `main` when staged files touch high-risk categories:
+  - `infra-mutation` (`infra/azure/**`, `infra/identity/**`)
+  - `data-mutation` (`db/migrations/**`, `db/scripts/**`)
+  - `pipeline-governance-mutation` (`.github/workflows/**`, `.github/policy/**`, `scripts/pipeline/**`)
+- Failure output includes exact matched files, rationale, and PR instructions.
+- Required action is to open a PR and request CODEOWNER review from `@jrkropp`.
+
+When it runs:
+
+- First command in `pnpm test:static`
+- Local `pre-commit` and `pre-push` hooks
 
 ### Layer 1: Testing Policy (fastest)
 
@@ -102,6 +119,9 @@ Rules:
 
 ### Testing contract rule failures
 
+- `HR001` high-risk mainline commit blocked
+  - You are committing high-risk files while on `main`.
+  - Create a branch, open a PR, and request review from `@jrkropp`.
 - `TC001` wrong test layer path
   - Move the file to the expected commit-stage, integration, e2e, or smoke location.
 - `TC010` focused test (`*.only`)
@@ -123,6 +143,7 @@ Rules:
 
 ### Useful commands
 
+- `pnpm ci:high-risk-mainline-policy`
 - `pnpm ci:testing-policy`
 - `pnpm test`
 - `pnpm test:integration`

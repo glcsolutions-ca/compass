@@ -68,6 +68,29 @@ const policy = loadPipelinePolicyObject({
     highRiskScopes: ["infra", "identity", "migration"],
     trailerKey: "Paired-With"
   },
+  highRiskMainlinePolicy: {
+    ruleId: "HR001",
+    mainBranch: "main",
+    requirePullRequestOnMain: true,
+    codeOwners: ["@jrkropp"],
+    categories: [
+      {
+        id: "infra-mutation",
+        patterns: ["infra/azure/**", "infra/identity/**"],
+        rationale: "production infrastructure and identity control-plane mutation risk"
+      },
+      {
+        id: "data-mutation",
+        patterns: ["db/migrations/**", "db/scripts/**"],
+        rationale: "schema/data integrity and rollout/rollback risk"
+      },
+      {
+        id: "pipeline-governance-mutation",
+        patterns: [".github/workflows/**", ".github/policy/**", "scripts/pipeline/**"],
+        rationale: "deployment pipeline config and release/deploy decision behavior risk"
+      }
+    ]
+  },
   integrationGate: {
     requiredChecks: [
       "determine-scope",
@@ -235,5 +258,29 @@ describe("glob matching engine", () => {
   it("keeps dot-path behavior deterministic for '**' patterns", () => {
     expect(matchesAnyPattern(".github/policy/pipeline-policy.json", ["**"])).toBe(false);
     expect(matchesAnyPattern("README.md", ["**"])).toBe(true);
+  });
+});
+
+describe("high risk mainline policy schema", () => {
+  it("requires categories and code owners in policy shape", () => {
+    expect(() =>
+      loadPipelinePolicyObject({
+        ...policy,
+        highRiskMainlinePolicy: {
+          ...policy.highRiskMainlinePolicy,
+          categories: []
+        }
+      })
+    ).toThrowError("highRiskMainlinePolicy.categories must be a non-empty array");
+
+    expect(() =>
+      loadPipelinePolicyObject({
+        ...policy,
+        highRiskMainlinePolicy: {
+          ...policy.highRiskMainlinePolicy,
+          codeOwners: ["jrkropp"]
+        }
+      })
+    ).toThrowError("highRiskMainlinePolicy.codeOwners entries must be GitHub handles");
   });
 });

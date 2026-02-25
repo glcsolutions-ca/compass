@@ -31,7 +31,7 @@
     - `.artifacts/runtime-coverage/<sha>/result.json`
 
 - `main-red-recovery.yml`
-  - trigger: `workflow_run` completion of `Commit Stage` and `Integration Gate`
+  - trigger: `workflow_run` completion of failed `Integration Gate` push runs
   - scope: push events on `main`
   - behavior: rerun failed jobs once on hard deterministic failure, then auto-revert head commit if failure repeats
   - key artifact: `.artifacts/main-recovery/<sha>/result.json`

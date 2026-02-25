@@ -82,14 +82,14 @@ describe("workflow pipeline contract", () => {
     expect(delivery).toContain("INTEGRATION_GATE_EVENT: push");
   });
 
-  it("keeps main red recovery wired to commit-stage and integration-gate push failures", () => {
+  it("keeps main red recovery wired to integration-gate push failures only", () => {
     const workflow = readUtf8(mainRedRecoveryWorkflowPath);
 
     expect(workflow).toContain("workflow_run:");
-    expect(workflow).toContain("- Commit Stage");
     expect(workflow).toContain("- Integration Gate");
     expect(workflow).toContain("github.event.workflow_run.event == 'push'");
     expect(workflow).toContain("github.event.workflow_run.head_branch == 'main'");
+    expect(workflow).toContain("github.event.workflow_run.conclusion == 'failure'");
     expect(workflow).toContain("main-red-recovery-${{ github.event.workflow_run.head_sha }}");
   });
 

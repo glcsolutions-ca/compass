@@ -4,10 +4,10 @@ import { decideRecoveryAction, isRecoveryRevertCommit } from "./auto-recover-mai
 describe("decideRecoveryAction", () => {
   it("requests rerun of failed jobs on first hard deterministic failure", () => {
     const decision = decideRecoveryAction({
-      workflowName: "Commit Stage",
+      workflowName: "Integration Gate",
       conclusion: "failure",
       runAttempt: 1,
-      failedJobNames: ["commit-test-suite", "commit-stage"],
+      failedJobNames: ["build-compile", "integration-gate"],
       recoveryRevertCommit: false
     });
 
@@ -58,16 +58,32 @@ describe("decideRecoveryAction", () => {
     });
 
     const decision = decideRecoveryAction({
-      workflowName: "Commit Stage",
+      workflowName: "Integration Gate",
       conclusion: "failure",
       runAttempt: 2,
-      failedJobNames: ["commit-stage"],
+      failedJobNames: ["integration-gate"],
       recoveryRevertCommit: recoveryCommit
     });
 
     expect(decision).toEqual({
       action: "noop",
       reasonCode: "HEAD_ALREADY_RECOVERY_REVERT",
+      hardDeterministicFailure: false
+    });
+  });
+
+  it("does nothing for unsupported workflows", () => {
+    const decision = decideRecoveryAction({
+      workflowName: "Commit Stage",
+      conclusion: "failure",
+      runAttempt: 1,
+      failedJobNames: ["commit-stage"],
+      recoveryRevertCommit: false
+    });
+
+    expect(decision).toEqual({
+      action: "noop",
+      reasonCode: "WORKFLOW_NOT_SUPPORTED",
       hardDeterministicFailure: false
     });
   });

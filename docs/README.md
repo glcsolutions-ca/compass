@@ -28,6 +28,7 @@ General documentation and architecture records live here.
 - `runbooks/README.md`
 - `runbooks/cloud-deployment-pipeline-setup.md`
 - `runbooks/entra-sso-setup.md`
+- `runbooks/migration-playbook.md`
 - `runbooks/postgres-local.md`
 - `runbooks/desktop-deployment-pipeline.md`
 - `runbooks/migration-safety.md`

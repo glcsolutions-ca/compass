@@ -2,11 +2,13 @@
 
 ## Policy
 
-Deploy-time migrations must remain compatible with the current app image and the previous rollback image.
-Use an expand/migrate/contract sequence.
-Pipeline migration job is the only production migration path.
-Deployment stage runs migration before API/Web rollout and fails closed on migration errors.
-Do not run migrations at API startup or in init containers.
+Migration behavior is defined by [`migration-playbook.md`](./migration-playbook.md).
+This runbook describes deploy-time safety controls and incident response.
+
+- Pipeline migration job is the only production migration path.
+- Deployment stage runs migration before API/Web/Codex rollout and fails closed on migration errors.
+- Do not run migrations at API startup or in init containers.
+- Current phase is forward-first and no backward-compat is required.
 
 ## Command-Level Role Separation
 
@@ -15,31 +17,13 @@ Do not run migrations at API startup or in init containers.
 - Migration job command: `node db/scripts/migrate.mjs up`
 - This keeps one immutable release artifact per commit while preserving separate execution roles.
 
-## Migration File Format
+## Runtime Guardrails
 
-- Migration files must use ESM exports (`export const up/down`) because the runtime image is Node ESM (`"type": "module"`).
-- CommonJS migration syntax (`exports.up/down`) will fail in the ACA migration job and block production promotion.
-
-## Allowed in Expand Step
-
-- Create new tables
-- Add nullable columns
-- Add non-breaking indexes and constraints
-
-## Separate Jobs
-
-- Backfills and data reshaping run as separate jobs.
-- Large backfills should not block deployment unless explicitly required.
-- Do not merge API and Web into a single sidecar deployment to run migrations.
-- Do not move migration execution into app startup hooks.
-
-## Deferred Contract Steps
-
-- Column/table drops
-- Incompatible renames
-- Hard non-null constraints without prior backfill
-
-Run contract-only changes after full traffic cutover and stability period.
+- Migration policy is validated before execution (`pnpm db:migrate:check`).
+- Runtime uses explicit ordering and lock controls (`--check-order`, `--lock`, `--single-transaction`).
+- Session safety controls are enforced through job environment (`lock_timeout`, `statement_timeout`).
+- Migration wait is bounded by `MIGRATION_TIMEOUT_SECONDS`.
+- For operations requiring non-transaction mode (for example concurrent index creation), isolate the change in a dedicated migration.
 
 ## Concurrency Controls
 
@@ -61,5 +45,7 @@ Run contract-only changes after full traffic cutover and stability period.
 
 ## Recovery
 
-- First response: replay a previously accepted release candidate SHA via `cloud-deployment-pipeline-replay.yml`.
-- Database disaster recovery: use Azure PostgreSQL backup/PITR procedures.
+1. Rollout stops automatically on migration failure.
+2. Inspect `.artifacts/deploy/<sha>/migration.json` and ACA job/container logs.
+3. Fix forward with a new migration, or restore database and redeploy if required.
+4. Replay a previously accepted release candidate SHA via `cloud-deployment-pipeline-replay.yml` when appropriate.

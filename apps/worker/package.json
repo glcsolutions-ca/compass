@@ -13,6 +13,7 @@
     "typecheck": "tsc -p tsconfig.ref.json --noEmit"
   },
   "dependencies": {
+    "@azure/identity": "^4.13.0",
     "@azure/service-bus": "^7.9.5",
     "@compass/contracts": "workspace:*",
     "dotenv": "^16.4.7"

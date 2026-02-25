@@ -4,6 +4,7 @@ import {
   type MessageHandlers,
   type ServiceBusReceivedMessage
 } from "@azure/service-bus";
+import { DefaultAzureCredential } from "@azure/identity";
 import { EventEnvelopeSchema } from "@compass/contracts";
 import type { WorkerConfig } from "./config.js";
 import { classifySettlement } from "./classify.js";
@@ -14,7 +15,11 @@ export interface WorkerDependencies {
     warn: (...args: unknown[]) => void;
     error: (...args: unknown[]) => void;
   };
-  createServiceBusClient?: (connectionString: string) => ServiceBusClientLike;
+  createServiceBusClient?: (
+    fullyQualifiedNamespace: string,
+    credential: unknown
+  ) => ServiceBusClientLike;
+  createCredential?: (managedIdentityClientId: string) => unknown;
   waitForShutdown?: () => Promise<void>;
 }
 
@@ -92,10 +97,15 @@ export async function runWorker(config: WorkerConfig, deps: WorkerDependencies =
   const log = deps.log ?? console;
   const createServiceBusClient =
     deps.createServiceBusClient ??
-    ((connectionString: string) => new ServiceBusClient(connectionString) as ServiceBusClientLike);
+    ((fullyQualifiedNamespace: string, credential: unknown) =>
+      new ServiceBusClient(fullyQualifiedNamespace, credential as never) as ServiceBusClientLike);
+  const createCredential =
+    deps.createCredential ??
+    ((managedIdentityClientId: string) => new DefaultAzureCredential({ managedIdentityClientId }));
   const waitForShutdown = deps.waitForShutdown ?? (() => new Promise<void>(() => {}));
 
-  const client = createServiceBusClient(config.serviceBusConnectionString);
+  const credential = createCredential(config.azureClientId);
+  const client = createServiceBusClient(config.serviceBusFullyQualifiedNamespace, credential);
   const receiver = client.createReceiver(config.queueName);
 
   try {

@@ -5,7 +5,8 @@ import { runWorker } from "./worker.js";
 
 function createConfig(overrides: Partial<WorkerConfig> = {}): WorkerConfig {
   return {
-    serviceBusConnectionString: "Endpoint=sb://test/;SharedAccessKeyName=a;SharedAccessKey=b",
+    serviceBusFullyQualifiedNamespace: "sb-compass-prod-cc-4514-01.servicebus.windows.net",
+    azureClientId: "11111111-2222-3333-4444-555555555555",
     queueName: "compass-events",
     runMode: "once",
     maxMessages: 10,
@@ -44,11 +45,13 @@ function createRuntime(messages: unknown[] = []) {
   };
 
   const createServiceBusClient = vi.fn(() => client);
+  const createCredential = vi.fn(() => ({ token: "credential" }));
 
   return {
     receiver,
     client,
     createServiceBusClient,
+    createCredential,
     completeMessage,
     abandonMessage,
     deadLetterMessage,
@@ -67,10 +70,16 @@ describe("runWorker", () => {
     const runtime = createRuntime([message]);
 
     await runWorker(createConfig({ runMode: "once" }), {
-      createServiceBusClient: runtime.createServiceBusClient
+      createServiceBusClient: runtime.createServiceBusClient,
+      createCredential: runtime.createCredential
     });
 
     expect(runtime.receiveMessages).toHaveBeenCalledOnce();
+    expect(runtime.createCredential).toHaveBeenCalledWith("11111111-2222-3333-4444-555555555555");
+    expect(runtime.createServiceBusClient).toHaveBeenCalledWith(
+      "sb-compass-prod-cc-4514-01.servicebus.windows.net",
+      { token: "credential" }
+    );
     expect(runtime.completeMessage).toHaveBeenCalledOnce();
     expect(runtime.abandonMessage).not.toHaveBeenCalled();
     expect(runtime.deadLetterMessage).not.toHaveBeenCalled();
@@ -84,7 +93,8 @@ describe("runWorker", () => {
     const runtime = createRuntime([message]);
 
     await runWorker(createConfig({ runMode: "once" }), {
-      createServiceBusClient: runtime.createServiceBusClient
+      createServiceBusClient: runtime.createServiceBusClient,
+      createCredential: runtime.createCredential
     });
 
     expect(runtime.completeMessage).not.toHaveBeenCalled();
@@ -100,7 +110,8 @@ describe("runWorker", () => {
     const runtime = createRuntime([message]);
 
     await runWorker(createConfig({ runMode: "once" }), {
-      createServiceBusClient: runtime.createServiceBusClient
+      createServiceBusClient: runtime.createServiceBusClient,
+      createCredential: runtime.createCredential
     });
 
     expect(runtime.completeMessage).not.toHaveBeenCalled();
@@ -116,6 +127,7 @@ describe("runWorker", () => {
 
     await runWorker(createConfig({ runMode: "loop" }), {
       createServiceBusClient: runtime.createServiceBusClient,
+      createCredential: runtime.createCredential,
       waitForShutdown: async () => {
         await runtime.awaitProcessMessage();
       }

@@ -7,31 +7,31 @@
 ## Queue Processing Lifecycle
 
 1. Load runtime config from environment.
-2. If connection string is missing, run in dry mode (no queue subscription).
+2. Connect to Service Bus using managed identity (`DefaultAzureCredential`).
 3. Subscribe to configured queue.
 4. Parse incoming message body into `EventEnvelope` contract.
-5. Process message with idempotency tracking and attempt-based routing.
-6. Complete, abandon, or dead-letter the message based on processing result.
+5. Complete valid messages; abandon/dead-letter invalid payloads based on delivery count.
 
 ## Env Table
 
-Configuration is parsed in `src/config/index.ts`.
+Configuration is parsed in `src/config.ts`.
 
-| Env Var                               | Default          | Notes                                                       |
-| ------------------------------------- | ---------------- | ----------------------------------------------------------- |
-| `AZURE_SERVICE_BUS_CONNECTION_STRING` | unset            | Required for active queue processing; unset means dry mode. |
-| `SERVICE_BUS_QUEUE_NAME`              | `compass-events` | Queue receiver name.                                        |
-| `MAX_EVENT_ATTEMPTS`                  | `5`              | Maximum attempts before dead-letter result.                 |
+| Env Var                                 | Default          | Notes                                                       |
+| --------------------------------------- | ---------------- | ----------------------------------------------------------- |
+| `SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE` | unset            | Required Service Bus namespace FQDN.                        |
+| `AZURE_CLIENT_ID`                       | unset            | Required user-assigned managed identity client ID.          |
+| `SERVICE_BUS_QUEUE_NAME`                | `compass-events` | Queue receiver name.                                        |
+| `WORKER_RUN_MODE`                       | `loop`           | `loop` for long-running receiver; `once` for one-shot mode. |
+| `WORKER_MAX_MESSAGES`                   | `10`             | Max messages to receive in `once` mode.                     |
+| `WORKER_MAX_WAIT_SECONDS`               | `15`             | Max receive wait in `once` mode.                            |
 
 Local template: `apps/worker/.env.example`.
 
-## Idempotency + Retry/Dead-Letter Behavior
+## Retry/Dead-Letter Behavior
 
-- Idempotency uses in-memory message ID tracking (`InMemoryIdempotencyStore`).
-- Duplicate message IDs are completed without reprocessing.
-- Invalid payloads are dead-lettered with reason `invalid_payload`.
-- Messages at or above max attempts are dead-lettered with reason `max_attempts`.
-- Transient failures return `retry` and are abandoned for redelivery.
+- Invalid payloads below max delivery count are abandoned for retry.
+- Invalid payloads at max delivery count are dead-lettered.
+- Delivery-count classification is handled by `src/classify.ts`.
 
 ## Message Contract Dependency
 

@@ -24,7 +24,6 @@ async function main() {
   const headSha = process.env.HEAD_SHA?.trim() || process.env.GITHUB_SHA?.trim() || "unknown";
   const mode = process.env.IDENTITY_CONFIG_MODE?.trim() || "unspecified";
   const apiIdentifierUri = process.env.API_IDENTIFIER_URI?.trim() || "";
-  const legacyAudience = process.env.ENTRA_AUDIENCE?.trim() || "";
   const requiredEnvNames = parseRequiredEnvNames(process.env.REQUIRED_ENV_NAMES);
 
   const reasons = [];
@@ -40,20 +39,12 @@ async function main() {
     }
   }
 
-  if (apiIdentifierUri && legacyAudience && apiIdentifierUri !== legacyAudience) {
-    reasons.push({
-      code: "IDENTITY_API_IDENTIFIER_URI_CONFLICT",
-      message: "API_IDENTIFIER_URI and ENTRA_AUDIENCE are both set but differ.",
-      field: "API_IDENTIFIER_URI"
-    });
-  }
-
-  const resolvedApiIdentifierUri = apiIdentifierUri || legacyAudience;
+  const resolvedApiIdentifierUri = apiIdentifierUri;
 
   if (!resolvedApiIdentifierUri) {
     reasons.push({
       code: "IDENTITY_API_IDENTIFIER_URI_MISSING",
-      message: "Set API_IDENTIFIER_URI (preferred) or ENTRA_AUDIENCE (legacy).",
+      message: "Set API_IDENTIFIER_URI.",
       field: "API_IDENTIFIER_URI"
     });
   } else if (!isApiIdentifierUri(resolvedApiIdentifierUri)) {
@@ -79,7 +70,6 @@ async function main() {
     reasonDetails: reasons,
     inputSummary: {
       apiIdentifierUri: redactBoolean(Boolean(apiIdentifierUri)),
-      entraAudienceLegacy: redactBoolean(Boolean(legacyAudience)),
       requiredEnvNames
     }
   };

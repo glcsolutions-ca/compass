@@ -72,45 +72,79 @@ describe("workflow pipeline contract", () => {
     expect(replay).not.toContain("\n  push:");
   });
 
-  it("keeps one release package build path and deploy stage that does not rebuild", () => {
+  it("keeps one release-package build path and deploy finalizer that does not rebuild", () => {
     const workflow = readUtf8(cloudDeliveryPipelineWorkflowPath);
-    const deployJob = extractJobBlock(workflow, "deploy_release_package");
+    const deployFinalizerJob = extractJobBlock(workflow, "deploy_release_package");
 
     expect(workflow).toContain("name: build-release-package-api-image");
     expect(workflow).toContain("name: build-release-package-web-image");
     expect(workflow).toContain("name: build-release-package-codex-image");
     expect(workflow).toContain("name: capture-current-runtime-refs");
 
-    expect(deployJob).not.toContain("docker build");
-    expect(deployJob).not.toContain("docker push");
+    expect(deployFinalizerJob).not.toContain("docker build");
+    expect(deployFinalizerJob).not.toContain("docker push");
   });
 
-  it("serializes production mutation in both delivery and replay", () => {
+  it("keeps wide production mutation topology in delivery and replay", () => {
     const delivery = readUtf8(cloudDeliveryPipelineWorkflowPath);
     const replay = readUtf8(cloudDeliveryReplayWorkflowPath);
 
-    const deliveryConcurrency = extractConcurrencySettings(
-      extractJobBlock(delivery, "deploy_release_package")
-    );
-    const replayConcurrency = extractConcurrencySettings(
-      extractJobBlock(replay, "deploy_release_package")
-    );
+    for (const workflow of [delivery, replay]) {
+      expect(workflow).toContain("  deploy_identity:");
+      expect(workflow).toContain("  deploy_infra:");
+      expect(workflow).toContain("  deploy_runtime:");
+      expect(workflow).toContain("  deploy_release_package:");
 
-    expect(deliveryConcurrency.group).toBe("production-mutation");
-    expect(deliveryConcurrency.cancelInProgress).toBe("false");
-    expect(replayConcurrency.group).toBe("production-mutation");
-    expect(replayConcurrency.cancelInProgress).toBe("false");
+      const runtimeJob = extractJobBlock(workflow, "deploy_runtime");
+      expect(runtimeJob).toContain("- deploy_infra");
+
+      const finalizerJob = extractJobBlock(workflow, "deploy_release_package");
+      expect(finalizerJob).toContain("- deploy_identity");
+      expect(finalizerJob).toContain("- deploy_infra");
+      expect(finalizerJob).toContain("- deploy_runtime");
+    }
   });
 
-  it("requires acceptance YES and deploy-required true before production deploy", () => {
+  it("keeps explicit production concurrency boundaries", () => {
     const delivery = readUtf8(cloudDeliveryPipelineWorkflowPath);
     const replay = readUtf8(cloudDeliveryReplayWorkflowPath);
 
-    expect(delivery).toContain("needs.acceptance_stage.outputs.acceptance_decision == 'YES'");
-    expect(delivery).toContain("needs.acceptance_stage.outputs.deploy_required == 'true'");
+    for (const workflow of [delivery, replay]) {
+      const identityConcurrency = extractConcurrencySettings(
+        extractJobBlock(workflow, "deploy_identity")
+      );
+      const infraConcurrency = extractConcurrencySettings(
+        extractJobBlock(workflow, "deploy_infra")
+      );
+      const runtimeConcurrency = extractConcurrencySettings(
+        extractJobBlock(workflow, "deploy_runtime")
+      );
 
-    expect(replay).toContain("needs.acceptance_stage.outputs.acceptance_decision == 'YES'");
-    expect(replay).toContain("needs.acceptance_stage.outputs.deploy_required == 'true'");
+      expect(identityConcurrency.group).toBe("production-identity-mutation");
+      expect(identityConcurrency.cancelInProgress).toBe("false");
+      expect(infraConcurrency.group).toBe("production-azure-mutation");
+      expect(infraConcurrency.cancelInProgress).toBe("false");
+      expect(runtimeConcurrency.group).toBe("production-azure-mutation");
+      expect(runtimeConcurrency.cancelInProgress).toBe("false");
+    }
+  });
+
+  it("requires acceptance YES and deploy-required true before production mutation", () => {
+    const delivery = readUtf8(cloudDeliveryPipelineWorkflowPath);
+    const replay = readUtf8(cloudDeliveryReplayWorkflowPath);
+
+    for (const workflow of [delivery, replay]) {
+      for (const jobName of [
+        "deploy_identity",
+        "deploy_infra",
+        "deploy_runtime",
+        "deploy_release_package"
+      ]) {
+        const block = extractJobBlock(workflow, jobName);
+        expect(block).toContain("needs.acceptance_stage.outputs.acceptance_decision == 'YES'");
+        expect(block).toContain("needs.acceptance_stage.outputs.deploy_required == 'true'");
+      }
+    }
   });
 
   it("keeps acceptance and production stage decision jobs deterministic with always guards", () => {
@@ -136,7 +170,7 @@ describe("workflow pipeline contract", () => {
     );
   });
 
-  it("keeps release-decision logic in shared scripts", () => {
+  it("keeps release decision logic in shared scripts", () => {
     const delivery = readUtf8(cloudDeliveryPipelineWorkflowPath);
     const replay = readUtf8(cloudDeliveryReplayWorkflowPath);
 
@@ -150,13 +184,20 @@ describe("workflow pipeline contract", () => {
     expect(replay).toContain("node scripts/pipeline/shared/decide-release-outcome.mjs");
   });
 
-  it("keeps cloud workflows free of domain-mode and phase-based branching toggles", () => {
+  it("keeps one domain model: optional custom-domain vars, no mode flags", () => {
     const delivery = readUtf8(cloudDeliveryPipelineWorkflowPath).toLowerCase();
     const replay = readUtf8(cloudDeliveryReplayWorkflowPath).toLowerCase();
     const domainModeToken = ["infra", "domain", "mode"].join("_");
 
     expect(delivery).not.toContain(domainModeToken);
     expect(replay).not.toContain(domainModeToken);
+    expect(delivery).not.toContain("assert-managed-certificate-contract.mjs");
+    expect(replay).not.toContain("assert-managed-certificate-contract.mjs");
+
+    expect(delivery).toContain("aca_api_custom_domain");
+    expect(replay).toContain("aca_api_custom_domain");
+    expect(delivery).toContain("aca_web_custom_domain");
+    expect(replay).toContain("aca_web_custom_domain");
 
     for (const token of ["phase-1", "phase 1", "phase-2", "phase 2"]) {
       expect(delivery).not.toContain(token);

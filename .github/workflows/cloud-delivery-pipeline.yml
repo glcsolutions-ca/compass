@@ -698,31 +698,19 @@ jobs:
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
       ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
-      ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
-      ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
-      ACR_NAME: ${{ vars.ACR_NAME }}
-      ACR_SKU: ${{ vars.ACR_SKU }}
-      POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
-      POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
-      POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
-      POSTGRES_VERSION: ${{ vars.POSTGRES_VERSION }}
-      POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
-      POSTGRES_SKU_TIER: ${{ vars.POSTGRES_SKU_TIER }}
-      POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
-      POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
       ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
       ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
       ACA_CODEX_CUSTOM_DOMAIN: ${{ vars.ACA_CODEX_CUSTOM_DOMAIN }}
-      ACA_API_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_API_MANAGED_CERTIFICATE_NAME }}
-      ACA_WEB_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_WEB_MANAGED_CERTIFICATE_NAME }}
-      ACA_CODEX_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_CODEX_MANAGED_CERTIFICATE_NAME }}
-      ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
+      ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+      ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
+      POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
+      POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
+      POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
       JOB_REQUIRED: ${{ (needs.load_release_package.outputs.infra_changed == 'true' || needs.load_release_package.outputs.requires_infra_convergence == 'true') && needs.load_release_package.outputs.docs_only_changed != 'true' }}
       API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
-      ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
       AUTH_AUDIENCE: ${{ vars.AUTH_AUDIENCE }}
-      AUTH_ISSUER: ${{ vars.ENTRA_ISSUER }}
-      AUTH_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
       AUTH_ALLOWED_CLIENT_IDS: ${{ vars.AUTH_ALLOWED_CLIENT_IDS }}
       AUTH_ACTIVE_TENANT_IDS: ${{ vars.AUTH_ACTIVE_TENANT_IDS }}
       OAUTH_TOKEN_ISSUER: ${{ vars.OAUTH_TOKEN_ISSUER }}
@@ -786,10 +774,6 @@ jobs:
         if: ${{ env.JOB_REQUIRED == 'true' }}
         run: node scripts/pipeline/shared/validate-infra-acceptance-config.mjs
 
-      - name: Validate managed certificate contract
-        if: ${{ env.JOB_REQUIRED == 'true' }}
-        run: node scripts/pipeline/cloud/production/assert-managed-certificate-contract.mjs
-
       - name: Render infra parameters
         if: ${{ env.JOB_REQUIRED == 'true' }}
         env:
@@ -838,10 +822,7 @@ jobs:
       TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
       TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
       TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
-      GH_ORGANIZATION: ${{ vars.GH_ORGANIZATION }}
-      GH_REPOSITORY_NAME: ${{ vars.GH_REPOSITORY_NAME }}
       API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
-      ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
       IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
       GITHUB_ENVIRONMENT_NAME: production
       JOB_REQUIRED: ${{ needs.load_release_package.outputs.identity_changed == 'true' && needs.load_release_package.outputs.docs_only_changed != 'true' }}
@@ -874,7 +855,7 @@ jobs:
         id: identity_config
         env:
           IDENTITY_CONFIG_MODE: acceptance
-          REQUIRED_ENV_NAMES: ARM_CLIENT_ID,ARM_TENANT_ID,ARM_SUBSCRIPTION_ID,TFSTATE_RESOURCE_GROUP,TFSTATE_STORAGE_ACCOUNT,TFSTATE_CONTAINER,TFSTATE_KEY,GH_ORGANIZATION,GH_REPOSITORY_NAME,IDENTITY_OWNER_OBJECT_IDS_JSON
+          REQUIRED_ENV_NAMES: ARM_CLIENT_ID,ARM_TENANT_ID,ARM_SUBSCRIPTION_ID,TFSTATE_RESOURCE_GROUP,TFSTATE_STORAGE_ACCOUNT,TFSTATE_CONTAINER,TFSTATE_KEY,IDENTITY_OWNER_OBJECT_IDS_JSON
         run: node scripts/pipeline/shared/validate-identity-config.mjs
 
       - name: Azure login (OIDC)
@@ -910,14 +891,18 @@ jobs:
 
       - name: Terraform plan
         if: ${{ env.JOB_REQUIRED == 'true' }}
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
+          gh_organization="${GITHUB_REPOSITORY%%/*}"
+          gh_repository="${GITHUB_REPOSITORY##*/}"
           mkdir -p ".artifacts/identity/$HEAD_SHA"
           terraform -chdir=infra/identity plan \
             -input=false \
             -lock=false \
             -var-file=env/prod.tfvars \
-            -var "github_organization=${GH_ORGANIZATION}" \
-            -var "github_repository=${GH_REPOSITORY_NAME}" \
+            -var "github_organization=${gh_organization}" \
+            -var "github_repository=${gh_repository}" \
             -var "github_environment_name=${GITHUB_ENVIRONMENT_NAME}" \
             -var "api_identifier_uri=${{ steps.identity_config.outputs.api_identifier_uri }}" \
             -var "owners=${IDENTITY_OWNER_OBJECT_IDS_JSON}" \
@@ -1013,136 +998,61 @@ jobs:
           echo "Acceptance stage decision is NO" >&2
           exit 1
 
-  deploy_release_package:
-    name: deploy-release-package
+  deploy_identity:
+    name: deploy-identity
     needs:
       - load_release_package
       - acceptance_stage
-    if: ${{ always() && needs.load_release_package.result == 'success' && needs.acceptance_stage.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' }}
+    if: ${{ always() && needs.load_release_package.result == 'success' && needs.acceptance_stage.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && needs.load_release_package.outputs.identity_changed == 'true' }}
     runs-on: ubuntu-latest
     environment: production
-    timeout-minutes: 75
+    timeout-minutes: 45
     concurrency:
-      group: production-mutation
+      group: production-identity-mutation
       cancel-in-progress: false
-    outputs:
-      api_prod_url: ${{ steps.current_state.outputs.api_prod_url }}
-      web_prod_url: ${{ steps.current_state.outputs.web_prod_url }}
-      codex_prod_url: ${{ steps.current_state.outputs.codex_prod_url }}
-      deployment_id: ${{ steps.record_release.outputs.deployment_id }}
     env:
       HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
-      CHANGE_CLASS: ${{ needs.load_release_package.outputs.change_class }}
-      RUNTIME_CHANGED: ${{ needs.load_release_package.outputs.runtime_changed }}
-      INFRA_CHANGED: ${{ needs.load_release_package.outputs.infra_changed }}
-      IDENTITY_CHANGED: ${{ needs.load_release_package.outputs.identity_changed }}
-      REQUIRES_INFRA_CONVERGENCE: ${{ needs.load_release_package.outputs.requires_infra_convergence }}
-      REQUIRES_MIGRATIONS: ${{ needs.load_release_package.outputs.requires_migrations }}
-      RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
-      RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
-      RELEASE_PACKAGE_CODEX_REF: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
-      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
-      AZURE_VNET_NAME: ${{ vars.AZURE_VNET_NAME }}
-      AZURE_ACA_SUBNET_NAME: ${{ vars.AZURE_ACA_SUBNET_NAME }}
-      AZURE_POSTGRES_SUBNET_NAME: ${{ vars.AZURE_POSTGRES_SUBNET_NAME }}
-      AZURE_PRIVATE_DNS_ZONE_NAME: ${{ vars.AZURE_PRIVATE_DNS_ZONE_NAME }}
-      ACA_ENVIRONMENT_NAME: ${{ vars.ACA_ENVIRONMENT_NAME }}
-      AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
-      ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
-      ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
-      ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
-      ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
-      ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
-      ACR_NAME: ${{ vars.ACR_NAME }}
-      ACR_SKU: ${{ vars.ACR_SKU }}
-      POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
-      POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
-      POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
-      POSTGRES_VERSION: ${{ vars.POSTGRES_VERSION }}
-      POSTGRES_SKU_NAME: ${{ vars.POSTGRES_SKU_NAME }}
-      POSTGRES_SKU_TIER: ${{ vars.POSTGRES_SKU_TIER }}
-      POSTGRES_STORAGE_MB: ${{ vars.POSTGRES_STORAGE_MB }}
-      ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
-      ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
-      ACA_CODEX_CUSTOM_DOMAIN: ${{ vars.ACA_CODEX_CUSTOM_DOMAIN }}
-      ACA_API_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_API_MANAGED_CERTIFICATE_NAME }}
-      ACA_WEB_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_WEB_MANAGED_CERTIFICATE_NAME }}
-      ACA_CODEX_MANAGED_CERTIFICATE_NAME: ${{ vars.ACA_CODEX_MANAGED_CERTIFICATE_NAME }}
-      ACA_CUSTOM_DOMAIN_VALIDATION_METHOD: ${{ vars.ACA_CUSTOM_DOMAIN_VALIDATION_METHOD }}
       API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
-      ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
-      AUTH_AUDIENCE: ${{ vars.AUTH_AUDIENCE }}
-      AUTH_ISSUER: ${{ vars.ENTRA_ISSUER }}
-      AUTH_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
-      AUTH_ALLOWED_CLIENT_IDS: ${{ vars.AUTH_ALLOWED_CLIENT_IDS }}
-      AUTH_ACTIVE_TENANT_IDS: ${{ vars.AUTH_ACTIVE_TENANT_IDS }}
-      OAUTH_TOKEN_ISSUER: ${{ vars.OAUTH_TOKEN_ISSUER }}
-      OAUTH_TOKEN_AUDIENCE: ${{ vars.OAUTH_TOKEN_AUDIENCE }}
-      OAUTH_TOKEN_SIGNING_SECRET: ${{ secrets.OAUTH_TOKEN_SIGNING_SECRET }}
-      AUTH_BOOTSTRAP_ALLOWED_TENANT_ID: ${{ vars.API_SMOKE_ALLOWED_TENANT_ID }}
-      AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_ID }}
-      AUTH_BOOTSTRAP_DELEGATED_USER_OID: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_OID }}
-      AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL }}
-      POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
-      ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
+      ARM_CLIENT_ID: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+      TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+      TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
+      TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
+      IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
+      GITHUB_ENVIRONMENT_NAME: production
+      GITHUB_REPOSITORY: ${{ github.repository }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Terraform
-        if: ${{ env.IDENTITY_CHANGED == 'true' }}
         uses: hashicorp/setup-terraform@v3
 
       - name: Validate identity config contract
-        if: ${{ env.IDENTITY_CHANGED == 'true' }}
         id: identity_config
         env:
-          HEAD_SHA: ${{ env.HEAD_SHA }}
           IDENTITY_CONFIG_MODE: production
-          API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
-          ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
-          ARM_CLIENT_ID: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
-          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-          TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
-          TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
-          TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
-          TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
-          GH_ORGANIZATION: ${{ vars.GH_ORGANIZATION }}
-          GH_REPOSITORY_NAME: ${{ vars.GH_REPOSITORY_NAME }}
-          IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
-          REQUIRED_ENV_NAMES: ARM_CLIENT_ID,ARM_TENANT_ID,ARM_SUBSCRIPTION_ID,TFSTATE_RESOURCE_GROUP,TFSTATE_STORAGE_ACCOUNT,TFSTATE_CONTAINER,TFSTATE_KEY,GH_ORGANIZATION,GH_REPOSITORY_NAME,IDENTITY_OWNER_OBJECT_IDS_JSON
+          REQUIRED_ENV_NAMES: ARM_CLIENT_ID,ARM_TENANT_ID,ARM_SUBSCRIPTION_ID,TFSTATE_RESOURCE_GROUP,TFSTATE_STORAGE_ACCOUNT,TFSTATE_CONTAINER,TFSTATE_KEY,IDENTITY_OWNER_OBJECT_IDS_JSON
         run: node scripts/pipeline/shared/validate-identity-config.mjs
 
       - name: Azure login for identity apply
-        if: ${{ env.IDENTITY_CHANGED == 'true' }}
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
           allow-no-subscriptions: true
 
       - name: Apply identity infrastructure
-        if: ${{ env.IDENTITY_CHANGED == 'true' }}
         env:
           ARM_USE_OIDC: "true"
           ARM_USE_AZUREAD: "true"
-          ARM_CLIENT_ID: ${{ secrets.AZURE_IDENTITY_CLIENT_ID }}
-          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-          TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
-          TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
-          TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
-          TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
-          GH_ORGANIZATION: ${{ vars.GH_ORGANIZATION }}
-          GH_REPOSITORY_NAME: ${{ vars.GH_REPOSITORY_NAME }}
-          API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
-          ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
-          IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
-          GITHUB_ENVIRONMENT_NAME: production
         run: |
           set -euo pipefail
+
+          gh_organization="${GITHUB_REPOSITORY%%/*}"
+          gh_repository="${GITHUB_REPOSITORY##*/}"
 
           terraform -chdir=infra/identity init \
             -input=false \
@@ -1160,8 +1070,8 @@ jobs:
             -input=false \
             -auto-approve \
             -var-file=env/prod.tfvars \
-            -var "github_organization=${GH_ORGANIZATION}" \
-            -var "github_repository=${GH_REPOSITORY_NAME}" \
+            -var "github_organization=${gh_organization}" \
+            -var "github_repository=${gh_repository}" \
             -var "github_environment_name=${GITHUB_ENVIRONMENT_NAME}" \
             -var "api_identifier_uri=${{ steps.identity_config.outputs.api_identifier_uri }}" \
             -var "owners=${IDENTITY_OWNER_OBJECT_IDS_JSON}"
@@ -1169,8 +1079,78 @@ jobs:
           mkdir -p ".artifacts/identity/$HEAD_SHA"
           terraform -chdir=infra/identity output -json > ".artifacts/identity/$HEAD_SHA/outputs.json"
 
-      - name: Azure login for infra/runtime
-        if: ${{ env.INFRA_CHANGED == 'true' || env.RUNTIME_CHANGED == 'true' || env.REQUIRES_INFRA_CONVERGENCE == 'true' }}
+      - name: Upload identity mutation artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-identity-${{ env.HEAD_SHA }}
+          path: .artifacts/identity/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
+
+  deploy_infra:
+    name: deploy-infra
+    needs:
+      - load_release_package
+      - acceptance_stage
+    if: ${{ always() && needs.load_release_package.result == 'success' && needs.acceptance_stage.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && (needs.load_release_package.outputs.infra_changed == 'true' || needs.load_release_package.outputs.requires_infra_convergence == 'true' || needs.load_release_package.outputs.runtime_changed == 'true') }}
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 60
+    concurrency:
+      group: production-azure-mutation
+      cancel-in-progress: false
+    outputs:
+      infra_apply_required: ${{ steps.decide_infra_apply.outputs.infra_apply_required }}
+      api_prod_url: ${{ steps.current_state.outputs.api_prod_url }}
+      web_prod_url: ${{ steps.current_state.outputs.web_prod_url }}
+      codex_prod_url: ${{ steps.current_state.outputs.codex_prod_url }}
+    env:
+      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+      RUNTIME_CHANGED: ${{ needs.load_release_package.outputs.runtime_changed }}
+      INFRA_CHANGED: ${{ needs.load_release_package.outputs.infra_changed }}
+      REQUIRES_INFRA_CONVERGENCE: ${{ needs.load_release_package.outputs.requires_infra_convergence }}
+      RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
+      RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
+      RELEASE_PACKAGE_CODEX_REF: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_VNET_NAME: ${{ vars.AZURE_VNET_NAME }}
+      AZURE_ACA_SUBNET_NAME: ${{ vars.AZURE_ACA_SUBNET_NAME }}
+      AZURE_POSTGRES_SUBNET_NAME: ${{ vars.AZURE_POSTGRES_SUBNET_NAME }}
+      AZURE_PRIVATE_DNS_ZONE_NAME: ${{ vars.AZURE_PRIVATE_DNS_ZONE_NAME }}
+      ACA_ENVIRONMENT_NAME: ${{ vars.ACA_ENVIRONMENT_NAME }}
+      AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
+      ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
+      ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+      ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
+      ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+      ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
+      ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
+      ACA_CODEX_CUSTOM_DOMAIN: ${{ vars.ACA_CODEX_CUSTOM_DOMAIN }}
+      ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
+      POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
+      POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
+      API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
+      AUTH_AUDIENCE: ${{ vars.AUTH_AUDIENCE }}
+      AUTH_ALLOWED_CLIENT_IDS: ${{ vars.AUTH_ALLOWED_CLIENT_IDS }}
+      AUTH_ACTIVE_TENANT_IDS: ${{ vars.AUTH_ACTIVE_TENANT_IDS }}
+      OAUTH_TOKEN_ISSUER: ${{ vars.OAUTH_TOKEN_ISSUER }}
+      OAUTH_TOKEN_AUDIENCE: ${{ vars.OAUTH_TOKEN_AUDIENCE }}
+      OAUTH_TOKEN_SIGNING_SECRET: ${{ secrets.OAUTH_TOKEN_SIGNING_SECRET }}
+      AUTH_BOOTSTRAP_ALLOWED_TENANT_ID: ${{ vars.API_SMOKE_ALLOWED_TENANT_ID }}
+      AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_ID }}
+      AUTH_BOOTSTRAP_DELEGATED_USER_OID: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_OID }}
+      AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL }}
+      POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+      ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
@@ -1178,16 +1158,14 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Validate deployment release package refs
-        if: ${{ env.INFRA_CHANGED == 'true' || env.RUNTIME_CHANGED == 'true' || env.REQUIRES_INFRA_CONVERGENCE == 'true' }}
         run: |
           set -euo pipefail
 
-          if [ -z "${RELEASE_PACKAGE_API_REF:-}" ] || [ -z "${RELEASE_PACKAGE_WEB_REF:-}" ] || [ -z "${RELEASE_PACKAGE_CODEX_REF:-}" ]; then
-            echo "Release package refs are required for infra/runtime production stage" >&2
-            exit 1
-          fi
-
           for image in "$RELEASE_PACKAGE_API_REF" "$RELEASE_PACKAGE_WEB_REF" "$RELEASE_PACKAGE_CODEX_REF"; do
+            if [ -z "$image" ]; then
+              echo "Release package image reference is missing for infra deployment" >&2
+              exit 1
+            fi
             if [[ "$image" != "${ACR_REGISTRY}/"*"@sha256:"* ]]; then
               echo "Release package ref must be an ACR digest ref: $image" >&2
               exit 1
@@ -1249,8 +1227,22 @@ jobs:
             echo "codex_app_exists=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Decide infra apply necessity
+        id: decide_infra_apply
+        run: |
+          set -euo pipefail
+
+          infra_apply_required="false"
+          if [ "$INFRA_CHANGED" = "true" ] || [ "$REQUIRES_INFRA_CONVERGENCE" = "true" ]; then
+            infra_apply_required="true"
+          elif [ "$RUNTIME_CHANGED" = "true" ] && [ "${{ steps.codex_app_presence.outputs.codex_app_exists }}" != "true" ]; then
+            infra_apply_required="true"
+          fi
+
+          echo "infra_apply_required=$infra_apply_required" >> "$GITHUB_OUTPUT"
+
       - name: Apply infra (when needed)
-        if: ${{ env.INFRA_CHANGED == 'true' || env.REQUIRES_INFRA_CONVERGENCE == 'true' || (env.RUNTIME_CHANGED == 'true' && steps.codex_app_presence.outputs.codex_app_exists == 'false') }}
+        if: ${{ steps.decide_infra_apply.outputs.infra_apply_required == 'true' }}
         env:
           API_IMAGE: ${{ env.RELEASE_PACKAGE_API_REF }}
           WEB_IMAGE: ${{ env.RELEASE_PACKAGE_WEB_REF }}
@@ -1260,7 +1252,6 @@ jobs:
           set -euo pipefail
 
           mkdir -p ".artifacts/infra/$HEAD_SHA"
-          node scripts/pipeline/cloud/production/assert-managed-certificate-contract.mjs
           node scripts/pipeline/shared/render-infra-parameters.mjs
 
           export ARM_TEMPLATE_FILE="infra/azure/main.bicep"
@@ -1268,8 +1259,101 @@ jobs:
 
           node scripts/pipeline/cloud/production/apply-infra.mjs
 
+      - name: Resolve current production URLs
+        id: current_state
+        run: |
+          set -euo pipefail
+
+          api_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_API_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
+          web_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_WEB_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
+          codex_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_CODEX_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
+
+          echo "api_prod_url=$api_prod_url" >> "$GITHUB_OUTPUT"
+          echo "web_prod_url=$web_prod_url" >> "$GITHUB_OUTPUT"
+          echo "codex_prod_url=$codex_prod_url" >> "$GITHUB_OUTPUT"
+
+      - name: Upload infra mutation artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-infra-${{ env.HEAD_SHA }}
+          path: .artifacts/infra/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
+
+  deploy_runtime:
+    name: deploy-runtime
+    needs:
+      - load_release_package
+      - acceptance_stage
+      - deploy_infra
+    if: ${{ always() && needs.load_release_package.result == 'success' && needs.acceptance_stage.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && needs.load_release_package.outputs.runtime_changed == 'true' && (needs.deploy_infra.result == 'success' || needs.deploy_infra.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 45
+    concurrency:
+      group: production-azure-mutation
+      cancel-in-progress: false
+    outputs:
+      api_prod_url: ${{ steps.current_state.outputs.api_prod_url }}
+      web_prod_url: ${{ steps.current_state.outputs.web_prod_url }}
+      codex_prod_url: ${{ steps.current_state.outputs.codex_prod_url }}
+    env:
+      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+      REQUIRES_MIGRATIONS: ${{ needs.load_release_package.outputs.requires_migrations }}
+      RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
+      RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
+      RELEASE_PACKAGE_CODEX_REF: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
+      ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+      ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
+      ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
+      ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate deployment release package refs
+        run: |
+          set -euo pipefail
+
+          for image in "$RELEASE_PACKAGE_API_REF" "$RELEASE_PACKAGE_WEB_REF" "$RELEASE_PACKAGE_CODEX_REF"; do
+            if [ -z "$image" ]; then
+              echo "Release package image reference is missing for runtime deployment" >&2
+              exit 1
+            fi
+            if [[ "$image" != "${ACR_REGISTRY}/"*"@sha256:"* ]]; then
+              echo "Release package ref must be an ACR digest ref: $image" >&2
+              exit 1
+            fi
+          done
+
+      - name: Resolve Codex app name
+        run: |
+          set -euo pipefail
+
+          codex_app_name="${ACA_CODEX_APP_NAME:-}"
+          if [ -z "$codex_app_name" ]; then
+            if [[ "$ACA_API_APP_NAME" == *"-api-"* ]]; then
+              codex_app_name="${ACA_API_APP_NAME/-api-/-codex-}"
+            else
+              echo "ACA_CODEX_APP_NAME is empty and fallback from ACA_API_APP_NAME failed" >&2
+              exit 1
+            fi
+          fi
+
+          echo "ACA_CODEX_APP_NAME=$codex_app_name" >> "$GITHUB_ENV"
+
       - name: Update migration job image
-        if: ${{ env.RUNTIME_CHANGED == 'true' }}
         run: |
           az containerapp job update \
             --resource-group "$AZURE_RESOURCE_GROUP" \
@@ -1278,7 +1362,7 @@ jobs:
             --output none
 
       - name: Run migration job
-        if: ${{ env.RUNTIME_CHANGED == 'true' && env.REQUIRES_MIGRATIONS == 'true' }}
+        if: ${{ env.REQUIRES_MIGRATIONS == 'true' }}
         id: migration_start
         env:
           AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
@@ -1286,7 +1370,7 @@ jobs:
         run: node scripts/pipeline/cloud/production/start-migration-job.mjs
 
       - name: Wait for migration completion
-        if: ${{ env.RUNTIME_CHANGED == 'true' && env.REQUIRES_MIGRATIONS == 'true' }}
+        if: ${{ env.REQUIRES_MIGRATIONS == 'true' }}
         env:
           AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
           ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
@@ -1295,7 +1379,6 @@ jobs:
         run: node scripts/pipeline/cloud/production/wait-migration-job.mjs
 
       - name: Deploy API
-        if: ${{ env.RUNTIME_CHANGED == 'true' }}
         uses: azure/container-apps-deploy-action@v1
         with:
           imageToDeploy: ${{ env.RELEASE_PACKAGE_API_REF }}
@@ -1304,7 +1387,6 @@ jobs:
           disableTelemetry: true
 
       - name: Deploy Web
-        if: ${{ env.RUNTIME_CHANGED == 'true' }}
         uses: azure/container-apps-deploy-action@v1
         with:
           imageToDeploy: ${{ env.RELEASE_PACKAGE_WEB_REF }}
@@ -1313,7 +1395,6 @@ jobs:
           disableTelemetry: true
 
       - name: Deploy Codex
-        if: ${{ env.RUNTIME_CHANGED == 'true' }}
         uses: azure/container-apps-deploy-action@v1
         with:
           imageToDeploy: ${{ env.RELEASE_PACKAGE_CODEX_REF }}
@@ -1323,13 +1404,70 @@ jobs:
 
       - name: Resolve current production URLs
         id: current_state
-        if: ${{ env.RUNTIME_CHANGED == 'true' || env.INFRA_CHANGED == 'true' || env.REQUIRES_INFRA_CONVERGENCE == 'true' }}
         run: |
           set -euo pipefail
 
           api_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_API_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
           web_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_WEB_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
           codex_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_CODEX_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
+
+          echo "api_prod_url=$api_prod_url" >> "$GITHUB_OUTPUT"
+          echo "web_prod_url=$web_prod_url" >> "$GITHUB_OUTPUT"
+          echo "codex_prod_url=$codex_prod_url" >> "$GITHUB_OUTPUT"
+
+      - name: Upload runtime mutation artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-runtime-${{ env.HEAD_SHA }}
+          path: .artifacts/deploy/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
+
+  deploy_release_package:
+    name: deploy-release-package
+    needs:
+      - load_release_package
+      - acceptance_stage
+      - deploy_identity
+      - deploy_infra
+      - deploy_runtime
+    if: ${{ always() && needs.load_release_package.result == 'success' && needs.acceptance_stage.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && (needs.deploy_identity.result == 'success' || needs.deploy_identity.result == 'skipped') && (needs.deploy_infra.result == 'success' || needs.deploy_infra.result == 'skipped') && (needs.deploy_runtime.result == 'success' || needs.deploy_runtime.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+    outputs:
+      api_prod_url: ${{ steps.current_state.outputs.api_prod_url }}
+      web_prod_url: ${{ steps.current_state.outputs.web_prod_url }}
+      codex_prod_url: ${{ steps.current_state.outputs.codex_prod_url }}
+      deployment_id: ${{ steps.record_release.outputs.deployment_id }}
+    env:
+      HEAD_SHA: ${{ needs.load_release_package.outputs.head_sha }}
+      CHANGE_CLASS: ${{ needs.load_release_package.outputs.change_class }}
+      RELEASE_PACKAGE_API_REF: ${{ needs.load_release_package.outputs.release_package_api_ref }}
+      RELEASE_PACKAGE_WEB_REF: ${{ needs.load_release_package.outputs.release_package_web_ref }}
+      RELEASE_PACKAGE_CODEX_REF: ${{ needs.load_release_package.outputs.release_package_codex_ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve final production URLs
+        id: current_state
+        run: |
+          set -euo pipefail
+
+          api_prod_url="${{ needs.deploy_runtime.outputs.api_prod_url }}"
+          web_prod_url="${{ needs.deploy_runtime.outputs.web_prod_url }}"
+          codex_prod_url="${{ needs.deploy_runtime.outputs.codex_prod_url }}"
+
+          if [ -z "$api_prod_url" ]; then
+            api_prod_url="${{ needs.deploy_infra.outputs.api_prod_url }}"
+          fi
+          if [ -z "$web_prod_url" ]; then
+            web_prod_url="${{ needs.deploy_infra.outputs.web_prod_url }}"
+          fi
+          if [ -z "$codex_prod_url" ]; then
+            codex_prod_url="${{ needs.deploy_infra.outputs.codex_prod_url }}"
+          fi
 
           echo "api_prod_url=$api_prod_url" >> "$GITHUB_OUTPUT"
           echo "web_prod_url=$web_prod_url" >> "$GITHUB_OUTPUT"
@@ -1387,6 +1525,9 @@ jobs:
     needs:
       - load_release_package
       - acceptance_stage
+      - deploy_identity
+      - deploy_infra
+      - deploy_runtime
       - deploy_release_package
     if: ${{ always() && needs.deploy_release_package.result == 'success' && needs.acceptance_stage.outputs.acceptance_decision == 'YES' && needs.acceptance_stage.outputs.deploy_required == 'true' && (needs.load_release_package.outputs.runtime_changed == 'true' || needs.load_release_package.outputs.infra_changed == 'true' || needs.load_release_package.outputs.requires_infra_convergence == 'true') }}
     runs-on: ubuntu-latest
@@ -1406,12 +1547,10 @@ jobs:
       API_SMOKE_ALLOWED_TENANT_ID: ${{ vars.API_SMOKE_ALLOWED_TENANT_ID }}
       API_SMOKE_ALLOWED_CLIENT_ID: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_ID }}
       API_SMOKE_ALLOWED_CLIENT_SECRET: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_SECRET }}
-      API_SMOKE_ALLOWED_SCOPE: ${{ vars.API_SMOKE_ALLOWED_SCOPE }}
+      API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
       API_SMOKE_DENIED_TENANT_ID: ${{ vars.API_SMOKE_DENIED_TENANT_ID }}
       API_SMOKE_DENIED_CLIENT_ID: ${{ secrets.API_SMOKE_DENIED_CLIENT_ID }}
       API_SMOKE_DENIED_CLIENT_SECRET: ${{ secrets.API_SMOKE_DENIED_CLIENT_SECRET }}
-      API_SMOKE_DENIED_SCOPE: ${{ vars.API_SMOKE_DENIED_SCOPE }}
-      API_SMOKE_DENIED_EXPECTED_CODE: ${{ vars.API_SMOKE_DENIED_EXPECTED_CODE }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

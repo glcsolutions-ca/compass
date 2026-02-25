@@ -42,6 +42,38 @@ function parseScopeFromPayload(scopePayload) {
   return nestedScope;
 }
 
+function parseBooleanFlag(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "true") {
+    return true;
+  }
+  if (normalized === "false") {
+    return false;
+  }
+  return null;
+}
+
+function deriveScopeFromEnv(highRiskScopes) {
+  const scope = {};
+  let hasAny = false;
+
+  for (const scopeKey of highRiskScopes) {
+    const envName = `SCOPE_${String(scopeKey).replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase()}`;
+    const parsed = parseBooleanFlag(process.env[envName]);
+    if (parsed === null) {
+      continue;
+    }
+    scope[scopeKey] = parsed;
+    hasAny = true;
+  }
+
+  if (!hasAny) {
+    return null;
+  }
+
+  return scope;
+}
+
 async function main() {
   const headSha = requireEnv("HEAD_SHA");
   const eventName = (process.env.EVENT_NAME || process.env.GITHUB_EVENT_NAME || "").trim();
@@ -56,8 +88,11 @@ async function main() {
     ? policy.pairingPolicy.highRiskScopes
     : [];
 
-  const scopePayload = JSON.parse(await readFile(scopePath, "utf8"));
-  const scope = parseScopeFromPayload(scopePayload);
+  let scope = deriveScopeFromEnv(highRiskScopes);
+  if (!scope) {
+    const scopePayload = JSON.parse(await readFile(scopePath, "utf8"));
+    scope = parseScopeFromPayload(scopePayload);
+  }
 
   const matchedHighRiskScopes = highRiskScopes.filter((scopeKey) => scope[scopeKey] === true);
   const pairingRequired =

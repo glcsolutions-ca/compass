@@ -5,9 +5,7 @@ import { loadWebAuthRuntimeConfig } from "../auth/runtime-config";
 import { parseSsoCookie, SSO_COOKIE_NAME } from "../auth/sso-cookie";
 
 interface LoginPageProps {
-  searchParams?:
-    | Record<string, string | string[] | undefined>
-    | Promise<Record<string, string | string[] | undefined>>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 function readQueryValue(
@@ -51,7 +49,7 @@ function renderErrorMessage(errorCode: string | null) {
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const resolvedSearchParams = (await Promise.resolve(searchParams)) ?? {};
+  const resolvedSearchParams = (await searchParams) ?? {};
   const nextPath = normalizeNextPath(readQueryValue(resolvedSearchParams, "next"));
   const errorCode = readQueryValue(resolvedSearchParams, "error");
 

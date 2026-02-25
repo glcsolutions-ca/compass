@@ -53,13 +53,10 @@
   - trigger: `push` to `main`, `workflow_dispatch`
   - purpose: signed desktop installer delivery
 
-- `auth-entra-canary.yml`
-  - trigger: nightly schedule + manual dispatch
-  - purpose: app-only allow/deny auth checks against live Entra
-
-- `auth-delegated-smoke.yml`
-  - trigger: manual dispatch
-  - purpose: delegated `/v1/me` probe for target SHA
+- Auth verification for cloud release happens inside `production-blackbox-verify` in:
+  - `cloud-delivery-pipeline.yml`
+  - `cloud-delivery-replay.yml`
+  - scope: app-only allowed/denied/invalid API smoke checks against target SHA
 
 - `desktop-release.yml`
   - manual compatibility lane for desktop release publication

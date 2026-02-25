@@ -51,7 +51,6 @@
     "commit:testing-policy": "node scripts/pipeline/commit/check-testing-policy.mjs",
     "acceptance:browser-evidence": "playwright test tests/e2e/smoke.spec.ts --config tests/e2e/playwright.config.ts --reporter=line --workers=1",
     "acceptance:system-smoke": "tsx tests/system/smoke.ts",
-    "acceptance:auth-entra-canary": "node scripts/pipeline/cloud/acceptance/run-auth-entra-canary.mjs",
     "acceptance:codex-smoke": "tsx tests/system/codex-smoke.ts",
     "desktop:dev": "pnpm --filter @compass/desktop dev:run",
     "desktop:make:mac": "pnpm --filter @compass/desktop make:mac",

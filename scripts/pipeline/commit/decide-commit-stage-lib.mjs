@@ -4,7 +4,6 @@ export function evaluateCommitStageResults({
   desktopRequired,
   infraRequired,
   identityRequired,
-  pairingRequired,
   docsDriftBlocking,
   docsDriftStatus,
   commitStageSloMode,
@@ -46,13 +45,6 @@ export function evaluateCommitStageResults({
     reasons.push({
       code: "CHECK_IDENTITY_STATIC_CHECK_REQUIRED_NOT_SUCCESS",
       message: `identity-static-check required but result is ${checkResults["identity-static-check"]}`
-    });
-  }
-
-  if (pairingRequired && checkResults["pairing-evidence-check"] !== "success") {
-    reasons.push({
-      code: "CHECK_PAIRING_EVIDENCE_REQUIRED_NOT_SUCCESS",
-      message: `pairing-evidence-check required but result is ${checkResults["pairing-evidence-check"]}`
     });
   }
 

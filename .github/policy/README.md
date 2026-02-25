@@ -18,7 +18,6 @@ Automated acceptance test gate and deployment stage are post-push gates.
 
 - `scopeRules`: file-to-scope classification (`runtime`, `desktop`, `infra`, `identity`, `docsOnly`, rollout flags)
 - `commitStage`: required commit-stage checks + commit SLO policy (`targetSeconds`, `mode`)
-- `pairingPolicy`: high-risk scope policy (`highRiskScopes`, `trailerKey`)
 - `highRiskMainlinePolicy`: local static `HR001` rule config (`mainBranch`, `codeOwners`, `categories`, `requirePullRequestOnMain`)
 - `integrationGate`: required integration checks
 - `automatedAcceptanceTestGate`: required acceptance jobs by scope

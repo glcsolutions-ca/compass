@@ -1,4 +1,4 @@
 #!/bin/sh
 set -eu
 
-pnpm exec lint-staged
+pnpm git-hooks:pre-commit

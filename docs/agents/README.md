@@ -10,11 +10,13 @@ This directory contains operational guidance for coding and review agents workin
 
 ## Local CI Fast Path
 
-- Install repo hooks once per clone: `pnpm hooks:install`
-- Run the default commit-stage suite: `pnpm test`
-- Hook behavior:
-  - `.githooks/pre-commit` runs `pnpm exec lint-staged`
-  - `.githooks/pre-push` runs `pnpm test`
+- Hooks are auto-installed during `pnpm install` (`prepare` runs `pnpm git-hooks:install`).
+- `git-hooks:install` prefers worktree-local Git config (`git config --worktree`) so each worktree keeps its own hook path.
+- If scripts are disabled during install, run `pnpm git-hooks:install` manually once per clone.
+- Pre-commit and pre-push are local fast-feedback ergonomics:
+  - `.githooks/pre-commit` runs `pnpm git-hooks:pre-commit` (`pnpm exec lint-staged`) on staged files.
+  - `.githooks/pre-push` runs `pnpm git-hooks:pre-push` (`pnpm test:static`) for fast local validation only.
+- Full correctness remains in CI gates (`.github/workflows/commit-stage.yml` and `.github/workflows/merge-queue-gate.yml`).
 
 ## Delivery Links
 

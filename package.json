@@ -7,6 +7,7 @@
   },
   "packageManager": "pnpm@10.30.1",
   "scripts": {
+    "prepare": "pnpm git-hooks:install",
     "build": "turbo run build",
     "check": "pnpm test",
     "check:quick": "pnpm test",
@@ -45,7 +46,9 @@
     "typecheck:refs": "tsc -b --pretty false",
     "contract:generate": "pnpm generate",
     "contract:check": "pnpm contract:generate && git diff --exit-code -- packages/contracts/openapi/openapi.json packages/sdk/src/generated/schema.ts",
-    "hooks:install": "git config core.hooksPath .githooks",
+    "git-hooks:install": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0; if git config --worktree core.hooksPath .githooks 2>/dev/null; then git config --local --unset-all core.hooksPath >/dev/null 2>&1 || true; else git config core.hooksPath .githooks; fi",
+    "git-hooks:pre-commit": "pnpm exec lint-staged",
+    "git-hooks:pre-push": "pnpm test:static",
     "commit:scope": "node scripts/pipeline/commit/resolve-scope.mjs",
     "commit:docs-drift": "node scripts/pipeline/commit/check-docs-drift.mjs",
     "commit:testing-policy": "node scripts/pipeline/commit/check-testing-policy.mjs",

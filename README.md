@@ -18,16 +18,26 @@ pnpm db:postgres:up   # optional for API/data work
 pnpm dev
 ```
 
+Optional cloud worker (requires Service Bus/Azure credentials):
+
+```bash
+pnpm dev:worker
+```
+
+`pnpm db:postgres:*` and `pnpm dev` now run local `.env` bootstrap for each worktree when needed.
+
 ## Runtime snapshot
 
-- Web (`apps/web`): React Router 7 framework mode (`ssr: false`) on port `3000`
-- API (`apps/api`): Express 5 + contract-backed OpenAPI on port `3001`
+- Web (`apps/web`): React Router 7 framework mode (`ssr: false`) on `WEB_PORT`
+- API (`apps/api`): Express 5 + contract-backed OpenAPI on `API_PORT`
 - Worker (`apps/worker`): Azure Service Bus consumer (`loop` or `once`)
-- Codex gateway (`apps/codex-app-server`): thread/turn + stream APIs on port `3010`
+- Codex gateway (`apps/codex-app-server`): thread/turn + stream APIs on `CODEX_PORT`
 
 ## Main commands
 
-- `pnpm dev` - run local apps/services
+- `pnpm dev` - run local core services (API, web, codex gateway)
+- `pnpm dev:all` - run all services including worker
+- `pnpm dev:worker` - run worker only (cloud credentials required)
 - `pnpm test` - run commit-stage checks (static + unit/component + contract)
 - `pnpm test:unit` - run workspace unit/component + pipeline contract tests
 - `pnpm test:full` - run commit-stage + integration tests
@@ -37,6 +47,15 @@ pnpm dev
 - `pnpm build` - build all apps/packages
 - `pnpm db:postgres:up` - start local Postgres, apply migrations, seed data
 - `pnpm db:postgres:down` - stop local Postgres
+
+## Local Env Bootstrap
+
+- `pnpm dev` and `pnpm db:postgres:*` call `scripts/dev/ensure-local-env.mjs` before service startup.
+- `pnpm dev` starts local-core services only. Use `pnpm dev:all` to include worker, or `pnpm dev:worker` to run worker explicitly.
+- Bootstrap manages `apps/api/.env`, `apps/web/.env`, `apps/codex-app-server/.env`, and `db/postgres/.env`, and only appends missing required keys when a file already exists.
+- Worker env is intentionally not auto-managed by this script.
+- Value precedence is: explicit shell env var > existing `.env` value > generated worktree default.
+- Generated defaults include per-worktree ports (`WEB_PORT`, `API_PORT`, `CODEX_PORT`, `POSTGRES_PORT`), `VITE_API_BASE_URL`, `DATABASE_URL`, and `COMPOSE_PROJECT_NAME`.
 
 ## Trunk-first flow
 

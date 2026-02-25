@@ -10,7 +10,9 @@
     "prepare": "pnpm git-hooks:install",
     "build": "turbo run build",
     "clean": "rimraf --glob .turbo coverage \"*.tsbuildinfo\" \"apps/*/dist\" \"apps/*/dist-types\" \"apps/*/.next\" \"apps/*/.turbo\" \"apps/*/coverage\" \"apps/*/*.tsbuildinfo\" \"packages/*/dist\" \"packages/*/dist-types\" \"packages/*/.next\" \"packages/*/.turbo\" \"packages/*/coverage\" \"packages/*/*.tsbuildinfo\"",
-    "dev": "turbo run dev --parallel",
+    "dev": "node scripts/dev/ensure-local-env.mjs && turbo run dev --parallel --filter=@compass/api --filter=@compass/web --filter=@compass/codex-app-server",
+    "dev:all": "node scripts/dev/ensure-local-env.mjs && turbo run dev --parallel",
+    "dev:worker": "pnpm --filter @compass/worker dev",
     "db:migrate:create": "node db/scripts/migrate-create.mjs",
     "db:migrate:check": "node db/scripts/check-migration-policy.mjs",
     "db:migrate:checksums:update": "node db/scripts/check-migration-policy.mjs --write",
@@ -19,10 +21,10 @@
     "db:migrate:status": "node db/scripts/migrate-status.mjs",
     "db:seed": "node db/scripts/seed-postgres.mjs",
     "db:postgres:wait": "node db/scripts/wait-for-postgres.mjs",
-    "db:postgres:up": "docker compose -f db/postgres/docker-compose.yml up -d postgres && pnpm db:postgres:wait && pnpm db:migrate:up && pnpm db:seed",
-    "db:postgres:down": "docker compose -f db/postgres/docker-compose.yml down",
-    "db:postgres:reset": "docker compose -f db/postgres/docker-compose.yml down --volumes && pnpm db:postgres:up",
-    "db:postgres:logs": "docker compose -f db/postgres/docker-compose.yml logs -f postgres",
+    "db:postgres:up": "node scripts/dev/ensure-local-env.mjs && docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml up -d postgres && pnpm db:postgres:wait && pnpm db:migrate:up && pnpm db:seed",
+    "db:postgres:down": "node scripts/dev/ensure-local-env.mjs && docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml down",
+    "db:postgres:reset": "node scripts/dev/ensure-local-env.mjs && docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml down --volumes && pnpm db:postgres:up",
+    "db:postgres:logs": "node scripts/dev/ensure-local-env.mjs && docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml logs -f postgres",
     "deploy:migrate:start": "node scripts/pipeline/cloud/deployment-stage/start-migration-job.mjs",
     "deploy:migrate:wait": "node scripts/pipeline/cloud/deployment-stage/wait-migration-job.mjs",
     "deploy:custom-domain:dns": "node scripts/pipeline/cloud/deployment-stage/custom-domain-dns.mjs",
@@ -68,7 +70,7 @@
     "desktop:dev": "pnpm --filter @compass/desktop dev:run",
     "desktop:make:mac": "pnpm --filter @compass/desktop make:mac",
     "desktop:make:win": "pnpm --filter @compass/desktop make:win",
-    "test:pipeline-contract": "vitest run db/scripts/migration-policy-lib.test.mjs scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/decide-integration-gate-lib.test.mjs scripts/pipeline/commit/auto-recover-main.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/check-high-risk-mainline-policy.test.mjs scripts/pipeline/commit/check-auth-openapi-metadata.test.mjs scripts/pipeline/commit/runtime-coverage-lib.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/decide-automated-acceptance-test-gate-lib.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/acceptance-blackbox-contract.test.mjs scripts/pipeline/cloud/deployment-stage/apply-infra.test.mjs"
+    "test:pipeline-contract": "vitest run db/scripts/migration-policy-lib.test.mjs db/scripts/constants.test.mjs scripts/dev/ensure-local-env.test.mjs scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/decide-integration-gate-lib.test.mjs scripts/pipeline/commit/auto-recover-main.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/check-high-risk-mainline-policy.test.mjs scripts/pipeline/commit/check-auth-openapi-metadata.test.mjs scripts/pipeline/commit/runtime-coverage-lib.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/decide-automated-acceptance-test-gate-lib.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/acceptance-blackbox-contract.test.mjs scripts/pipeline/cloud/deployment-stage/apply-infra.test.mjs"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

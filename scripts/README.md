@@ -3,6 +3,7 @@
 ## Purpose
 
 The `scripts/` directory contains delivery automation for commit stage, automated acceptance test gate, deployment stage, and release evidence.
+It also contains local developer bootstrap helpers under `scripts/dev/`.
 
 ## Pipeline Stage Boundaries
 
@@ -10,6 +11,7 @@ The `scripts/` directory contains delivery automation for commit stage, automate
 - `scripts/pipeline/cloud/`: cloud deployment pipeline helpers, split by automated acceptance test gate and deployment stage.
 - `scripts/pipeline/desktop/`: desktop delivery automated acceptance test gate/deployment stage helpers.
 - `scripts/pipeline/shared/`: shared utilities, replay loaders, and workflow contract tests.
+- `scripts/dev/`: local development bootstrap helpers (for example `ensure-local-env.mjs`).
 
 Commit-stage and automated acceptance test gate scripts must stay non-mutating. Deployment-stage scripts may mutate production only from guarded workflows.
 

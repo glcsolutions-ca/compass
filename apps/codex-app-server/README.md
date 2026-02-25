@@ -39,6 +39,8 @@ Deferred from this v1 surface:
 | `CODEX_CLIENT_VERSION` | `0.1.0`                 | `initialize.clientInfo.version` value.            |
 | `CODEX_START_ON_BOOT`  | `true`                  | If `false`, codex starts lazily on first request. |
 
+Optional auth/env fields (for example `OPENAI_API_KEY`, `ENTRA_CLIENT_ID`) treat blank strings as unset.
+
 ## OpenAI App-Server Binary
 
 This gateway starts OpenAI's official `codex app-server` binary (see `CODEX_BIN_PATH`).

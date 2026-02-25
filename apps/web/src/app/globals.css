@@ -133,6 +133,16 @@ p {
   line-height: 1.45;
 }
 
+.auth-ready {
+  color: #335874;
+  background: #f2f8fc;
+  border: 1px solid #d6e5f1;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 0.93rem;
+  line-height: 1.42;
+}
+
 .auth-error {
   color: var(--danger);
   background: #fff3f5;
@@ -168,6 +178,19 @@ p {
 .auth-action:hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 18px rgb(25 90 138 / 28%);
+}
+
+.auth-action.redirecting {
+  cursor: progress;
+  transform: none;
+  box-shadow: none;
+  border-color: #4f7a9a;
+  background: linear-gradient(180deg, #4d7f9f 0%, #3f6f91 100%);
+}
+
+.auth-action.redirecting:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 .auth-action:focus-visible {

@@ -12,7 +12,7 @@ compass/
 ├─ packages/{contracts,sdk}
 ├─ scripts/{ci,deploy}
 └─ tests/{e2e,system}
-````
+```
 
 ## Main commands
 

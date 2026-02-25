@@ -206,3 +206,5 @@ Bicep handles Azure resource topology; Terraform handles Entra identity lifecycl
 ### What should an operator remember?
 
 One manual bootstrap, then one deterministic automated pipeline path for every change.
+
+For infra-only drill triggers, include a small runbook update in the same PR to satisfy docs-drift policy checks.

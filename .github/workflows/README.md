@@ -34,6 +34,7 @@
   - trigger: `workflow_run` completion of failed `Integration Gate` push runs
   - scope: push events on `main`
   - behavior: rerun failed jobs once on hard deterministic failure, then auto-revert head commit if failure repeats
+  - note: successful `Integration Gate` runs still emit a `workflow_run` event, so this workflow can appear as `skipped`; this is expected
   - key artifact: `.artifacts/main-recovery/<sha>/result.json`
 
 - `cloud-deployment-pipeline.yml`

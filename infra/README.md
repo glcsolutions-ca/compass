@@ -36,4 +36,4 @@ Treat these as high risk and fail closed by default:
 
 - Azure runtime/platform changes: [`infra/azure/README.md`](./azure/README.md)
 - Entra identity changes: [`infra/identity/README.md`](./identity/README.md)
-- Cloud delivery runbook: [`docs/runbooks/cloud-delivery-pipeline.md`](../docs/runbooks/cloud-delivery-pipeline.md)
+- Cloud pipeline setup: [`docs/runbooks/cloud-deployment-pipeline-setup.md`](../docs/runbooks/cloud-deployment-pipeline-setup.md)

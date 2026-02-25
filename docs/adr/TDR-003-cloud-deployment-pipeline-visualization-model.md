@@ -70,4 +70,4 @@ Reconsider reusable stage wrappers only if both conditions are true:
 - `.github/workflows/cloud-delivery-replay.yml`
 - `.github/workflows/README.md`
 - `docs/commit-stage-policy.md`
-- `docs/runbooks/cloud-delivery-pipeline.md`
+- `docs/runbooks/cloud-deployment-pipeline-setup.md`

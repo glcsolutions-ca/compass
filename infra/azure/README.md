@@ -188,4 +188,4 @@ pnpm deploy:custom-domain:dns
 - `scripts/pipeline/cloud/production/apply-infra.mjs`
 - `scripts/pipeline/cloud/production/assert-managed-certificate-contract.mjs`
 - `scripts/pipeline/cloud/production/custom-domain-dns.mjs`
-- `docs/runbooks/cloud-delivery-pipeline.md`
+- `docs/runbooks/cloud-deployment-pipeline-setup.md`

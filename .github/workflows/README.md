@@ -75,4 +75,4 @@
 - Policy contract: `.github/policy/pipeline-policy.json`
 - Branch protection baseline: `docs/branch-protection.md`
 - Commit-stage policy: `docs/commit-stage-policy.md`
-- Cloud delivery runbook: `docs/runbooks/cloud-delivery-pipeline.md`
+- Cloud delivery runbook: `docs/runbooks/cloud-deployment-pipeline-setup.md`

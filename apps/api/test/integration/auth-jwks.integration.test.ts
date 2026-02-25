@@ -248,7 +248,7 @@ describe("Auth integration with remote JWKS", () => {
 
     return {
       statusCode: response.statusCode,
-      json: response.json() as { code?: string; caller?: { tokenType?: string } }
+      json: response.json()
     };
   }
 

@@ -12,35 +12,12 @@ pnpm db:postgres:up
 pnpm dev
 ```
 
-`pnpm db:postgres:*` and `pnpm dev` invoke local env bootstrap as part of those commands.
-`pnpm dev` starts local core services (API/web/codex). Start worker separately with `pnpm dev:worker` when needed.
+`db:postgres:up` performs four steps:
 
-`db:postgres:up` performs five steps:
-
-1. Runs `scripts/dev/ensure-local-env.mjs` to bootstrap API/Web/Codex env files plus `db/postgres/.env` and add missing required keys.
-2. Starts Docker PostgreSQL.
-3. Waits for readiness.
-4. Applies migrations from `db/migrations/*.mjs` using explicit glob selection (`--use-glob`).
-5. Runs generic seed loading from `db/seeds/*.sql` (no-op if no seed files exist).
-
-Bootstrap uses this precedence for local values:
-
-1. explicit shell env var
-2. existing `.env` value
-3. generated per-worktree default
-
-Local Postgres compose values are sourced from `db/postgres/.env`:
-
-- `COMPOSE_PROJECT_NAME`
-- `POSTGRES_PORT`
-- `DATABASE_URL`
-
-`DATABASE_URL` resolution for migration/seed/wait scripts is:
-
-1. process env `DATABASE_URL`
-2. `db/postgres/.env` `DATABASE_URL`
-3. derived `postgres://compass:compass@localhost:$POSTGRES_PORT/compass`
-4. fallback `postgres://compass:compass@localhost:5432/compass`
+1. Starts Docker PostgreSQL.
+2. Waits for readiness.
+3. Applies migrations from `db/migrations/`.
+4. Runs generic seed loading from `db/seeds/*.sql` (no-op if no seed files exist).
 
 Stop services:
 
@@ -69,8 +46,6 @@ pnpm db:migrate:status
 - filename pattern: `^\d{17}_[a-z0-9_]+\.mjs$`
 - extension: `.mjs` only
 - checksums auto-refresh in `db/migrations/checksums.json`
-
-`db:migrate:up` loads migration files explicitly with `db/migrations/*.mjs` (not full-directory scanning).
 
 `db:migrate:up` enforces migration policy checks before executing and runs with explicit migration safety defaults:
 

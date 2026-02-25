@@ -1,14 +1,13 @@
-name: ${COMPOSE_PROJECT_NAME:-compass}
-
 services:
   postgres:
     image: postgres:16-alpine
+    container_name: compass-postgres
     environment:
       POSTGRES_DB: compass
       POSTGRES_USER: compass
       POSTGRES_PASSWORD: compass
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U compass -d compass"]
       interval: 5s

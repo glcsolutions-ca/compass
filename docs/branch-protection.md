@@ -2,17 +2,17 @@
 
 Configure `main` so direct integration is allowed, but safety checks remain strict.
 
-## Required Status Contexts
+## Gate Status Contexts
 
 - `commit-stage`
 - `integration-gate`
 
-Automated acceptance test gate and deployment stage checks remain post-push release controls, not branch-protection contexts.
+Automated acceptance test gate and deployment stage checks remain post-push release controls.
 
 ## Required Safety Controls
 
 - `enforce_admins.enabled=true`
-- `required_status_checks.strict=true`
+- `required_status_checks=null` (direct push enabled)
 - `allow_force_pushes.enabled=false`
 - `allow_deletions.enabled=false`
 - no legacy batching ruleset on `main`
@@ -20,18 +20,10 @@ Automated acceptance test gate and deployment stage checks remain post-push rele
 
 ## Apply or Repair via GitHub CLI
 
-Set required status contexts:
+Remove branch-protection required status checks to allow direct pushes:
 
 ```bash
-cat >/tmp/required-status-checks.json <<'JSON'
-{
-  "strict": true,
-  "contexts": ["commit-stage", "integration-gate"]
-}
-JSON
-
-gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/required_status_checks \
-  --input /tmp/required-status-checks.json
+gh api --method DELETE repos/glcsolutions-ca/compass/branches/main/protection/required_status_checks
 ```
 
 Remove required PR review gate:

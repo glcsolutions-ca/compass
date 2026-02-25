@@ -2,6 +2,8 @@
 
 > manual bootstrap once, then one automated pipeline path for every change.
 
+_Runbook note (2026-02-25): infra proof runs may include intentional non-functional marker edits in `infra/azure/main.bicep` to exercise full infra convergence._
+
 ## Automated Pipeline Flow
 
 ```mermaid

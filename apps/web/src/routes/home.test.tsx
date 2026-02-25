@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import Home from "./home.js";
+import Home from "../../app/routes/home.js";
 
 const env = import.meta.env as Record<string, string | undefined>;
 const originalApiBaseUrl = env.VITE_API_BASE_URL;

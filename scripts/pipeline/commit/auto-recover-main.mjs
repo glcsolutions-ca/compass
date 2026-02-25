@@ -17,7 +17,6 @@ const DETERMINISTIC_FAILURE_JOBS = {
     "desktop-commit-test-suite",
     "infra-static-check",
     "identity-static-check",
-    "pairing-evidence-check",
     "commit-stage"
   ]),
   "Integration Gate": new Set([

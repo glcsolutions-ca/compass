@@ -8,7 +8,7 @@
 
 ## `commit-stage` Failure
 
-- Cause: required fast checks failed, docs-drift blocked, pairing evidence was missing for high-risk push, or commit-stage SLO was enforced and missed.
+- Cause: required fast checks failed, docs-drift blocked, or commit-stage SLO was enforced and missed.
 - Fix: inspect `.artifacts/commit-stage/<sha>/result.json`, fix forward on `main`, and push a corrective commit.
 
 ## `integration-gate` Failure

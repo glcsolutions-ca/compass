@@ -112,7 +112,6 @@ export function assertPipelinePolicyShape(policy) {
     "version",
     "scopeRules",
     "commitStage",
-    "pairingPolicy",
     "highRiskMainlinePolicy",
     "automatedAcceptanceTestGate",
     "deploymentStage",
@@ -176,23 +175,6 @@ export function assertPipelinePolicyShape(policy) {
 
   if (!["observe", "enforce"].includes(policy.commitStage.slo.mode)) {
     throw new Error("commitStage.slo.mode must be one of: observe, enforce");
-  }
-
-  const pairingPolicy = policy.pairingPolicy;
-  if (!pairingPolicy || typeof pairingPolicy !== "object" || Array.isArray(pairingPolicy)) {
-    throw new Error("pairingPolicy must be an object");
-  }
-
-  if (!Array.isArray(pairingPolicy.highRiskScopes) || pairingPolicy.highRiskScopes.length === 0) {
-    throw new Error("pairingPolicy.highRiskScopes must be a non-empty array");
-  }
-
-  if (pairingPolicy.highRiskScopes.some((entry) => String(entry || "").trim().length === 0)) {
-    throw new Error("pairingPolicy.highRiskScopes entries must be non-empty strings");
-  }
-
-  if (String(pairingPolicy.trailerKey || "").trim().length === 0) {
-    throw new Error("pairingPolicy.trailerKey must be a non-empty string");
   }
 
   const highRiskMainlinePolicy = policy.highRiskMainlinePolicy;

@@ -83,3 +83,23 @@ echo 'production environment'
 gh api repos/glcsolutions-ca/compass/environments/production \
   --jq '{name,can_admins_bypass,deployment_branch_policy,protection_rules}'
 ```
+
+## 6) Phase 2 Readiness: High-Risk Path Ruleset
+
+Local enforcement (`HR001`) is active now via `pnpm test:static` and git hooks. GitHub path-scoped PR enforcement is deferred until Codex runs under a separate identity.
+
+```bash
+gh api repos/glcsolutions-ca/compass/rulesets --paginate \
+  --jq '.[] | {id,name,enforcement,target} | select(.name | test("high[- ]risk|codeowner"; "i"))'
+```
+
+Expected now:
+
+- no dedicated high-risk path ruleset yet
+
+Target state for activation:
+
+- ruleset targets `main`
+- applies only to high-risk paths (`infra`, `identity`, `db/migrations`, `db/scripts`, `.github/workflows`, `.github/policy`, `scripts/pipeline`)
+- requires pull request + code owner review + one approval
+- requires approval from someone other than last pusher

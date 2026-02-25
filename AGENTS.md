@@ -26,9 +26,8 @@ compass/
 ## Trunk-based CD (Dave Farley style)
 
 - **Trunk = `main`**. `main` must stay **green and releasable** at all times.
-- **No long-lived branches / PR gates**. Prefer **small, reversible** changes and integrate frequently.
+- **Integrate in small batches**. Prefer **small, reversible** changes and frequent evidence-driven commits.
 - **Pipeline = release evidence**. A change is “done” only when the `main` pipeline is green. If `main` goes red: **fix forward or revert immediately**.
-- **High-risk pairing evidence**. For `infra`, `identity`, or `migration` pushes to `main`, commit messages must include `Paired-With: @github-handle`.
 
 ### Agent workflow (always)
 

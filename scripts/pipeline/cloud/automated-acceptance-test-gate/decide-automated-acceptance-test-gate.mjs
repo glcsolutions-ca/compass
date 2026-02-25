@@ -87,7 +87,12 @@ async function main() {
     identityConfigContractReasonCodes
   });
 
-  const resultPath = path.join(".artifacts", "acceptance", headSha, "result.json");
+  const resultPath = path.join(
+    ".artifacts",
+    "automated-acceptance-test-gate",
+    headSha,
+    "result.json"
+  );
   const payload = {
     schemaVersion: "1",
     generatedAt: new Date().toISOString(),

@@ -663,8 +663,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: automated-acceptance-test-gate-${{ needs.load_release_candidate.outputs.head_sha }}
-          path: .artifacts/automated-acceptance-test-gate/${{ needs.load_release_candidate.outputs.head_sha }}
-          if-no-files-found: warn
+          path: .artifacts/automated-acceptance-test-gate/${{ needs.load_release_candidate.outputs.head_sha }}/result.json
+          if-no-files-found: error
 
       - name: Fail acceptance on NO
         if: ${{ steps.finalize.outputs.acceptance_decision == 'NO' }}

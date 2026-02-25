@@ -42,6 +42,7 @@ async function main() {
       apiAppName: { value: requireEnv("ACA_API_APP_NAME") },
       webAppName: { value: requireEnv("ACA_WEB_APP_NAME") },
       workerAppName: { value: requireEnv("ACA_WORKER_APP_NAME") },
+      workerRuntimeIdentityName: { value: requireEnv("WORKER_RUNTIME_IDENTITY_NAME") },
       codexAppName: { value: requireEnv("ACA_CODEX_APP_NAME") },
       webSessionSecret: { value: requireEnv("WEB_SESSION_SECRET") },
       entraLoginEnabled: { value: entraLoginEnabled },
@@ -79,7 +80,10 @@ async function main() {
       webImage: { value: requireEnv("WEB_IMAGE") },
       workerImage: { value: requireEnv("WORKER_IMAGE") },
       codexImage: { value: requireEnv("CODEX_IMAGE") },
-      serviceBusConnectionString: { value: requireEnv("AZURE_SERVICE_BUS_CONNECTION_STRING") },
+      serviceBusProdNamespaceName: { value: requireEnv("SERVICE_BUS_PROD_NAMESPACE_NAME") },
+      serviceBusAcceptanceNamespaceName: {
+        value: requireEnv("SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME")
+      },
       serviceBusQueueName: { value: requireEnv("SERVICE_BUS_QUEUE_NAME") },
       workerRunMode: { value: readOptional("WORKER_RUN_MODE") || "loop" }
     }

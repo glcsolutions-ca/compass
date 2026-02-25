@@ -16,8 +16,10 @@
 3. ACR.
 4. PostgreSQL Flexible Server + database.
 5. ACR pull managed identity + `AcrPull` assignment.
-6. Container Apps: API, Web, Codex.
-7. Manual migration ACA Job.
+6. Worker runtime managed identity + queue-level Service Bus Data Receiver role assignment.
+7. Service Bus namespaces (production + acceptance) and queue baseline (`compass-events`).
+8. Container Apps: API, Web, Worker, Codex.
+9. Manual migration ACA Job.
 
 ## Runtime Parameter Contract
 
@@ -37,6 +39,8 @@ Runtime parameters are rendered to `.artifacts/infra/<sha>/runtime.parameters.js
 - `ACA_ENVIRONMENT_NAME`
 - `ACA_API_APP_NAME`
 - `ACA_WEB_APP_NAME`
+- `ACA_WORKER_APP_NAME`
+- `WORKER_RUNTIME_IDENTITY_NAME`
 - `ACA_CODEX_APP_NAME`
 - `ACA_MIGRATE_JOB_NAME`
 - `ACR_NAME`
@@ -57,6 +61,10 @@ Runtime parameters are rendered to `.artifacts/infra/<sha>/runtime.parameters.js
 - `API_SMOKE_ALLOWED_TENANT_ID`
 - `OAUTH_TOKEN_ISSUER`
 - `OAUTH_TOKEN_AUDIENCE`
+- `SERVICE_BUS_PROD_NAMESPACE_NAME`
+- `SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME`
+- `SERVICE_BUS_QUEUE_NAME`
+- `WORKER_RUN_MODE`
 - `ACA_API_CUSTOM_DOMAIN` (optional)
 - `ACA_WEB_CUSTOM_DOMAIN` (optional)
 - `ACA_CODEX_CUSTOM_DOMAIN` (optional)

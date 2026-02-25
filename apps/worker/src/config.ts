@@ -1,7 +1,8 @@
 export type WorkerRunMode = "loop" | "once";
 
 export interface WorkerConfig {
-  serviceBusConnectionString: string;
+  serviceBusFullyQualifiedNamespace: string;
+  azureClientId: string;
   queueName: string;
   runMode: WorkerRunMode;
   maxMessages: number;
@@ -20,12 +21,17 @@ function parsePositiveInt(name: string, value: string | undefined, fallback: num
 }
 
 export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
-  const serviceBusConnectionString = env.AZURE_SERVICE_BUS_CONNECTION_STRING?.trim() || "";
+  const serviceBusFullyQualifiedNamespace = env.SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE?.trim() || "";
+  const azureClientId = env.AZURE_CLIENT_ID?.trim() || "";
   const queueName = env.SERVICE_BUS_QUEUE_NAME?.trim() || "";
   const runModeCandidate = env.WORKER_RUN_MODE?.trim().toLowerCase() || "loop";
 
-  if (!serviceBusConnectionString) {
-    throw new Error("AZURE_SERVICE_BUS_CONNECTION_STRING is required");
+  if (!serviceBusFullyQualifiedNamespace) {
+    throw new Error("SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE is required");
+  }
+
+  if (!azureClientId) {
+    throw new Error("AZURE_CLIENT_ID is required");
   }
 
   if (!queueName) {
@@ -45,7 +51,8 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   );
 
   return {
-    serviceBusConnectionString,
+    serviceBusFullyQualifiedNamespace,
+    azureClientId,
     queueName,
     runMode,
     maxMessages,

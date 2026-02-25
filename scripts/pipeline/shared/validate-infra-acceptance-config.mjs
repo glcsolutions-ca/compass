@@ -18,6 +18,7 @@ const REQUIRED_ENV_NAMES = [
   "ACA_API_APP_NAME",
   "ACA_WEB_APP_NAME",
   "ACA_WORKER_APP_NAME",
+  "WORKER_RUNTIME_IDENTITY_NAME",
   "ACA_CODEX_APP_NAME",
   "ACA_MIGRATE_JOB_NAME",
   "WEB_SESSION_SECRET",
@@ -40,7 +41,8 @@ const REQUIRED_ENV_NAMES = [
   "AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID",
   "AUTH_BOOTSTRAP_DELEGATED_USER_OID",
   "AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL",
-  "AZURE_SERVICE_BUS_CONNECTION_STRING",
+  "SERVICE_BUS_PROD_NAMESPACE_NAME",
+  "SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME",
   "SERVICE_BUS_QUEUE_NAME"
 ];
 
@@ -49,7 +51,8 @@ const PROVIDERS = [
   "Microsoft.ContainerService",
   "Microsoft.Network",
   "Microsoft.DBforPostgreSQL",
-  "Microsoft.OperationalInsights"
+  "Microsoft.OperationalInsights",
+  "Microsoft.ServiceBus"
 ];
 
 async function capture(cmd, args) {

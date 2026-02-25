@@ -777,7 +777,9 @@ jobs:
       AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_ID }}
       AUTH_BOOTSTRAP_DELEGATED_USER_OID: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_OID }}
       AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL }}
-      AZURE_SERVICE_BUS_CONNECTION_STRING: ${{ secrets.AZURE_SERVICE_BUS_CONNECTION_STRING }}
+      WORKER_RUNTIME_IDENTITY_NAME: ${{ vars.WORKER_RUNTIME_IDENTITY_NAME }}
+      SERVICE_BUS_PROD_NAMESPACE_NAME: ${{ vars.SERVICE_BUS_PROD_NAMESPACE_NAME }}
+      SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME: ${{ vars.SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME }}
       SERVICE_BUS_QUEUE_NAME: ${{ vars.SERVICE_BUS_QUEUE_NAME }}
       WORKER_RUN_MODE: ${{ vars.WORKER_RUN_MODE }}
     steps:
@@ -1216,7 +1218,9 @@ jobs:
       AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_ID }}
       AUTH_BOOTSTRAP_DELEGATED_USER_OID: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_OID }}
       AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL }}
-      AZURE_SERVICE_BUS_CONNECTION_STRING: ${{ secrets.AZURE_SERVICE_BUS_CONNECTION_STRING }}
+      WORKER_RUNTIME_IDENTITY_NAME: ${{ vars.WORKER_RUNTIME_IDENTITY_NAME }}
+      SERVICE_BUS_PROD_NAMESPACE_NAME: ${{ vars.SERVICE_BUS_PROD_NAMESPACE_NAME }}
+      SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME: ${{ vars.SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME }}
       SERVICE_BUS_QUEUE_NAME: ${{ vars.SERVICE_BUS_QUEUE_NAME }}
       WORKER_RUN_MODE: ${{ vars.WORKER_RUN_MODE }}
       POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
@@ -1361,9 +1365,6 @@ jobs:
           WEB_IMAGE: ${{ env.RELEASE_CANDIDATE_WEB_REF }}
           WORKER_IMAGE: ${{ env.RELEASE_CANDIDATE_WORKER_REF }}
           CODEX_IMAGE: ${{ env.RELEASE_CANDIDATE_CODEX_REF }}
-          AZURE_SERVICE_BUS_CONNECTION_STRING: ${{ secrets.AZURE_SERVICE_BUS_CONNECTION_STRING }}
-          SERVICE_BUS_QUEUE_NAME: ${{ vars.SERVICE_BUS_QUEUE_NAME }}
-          WORKER_RUN_MODE: ${{ vars.WORKER_RUN_MODE }}
           ARM_PARAMETERS_FILE: .artifacts/infra/${{ env.HEAD_SHA }}/runtime.parameters.json
         run: |
           set -euo pipefail
@@ -1375,6 +1376,10 @@ jobs:
           export ARM_ARTIFACT_DIR=".artifacts/infra/$HEAD_SHA"
 
           node scripts/pipeline/cloud/deployment-stage/apply-infra.mjs
+
+      - name: Verify worker Service Bus cutover
+        if: ${{ steps.decide_infra_apply.outputs.infra_apply_required == 'true' }}
+        run: node scripts/pipeline/cloud/deployment-stage/verify-worker-servicebus-cutover.mjs
 
       - name: Resolve current production URLs
         id: current_state

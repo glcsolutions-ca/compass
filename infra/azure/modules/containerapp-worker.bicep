@@ -4,8 +4,9 @@ param managedEnvironmentId string
 param image string
 param registryServer string
 param registryIdentityResourceId string
-@secure()
-param serviceBusConnectionString string
+param runtimeIdentityResourceId string
+param runtimeIdentityClientId string
+param serviceBusFullyQualifiedNamespace string
 param serviceBusQueueName string
 param workerRunMode string = 'loop'
 
@@ -16,6 +17,7 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
     type: 'UserAssigned'
     userAssignedIdentities: {
       '${registryIdentityResourceId}': {}
+      '${runtimeIdentityResourceId}': {}
     }
   }
   properties: {
@@ -29,12 +31,6 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
           identity: registryIdentityResourceId
         }
       ]
-      secrets: [
-        {
-          name: 'service-bus-connection-string'
-          value: serviceBusConnectionString
-        }
-      ]
     }
     template: {
       containers: [
@@ -43,8 +39,12 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
           image: image
           env: [
             {
-              name: 'AZURE_SERVICE_BUS_CONNECTION_STRING'
-              secretRef: 'service-bus-connection-string'
+              name: 'AZURE_CLIENT_ID'
+              value: runtimeIdentityClientId
+            }
+            {
+              name: 'SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE'
+              value: serviceBusFullyQualifiedNamespace
             }
             {
               name: 'SERVICE_BUS_QUEUE_NAME'

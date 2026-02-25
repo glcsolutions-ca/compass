@@ -19,6 +19,7 @@ param logAnalyticsWorkspaceName string = 'SET_IN_GITHUB_ENV'
 param apiAppName string = 'SET_IN_GITHUB_ENV'
 param webAppName string = 'SET_IN_GITHUB_ENV'
 param workerAppName string = 'SET_IN_GITHUB_ENV'
+param workerRuntimeIdentityName string = 'SET_IN_GITHUB_ENV'
 param codexAppName string = 'SET_IN_GITHUB_ENV'
 param migrationJobName string = 'SET_IN_GITHUB_ENV'
 param acrPullIdentityName string = 'SET_IN_GITHUB_ENV'
@@ -47,8 +48,8 @@ param entraClientId string = ''
 param entraClientSecret string = ''
 param entraAllowedTenantIds string = ''
 param authDevFallbackEnabled string = 'false'
-@secure()
-param serviceBusConnectionString string
+param serviceBusProdNamespaceName string = 'SET_IN_GITHUB_ENV'
+param serviceBusAcceptanceNamespaceName string = 'SET_IN_GITHUB_ENV'
 param serviceBusQueueName string = 'compass-events'
 param workerRunMode string = 'loop'
 param apiCustomDomain string = ''
@@ -74,6 +75,10 @@ param authBootstrapDelegatedUserEmail string = 'SET_IN_GITHUB_ENV'
 var acrPullRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
   '7f951dda-4ed3-4680-a7ca-43fe172d538d'
+)
+var serviceBusDataReceiverRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0'
 )
 
 module network './modules/network.bicep' = {
@@ -126,6 +131,26 @@ module postgres './modules/postgres-flex.bicep' = {
   }
 }
 
+module serviceBusProd './modules/servicebus.bicep' = {
+  name: 'servicebus-prod'
+  params: {
+    location: location
+    namespaceName: serviceBusProdNamespaceName
+    queueName: serviceBusQueueName
+    disableLocalAuth: true
+  }
+}
+
+module serviceBusAcceptance './modules/servicebus.bicep' = {
+  name: 'servicebus-acceptance'
+  params: {
+    location: location
+    namespaceName: serviceBusAcceptanceNamespaceName
+    queueName: serviceBusQueueName
+    disableLocalAuth: true
+  }
+}
+
 var encodedDbUser = uriComponent(postgresAdminUsername)
 var encodedDbPassword = uriComponent(postgresAdminPassword)
 var encodedDbName = uriComponent(postgresDatabaseName)
@@ -145,8 +170,17 @@ resource acrPullIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
   location: location
 }
 
+resource workerRuntimeIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: workerRuntimeIdentityName
+  location: location
+}
+
 resource acrRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
   name: acrName
+}
+
+resource serviceBusProdQueue 'Microsoft.ServiceBus/namespaces/queues@2024-01-01' existing = {
+  name: '${serviceBusProdNamespaceName}/${serviceBusQueueName}'
 }
 
 resource acrPullIdentityRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
@@ -159,6 +193,19 @@ resource acrPullIdentityRoleAssignment 'Microsoft.Authorization/roleAssignments@
     principalId: acrPullIdentity.properties.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: acrPullRoleDefinitionId
+  }
+}
+
+resource workerQueueReceiverRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(serviceBusProdQueue.id, workerRuntimeIdentityName, 'ServiceBusDataReceiver')
+  scope: serviceBusProdQueue
+  dependsOn: [
+    serviceBusProd
+  ]
+  properties: {
+    principalId: workerRuntimeIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: serviceBusDataReceiverRoleDefinitionId
   }
 }
 
@@ -222,12 +269,15 @@ module worker './modules/containerapp-worker.bicep' = {
     image: workerImage
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
-    serviceBusConnectionString: serviceBusConnectionString
+    runtimeIdentityResourceId: workerRuntimeIdentity.id
+    runtimeIdentityClientId: workerRuntimeIdentity.properties.clientId
+    serviceBusFullyQualifiedNamespace: serviceBusProd.outputs.namespaceFqdn
     serviceBusQueueName: serviceBusQueueName
     workerRunMode: workerRunMode
   }
   dependsOn: [
     acrPullIdentityRoleAssignment
+    workerQueueReceiverRoleAssignment
   ]
 }
 
@@ -279,6 +329,14 @@ output acrNameOutput string = acr.outputs.registryNameOutput
 output acrLoginServer string = acr.outputs.loginServer
 output acrPullIdentityId string = acrPullIdentity.id
 output acrPullIdentityPrincipalId string = acrPullIdentity.properties.principalId
+output workerRuntimeIdentityId string = workerRuntimeIdentity.id
+output workerRuntimeIdentityPrincipalId string = workerRuntimeIdentity.properties.principalId
+output workerRuntimeIdentityClientId string = workerRuntimeIdentity.properties.clientId
+output serviceBusProdNamespaceNameOutput string = serviceBusProd.outputs.namespaceNameOutput
+output serviceBusProdNamespaceFqdn string = serviceBusProd.outputs.namespaceFqdn
+output serviceBusProdQueueId string = serviceBusProd.outputs.queueId
+output serviceBusAcceptanceNamespaceNameOutput string = serviceBusAcceptance.outputs.namespaceNameOutput
+output serviceBusAcceptanceNamespaceFqdn string = serviceBusAcceptance.outputs.namespaceFqdn
 
 output apiContainerAppName string = api.outputs.appName
 output apiLatestRevision string = api.outputs.latestRevisionName

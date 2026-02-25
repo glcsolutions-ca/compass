@@ -10,9 +10,7 @@
 - `custom-domain-dns.mjs`: emits DNS records for optional custom-domain cut-in.
 - `start-migration-job.mjs`: starts ACA migration job execution.
 - `wait-migration-job.mjs`: waits for migration completion and captures status/log metadata.
-- `verify-auth-canary-freshness.mjs`: checks canary/delegated smoke freshness windows.
 - `verify-api-smoke.mjs`: validates API health, OpenAPI, allowed/denied auth behavior.
-- `verify-delegated-smoke.mjs`: validates delegated `/v1/me` behavior.
 - `record-release.mjs`: records successful deployment in GitHub Deployments.
 - `decide-production-stage.mjs`: computes production YES/NO decision artifact.
 - `utils.mjs`: shared execution/env/artifact helpers.

@@ -147,9 +147,6 @@ Set these in both `acceptance` and `production` unless noted:
 | `ACA_API_CUSTOM_DOMAIN`               | optional   | optional   |
 | `ACA_WEB_CUSTOM_DOMAIN`               | optional   | optional   |
 | `ACA_CODEX_CUSTOM_DOMAIN`             | optional   | optional   |
-| `AUTH_CANARY_API_BASE_URL`            | optional   | required   |
-| `AUTH_CANARY_ALLOWED_TENANT_ID`       | optional   | required   |
-| `AUTH_CANARY_DENIED_TENANT_ID`        | optional   | required   |
 | `IDENTITY_OWNER_OBJECT_IDS_JSON`      | required   | required   |
 
 ### Required Secrets
@@ -166,21 +163,16 @@ Set these in both `acceptance` and `production` unless noted:
 | `API_SMOKE_ALLOWED_CLIENT_SECRET`     | required   | required   |
 | `API_SMOKE_DENIED_CLIENT_ID`          | required   | required   |
 | `API_SMOKE_DENIED_CLIENT_SECRET`      | required   | required   |
-| `AUTH_CANARY_ALLOWED_CLIENT_ID`       | optional   | required   |
-| `AUTH_CANARY_ALLOWED_CLIENT_SECRET`   | optional   | required   |
-| `AUTH_CANARY_DENIED_CLIENT_ID`        | optional   | required   |
-| `AUTH_CANARY_DENIED_CLIENT_SECRET`    | optional   | required   |
-| `AUTH_DELEGATED_PROBE_TOKEN`          | optional   | required   |
 
 6. Trigger the first infra-scope PR (for example a non-functional comment in `infra/azure/main.bicep`) and merge to `main`.
 
 This first merged run is what creates the full platform (ACA env/apps/job, Postgres, networking, identities wired into infra runtime config).
 
-7. After first successful deploy, capture the default ACA API FQDN and set canary base URL to it.
+7. After first successful deploy, capture the default ACA API FQDN for operator records and smoke troubleshooting.
 
 ```bash
 api_fqdn="$(az containerapp show -g "$AZURE_RESOURCE_GROUP" -n "$ACA_API_APP_NAME" --query properties.configuration.ingress.fqdn -o tsv)"
-gh variable set -e acceptance AUTH_CANARY_API_BASE_URL --body "https://$api_fqdn"
+echo "API default URL: https://$api_fqdn"
 ```
 
 8. Optional custom-domain cut-in (later).
@@ -188,7 +180,7 @@ gh variable set -e acceptance AUTH_CANARY_API_BASE_URL --body "https://$api_fqdn
 - Set `ACA_API_CUSTOM_DOMAIN`, `ACA_WEB_CUSTOM_DOMAIN`, and optional `ACA_CODEX_CUSTOM_DOMAIN`.
 - Publish DNS records for domain ownership/validation.
 - Run normal infra convergence through the same pipeline path.
-- Update `AUTH_CANARY_API_BASE_URL` and any external probes to the custom host once cut-in is complete.
+- Update external operational probes to the custom host once cut-in is complete.
 
 9. Save bootstrap evidence.
 

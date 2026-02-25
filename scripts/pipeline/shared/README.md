@@ -10,7 +10,7 @@
 | ------------------------------------------- | ---------------------------------------------------------------------------- |
 | `pipeline-utils.mjs`                        | Shared env, file, policy, and artifact utilities.                            |
 | `collect-commit-stage-timing.mjs`           | Commit-stage timing collection and SLO telemetry writer.                     |
-| `collect-integration-gate-metrics.mjs`      | Integration-gate throughput snapshot (queue delay, pass rates, rerun ratio). |
+| `collect-integration-gate-metrics.mjs`      | Integration-gate throughput snapshot (run wait, pass rates, rerun ratio).    |
 | `collect-cloud-deployment-stage-timing.mjs` | Cloud deployment stage timing collection and bottleneck reporting.           |
 | `verify-commit-stage-evidence.mjs`          | Verifies successful commit-stage evidence exists for the release SHA.        |
 | `verify-integration-gate-evidence.mjs`      | Verifies successful integration-gate evidence exists for the release SHA.    |

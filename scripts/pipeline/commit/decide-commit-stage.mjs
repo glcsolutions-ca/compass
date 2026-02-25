@@ -59,7 +59,8 @@ function parseCheckResults() {
     "commit-test-suite",
     "desktop-commit-test-suite",
     "infra-static-check",
-    "identity-static-check"
+    "identity-static-check",
+    "pairing-evidence-check"
   ];
 
   const checkResults = {};
@@ -79,6 +80,7 @@ async function main() {
   const desktopRequired = parseBooleanEnv("DESKTOP_REQUIRED", false);
   const infraRequired = parseBooleanEnv("INFRA_REQUIRED", false);
   const identityRequired = parseBooleanEnv("IDENTITY_REQUIRED", false);
+  const pairingRequired = parseBooleanEnv("PAIRING_REQUIRED", false);
   const docsDriftBlocking = parseBooleanEnv("DOCS_DRIFT_BLOCKING", false);
   const docsDriftStatus = (process.env.DOCS_DRIFT_STATUS?.trim() || "unknown").toLowerCase();
   const commitStageSloMode = parseModeEnv("COMMIT_STAGE_SLO_MODE", "observe");
@@ -93,6 +95,7 @@ async function main() {
     desktopRequired,
     infraRequired,
     identityRequired,
+    pairingRequired,
     docsDriftBlocking,
     docsDriftStatus,
     commitStageSloMode,
@@ -111,6 +114,7 @@ async function main() {
     desktopRequired,
     infraRequired,
     identityRequired,
+    pairingRequired,
     docsDriftBlocking,
     docsDriftStatus,
     commitStageSlo: {

@@ -23,7 +23,7 @@
 - manual probe-token dependency
 - freshness checks in production/replay that gate release decisions
 
-3. Confirmed existing integration lane already runs in the integration gate exact-merge path and is suitable for new deterministic JWKS integration coverage.
+3. Confirmed existing integration lane already runs in the integration gate push-main path and is suitable for new deterministic JWKS integration coverage.
 
 ### 2026-02-25T00:20Z (workflow simplification)
 

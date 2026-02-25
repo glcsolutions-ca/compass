@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateMergeQueueGateResults } from "./decide-integration-gate-lib.mjs";
+import { evaluateIntegrationGateResults } from "./decide-integration-gate-lib.mjs";
 
 function baseInput() {
   return {
@@ -19,9 +19,9 @@ function baseInput() {
   };
 }
 
-describe("evaluateMergeQueueGateResults", () => {
+describe("evaluateIntegrationGateResults", () => {
   it("passes with all required checks successful", () => {
-    const reasons = evaluateMergeQueueGateResults(baseInput());
+    const reasons = evaluateIntegrationGateResults(baseInput());
     expect(reasons).toEqual([]);
   });
 
@@ -29,7 +29,7 @@ describe("evaluateMergeQueueGateResults", () => {
     const input = baseInput();
     input.checkResults["determine-scope"] = "failure";
 
-    const reasons = evaluateMergeQueueGateResults(input);
+    const reasons = evaluateIntegrationGateResults(input);
     expect(reasons).toEqual([
       {
         code: "CHECK_DETERMINE_SCOPE_NOT_SUCCESS",
@@ -49,7 +49,7 @@ describe("evaluateMergeQueueGateResults", () => {
     input.docsDriftBlocking = true;
     input.docsDriftStatus = "fail";
 
-    const reasons = evaluateMergeQueueGateResults(input);
+    const reasons = evaluateIntegrationGateResults(input);
     expect(reasons).toEqual([
       {
         code: "CHECK_BUILD_COMPILE_REQUIRED_NOT_SUCCESS",
@@ -77,7 +77,7 @@ describe("evaluateMergeQueueGateResults", () => {
     input.migrationRequired = false;
     input.integrationRequired = false;
 
-    const reasons = evaluateMergeQueueGateResults(input);
+    const reasons = evaluateIntegrationGateResults(input);
     expect(reasons).toEqual([]);
   });
 
@@ -86,7 +86,7 @@ describe("evaluateMergeQueueGateResults", () => {
     input.migrationRequired = true;
     input.checkResults["migration-safety"] = "failure";
 
-    const reasons = evaluateMergeQueueGateResults(input);
+    const reasons = evaluateIntegrationGateResults(input);
     expect(reasons).toEqual([
       {
         code: "CHECK_MIGRATION_SAFETY_REQUIRED_NOT_SUCCESS",

@@ -8,13 +8,13 @@
 
 ## `commit-stage` Failure
 
-- Cause: required PR fast checks failed, docs-drift blocked, or commit-stage SLO was enforced and missed.
-- Fix: rerun failed checks on latest PR commit and update docs when policy-critical paths changed.
+- Cause: required fast checks failed, docs-drift blocked, pairing evidence was missing for high-risk push, or commit-stage SLO was enforced and missed.
+- Fix: inspect `.artifacts/commit-stage/<sha>/result.json`, fix forward on `main`, and push a corrective commit.
 
 ## `integration-gate` Failure
 
-- Cause: exact merge checks failed (`build-compile`, `migration-safety`, `auth-critical-smoke`, or `minimal-integration-smoke`).
-- Fix: inspect `.artifacts/integration-gate/<sha>/result.json`, fix forward in PR, and re-queue.
+- Cause: integration checks failed (`build-compile`, `migration-safety`, `auth-critical-smoke`, or `minimal-integration-smoke`).
+- Fix: inspect `.artifacts/integration-gate/<sha>/result.json`, fix forward on `main`, and push a corrective commit.
 
 ## `automated-acceptance-test-gate` Failure
 

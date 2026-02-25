@@ -1,4 +1,4 @@
-export function evaluateMergeQueueGateResults({
+export function evaluateIntegrationGateResults({
   checkResults,
   buildRequired,
   migrationRequired,

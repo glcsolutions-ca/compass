@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`scripts/pipeline/commit/` contains PR commit-test-suite and integration gate control logic.
+`scripts/pipeline/commit/` contains trunk-first commit-stage and integration-gate control logic.
 
 ## Script-To-Workflow Map
 
@@ -12,8 +12,10 @@
 | `check-testing-policy.mjs`        | `pnpm test:static` and commit stage        | Enforce test placement/policy rules (`TC001`, `TC010`, `TC011`, `TC020`).                | `.artifacts/testing-policy/<sha>/result.json`   |
 | `check-docs-drift.mjs`            | `commit-stage.yml`, `integration-gate.yml` | Evaluate docs drift against policy contract.                                             | `.artifacts/docs-drift/<sha>/result.json`       |
 | `decide-commit-stage.mjs`         | `.github/workflows/commit-stage.yml`       | Final commit-stage gate decision from required check outcomes and docs-drift state.      | `.artifacts/commit-stage/<sha>/result.json`     |
-| `decide-integration-gate.mjs`     | `.github/workflows/integration-gate.yml`   | Final integration gate decision for exact-merge checks and docs-drift state.             | `.artifacts/integration-gate/<sha>/result.json` |
-| `decide-integration-gate-lib.mjs` | unit tests + integration gate              | Reason-code evaluator for exact merge gate decision.                                     | n/a                                             |
+| `decide-integration-gate.mjs`     | `.github/workflows/integration-gate.yml`   | Final integration gate decision for push-main checks and docs-drift state.               | `.artifacts/integration-gate/<sha>/result.json` |
+| `decide-integration-gate-lib.mjs` | unit tests + integration gate              | Reason-code evaluator for integration-gate decisions.                                    | n/a                                             |
+| `check-pairing-evidence.mjs`      | `.github/workflows/commit-stage.yml`       | Enforces `Paired-With` trailer for high-risk pushes to `main` based on policy scopes.    | `.artifacts/pairing-evidence/<sha>/result.json` |
+| `auto-recover-main.mjs`           | `.github/workflows/main-red-recovery.yml`  | Reruns hard deterministic failures once, then auto-reverts repeated failures on `main`.  | `.artifacts/main-recovery/<sha>/result.json`    |
 
 ## Expected Artifacts
 
@@ -23,6 +25,8 @@
 - `.artifacts/integration-gate/<sha>/result.json`
 - `.artifacts/testing-policy/<sha>/result.json`
 - `.artifacts/docs-drift/<sha>/result.json`
+- `.artifacts/pairing-evidence/<sha>/result.json`
+- `.artifacts/main-recovery/<sha>/result.json`
 
 ## Local Execution Notes
 

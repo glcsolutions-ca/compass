@@ -39,7 +39,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           HEAD_SHA: ${{ github.sha }}
           COMMIT_STAGE_WORKFLOW_FILE: commit-stage.yml
-          COMMIT_STAGE_EVENT: merge_group
+          COMMIT_STAGE_EVENT: push
         run: node scripts/pipeline/shared/verify-commit-stage-evidence.mjs
 
       - name: Upload commit-stage evidence artifact
@@ -73,6 +73,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           HEAD_SHA: ${{ github.sha }}
           INTEGRATION_GATE_WORKFLOW_FILE: integration-gate.yml
+          INTEGRATION_GATE_EVENT: push
         run: node scripts/pipeline/shared/verify-integration-gate-evidence.mjs
 
       - name: Upload integration gate evidence artifact

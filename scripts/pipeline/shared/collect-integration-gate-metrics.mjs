@@ -119,13 +119,19 @@ async function fetchRunAndJobs({ token, repository, runId }) {
   return { run, jobs };
 }
 
-async function fetchRecentMergeQueueRuns({ token, repository, workflowFile, sampleSize }) {
+async function fetchRecentIntegrationGateRuns({
+  token,
+  repository,
+  workflowFile,
+  workflowEvent,
+  sampleSize
+}) {
   const runs = [];
   let page = 1;
 
   while (runs.length < sampleSize) {
     const params = new URLSearchParams({
-      event: "merge_group",
+      event: workflowEvent,
       per_page: "100",
       page: String(page)
     });
@@ -282,15 +288,22 @@ async function main() {
   const runId = requireEnv("GITHUB_RUN_ID");
   const headSha = process.env.HEAD_SHA?.trim() || process.env.GITHUB_SHA?.trim() || "unknown";
   const workflowFile = process.env.INTEGRATION_GATE_WORKFLOW_FILE?.trim() || "integration-gate.yml";
+  const workflowEvent = process.env.INTEGRATION_GATE_EVENT?.trim() || "push";
   const policyPath =
     process.env.PIPELINE_POLICY_PATH ?? path.join(".github", "policy", "pipeline-policy.json");
 
   const policy = await loadPipelinePolicy(policyPath);
-  const sampleSize = parseSampleSize(policy, process.env.MERGE_QUEUE_SAMPLE_SIZE);
+  const sampleSize = parseSampleSize(policy, process.env.INTEGRATION_GATE_SAMPLE_SIZE);
 
   const [{ run, jobs }, recentRuns] = await Promise.all([
     fetchRunAndJobs({ token, repository, runId }),
-    fetchRecentMergeQueueRuns({ token, repository, workflowFile, sampleSize })
+    fetchRecentIntegrationGateRuns({
+      token,
+      repository,
+      workflowFile,
+      workflowEvent,
+      sampleSize
+    })
   ]);
 
   const completedRuns = recentRuns.filter((entry) => entry?.status === "completed");
@@ -312,6 +325,7 @@ async function main() {
     headSha,
     runId,
     workflowFile,
+    workflowEvent,
     currentRun: {
       queueDelaySeconds: getCurrentRunQueueDelay(run, jobs),
       timeToGateSeconds: getCurrentRunTimeToGate(jobs),

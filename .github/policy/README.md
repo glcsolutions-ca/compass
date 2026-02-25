@@ -8,16 +8,18 @@ This directory is the machine source of truth for delivery policy.
   - `.github/workflows/integration-gate.yml`
   - `.github/workflows/cloud-deployment-pipeline.yml`
   - `.github/workflows/cloud-deployment-pipeline-replay.yml`
-  - `.github/workflows/desktop-deployment-pipeline.yml`
+- `.github/workflows/desktop-deployment-pipeline.yml`
 - Required gate contexts: `commit-stage`, `integration-gate`
 
-PR commit-test suite and exact integration-gate validation are separate by design. Automated acceptance test gate and deployment stage are post-merge gates.
+Trunk-first default is direct integration to `main` with fast automated gates on push. `pull_request` runs remain optional preview signals.
+Automated acceptance test gate and deployment stage are post-push gates.
 
 ## Policy Sections
 
 - `scopeRules`: file-to-scope classification (`runtime`, `desktop`, `infra`, `identity`, `docsOnly`, rollout flags)
-- `commitStage`: required PR checks + commit SLO policy (`targetSeconds`, `mode`)
-- `integrationGate`: required exact-merge checks
+- `commitStage`: required commit-stage checks + commit SLO policy (`targetSeconds`, `mode`)
+- `pairingPolicy`: high-risk scope policy (`highRiskScopes`, `trailerKey`)
+- `integrationGate`: required integration checks
 - `automatedAcceptanceTestGate`: required acceptance jobs by scope
 - `deploymentStage`: production promotion safety toggles
 - `cloudDeploymentPipeline`: cloud deployment timing SLO targets (`acceptance`, `production`)

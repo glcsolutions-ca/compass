@@ -38,12 +38,9 @@ tsx tests/system/codex-smoke.ts
 `tests/system/smoke.ts`:
 
 1. Resolves `BASE_URL` or `TARGET_API_BASE_URL` (defaults to `http://127.0.0.1:3001`).
-2. Sends HTTP requests to `GET /health` and `GET /openapi.json`.
-3. Verifies OpenAPI includes `/health`.
-4. Requires delegated token via `AUTH_SMOKE_TOKEN` and app token via `APP_SMOKE_TOKEN`.
-5. Verifies delegated and app-authenticated `GET /v1/me` responses.
-6. Verifies an invalid bearer token is rejected with `401`.
-7. Writes pass/fail artifact and appends `system_smoke_path` output when running in CI.
+2. Sends HTTP requests to `GET /health`, `GET /openapi.json`, and `GET /v1/ping`.
+3. Verifies OpenAPI includes `/health` and `/v1/ping`.
+4. Writes pass/fail artifact and appends `system_smoke_path` output when running in CI.
 
 `tests/system/codex-smoke.ts`:
 

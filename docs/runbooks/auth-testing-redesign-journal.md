@@ -1,5 +1,7 @@
 # Auth Testing Redesign Journal
 
+> Status: Archived pre-reset reference. The runtime baseline now runs without auth enforcement and this journal remains historical context only.
+
 ## Context
 
 - Date: 2026-02-25

@@ -5,20 +5,20 @@ RUN corepack enable
 
 WORKDIR /workspace
 COPY . .
-RUN mkdir -p /workspace/apps/web/public
+
+ARG VITE_API_BASE_URL=http://localhost:3001
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @compass/sdk build
 RUN pnpm --filter @compass/web build
+RUN pnpm --filter @compass/web deploy --legacy --prod /opt/app
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 
-COPY --from=build /workspace/apps/web/.next/standalone ./
-COPY --from=build /workspace/apps/web/.next/static ./apps/web/.next/static
-COPY --from=build /workspace/apps/web/public ./apps/web/public
+COPY --from=build /opt/app/ ./
 
 EXPOSE 3000
-CMD ["node", "apps/web/server.js"]
+CMD ["npm", "run", "start"]

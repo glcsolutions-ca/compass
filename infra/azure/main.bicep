@@ -18,6 +18,7 @@ param environmentName string = 'SET_IN_GITHUB_ENV'
 param logAnalyticsWorkspaceName string = 'SET_IN_GITHUB_ENV'
 param apiAppName string = 'SET_IN_GITHUB_ENV'
 param webAppName string = 'SET_IN_GITHUB_ENV'
+param workerAppName string = 'SET_IN_GITHUB_ENV'
 param codexAppName string = 'SET_IN_GITHUB_ENV'
 param migrationJobName string = 'SET_IN_GITHUB_ENV'
 param acrPullIdentityName string = 'SET_IN_GITHUB_ENV'
@@ -36,6 +37,7 @@ param postgresStorageMb int = 32768
 
 param apiImage string = 'SET_IN_GITHUB_ENV'
 param webImage string = 'SET_IN_GITHUB_ENV'
+param workerImage string = 'SET_IN_GITHUB_ENV'
 param codexImage string = 'SET_IN_GITHUB_ENV'
 @secure()
 param webSessionSecret string
@@ -45,6 +47,10 @@ param entraClientId string = ''
 param entraClientSecret string = ''
 param entraAllowedTenantIds string = ''
 param authDevFallbackEnabled string = 'false'
+@secure()
+param serviceBusConnectionString string
+param serviceBusQueueName string = 'compass-events'
+param workerRunMode string = 'loop'
 param apiCustomDomain string = ''
 param webCustomDomain string = ''
 param codexCustomDomain string = ''
@@ -207,6 +213,24 @@ module web './modules/containerapp-web.bicep' = {
   ]
 }
 
+module worker './modules/containerapp-worker.bicep' = {
+  name: 'containerapp-worker'
+  params: {
+    location: location
+    containerAppName: workerAppName
+    managedEnvironmentId: containerEnvironment.outputs.environmentId
+    image: workerImage
+    registryServer: acr.outputs.loginServer
+    registryIdentityResourceId: acrPullIdentity.id
+    serviceBusConnectionString: serviceBusConnectionString
+    serviceBusQueueName: serviceBusQueueName
+    workerRunMode: workerRunMode
+  }
+  dependsOn: [
+    acrPullIdentityRoleAssignment
+  ]
+}
+
 module codex './modules/containerapp-codex.bicep' = {
   name: 'containerapp-codex'
   params: {
@@ -263,6 +287,9 @@ output apiLatestRevisionFqdn string = api.outputs.latestRevisionFqdn
 output webContainerAppName string = web.outputs.appName
 output webLatestRevision string = web.outputs.latestRevisionName
 output webLatestRevisionFqdn string = web.outputs.latestRevisionFqdn
+
+output workerContainerAppName string = worker.outputs.appName
+output workerLatestRevision string = worker.outputs.latestRevisionName
 
 output codexContainerAppName string = codex.outputs.appName
 output codexLatestRevision string = codex.outputs.latestRevisionName

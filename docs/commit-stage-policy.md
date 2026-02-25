@@ -56,7 +56,7 @@ High-risk changes are enforced by local static policy `HR001`:
 - `determine-scope` (always)
 - `build-compile` (runtime/infra/identity/deployment-pipeline-config changes on push)
 - `migration-safety` (migration changes on push)
-- `auth-critical-smoke` (runtime/infra/identity/deployment-pipeline-config changes on push)
+- `runtime-contract-smoke` (runtime/infra/identity/deployment-pipeline-config changes on push)
 - `minimal-integration-smoke` (runtime changes on push)
 - `integration-gate` final decision
 

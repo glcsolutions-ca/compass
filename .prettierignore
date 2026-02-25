@@ -10,3 +10,5 @@ coverage
 pnpm-lock.yaml
 packages/contracts/openapi/openapi.json
 packages/sdk/src/generated/schema.ts
+apps/web/.react-router
+apps/web/build

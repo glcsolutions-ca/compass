@@ -130,8 +130,8 @@ jobs:
         if: ${{ always() }}
         run: pnpm db:postgres:down
 
-  auth_critical_smoke:
-    name: auth-critical-smoke
+  runtime_contract_smoke:
+    name: runtime-contract-smoke
     needs:
       - determine_scope
     if: ${{ github.event_name == 'push' && needs.determine_scope.outputs.head_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
@@ -144,14 +144,14 @@ jobs:
       - name: Setup Node + pnpm
         uses: ./.github/actions/setup-node-pnpm
 
-      - name: Run auth-critical smoke
+      - name: Run runtime contract smoke
         run: pnpm ci:smoke:system
 
-      - name: Upload auth smoke artifact
+      - name: Upload runtime contract smoke artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: integration-gate-auth-smoke-${{ needs.determine_scope.outputs.tested_sha }}
+          name: integration-gate-runtime-contract-smoke-${{ needs.determine_scope.outputs.tested_sha }}
           path: .artifacts/commit-smoke/${{ needs.determine_scope.outputs.tested_sha }}/result.json
           if-no-files-found: warn
 
@@ -181,6 +181,40 @@ jobs:
         if: ${{ always() }}
         run: pnpm db:postgres:down
 
+  runtime_coverage_report:
+    name: runtime-coverage-report
+    needs:
+      - determine_scope
+    if: ${{ github.event_name == 'push' && needs.determine_scope.outputs.head_sha == github.sha && needs.determine_scope.outputs.runtime_changed == 'true' }}
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Collect runtime coverage (non-blocking)
+        env:
+          TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
+        run: pnpm ci:runtime-coverage
+
+      - name: Upload runtime coverage artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-gate-runtime-coverage-${{ needs.determine_scope.outputs.tested_sha }}
+          path: |
+            .artifacts/runtime-coverage/${{ needs.determine_scope.outputs.tested_sha }}/result.json
+            apps/api/coverage
+            apps/web/coverage
+            apps/worker/coverage
+            packages/contracts/coverage
+            packages/sdk/coverage
+          if-no-files-found: warn
+
   integration_gate:
     name: integration-gate
     if: ${{ always() }}
@@ -188,7 +222,7 @@ jobs:
       - determine_scope
       - build_compile
       - migration_safety
-      - auth_critical_smoke
+      - runtime_contract_smoke
       - minimal_integration_smoke
     runs-on: ubuntu-latest
     timeout-minutes: 12
@@ -218,11 +252,11 @@ jobs:
           TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
           BUILD_REQUIRED: ${{ github.event_name == 'push' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
           MIGRATION_REQUIRED: ${{ github.event_name == 'push' && needs.determine_scope.outputs.migration_changed == 'true' }}
-          AUTH_REQUIRED: ${{ github.event_name == 'push' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
+          RUNTIME_SMOKE_REQUIRED: ${{ github.event_name == 'push' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
           INTEGRATION_REQUIRED: ${{ github.event_name == 'push' && needs.determine_scope.outputs.runtime_changed == 'true' }}
           DOCS_DRIFT_BLOCKING: ${{ needs.determine_scope.outputs.docs_drift_blocking }}
           DOCS_DRIFT_STATUS: ${{ needs.determine_scope.outputs.docs_drift_status }}
-          CHECK_RESULTS_JSON: ${{ format('{{"determine-scope":"{0}","build-compile":"{1}","migration-safety":"{2}","auth-critical-smoke":"{3}","minimal-integration-smoke":"{4}"}}', needs.determine_scope.result, needs.build_compile.result, needs.migration_safety.result, needs.auth_critical_smoke.result, needs.minimal_integration_smoke.result) }}
+          CHECK_RESULTS_JSON: ${{ format('{{"determine-scope":"{0}","build-compile":"{1}","migration-safety":"{2}","runtime-contract-smoke":"{3}","minimal-integration-smoke":"{4}"}}', needs.determine_scope.result, needs.build_compile.result, needs.migration_safety.result, needs.runtime_contract_smoke.result, needs.minimal_integration_smoke.result) }}
         run: node scripts/pipeline/commit/decide-integration-gate.mjs
 
       - name: Upload integration gate artifact

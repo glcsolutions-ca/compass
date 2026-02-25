@@ -5,6 +5,11 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     environment: "node",
-    setupFiles: ["../../packages/testkit/guardrails/commit-stage.setup.mjs"]
+    include: ["src/**/*.test.ts"],
+    setupFiles: ["../../packages/testkit/guardrails/commit-stage.setup.mjs"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json-summary", "html", "clover"]
+    }
   }
 });

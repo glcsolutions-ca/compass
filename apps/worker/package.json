@@ -1,6 +1,7 @@
 {
   "name": "@compass/worker",
   "version": "0.1.0",
+  "description": "Compass background worker",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,10 +15,10 @@
   "dependencies": {
     "@azure/service-bus": "^7.9.5",
     "@compass/contracts": "workspace:*",
-    "dotenv": "^16.4.7",
-    "zod": "^3.24.2"
+    "dotenv": "^16.4.7"
   },
   "devDependencies": {
+    "@compass/testkit": "workspace:*",
     "tsx": "4.21.0",
     "vitest": "3.2.4"
   }

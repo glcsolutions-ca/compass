@@ -448,7 +448,11 @@ export async function runTestingPolicy(options = {}) {
       );
     }
 
-    const content = await readFile(filePath, "utf8");
+    const content = await readFileIfExists(filePath);
+    if (content === null) {
+      // File can be tracked but removed in the working tree during refactors.
+      continue;
+    }
 
     if (enabledRules.has("TC010")) {
       const onlyLines = findLineMatches(content, ONLY_PATTERN);

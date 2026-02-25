@@ -1,69 +1,12 @@
 import "dotenv/config";
-import { ServiceBusClient } from "@azure/service-bus";
-import { loadWorkerConfig } from "./config/index.js";
-import {
-  InMemoryIdempotencyStore,
-  parseSyncMessage,
-  processSyncMessage
-} from "./features/sync/index.js";
+import { loadWorkerConfig } from "./config.js";
+import { runWorker } from "./worker.js";
 
-function main(): void {
-  const config = loadWorkerConfig();
+const config = loadWorkerConfig();
 
-  if (!config.connectionString) {
-    console.info(
-      "Worker started in dry mode: set AZURE_SERVICE_BUS_CONNECTION_STRING to process queue messages."
-    );
-    return;
-  }
+console.info(`Worker starting in ${config.runMode} mode for queue '${config.queueName}'`);
 
-  const client = new ServiceBusClient(config.connectionString);
-  const receiver = client.createReceiver(config.queueName);
-  const store = new InMemoryIdempotencyStore();
-
-  receiver.subscribe({
-    processError: async (error) => {
-      console.error("Service Bus processing error", error);
-    },
-    processMessage: async (message) => {
-      const event = parseSyncMessage(message);
-      if (!event) {
-        await receiver.deadLetterMessage(message, {
-          deadLetterReason: "invalid_payload",
-          deadLetterErrorDescription: "Message body does not match EventEnvelope schema"
-        });
-        return;
-      }
-
-      const result = processSyncMessage(event, store, { maxAttempts: config.maxAttempts });
-
-      switch (result.status) {
-        case "processed":
-        case "duplicate": {
-          await receiver.completeMessage(message);
-          break;
-        }
-        case "retry": {
-          await receiver.abandonMessage(message);
-          break;
-        }
-        case "dead-letter": {
-          await receiver.deadLetterMessage(message, {
-            deadLetterReason: "max_attempts",
-            deadLetterErrorDescription: result.reason
-          });
-          break;
-        }
-      }
-    }
-  });
-
-  console.info(`Worker listening on queue '${config.queueName}'`);
-}
-
-try {
-  main();
-} catch (error) {
-  console.error("Worker failed to start", error);
-  process.exit(1);
-}
+void runWorker(config).catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+});

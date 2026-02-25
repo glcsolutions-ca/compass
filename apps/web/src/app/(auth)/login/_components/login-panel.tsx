@@ -37,7 +37,9 @@ export function LoginPanel({
             <span>Microsoft Entra</span>
           </p>
           <h2>Enterprise Access</h2>
-          <p className="auth-note">Use your organization account to continue.</p>
+          <p className="auth-note" data-testid="baseline-helper-copy">
+            Use your organization account to continue.
+          </p>
 
           {canUseSso ? (
             <p className="auth-ready" id={ssoReadyMessageId}>

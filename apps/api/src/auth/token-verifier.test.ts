@@ -87,7 +87,25 @@ describe("AccessTokenVerifier", () => {
       tid: "tenant-a",
       azp: "integration-client",
       appid: "integration-client",
+      oid: "service-principal-oid-1",
       idtyp: "app",
+      roles: ["Compass.Integration.Read"]
+    });
+
+    const result = await verifier.verifyAuthorizationHeader(`Bearer ${token}`);
+    expect(result.tokenType).toBe("app");
+    expect(result.subjectType).toBe("app");
+    expect(result.subjectId).toBe("integration-client");
+    expect(result.appRoles.has("Compass.Integration.Read")).toBe(true);
+  });
+
+  it("classifies role-only tokens as app when oid is present", async () => {
+    const verifier = new AccessTokenVerifier(config);
+    const token = await signApiToken({
+      tid: "tenant-a",
+      azp: "integration-client",
+      appid: "integration-client",
+      oid: "service-principal-oid-1",
       roles: ["Compass.Integration.Read"]
     });
 

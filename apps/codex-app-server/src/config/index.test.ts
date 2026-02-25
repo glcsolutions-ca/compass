@@ -44,4 +44,20 @@ describe("loadCodexAppConfig", () => {
     expect(config.entraLoginEnabled).toBe(true);
     expect(config.authDevFallbackEnabled).toBe(true);
   });
+
+  it("treats blank optional env values as unset", () => {
+    const config = loadCodexAppConfig({
+      DATABASE_URL: " ",
+      OPENAI_API_KEY: "",
+      ENTRA_CLIENT_ID: "   ",
+      ENTRA_CLIENT_SECRET: "",
+      ENTRA_REDIRECT_URI: " "
+    });
+
+    expect(config.databaseUrl).toBeUndefined();
+    expect(config.serviceApiKey).toBeUndefined();
+    expect(config.entraClientId).toBeUndefined();
+    expect(config.entraClientSecret).toBeUndefined();
+    expect(config.entraRedirectUri).toBeUndefined();
+  });
 });

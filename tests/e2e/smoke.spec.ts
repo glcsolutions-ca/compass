@@ -54,7 +54,7 @@ async function runBaselineFlow(
     details: headingPass ? `Heading: ${headingText}` : "No heading text found"
   });
 
-  const helperTexts = await page.locator(".helper").allTextContents();
+  const helperTexts = await page.locator('[data-testid="baseline-helper-copy"]').allTextContents();
   const helperPass = helperTexts.some((value) => value.trim().length > 0);
   flowAssertions.push({
     id: `${flowId}:helper-visible`,

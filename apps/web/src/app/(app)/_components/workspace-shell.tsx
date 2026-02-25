@@ -33,7 +33,7 @@ export function WorkspaceShell({ session, devFallbackEnabled }: WorkspaceShellPr
           <div>
             <p className="app-kicker">Compass</p>
             <h1>Core App Shell</h1>
-            <p className="app-lead">
+            <p className="app-lead" data-testid="baseline-helper-copy">
               Foundation for authenticated product workflows. UI modules and feature surfaces will
               be added incrementally from this baseline.
             </p>

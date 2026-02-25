@@ -12,29 +12,21 @@ gh auth status
 
 ```bash
 gh api repos/glcsolutions-ca/compass/branches/main/protection \
-  --jq '{enforce_admins,required_status_checks,allow_force_pushes,allow_deletions}'
+  --jq '{enforce_admins,required_status_checks,required_pull_request_reviews,allow_force_pushes,allow_deletions}'
 ```
 
 Expected:
 
 - `enforce_admins.enabled=true`
-- `required_status_checks.strict=true`
-- required contexts include `commit-stage` and `integration-gate`
+- `required_status_checks=null` (direct pushes allowed)
+- `required_pull_request_reviews=null`
 - `allow_force_pushes.enabled=false`
 - `allow_deletions.enabled=false`
 
-If required contexts drift:
+If status checks are reintroduced and trunk-first pushes are blocked:
 
 ```bash
-cat >/tmp/required-status-checks.json <<'JSON'
-{
-  "strict": true,
-  "contexts": ["commit-stage", "integration-gate"]
-}
-JSON
-
-gh api --method PATCH repos/glcsolutions-ca/compass/branches/main/protection/required_status_checks \
-  --input /tmp/required-status-checks.json
+gh api --method DELETE repos/glcsolutions-ca/compass/branches/main/protection/required_status_checks
 ```
 
 ## 2) Required PR Review Gate Removed

@@ -60,6 +60,29 @@
     "highRiskScopes": ["infra", "identity", "migration"],
     "trailerKey": "Paired-With"
   },
+  "highRiskMainlinePolicy": {
+    "ruleId": "HR001",
+    "mainBranch": "main",
+    "requirePullRequestOnMain": true,
+    "codeOwners": ["@jrkropp"],
+    "categories": [
+      {
+        "id": "infra-mutation",
+        "patterns": ["infra/azure/**", "infra/identity/**"],
+        "rationale": "production infrastructure and identity control-plane mutation risk"
+      },
+      {
+        "id": "data-mutation",
+        "patterns": ["db/migrations/**", "db/scripts/**"],
+        "rationale": "schema/data integrity and rollout/rollback risk"
+      },
+      {
+        "id": "pipeline-governance-mutation",
+        "patterns": [".github/workflows/**", ".github/policy/**", "scripts/pipeline/**"],
+        "rationale": "deployment pipeline config and release/deploy decision behavior risk"
+      }
+    ]
+  },
   "automatedAcceptanceTestGate": {
     "requiredFlowIds": ["compass-smoke"],
     "runtimeRequiredChecks": [

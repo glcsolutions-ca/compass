@@ -30,7 +30,7 @@ pnpm --filter @compass/sdk generate
 4. Verify generated artifacts are in sync:
 
 ```bash
-pnpm check:contract
+pnpm contract:check
 ```
 
 ## Consumer Relationships

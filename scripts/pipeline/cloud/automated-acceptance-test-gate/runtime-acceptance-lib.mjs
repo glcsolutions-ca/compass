@@ -13,20 +13,22 @@ export function requireReleasePackageRefs() {
   }
 
   const apiRef = requireEnv("RELEASE_CANDIDATE_API_REF");
-  const webRef = process.env.RELEASE_CANDIDATE_WEB_REF?.trim() || "";
-  const codexRef = process.env.RELEASE_CANDIDATE_CODEX_REF?.trim() || "";
+  const webRef = requireEnv("RELEASE_CANDIDATE_WEB_REF");
+  const codexRef = requireEnv("RELEASE_CANDIDATE_CODEX_REF");
+  const workerRef = requireEnv("RELEASE_CANDIDATE_WORKER_REF");
 
-  if (!apiRef.includes("@sha256:")) {
-    throw new Error(`Release candidate API image is not digest-pinned: ${apiRef}`);
-  }
-  if (webRef && !webRef.includes("@sha256:")) {
-    throw new Error(`Release candidate Web image is not digest-pinned: ${webRef}`);
-  }
-  if (codexRef && !codexRef.includes("@sha256:")) {
-    throw new Error(`Release candidate Codex image is not digest-pinned: ${codexRef}`);
+  for (const [name, ref] of [
+    ["API", apiRef],
+    ["Web", webRef],
+    ["Codex", codexRef],
+    ["Worker", workerRef]
+  ]) {
+    if (!ref.includes("@sha256:")) {
+      throw new Error(`Release candidate ${name} image is not digest-pinned: ${ref}`);
+    }
   }
 
-  return { apiRef, webRef, codexRef };
+  return { apiRef, webRef, codexRef, workerRef };
 }
 
 export async function runShell(script) {

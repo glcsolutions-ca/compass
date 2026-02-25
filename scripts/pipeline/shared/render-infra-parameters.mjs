@@ -41,6 +41,7 @@ async function main() {
       logAnalyticsWorkspaceName: { value: requireEnv("AZURE_LOG_ANALYTICS_WORKSPACE_NAME") },
       apiAppName: { value: requireEnv("ACA_API_APP_NAME") },
       webAppName: { value: requireEnv("ACA_WEB_APP_NAME") },
+      workerAppName: { value: requireEnv("ACA_WORKER_APP_NAME") },
       codexAppName: { value: requireEnv("ACA_CODEX_APP_NAME") },
       webSessionSecret: { value: requireEnv("WEB_SESSION_SECRET") },
       entraLoginEnabled: { value: entraLoginEnabled },
@@ -76,7 +77,11 @@ async function main() {
       postgresAdminPassword: { value: requireEnv("POSTGRES_ADMIN_PASSWORD") },
       apiImage: { value: requireEnv("API_IMAGE") },
       webImage: { value: requireEnv("WEB_IMAGE") },
-      codexImage: { value: requireEnv("CODEX_IMAGE") }
+      workerImage: { value: requireEnv("WORKER_IMAGE") },
+      codexImage: { value: requireEnv("CODEX_IMAGE") },
+      serviceBusConnectionString: { value: requireEnv("AZURE_SERVICE_BUS_CONNECTION_STRING") },
+      serviceBusQueueName: { value: requireEnv("SERVICE_BUS_QUEUE_NAME") },
+      workerRunMode: { value: readOptional("WORKER_RUN_MODE") || "loop" }
     }
   };
 

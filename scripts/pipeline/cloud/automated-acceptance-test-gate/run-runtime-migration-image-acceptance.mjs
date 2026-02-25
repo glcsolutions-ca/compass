@@ -4,7 +4,7 @@ import { requireReleasePackageRefs, runShell } from "./runtime-acceptance-lib.mj
 async function main() {
   const headSha = requireEnv("HEAD_SHA");
   const acrName = requireEnv("ACR_NAME");
-  const { apiRef } = requireReleasePackageRefs();
+  const { apiRef, workerRef } = requireReleasePackageRefs();
   const artifactPath = `.artifacts/migration-image-smoke/${headSha}/result.json`;
 
   try {
@@ -59,7 +59,8 @@ docker run --rm \
       headSha,
       status: "pass",
       reasonCode: "",
-      releaseCandidateApiRef: apiRef
+      releaseCandidateApiRef: apiRef,
+      releaseCandidateWorkerRef: workerRef
     });
   } catch (error) {
     await writeJsonFile(artifactPath, {
@@ -69,6 +70,7 @@ docker run --rm \
       status: "fail",
       reasonCode: "MIGRATION_IMAGE_SMOKE_FAILED",
       releaseCandidateApiRef: apiRef,
+      releaseCandidateWorkerRef: workerRef,
       error: error instanceof Error ? error.message : String(error)
     });
     throw error;

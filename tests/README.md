@@ -91,7 +91,8 @@ Examples:
 **Purpose:** confirm the deployed system is alive.
 
 - Health endpoint
-- One authenticated call
+- OpenAPI endpoint
+- Ping endpoint
 - One “page loads” check (when UI is relevant)
 
 ---
@@ -188,6 +189,15 @@ We standardize on predictable entrypoints so CI and humans run the same commands
 
 - `pnpm test:unit` / `pnpm test:integration` / `pnpm test:e2e`  
   Targeted runs for debugging
+
+- `pnpm test:contracts`  
+  Contract-focused checks for `@compass/contracts` + `@compass/sdk`
+
+- `pnpm test:runtime:unit` / `pnpm test:runtime:integration` / `pnpm test:runtime:smoke`  
+  Runtime-first layer commands for web/api/worker + shared contracts/sdk
+
+- `pnpm test:coverage`  
+  Coverage collection (informational first; thresholds are ratcheted later)
 
 CI should call these scripts directly (avoid “CI-only magic”).
 

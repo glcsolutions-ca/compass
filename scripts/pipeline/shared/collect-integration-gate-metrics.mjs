@@ -11,7 +11,7 @@ const DEFAULT_SAMPLE_SIZE = 20;
 const STAGE_JOB_NAMES = [
   "build-compile",
   "migration-safety",
-  "auth-critical-smoke",
+  "runtime-contract-smoke",
   "minimal-integration-smoke",
   "integration-gate"
 ];

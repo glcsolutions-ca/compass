@@ -91,7 +91,7 @@ const policy = loadPipelinePolicyObject({
       "determine-scope",
       "build-compile",
       "migration-safety",
-      "auth-critical-smoke",
+      "runtime-contract-smoke",
       "minimal-integration-smoke",
       "integration-gate"
     ]

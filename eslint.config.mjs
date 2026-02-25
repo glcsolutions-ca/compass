@@ -1,5 +1,4 @@
 import js from "@eslint/js";
-import nextPlugin from "@next/eslint-plugin-next";
 import eslintConfigPrettier from "eslint-config-prettier";
 import tseslint from "typescript-eslint";
 import { loadTestPolicySync } from "./scripts/pipeline/commit/testing-policy.mjs";
@@ -48,16 +47,19 @@ if (lintPolicy.disallowMathRandom) {
 }
 
 if (lintPolicy.disallowRawSetTimeout) {
-  commitStageSyntaxSelectors.push({
-    selector: "CallExpression[callee.name='setTimeout']",
-    message:
-      "Raw setTimeout in commit-stage tests is disallowed. Poll a readiness condition or use testkit helpers."
-  });
-  commitStageSyntaxSelectors.push({
-    selector: "CallExpression[callee.object.name='globalThis'][callee.property.name='setTimeout']",
-    message:
-      "Raw setTimeout in commit-stage tests is disallowed. Poll a readiness condition or use testkit helpers."
-  });
+  commitStageSyntaxSelectors.push(
+    {
+      selector: "CallExpression[callee.name='setTimeout']",
+      message:
+        "Raw setTimeout in commit-stage tests is disallowed. Poll a readiness condition or use testkit helpers."
+    },
+    {
+      selector:
+        "CallExpression[callee.object.name='globalThis'][callee.property.name='setTimeout']",
+      message:
+        "Raw setTimeout in commit-stage tests is disallowed. Poll a readiness condition or use testkit helpers."
+    }
+  );
 }
 
 if (lintPolicy.focusedTests) {
@@ -93,11 +95,11 @@ export default tseslint.config(
       "**/node_modules/**",
       "**/dist/**",
       "**/dist-types/**",
-      "**/.next/**",
+      "**/build/**",
+      "**/.react-router/**",
       "**/.turbo/**",
       "**/coverage/**",
       "**/vitest*.config.*",
-      "apps/web/next-env.d.ts",
       "packages/testkit/guardrails/**"
     ]
   },
@@ -173,22 +175,6 @@ export default tseslint.config(
             "no-restricted-syntax": ["error", ...commitStageSyntaxSelectors]
           }
         : {})
-    }
-  },
-  {
-    files: ["apps/web/**/*.{js,jsx,ts,tsx}"],
-    plugins: {
-      "@next/next": nextPlugin
-    },
-    settings: {
-      next: {
-        rootDir: "apps/web"
-      }
-    },
-    rules: {
-      ...nextPlugin.configs.recommended.rules,
-      ...nextPlugin.configs["core-web-vitals"].rules,
-      "@next/next/no-html-link-for-pages": "off"
     }
   },
   {

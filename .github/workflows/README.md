@@ -24,7 +24,7 @@
 - `integration-gate.yml`
   - trigger: `push` to `main`, optional `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`)
   - required check: `integration-gate`
-  - key jobs: `determine-scope` (always), push-scoped checks `build-compile`, `migration-safety`, `auth-critical-smoke`, `minimal-integration-smoke`, final `integration-gate`
+  - key jobs: `determine-scope` (always), push-scoped checks `build-compile`, `migration-safety`, `runtime-contract-smoke`, `minimal-integration-smoke`, optional non-blocking `runtime-coverage-report`, final `integration-gate`
   - key artifacts:
     - `.artifacts/integration-gate/<sha>/result.json`
     - `.artifacts/integration-gate/<sha>/timing.json`

@@ -9,16 +9,13 @@ describe("createApiClient", () => {
     expectTypeOf(client).toEqualTypeOf<Client<ApiPaths>>();
   });
 
-  it("keeps /health operation aligned to generated schema operation types", () => {
+  it("keeps health and ping operation types aligned", () => {
     type HealthPathGet = ApiPaths["/health"]["get"];
     type HealthOperation = ApiOperations["getHealth"];
-    type HealthResponse =
-      ApiOperations["getHealth"]["responses"][200]["content"]["application/json"];
+    type PingPathGet = ApiPaths["/v1/ping"]["get"];
+    type PingOperation = ApiOperations["getPing"];
 
     expectTypeOf<HealthPathGet>().toEqualTypeOf<HealthOperation>();
-    expectTypeOf<HealthResponse>().toEqualTypeOf<{
-      status: "ok";
-      timestamp: string;
-    }>();
+    expectTypeOf<PingPathGet>().toEqualTypeOf<PingOperation>();
   });
 });

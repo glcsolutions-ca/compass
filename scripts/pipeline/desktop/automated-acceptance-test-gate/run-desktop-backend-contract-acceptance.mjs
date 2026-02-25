@@ -7,8 +7,7 @@ function normalizeHttpsBaseUrl(rawUrl) {
     throw new Error(`Desktop backend compatibility requires HTTPS base URL: ${rawUrl}`);
   }
 
-  const normalized = parsed.toString().replace(/\/+$/, "");
-  return normalized;
+  return parsed.toString().replace(/\/+$/, "");
 }
 
 async function fetchJsonWithStatus(url) {
@@ -26,6 +25,7 @@ async function fetchJsonWithStatus(url) {
 async function main() {
   const headSha = requireEnv("HEAD_SHA");
   const webBaseUrl = normalizeHttpsBaseUrl(requireEnv("WEB_BASE_URL"));
+  const backendBaseUrl = normalizeHttpsBaseUrl(process.env.DESKTOP_BACKEND_BASE_URL || webBaseUrl);
   const artifactPath = path.join(
     ".artifacts",
     "desktop-acceptance",
@@ -34,8 +34,8 @@ async function main() {
   );
 
   const reasons = [];
-  const healthUrl = `${webBaseUrl}/api/v1/health`;
-  const openapiUrl = `${webBaseUrl}/api/v1/openapi.json`;
+  const healthUrl = `${backendBaseUrl}/health`;
+  const openapiUrl = `${backendBaseUrl}/openapi.json`;
 
   let health = null;
   let openapi = null;
@@ -60,9 +60,10 @@ async function main() {
       if (
         !paths ||
         typeof paths !== "object" ||
-        !Object.prototype.hasOwnProperty.call(paths, "/health")
+        !Object.prototype.hasOwnProperty.call(paths, "/health") ||
+        !Object.prototype.hasOwnProperty.call(paths, "/v1/ping")
       ) {
-        reasons.push("openapi contract missing /health path");
+        reasons.push("openapi contract missing required baseline paths");
       }
     }
   } catch (error) {
@@ -78,6 +79,7 @@ async function main() {
     headSha,
     pass,
     webBaseUrl,
+    backendBaseUrl,
     checks: {
       healthUrl,
       openapiUrl

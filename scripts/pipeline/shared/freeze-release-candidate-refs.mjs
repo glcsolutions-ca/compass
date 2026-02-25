@@ -106,6 +106,24 @@ async function freezeWebImage() {
   await appendGithubOutput({ release_candidate_web_ref: releaseCandidateWebRef });
 }
 
+async function freezeWorkerImage() {
+  const headSha = requireEnv("HEAD_SHA");
+  const acrName = requireEnv("ACR_NAME");
+  const acrRegistry = requireEnv("ACR_REGISTRY");
+  const image = `${acrRegistry}/compass-worker:${headSha}`;
+
+  await run("az", ["acr", "login", "--name", acrName, "--only-show-errors"]);
+  await run("docker", ["build", "-f", "apps/worker/Dockerfile", "-t", image, "."]);
+  await run("docker", ["push", image]);
+
+  const releaseCandidateWorkerRef = await capture("docker", [
+    "inspect",
+    "--format={{index .RepoDigests 0}}",
+    image
+  ]);
+  await appendGithubOutput({ release_candidate_worker_ref: releaseCandidateWorkerRef });
+}
+
 async function freezeCodexImage() {
   const headSha = requireEnv("HEAD_SHA");
   const acrName = requireEnv("ACR_NAME");
@@ -129,6 +147,7 @@ async function freezeCurrentRuntimeRefs() {
   const resourceGroup = requireEnv("AZURE_RESOURCE_GROUP");
   const apiAppName = requireEnv("ACA_API_APP_NAME");
   const webAppName = requireEnv("ACA_WEB_APP_NAME");
+  const workerAppName = requireEnv("ACA_WORKER_APP_NAME");
   const codexAppName = requireEnv("ACA_CODEX_APP_NAME");
 
   const apiImage = await capture("az", [
@@ -155,6 +174,18 @@ async function freezeCurrentRuntimeRefs() {
     "--output",
     "tsv"
   ]);
+  const workerImage = await capture("az", [
+    "containerapp",
+    "show",
+    "--resource-group",
+    resourceGroup,
+    "--name",
+    workerAppName,
+    "--query",
+    "properties.template.containers[0].image",
+    "--output",
+    "tsv"
+  ]);
   const codexImage = await capture("az", [
     "containerapp",
     "show",
@@ -170,11 +201,13 @@ async function freezeCurrentRuntimeRefs() {
 
   const releaseCandidateApiRef = await resolveToDigestRef(acrName, apiImage);
   const releaseCandidateWebRef = await resolveToDigestRef(acrName, webImage);
+  const releaseCandidateWorkerRef = await resolveToDigestRef(acrName, workerImage);
   const releaseCandidateCodexRef = await resolveToDigestRef(acrName, codexImage);
 
   await appendGithubOutput({
     release_candidate_api_ref: releaseCandidateApiRef,
     release_candidate_web_ref: releaseCandidateWebRef,
+    release_candidate_worker_ref: releaseCandidateWorkerRef,
     release_candidate_codex_ref: releaseCandidateCodexRef
   });
 }
@@ -188,6 +221,10 @@ async function main() {
   }
   if (mode === "build-web") {
     await freezeWebImage();
+    return;
+  }
+  if (mode === "build-worker") {
+    await freezeWorkerImage();
     return;
   }
   if (mode === "build-codex") {

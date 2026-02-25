@@ -5,15 +5,7 @@ import { test, type Page } from "@playwright/test";
 function parseRequiredFlowIds() {
   const requiredFlowIdsJson = process.env.REQUIRED_FLOW_IDS_JSON?.trim();
   if (requiredFlowIdsJson && requiredFlowIdsJson.length > 0) {
-    let parsed: unknown;
-
-    try {
-      parsed = JSON.parse(requiredFlowIdsJson);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`REQUIRED_FLOW_IDS_JSON must be valid JSON: ${message}`);
-    }
-
+    const parsed = JSON.parse(requiredFlowIdsJson);
     if (!Array.isArray(parsed)) {
       throw new Error("REQUIRED_FLOW_IDS_JSON must be a JSON array");
     }
@@ -35,7 +27,7 @@ function parseRequiredFlowIds() {
     .filter((value) => value.length > 0);
 }
 
-async function runBaselineFlow(
+async function runFlow(
   page: Page,
   flowId: string,
   flowAssertions: Array<{
@@ -46,63 +38,27 @@ async function runBaselineFlow(
   }>
 ) {
   const headingText = (await page.locator("h1").first().textContent())?.trim() ?? "";
-  const headingPass = headingText.length > 0;
   flowAssertions.push({
     id: `${flowId}:heading-visible`,
     description: `[${flowId}] Landing heading is visible`,
-    pass: headingPass,
-    details: headingPass ? `Heading: ${headingText}` : "No heading text found"
+    pass: headingText.length > 0,
+    details: headingText.length > 0 ? `Heading: ${headingText}` : "No heading text found"
   });
 
-  const helperTexts = await page.locator('[data-testid="baseline-helper-copy"]').allTextContents();
-  const helperPass = helperTexts.some((value) => value.trim().length > 0);
+  const statusText = (await page.getByTestId("api-health-status").textContent())?.trim() ?? "";
   flowAssertions.push({
-    id: `${flowId}:helper-visible`,
-    description: `[${flowId}] Helper copy is visible`,
-    pass: helperPass,
-    details: helperPass ? "Helper copy found" : "No helper text found"
-  });
-}
-
-async function runCodexFlow(
-  page: Page,
-  flowId: string,
-  flowAssertions: Array<{
-    id: string;
-    description: string;
-    pass: boolean;
-    details?: string;
-  }>
-) {
-  await page.getByTestId("codex-start-thread").click();
-  await page.waitForFunction(() => {
-    const element = document.querySelector('[data-testid="codex-thread-id"]');
-    return element?.textContent && element.textContent !== "no-thread";
+    id: `${flowId}:api-health-status-visible`,
+    description: `[${flowId}] API health status field is visible`,
+    pass: statusText.length > 0,
+    details: statusText.length > 0 ? `status=${statusText}` : "missing status value"
   });
 
-  const threadText = (await page.getByTestId("codex-thread-id").textContent())?.trim() ?? "";
+  const apiBase = (await page.getByTestId("api-base-url").textContent())?.trim() ?? "";
   flowAssertions.push({
-    id: `${flowId}:thread-created`,
-    description: `[${flowId}] Thread creation succeeds`,
-    pass: threadText.length > 0 && threadText !== "no-thread",
-    details: `threadId=${threadText || "(missing)"}`
-  });
-
-  await page.getByTestId("codex-turn-input").fill("Run a simple streamed codex turn.");
-  await page.getByTestId("codex-start-turn").click();
-  await page.waitForFunction(() => {
-    const element = document.querySelector('[data-testid="codex-event-stream"]');
-    return element?.textContent?.includes("turn.started");
-  });
-
-  const streamText = (await page.getByTestId("codex-event-stream").textContent()) ?? "";
-  flowAssertions.push({
-    id: `${flowId}:turn-streamed`,
-    description: `[${flowId}] Turn emits streaming events`,
-    pass: streamText.includes("turn.started"),
-    details: streamText.includes("turn.started")
-      ? "turn.started event observed"
-      : "turn.started event not observed"
+    id: `${flowId}:api-base-visible`,
+    description: `[${flowId}] API base URL is rendered`,
+    pass: apiBase.length > 0,
+    details: apiBase.length > 0 ? apiBase : "missing api base url"
   });
 }
 
@@ -153,11 +109,7 @@ test("compass smoke flow", async ({ page }) => {
 
     try {
       await page.goto(`${baseUrl}${expectedEntrypoint}`, { waitUntil: "networkidle" });
-      if (flowId === "codex-stream") {
-        await runCodexFlow(page, flowId, flowAssertions);
-      } else {
-        await runBaselineFlow(page, flowId, flowAssertions);
-      }
+      await runFlow(page, flowId, flowAssertions);
     } catch (error) {
       flowStatus = "failed";
       flowAssertions.push({

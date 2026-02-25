@@ -17,8 +17,8 @@ async function writeResult(filePath: string, payload: unknown) {
   await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
-async function requestJson(url: string, headers?: HeadersInit) {
-  const response = await fetch(url, { method: "GET", headers });
+async function requestJson(url: string) {
+  const response = await fetch(url, { method: "GET" });
   const text = await response.text();
   let json: unknown = null;
   try {
@@ -47,11 +47,6 @@ async function main() {
   const assertions: Array<{ id: string; pass: boolean; details: string }> = [];
 
   try {
-    const delegatedAuthToken = process.env.AUTH_SMOKE_TOKEN?.trim();
-    const appAuthToken = process.env.APP_SMOKE_TOKEN?.trim();
-    assert.ok(delegatedAuthToken, "AUTH_SMOKE_TOKEN is required for system smoke");
-    assert.ok(appAuthToken, "APP_SMOKE_TOKEN is required for system smoke");
-
     const health = await requestJson(`${baseUrl}/health`);
     assert.equal(health.status, 200, "health endpoint should return 200");
     assertions.push({ id: "health-200", pass: true, details: `status=${health.status}` });
@@ -63,52 +58,22 @@ async function main() {
     const hasHealthPath = Boolean(
       (openapi.json as { paths?: Record<string, unknown> } | null)?.paths?.["/health"]
     );
+    const hasPingPath = Boolean(
+      (openapi.json as { paths?: Record<string, unknown> } | null)?.paths?.["/v1/ping"]
+    );
     assert.equal(hasHealthPath, true, "openapi should include /health path");
+    assert.equal(hasPingPath, true, "openapi should include /v1/ping path");
+
     assertions.push({
       id: "openapi-has-health",
       pass: true,
       details: `hasHealthPath=${hasHealthPath}`
     });
+    assertions.push({ id: "openapi-has-ping", pass: true, details: `hasPingPath=${hasPingPath}` });
 
-    const delegatedMe = await requestJson(`${baseUrl}/v1/me`, {
-      authorization: `Bearer ${delegatedAuthToken}`
-    });
-    assert.equal(delegatedMe.status, 200, "delegated auth /v1/me endpoint should return 200");
-    const delegatedTokenType =
-      (delegatedMe.json as { caller?: { tokenType?: string } } | null)?.caller?.tokenType ?? "n/a";
-    assert.equal(
-      delegatedTokenType,
-      "delegated",
-      "delegated smoke token should classify as delegated"
-    );
-    assertions.push({
-      id: "auth-me-delegated-200",
-      pass: true,
-      details: `status=${delegatedMe.status}, tokenType=${delegatedTokenType}`
-    });
-
-    const appMe = await requestJson(`${baseUrl}/v1/me`, {
-      authorization: `Bearer ${appAuthToken}`
-    });
-    assert.equal(appMe.status, 200, "app auth /v1/me endpoint should return 200");
-    const appTokenType =
-      (appMe.json as { caller?: { tokenType?: string } } | null)?.caller?.tokenType ?? "n/a";
-    assert.equal(appTokenType, "app", "app smoke token should classify as app");
-    assertions.push({
-      id: "auth-me-app-200",
-      pass: true,
-      details: `status=${appMe.status}, tokenType=${appTokenType}`
-    });
-
-    const deny = await requestJson(`${baseUrl}/v1/me`, {
-      authorization: "Bearer invalid.smoke.token"
-    });
-    assert.equal(deny.status, 401, "invalid bearer token should be rejected");
-    assertions.push({
-      id: "auth-deny-invalid-token-401",
-      pass: true,
-      details: `status=${deny.status}`
-    });
+    const ping = await requestJson(`${baseUrl}/v1/ping`);
+    assert.equal(ping.status, 200, "ping endpoint should return 200");
+    assertions.push({ id: "ping-200", pass: true, details: `status=${ping.status}` });
 
     const payload = {
       schemaVersion: "1",

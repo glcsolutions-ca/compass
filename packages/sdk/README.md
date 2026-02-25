@@ -78,7 +78,7 @@ pnpm contract:generate
 ## Type Alignment Checks
 
 - `src/client-types.test.ts` asserts API path and operation type alignment.
-- `pnpm check:contract` verifies generated artifacts are committed and in sync.
+- `pnpm contract:check` verifies generated artifacts are committed and in sync.
 
 ## Local Commands
 

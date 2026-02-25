@@ -27,11 +27,11 @@
 ## Local Execution Notes
 
 ```bash
-pnpm commit:scope
-pnpm commit:testing-policy
-pnpm commit:docs-drift
+pnpm ci:scope
+pnpm ci:testing-policy
+pnpm ci:docs-drift
 ```
 
-`pnpm commit:stage` expects CI-provided environment variables (`CHECK_RESULTS_JSON`, scope flags, docs-drift state, and SHA metadata).
+`pnpm ci:gate:commit-stage` expects CI-provided environment variables (`CHECK_RESULTS_JSON`, scope flags, docs-drift state, and SHA metadata).
 
 Commit-stage timing/SLO collection is handled by `scripts/pipeline/shared/collect-commit-stage-timing.mjs`.

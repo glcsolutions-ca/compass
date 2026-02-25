@@ -30,7 +30,7 @@ function toExtensionAlias(value: unknown): Record<string, ExtensionAliasValue> {
 const nextConfig: NextConfig = {
   output: "standalone",
   eslint: {
-    // Lint is enforced in CI via `pnpm check`; skip duplicate lint during `next build`.
+    // Lint is enforced in CI via `pnpm test:static`; skip duplicate lint during `next build`.
     ignoreDuringBuilds: true
   },
   transpilePackages: ["@compass/sdk"],

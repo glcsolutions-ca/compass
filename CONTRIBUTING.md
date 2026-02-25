@@ -41,7 +41,7 @@ Testing commands:
 - `pnpm test:unit` - workspace unit/component tests + pipeline contract tests
 - `pnpm test:integration` - integration tests only
 - `pnpm test:e2e` - Playwright smoke flow only
-- `pnpm check` - alias to `pnpm test` (transitional)
+- `pnpm test:static` - policy + format + lint + typecheck checks
 
 Useful DB commands:
 

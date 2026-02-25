@@ -123,7 +123,7 @@ Rules:
 
 ### Useful commands
 
-- `pnpm commit:testing-policy`
+- `pnpm ci:testing-policy`
 - `pnpm test`
 - `pnpm test:integration`
 
@@ -132,5 +132,5 @@ Rules:
 1. Update `tests/policy/test-policy.json`.
 2. Update `tests/policy/test-quarantine.json` when skip metadata changes.
 3. Update docs when behavior changes (`tests/README.md` and this file).
-4. Run `pnpm commit:testing-policy` and `pnpm test`.
+4. Run `pnpm ci:testing-policy` and `pnpm test`.
 5. Keep `scripts/pipeline/commit/testing-policy.test.mjs`, `scripts/pipeline/commit/check-testing-policy.test.mjs`, and `scripts/pipeline/commit/eslint-policy.test.mjs` aligned with policy validation rules.

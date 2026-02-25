@@ -65,6 +65,13 @@ Behavior:
 This removes `unknown`-shaped auth payloads and standardizes runtime parsing for
 gateway route handlers.
 
+## Contract Verification Command
+
+Use the root contract verification command to validate generated OpenAPI and SDK
+schema artifacts are in sync:
+
+- `pnpm contract:check`
+
 ## API Permission Claims
 
 API auth token verification now accepts Entra access tokens with:

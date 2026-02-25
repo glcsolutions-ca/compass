@@ -7,7 +7,7 @@
 ## Run Command
 
 ```bash
-pnpm acceptance:system-smoke
+pnpm test:acceptance:system
 ```
 
 Equivalent direct command:
@@ -19,7 +19,7 @@ tsx tests/system/smoke.ts
 Codex gateway smoke:
 
 ```bash
-pnpm acceptance:codex-smoke
+pnpm test:acceptance:codex
 ```
 
 Equivalent direct command:

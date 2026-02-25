@@ -100,6 +100,29 @@ function parsePort(value, sourceName) {
   return parsed;
 }
 
+function parsePostgresPortFromDatabaseUrl(value, sourceName) {
+  const normalized = normalizeValue(value);
+  if (!normalized) {
+    return undefined;
+  }
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(normalized);
+  } catch {
+    throw new Error(`${sourceName} must be a valid URL when provided (received: ${normalized})`);
+  }
+
+  const isPostgresProtocol =
+    parsedUrl.protocol === "postgres:" || parsedUrl.protocol === "postgresql:";
+  if (!isPostgresProtocol) {
+    return undefined;
+  }
+
+  const portCandidate = parsedUrl.port || "5432";
+  return parsePort(portCandidate, `${sourceName} port`);
+}
+
 async function fileExists(filePath) {
   try {
     await access(filePath);
@@ -258,6 +281,8 @@ export async function resolveLocalEnvValues({
   isPortAvailableFn = isPortAvailable
 } = {}) {
   const state = stateByPath ?? (await loadAllEnvState(rootDir));
+  const explicitDatabaseUrl = normalizeValue(env.DATABASE_URL);
+  const existingDatabaseUrl = getExistingValue(state, "db/postgres/.env", "DATABASE_URL");
 
   const existingPorts = {
     WEB_PORT: getExistingValue(state, "apps/web/.env", "WEB_PORT"),
@@ -276,7 +301,9 @@ export async function resolveLocalEnvValues({
       parsePort(existingPorts.CODEX_PORT, "CODEX_PORT in .env"),
     POSTGRES_PORT:
       parsePort(env.POSTGRES_PORT, "POSTGRES_PORT") ??
-      parsePort(existingPorts.POSTGRES_PORT, "POSTGRES_PORT in .env")
+      parsePostgresPortFromDatabaseUrl(explicitDatabaseUrl, "DATABASE_URL") ??
+      parsePort(existingPorts.POSTGRES_PORT, "POSTGRES_PORT in .env") ??
+      parsePostgresPortFromDatabaseUrl(existingDatabaseUrl, "DATABASE_URL in .env")
   };
 
   const unresolvedPortKeys = PORT_KEYS.filter((key) => !resolvedPorts[key]);
@@ -296,7 +323,6 @@ export async function resolveLocalEnvValues({
     "db/postgres/.env",
     "COMPOSE_PROJECT_NAME"
   );
-  const existingDatabaseUrl = getExistingValue(state, "db/postgres/.env", "DATABASE_URL");
 
   const viteApiBaseUrl =
     normalizeValue(env.VITE_API_BASE_URL) ??
@@ -307,7 +333,7 @@ export async function resolveLocalEnvValues({
     existingComposeProjectName ??
     `compass-${getWorktreeSeed(rootDir).shortSeed}`;
   const databaseUrl =
-    normalizeValue(env.DATABASE_URL) ??
+    explicitDatabaseUrl ??
     existingDatabaseUrl ??
     `postgres://compass:compass@localhost:${resolvedPorts.POSTGRES_PORT}/compass`;
 

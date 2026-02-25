@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { ApiErrorSchema } from "./schemas.js";
 import {
+  AuthAccountReadResponseSchema,
+  AuthLoginStartResponseSchema,
+  AuthModeSchema,
   ApiKeyLoginRequestSchema,
   ApprovalResponseRequestSchema,
   ChatGptLoginCancelRequestSchema,
@@ -37,6 +40,24 @@ describe("codex gateway contract schemas", () => {
     expect(ApprovalResponseRequestSchema.parse({ decision: "accept" }).decision).toBe("accept");
     expect(ApiKeyLoginRequestSchema.parse({ apiKey: "sk-test" }).apiKey).toBe("sk-test");
     expect(ChatGptLoginCancelRequestSchema.parse({ loginId: "login_1" }).loginId).toBe("login_1");
+    expect(AuthModeSchema.parse("chatgpt")).toBe("chatgpt");
+    expect(
+      AuthLoginStartResponseSchema.parse({
+        loginId: "login_1",
+        authUrl: "https://chat.openai.com/oauth",
+        account: {
+          type: "chatgpt",
+          email: "user@example.com"
+        }
+      }).loginId
+    ).toBe("login_1");
+    expect(
+      AuthAccountReadResponseSchema.parse({
+        account: {
+          type: "apiKey"
+        }
+      }).account?.type
+    ).toBe("apiKey");
   });
 
   it("rejects invalid request payloads", () => {

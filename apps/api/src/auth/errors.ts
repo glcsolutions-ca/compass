@@ -24,7 +24,9 @@ export function invalidToken(message: string) {
   return new AuthError(401, "invalid_token", message);
 }
 
-export function tokenUnclassified(message = "Token must be unambiguously delegated or app-only") {
+export function tokenUnclassified(
+  message = "Token must include delegated scopes or application roles"
+) {
   return new AuthError(401, "token_unclassified", message);
 }
 

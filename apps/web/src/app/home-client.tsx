@@ -203,6 +203,27 @@ export default function HomeClient() {
     }
   }, [normalizedApiBaseUrl]);
 
+  const logoutEnterpriseSso = useCallback(async () => {
+    setAuthBusy(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch("/api/auth/entra/logout", {
+        method: "POST"
+      });
+
+      if (!response.ok && !response.redirected) {
+        const body = await readErrorBody(response);
+        throw new Error(body);
+      }
+
+      window.location.assign(response.url || "/login");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+      setAuthBusy(false);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -373,7 +394,7 @@ export default function HomeClient() {
   return (
     <main>
       <h1>Compass Codex Gateway</h1>
-      <p className="helper">Foundation baseline plus codex gateway integration prototype.</p>
+      <p className="helper">Enterprise SSO access granted. Select a provider auth mode below.</p>
 
       <section className="panel">
         <h2>Authentication</h2>
@@ -441,6 +462,17 @@ export default function HomeClient() {
             disabled={authBusy}
           >
             Logout
+          </button>
+          <button
+            type="button"
+            data-testid="codex-auth-entra-logout"
+            className="secondary"
+            onClick={() => {
+              void logoutEnterpriseSso();
+            }}
+            disabled={authBusy}
+          >
+            Sign Out Enterprise SSO
           </button>
         </div>
 

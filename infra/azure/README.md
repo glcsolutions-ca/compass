@@ -44,6 +44,10 @@ Runtime parameters are rendered to `.artifacts/infra/<sha>/runtime.parameters.js
 - `POSTGRES_SERVER_NAME`
 - `POSTGRES_DATABASE_NAME`
 - `POSTGRES_ADMIN_USERNAME`
+- `ENTRA_LOGIN_ENABLED` (`true` or `false`)
+- `AUTH_DEV_FALLBACK_ENABLED` (`false` in cloud environments)
+- `ENTRA_CLIENT_ID` (required when `ENTRA_LOGIN_ENABLED=true`)
+- `ENTRA_ALLOWED_TENANT_IDS` (optional tenant allowlist)
 - `API_IDENTIFIER_URI`
 - `AUTH_AUDIENCE`
 - `AUTH_ALLOWED_CLIENT_IDS`
@@ -63,12 +67,15 @@ Runtime parameters are rendered to `.artifacts/infra/<sha>/runtime.parameters.js
 - `POSTGRES_ADMIN_PASSWORD`
 - `OAUTH_TOKEN_SIGNING_SECRET`
 - `API_SMOKE_ALLOWED_CLIENT_ID`
+- `WEB_SESSION_SECRET`
+- `ENTRA_CLIENT_SECRET` (required when `ENTRA_LOGIN_ENABLED=true`)
 
 ### Derived Values (not operator inputs)
 
 - `AUTH_ISSUER` is derived from `AZURE_TENANT_ID`.
 - `AUTH_JWKS_URI` is derived from `AZURE_TENANT_ID`.
 - `ACR_LOGIN_SERVER` is derived from `ACR_NAME`.
+- `WEB_BASE_URL` is derived from `ACA_WEB_CUSTOM_DOMAIN` (or ACA default FQDN when unset).
 - Postgres SKU/version/storage and ACR SKU use IaC defaults in `main.bicep`.
 
 ## Custom Domain Model

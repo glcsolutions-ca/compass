@@ -40,18 +40,20 @@ Proxy target rules:
 
 ## Env Table
 
-| Env Var                     | Default                                 | Notes                                                                                 |
-| --------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------- |
-| `API_BASE_URL`              | `http://localhost:3001` (dev/test only) | Runtime proxy target for `/api/v1/*`; required in production.                         |
-| `WEB_SESSION_SECRET`        | dev/test default                        | Required in production; signs/verifies host-only BFF session cookie.                  |
-| `WEB_ALLOWED_ORIGINS`       | unset                                   | Optional comma-separated allowlist for origin/referer checks on mutating proxy calls. |
-| `ENTRA_LOGIN_ENABLED`       | `false`                                 | Enables enterprise SSO gate and `/login` flow.                                        |
-| `ENTRA_CLIENT_ID`           | unset                                   | Entra app registration client ID.                                                     |
-| `ENTRA_CLIENT_SECRET`       | unset                                   | Entra app registration client secret used at token exchange.                          |
-| `ENTRA_REDIRECT_URI`        | unset                                   | Redirect URI for Entra callback (must match app registration).                        |
-| `ENTRA_ALLOWED_TENANT_IDS`  | unset                                   | Comma-separated allowlist of tenant IDs for multi-tenant org sign-in.                 |
-| `ENTRA_JWKS_JSON`           | unset                                   | Optional JSON JWKS override (primarily for deterministic tests/offline validation).   |
-| `AUTH_DEV_FALLBACK_ENABLED` | `false`                                 | Non-production only; bypasses enterprise SSO gate for local/dev fallback.             |
+| Env Var                          | Default                                 | Notes                                                                                             |
+| -------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `API_BASE_URL`                   | `http://localhost:3001` (dev/test only) | Runtime proxy target for `/api/v1/*`; required in production.                                     |
+| `WEB_SESSION_SECRET`             | dev/test default                        | Required in production; signs/verifies host-only BFF session cookie.                              |
+| `WEB_ALLOWED_ORIGINS`            | unset                                   | Optional comma-separated allowlist for origin/referer checks on mutating proxy calls.             |
+| `ENTRA_LOGIN_ENABLED`            | `false`                                 | Enables enterprise SSO gate and `/login` flow.                                                    |
+| `WEB_BASE_URL`                   | unset                                   | Canonical web origin; Entra callback URI is derived as `${WEB_BASE_URL}/api/auth/entra/callback`. |
+| `ENTRA_CLIENT_ID`                | unset                                   | Entra app registration client ID.                                                                 |
+| `ENTRA_CLIENT_SECRET`            | unset                                   | Entra app registration client secret used at token exchange.                                      |
+| `ENTRA_ALLOWED_TENANT_IDS`       | unset                                   | Comma-separated allowlist of tenant IDs for multi-tenant org sign-in.                             |
+| `ENTRA_JWKS_JSON`                | unset                                   | Optional JSON JWKS override (primarily for deterministic tests/offline validation).               |
+| `AUTH_DEV_FALLBACK_ENABLED`      | `false`                                 | Non-production only; bypasses enterprise SSO gate for local/dev fallback.                         |
+| `NEXT_PUBLIC_CODEX_API_BASE_URL` | `http://localhost:3010`                 | Browser-side base URL for direct codex gateway HTTP calls.                                        |
+| `NEXT_PUBLIC_CODEX_WS_BASE_URL`  | `ws://localhost:3010`                   | Browser-side base URL for direct codex gateway websocket stream.                                  |
 
 Local template: `apps/web/.env.local.example`.
 

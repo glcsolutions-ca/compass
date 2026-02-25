@@ -8,5 +8,7 @@ required_scope_name = "compass.user"
 # Populate these with actual IDs to establish explicit ownership for created app registrations.
 owners = []
 
-# Set this once production web redirect URIs are known.
-web_redirect_uris = []
+web_redirect_uris = [
+  "http://localhost:3000/api/auth/entra/callback",
+  "http://127.0.0.1:3000/api/auth/entra/callback"
+]

@@ -37,6 +37,14 @@ param postgresStorageMb int = 32768
 param apiImage string = 'SET_IN_GITHUB_ENV'
 param webImage string = 'SET_IN_GITHUB_ENV'
 param codexImage string = 'SET_IN_GITHUB_ENV'
+@secure()
+param webSessionSecret string
+param entraLoginEnabled string = 'false'
+param entraClientId string = ''
+@secure()
+param entraClientSecret string = ''
+param entraAllowedTenantIds string = ''
+param authDevFallbackEnabled string = 'false'
 param apiCustomDomain string = ''
 param webCustomDomain string = ''
 param codexCustomDomain string = ''
@@ -119,6 +127,9 @@ var databaseUrl = 'postgres://${encodedDbUser}:${encodedDbPassword}@${postgres.o
 var apiBaseUrl = empty(apiCustomDomain)
   ? 'https://${apiAppName}.${containerEnvironment.outputs.defaultDomain}'
   : 'https://${apiCustomDomain}'
+var webBaseUrl = empty(webCustomDomain)
+  ? 'https://${webAppName}.${containerEnvironment.outputs.defaultDomain}'
+  : 'https://${webCustomDomain}'
 var codexBaseUrl = empty(codexCustomDomain)
   ? 'https://${codexAppName}.${containerEnvironment.outputs.defaultDomain}'
   : 'https://${codexCustomDomain}'
@@ -182,6 +193,13 @@ module web './modules/containerapp-web.bicep' = {
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
     apiBaseUrl: apiBaseUrl
+    webBaseUrl: webBaseUrl
+    webSessionSecret: webSessionSecret
+    entraLoginEnabled: entraLoginEnabled
+    entraClientId: entraClientId
+    entraClientSecret: entraClientSecret
+    entraAllowedTenantIds: entraAllowedTenantIds
+    authDevFallbackEnabled: authDevFallbackEnabled
     customDomainName: webCustomDomain
   }
   dependsOn: [

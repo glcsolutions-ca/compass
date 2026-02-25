@@ -7,9 +7,9 @@ describe("entra start route", () => {
   beforeEach(() => {
     vi.stubEnv("NODE_ENV", "test");
     vi.stubEnv("WEB_SESSION_SECRET", "web-session-secret-123456");
+    vi.stubEnv("WEB_BASE_URL", "http://localhost:3000");
     vi.stubEnv("ENTRA_LOGIN_ENABLED", "true");
     vi.stubEnv("ENTRA_CLIENT_ID", "web-client-id");
-    vi.stubEnv("ENTRA_REDIRECT_URI", "http://localhost:3000/api/auth/entra/callback");
   });
 
   afterEach(() => {
@@ -51,6 +51,32 @@ describe("entra start route", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Microsoft Entra login is disabled",
       code: "ENTRA_LOGIN_DISABLED"
+    });
+  });
+
+  it("returns 500 when web base URL host is 0.0.0.0", async () => {
+    vi.stubEnv("WEB_BASE_URL", "http://0.0.0.0:3000");
+
+    const request = new NextRequest("http://localhost:3000/api/auth/entra/start");
+    const response = await GET(request);
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "WEB_BASE_URL must not use 0.0.0.0; use localhost",
+      code: "WEB_BASE_URL_INVALID"
+    });
+  });
+
+  it("returns 500 when web base URL includes a path", async () => {
+    vi.stubEnv("WEB_BASE_URL", "https://compass.example.com/app");
+
+    const request = new NextRequest("http://localhost:3000/api/auth/entra/start");
+    const response = await GET(request);
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "WEB_BASE_URL must not include path, query, or fragment",
+      code: "WEB_BASE_URL_INVALID"
     });
   });
 });

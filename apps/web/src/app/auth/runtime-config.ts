@@ -25,9 +25,9 @@ export interface WebAuthRuntimeConfig {
   sessionSecret: string | null;
   entraLoginEnabled: boolean;
   devFallbackEnabled: boolean;
+  webBaseUrl: string | null;
   entraClientId: string | null;
   entraClientSecret: string | null;
-  entraRedirectUri: string | null;
   entraAllowedTenantIds: string[];
 }
 
@@ -55,9 +55,9 @@ export function loadWebAuthRuntimeConfig(
     sessionSecret: resolveSessionSecret(env),
     entraLoginEnabled: readFlag(env, "ENTRA_LOGIN_ENABLED"),
     devFallbackEnabled: isAuthDevFallbackEnabled(env),
+    webBaseUrl: readString(env, "WEB_BASE_URL"),
     entraClientId: readString(env, "ENTRA_CLIENT_ID"),
     entraClientSecret: readString(env, "ENTRA_CLIENT_SECRET"),
-    entraRedirectUri: readString(env, "ENTRA_REDIRECT_URI"),
     entraAllowedTenantIds: readCsv(env, "ENTRA_ALLOWED_TENANT_IDS")
   };
 }

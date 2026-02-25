@@ -73,10 +73,10 @@ describe("entra callback route", () => {
   beforeEach(() => {
     vi.stubEnv("NODE_ENV", "test");
     vi.stubEnv("WEB_SESSION_SECRET", SESSION_SECRET);
+    vi.stubEnv("WEB_BASE_URL", "http://localhost:3000");
     vi.stubEnv("ENTRA_LOGIN_ENABLED", "true");
     vi.stubEnv("ENTRA_CLIENT_ID", "web-client-id");
     vi.stubEnv("ENTRA_CLIENT_SECRET", "web-client-secret");
-    vi.stubEnv("ENTRA_REDIRECT_URI", "http://localhost:3000/api/auth/entra/callback");
     vi.stubEnv("ENTRA_ALLOWED_TENANT_IDS", "tenant-a");
   });
 
@@ -110,6 +110,19 @@ describe("entra callback route", () => {
     const location = readLocation(response);
     expect(location?.pathname).toBe("/login");
     expect(location?.searchParams.get("error")).toBe("state_mismatch");
+  });
+
+  it("returns 500 when web base URL host is 0.0.0.0", async () => {
+    vi.stubEnv("WEB_BASE_URL", "http://0.0.0.0:3000");
+
+    const request = new NextRequest("http://localhost:3000/api/auth/entra/callback");
+    const response = await GET(request);
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "WEB_BASE_URL must not use 0.0.0.0; use localhost",
+      code: "WEB_BASE_URL_INVALID"
+    });
   });
 
   it("rejects callback when tenant is not allowlisted", async () => {

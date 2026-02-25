@@ -361,6 +361,12 @@ jobs:
       POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
       POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
       POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+      WEB_SESSION_SECRET: ${{ secrets.WEB_SESSION_SECRET }}
+      ENTRA_LOGIN_ENABLED: ${{ vars.ENTRA_LOGIN_ENABLED }}
+      ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
+      ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
+      ENTRA_ALLOWED_TENANT_IDS: ${{ vars.ENTRA_ALLOWED_TENANT_IDS }}
+      AUTH_DEV_FALLBACK_ENABLED: ${{ vars.AUTH_DEV_FALLBACK_ENABLED }}
       JOB_REQUIRED: ${{ (needs.load_release_candidate.outputs.infra_changed == 'true' || needs.load_release_candidate.outputs.requires_infra_convergence == 'true') && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
       API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
       AUTH_AUDIENCE: ${{ vars.AUTH_AUDIENCE }}
@@ -477,6 +483,7 @@ jobs:
       TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
       API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
       IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
+      ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
       GITHUB_ENVIRONMENT_NAME: production
       JOB_REQUIRED: ${{ needs.load_release_candidate.outputs.identity_changed == 'true' && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
     steps:
@@ -508,7 +515,7 @@ jobs:
         id: identity_config
         env:
           IDENTITY_CONFIG_MODE: acceptance
-          REQUIRED_ENV_NAMES: ARM_CLIENT_ID,ARM_TENANT_ID,ARM_SUBSCRIPTION_ID,TFSTATE_RESOURCE_GROUP,TFSTATE_STORAGE_ACCOUNT,TFSTATE_CONTAINER,TFSTATE_KEY,IDENTITY_OWNER_OBJECT_IDS_JSON
+          REQUIRED_ENV_NAMES: ARM_CLIENT_ID,ARM_TENANT_ID,ARM_SUBSCRIPTION_ID,TFSTATE_RESOURCE_GROUP,TFSTATE_STORAGE_ACCOUNT,TFSTATE_CONTAINER,TFSTATE_KEY,IDENTITY_OWNER_OBJECT_IDS_JSON,ACA_WEB_CUSTOM_DOMAIN
         run: node scripts/pipeline/shared/validate-identity-config.mjs
 
       - name: Azure login (OIDC)
@@ -559,6 +566,7 @@ jobs:
             -var "github_environment_name=${GITHUB_ENVIRONMENT_NAME}" \
             -var "api_identifier_uri=${{ steps.identity_config.outputs.api_identifier_uri }}" \
             -var "owners=${IDENTITY_OWNER_OBJECT_IDS_JSON}" \
+            -var "web_custom_domain=${ACA_WEB_CUSTOM_DOMAIN}" \
             -out=tfplan
           terraform -chdir=infra/identity show -json tfplan > ".artifacts/identity/$HEAD_SHA/plan.json"
 
@@ -674,6 +682,7 @@ jobs:
       TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
       TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
       IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
+      ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
       GITHUB_ENVIRONMENT_NAME: production
       GITHUB_REPOSITORY: ${{ github.repository }}
     steps:
@@ -687,7 +696,7 @@ jobs:
         id: identity_config
         env:
           IDENTITY_CONFIG_MODE: production
-          REQUIRED_ENV_NAMES: ARM_CLIENT_ID,ARM_TENANT_ID,ARM_SUBSCRIPTION_ID,TFSTATE_RESOURCE_GROUP,TFSTATE_STORAGE_ACCOUNT,TFSTATE_CONTAINER,TFSTATE_KEY,IDENTITY_OWNER_OBJECT_IDS_JSON
+          REQUIRED_ENV_NAMES: ARM_CLIENT_ID,ARM_TENANT_ID,ARM_SUBSCRIPTION_ID,TFSTATE_RESOURCE_GROUP,TFSTATE_STORAGE_ACCOUNT,TFSTATE_CONTAINER,TFSTATE_KEY,IDENTITY_OWNER_OBJECT_IDS_JSON,ACA_WEB_CUSTOM_DOMAIN
         run: node scripts/pipeline/shared/validate-identity-config.mjs
 
       - name: Azure login for identity apply
@@ -727,7 +736,8 @@ jobs:
             -var "github_repository=${gh_repository}" \
             -var "github_environment_name=${GITHUB_ENVIRONMENT_NAME}" \
             -var "api_identifier_uri=${{ steps.identity_config.outputs.api_identifier_uri }}" \
-            -var "owners=${IDENTITY_OWNER_OBJECT_IDS_JSON}"
+            -var "owners=${IDENTITY_OWNER_OBJECT_IDS_JSON}" \
+            -var "web_custom_domain=${ACA_WEB_CUSTOM_DOMAIN}"
 
           mkdir -p ".artifacts/identity/$HEAD_SHA"
           terraform -chdir=infra/identity output -json > ".artifacts/identity/$HEAD_SHA/outputs.json"
@@ -786,6 +796,12 @@ jobs:
       POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
       POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
       POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
+      WEB_SESSION_SECRET: ${{ secrets.WEB_SESSION_SECRET }}
+      ENTRA_LOGIN_ENABLED: ${{ vars.ENTRA_LOGIN_ENABLED }}
+      ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
+      ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
+      ENTRA_ALLOWED_TENANT_IDS: ${{ vars.ENTRA_ALLOWED_TENANT_IDS }}
+      AUTH_DEV_FALLBACK_ENABLED: ${{ vars.AUTH_DEV_FALLBACK_ENABLED }}
       API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
       AUTH_AUDIENCE: ${{ vars.AUTH_AUDIENCE }}
       AUTH_ALLOWED_CLIENT_IDS: ${{ vars.AUTH_ALLOWED_CLIENT_IDS }}

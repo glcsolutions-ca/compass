@@ -18,17 +18,20 @@ Out of scope:
 
 ## Tenant Roster (Pilot)
 
-| Label | Domain            | Entra Tenant ID                        | Pilot Status |
-| ----- | ----------------- | -------------------------------------- | ------------ |
-| GLC   | `glcsolutions.ca` | `<entra-tenant-id-a>` | Active       |
-| Kropp | `kropp.ca`        | `<entra-tenant-id-b>` | Active       |
+Do not commit real tenant identifiers. Keep concrete values in environment configuration only.
+
+| Label    | Domain               | Entra Tenant ID       | Pilot Status |
+| -------- | -------------------- | --------------------- | ------------ |
+| Tenant A | `<managed-domain-a>` | `<entra-tenant-id-a>` | Active       |
+| Tenant B | `<managed-domain-b>` | `<entra-tenant-id-b>` | Active       |
 
 ## Baseline Configuration
 
 Ensure both GitHub environments (`acceptance`, `production`) include:
 
 - `ENTRA_ALLOWED_TENANT_IDS=<entra-tenant-id-a>,<entra-tenant-id-b>`
-- `API_SMOKE_ALLOWED_TENANT_ID=<entra-tenant-id-a>` (GLC only)
+- `AUTH_ACTIVE_TENANT_IDS=<entra-tenant-id-a>,<entra-tenant-id-b>`
+- `API_SMOKE_ALLOWED_TENANT_ID=<entra-tenant-id-a>` (primary pilot tenant only)
 
 Validation commands:
 
@@ -68,20 +71,20 @@ Record one row per day and mark all checks pass/fail.
 
 ### Core Public Checks
 
-1. `GET https://compass.glcsolutions.ca/health` returns `200`
-2. `GET https://compass.glcsolutions.ca/openapi.json` returns `200`
-3. `GET https://compass.glcsolutions.ca/v1/auth/me` (anonymous) returns `401`
-4. `GET https://compass.glcsolutions.ca/v1/auth/entra/start?returnTo=%2F` returns `302` and redirect includes:
+1. `GET https://<compass-web-base-url>/health` returns `200`
+2. `GET https://<compass-web-base-url>/openapi.json` returns `200`
+3. `GET https://<compass-web-base-url>/v1/auth/me` (anonymous) returns `401`
+4. `GET https://<compass-web-base-url>/v1/auth/entra/start?returnTo=%2F` returns `302` and redirect includes:
 
 - host `login.microsoftonline.com`
 - path `/organizations/oauth2/v2.0/authorize`
 - expected `client_id`
-- expected `redirect_uri=https://compass.glcsolutions.ca/v1/auth/entra/callback`
+- expected `redirect_uri=https://<compass-web-base-url>/v1/auth/entra/callback`
 
 ### Tenant Flow Checks
 
-1. GLC tenant login lands on `/workspaces` or `/t/<slug>`
-2. Kropp tenant login lands on `/workspaces` or `/t/<slug>`
+1. Tenant A login lands on `/workspaces` or `/t/<slug>`
+2. Tenant B login lands on `/workspaces` or `/t/<slug>`
 3. Tenant boundary behavior verified (deny non-member, allow member)
 4. Invite flow per tenant:
 
@@ -92,15 +95,15 @@ Record one row per day and mark all checks pass/fail.
 
 ### Daily Record Template
 
-| Day | Date (UTC) | Health    | OpenAPI   | AuthMe 401 | AuthStart Redirect | GLC Login | Kropp Login | Invite Flow | Boundary Checks | Incidents      | Operator |
-| --- | ---------- | --------- | --------- | ---------- | ------------------ | --------- | ----------- | ----------- | --------------- | -------------- | -------- |
-| 1   | YYYY-MM-DD | pass/fail | pass/fail | pass/fail  | pass/fail          | pass/fail | pass/fail   | pass/fail   | pass/fail       | none / see log | name     |
+| Day | Date (UTC) | Health    | OpenAPI   | AuthMe 401 | AuthStart Redirect | Tenant A Login | Tenant B Login | Invite Flow | Boundary Checks | Incidents      | Operator |
+| --- | ---------- | --------- | --------- | ---------- | ------------------ | -------------- | -------------- | ----------- | --------------- | -------------- | -------- |
+| 1   | YYYY-MM-DD | pass/fail | pass/fail | pass/fail  | pass/fail          | pass/fail      | pass/fail      | pass/fail   | pass/fail       | none / see log | name     |
 
 Day 1 recorded evidence:
 
-| Day | Date (UTC) | Health | OpenAPI | AuthMe 401 | AuthStart Redirect | GLC Login | Kropp Login | Invite Flow | Boundary Checks | Incidents | Operator |
-| --- | ---------- | ------ | ------- | ---------- | ------------------ | --------- | ----------- | ----------- | --------------- | --------- | -------- |
-| 1   | 2026-02-26 | pass   | pass    | pass       | pass               | pass      | pass        | pass        | pass            | none      | codex    |
+| Day | Date (UTC) | Health | OpenAPI | AuthMe 401 | AuthStart Redirect | Tenant A Login | Tenant B Login | Invite Flow | Boundary Checks | Incidents | Operator |
+| --- | ---------- | ------ | ------- | ---------- | ------------------ | -------------- | -------------- | ----------- | --------------- | --------- | -------- |
+| 1   | 2026-02-26 | pass   | pass    | pass       | pass               | pass           | pass           | pass        | pass            | none      | codex    |
 
 Day 1 notes:
 
@@ -112,15 +115,15 @@ Day 1 notes:
     - host `login.microsoftonline.com`
     - path `/organizations/oauth2/v2.0/authorize`
     - `client_id=<entra-client-id-redacted>`
-    - `redirect_uri=https://compass.glcsolutions.ca/v1/auth/entra/callback`
-- GLC login marked pass based on successful browser sign-in evidence provided in-thread.
-- Kropp login marked pass based on successful browser sign-in evidence provided in-thread.
+    - `redirect_uri=https://<compass-web-base-url>/v1/auth/entra/callback`
+- Tenant A login marked pass based on successful browser sign-in evidence provided in-thread.
+- Tenant B login marked pass based on successful browser sign-in evidence provided in-thread.
 - Tenant bootstrap and boundary evidence:
-  - `POST /v1/tenants` as `<pilot-user-email-redacted>` created tenant `kropp` (`201`)
-  - `GET /v1/tenants/kropp` as non-member user returned `403 TENANT_FORBIDDEN`
-  - `GET /v1/tenants/kropp` as owner returned `200`
-  - `GET /v1/tenants/kropp/members` as owner returned `200`
-- Invite lifecycle evidence on `kropp`:
+  - `POST /v1/tenants` as pilot tenant owner created workspace (`201`)
+  - `GET /v1/tenants/<tenant-slug>` as non-member user returned `403 TENANT_FORBIDDEN`
+  - `GET /v1/tenants/<tenant-slug>` as owner returned `200`
+  - `GET /v1/tenants/<tenant-slug>/members` as owner returned `200`
+- Invite lifecycle evidence on pilot tenant:
   - owner create invite returned `201`
   - invite accept by target user returned `200`
   - same-user replay returned `200` (idempotent-safe)
@@ -133,12 +136,12 @@ Day 1 notes:
   - `POST /v1/auth/logout` returned `204`
   - same session token after logout returned `401`
 - Follow-up recheck (`2026-02-26T19:40:06Z`) using deployment smoke contract:
-  - `node scripts/pipeline/cloud/deployment-stage/verify-api-smoke.mjs` returned pass against `https://compass.glcsolutions.ca`
+  - `node scripts/pipeline/cloud/deployment-stage/verify-api-smoke.mjs` returned pass against `https://<compass-web-base-url>`
   - redirect assertion pass included:
     - host `login.microsoftonline.com`
     - path `/organizations/oauth2/v2.0/authorize`
     - `client_id=<entra-client-id-redacted>`
-    - `redirect_uri=https://compass.glcsolutions.ca/v1/auth/entra/callback`
+    - `redirect_uri=https://<compass-web-base-url>/v1/auth/entra/callback`
 - Allow-list parity revalidated (`2026-02-26T19:39:47Z`):
   - `gh variable list -e acceptance` and `gh variable list -e production` both include:
     - `ENTRA_ALLOWED_TENANT_IDS=<entra-tenant-id-a>,<entra-tenant-id-b>`

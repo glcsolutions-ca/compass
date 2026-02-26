@@ -41,16 +41,20 @@ pnpm db:migrate:status
 For production clean-slate reset on Azure Postgres flexible server:
 
 ```bash
+# Resolve these from secured CI/environment configuration:
+#   AZURE_RESOURCE_GROUP
+#   POSTGRES_SERVER_NAME
+#   POSTGRES_DATABASE_NAME
 az postgres flexible-server db delete \
-  --resource-group <azure-resource-group> \
-  --server-name <postgres-server-name> \
-  --database-name compass \
+  --resource-group "$AZURE_RESOURCE_GROUP" \
+  --server-name "$POSTGRES_SERVER_NAME" \
+  --database-name "$POSTGRES_DATABASE_NAME" \
   --yes
 
 az postgres flexible-server db create \
-  --resource-group <azure-resource-group> \
-  --server-name <postgres-server-name> \
-  --database-name compass \
+  --resource-group "$AZURE_RESOURCE_GROUP" \
+  --server-name "$POSTGRES_SERVER_NAME" \
+  --database-name "$POSTGRES_DATABASE_NAME" \
   --charset UTF8 \
   --collation en_US.utf8
 ```

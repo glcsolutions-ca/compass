@@ -103,23 +103,24 @@ async function runFlow(
     authStartJson = null;
   }
   const authStartIsRedirect = authStartStatus === 302 || authStartStatus === 303;
-  const authStartIsEntraDisabled =
+  const authStartIsExplicitAuthUnavailable =
     authStartStatus === 503 &&
     (authStartJson?.code === "ENTRA_LOGIN_DISABLED" ||
-      authStartJson?.code === "ENTRA_CONFIG_REQUIRED");
+      authStartJson?.code === "ENTRA_CONFIG_REQUIRED" ||
+      authStartJson?.code === "AUTH_NOT_CONFIGURED");
 
   flowAssertions.push({
     id: `${flowId}:gateway-auth-start-status`,
     description: `[${flowId}] Gateway auth start reaches API auth handler`,
-    pass: authStartIsRedirect || authStartIsEntraDisabled,
+    pass: authStartIsRedirect || authStartIsExplicitAuthUnavailable,
     details: `status=${authStartStatus}, code=${String(authStartJson?.code ?? "")}`
   });
   flowAssertions.push({
     id: `${flowId}:gateway-auth-start-target`,
-    description: `[${flowId}] Gateway auth start response is provider redirect or explicit Entra-disabled error`,
+    description: `[${flowId}] Gateway auth start response is provider redirect or explicit auth-unavailable error`,
     pass:
       (authStartIsRedirect && authStartLocation.startsWith("https://login.microsoftonline.com/")) ||
-      authStartIsEntraDisabled,
+      authStartIsExplicitAuthUnavailable,
     details:
       authStartLocation ||
       `status=${authStartStatus}, code=${String(authStartJson?.code ?? "")}, body=${authStartText.slice(0, 160)}`

@@ -14,8 +14,8 @@ This directory contains operational guidance for coding and review agents workin
 - `git-hooks:install` prefers worktree-local Git config (`git config --worktree`) so each worktree keeps its own hook path.
 - If scripts are disabled during install, run `pnpm git-hooks:install` manually once per clone.
 - Pre-commit and pre-push are local commit-test-suite ergonomics:
-  - `.githooks/pre-commit` runs `pnpm git-hooks:pre-commit` (`pnpm test:static`) on staged files.
-  - `.githooks/pre-push` runs `pnpm git-hooks:pre-push` (`pnpm test:static`) for fast local validation only.
+  - `.githooks/pre-commit` runs `pnpm git-hooks:pre-commit` (`pnpm test:quick`) for fast commit-stage feedback.
+  - `.githooks/pre-push` runs `pnpm git-hooks:pre-push` (`pnpm test:full`) for deep local confidence before push.
 - Full correctness remains in CI gates (`.github/workflows/commit-stage.yml` and `.github/workflows/integration-gate.yml`).
 
 ## Delivery Links

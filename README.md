@@ -44,7 +44,6 @@ pnpm dev:worker
 - `pnpm test:full` - run backend preflight first, then quick gate + integration + Playwright smoke
 - `pnpm test:integration` - run integration tests only
 - `pnpm test:e2e` - run Playwright smoke flow only
-- `pnpm test:static` - run policy + formatting + lint + typecheck checks
 - `pnpm build` - build all apps/packages
 - `pnpm db:postgres:up` - start local Postgres, apply migrations, seed data
 - `pnpm db:postgres:down` - stop local Postgres

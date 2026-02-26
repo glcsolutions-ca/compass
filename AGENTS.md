@@ -24,9 +24,9 @@ Agents can run these locally when needed.
 
 ### Testing
 
-- `pnpm test` — **commit-stage** checks (static + unit/component + contract)
-- `pnpm test:static` — policy + formatting + lint + typecheck (fastest local gate)
-- `pnpm test:full` — commit-stage + integration tests
+- `pnpm test:quick` — **commit-stage** checks (policy + formatting + lint + typecheck + unit/component + contract)
+- `pnpm test` — alias for `pnpm test:quick`
+- `pnpm test:full` — quick gate + integration tests + Playwright smoke
 - `pnpm test:integration` — integration tests only (requires local Postgres)
 - `pnpm test:e2e` — Playwright smoke flow only
 
@@ -58,9 +58,9 @@ pnpm db:postgres:down
 git pull --rebase
 
 # While iterating:
-# pnpm test:static
+# pnpm test:quick
 # Before pushing to main:
-pnpm test
+pnpm test:full
 
 git add -A
 git commit -m "<small change>"
@@ -69,7 +69,7 @@ git push origin main
 # If push is rejected (main moved):
 #   git pull --rebase
 #   <resolve conflicts>
-#   pnpm test
+#   pnpm test:full
 #   git push origin main
 
 # If the main pipeline is red:

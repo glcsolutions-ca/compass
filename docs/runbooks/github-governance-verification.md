@@ -86,7 +86,7 @@ gh api repos/glcsolutions-ca/compass/environments/production \
 
 ## 6) Phase 2 Readiness: High-Risk Path Ruleset
 
-Local enforcement (`HR001`) is active now via `pnpm test:static` and git hooks. GitHub path-scoped PR enforcement is deferred until Codex runs under a separate identity.
+Local enforcement (`HR001`) is active now via `pnpm test:quick` and git hooks. GitHub path-scoped PR enforcement is deferred until Codex runs under a separate identity.
 
 ```bash
 gh api repos/glcsolutions-ca/compass/rulesets --paginate \

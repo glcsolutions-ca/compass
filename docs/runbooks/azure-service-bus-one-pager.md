@@ -55,7 +55,7 @@ az containerapp show -g "$AZURE_RESOURCE_GROUP" -n "$ACA_WORKER_APP_NAME" --quer
 ## Change Procedure
 
 1. Change Bicep/runtime/pipeline in one scoped commit.
-2. Run `pnpm test:static`.
+2. Run `pnpm test:quick`.
 3. Push to `main`.
 4. Confirm `Cloud Deployment Pipeline` is green.
 

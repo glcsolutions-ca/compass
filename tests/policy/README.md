@@ -39,7 +39,7 @@ What it enforces:
 
 When it runs:
 
-- First command in `pnpm test:static`
+- First phase inside `pnpm test:quick`
 - Local `pre-commit` and `pre-push` hooks
 
 ### Layer 1: Testing Policy (fastest)

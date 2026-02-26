@@ -69,7 +69,7 @@ Primary artifacts:
 | Pre-commit hook              | `.githooks/pre-commit` runs `pnpm test:quick`.                                                                  | `.githooks/pre-commit`, `package.json`                |
 | Pre-push hook                | `.githooks/pre-push` runs `pnpm test:full`.                                                                     | `.githooks/pre-push`, `package.json`                  |
 | Contract drift enforcement   | `contract:check` remains inside `test:quick`, so drift blocks both pre-commit and pre-push.                     | `package.json`                                        |
-| Specialist commands          | `test:static`, `test:integration`, `test:e2e`, and policy scripts remain available for CI and troubleshooting.  | `package.json`                                        |
+| Specialist commands          | `test:integration`, `test:e2e`, and policy scripts remain available for CI and troubleshooting.                 | `package.json`                                        |
 
 ### A2. Farley Alignment Assessment
 

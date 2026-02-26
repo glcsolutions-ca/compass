@@ -19,12 +19,28 @@ function resolveWebPort(rawPort: string | undefined) {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const port = resolveWebPort(env.WEB_PORT);
+  const apiBaseUrl =
+    env.VITE_API_BASE_URL?.trim() || env.API_BASE_URL?.trim() || "http://127.0.0.1:3001";
 
   return {
     plugins: [reactRouter(), tsconfigPaths()],
     server: {
       port,
-      strictPort: true
+      strictPort: true,
+      proxy: {
+        "/v1": {
+          target: apiBaseUrl,
+          changeOrigin: true
+        },
+        "/health": {
+          target: apiBaseUrl,
+          changeOrigin: true
+        },
+        "/openapi.json": {
+          target: apiBaseUrl,
+          changeOrigin: true
+        }
+      }
     }
   };
 });

@@ -22,13 +22,15 @@ RUN pnpm --filter @compass/web build
 
 FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 AS runtime
 COPY apps/web/nginx/nginx.conf /etc/nginx/nginx.conf
-COPY apps/web/nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY apps/web/nginx/default.conf /etc/nginx/templates/default.conf.template
+COPY apps/web/nginx/entrypoint.sh /entrypoint.sh
 COPY --from=build /workspace/apps/web/build/client /usr/share/nginx/html
 
 RUN mkdir -p /var/cache/nginx /var/log/nginx \
+  && chmod +x /entrypoint.sh \
   && chown -R nginx:nginx /var/cache/nginx /var/log/nginx /usr/share/nginx/html /tmp
 
 USER nginx
 
 EXPOSE 3000
-ENTRYPOINT ["nginx", "-g", "daemon off;"]
+ENTRYPOINT ["/entrypoint.sh"]

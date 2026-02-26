@@ -1311,6 +1311,7 @@ jobs:
       - name: Browser smoke verification
         env:
           PR_NUMBER: 0
+          REQUIRE_AUTH_GATEWAY: "true"
         run: pnpm test:acceptance:browser
 
       - name: Upload post-deployment verification artifacts

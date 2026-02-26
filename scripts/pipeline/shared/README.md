@@ -20,7 +20,7 @@
 | `load-release-candidate-contract.mjs`       | Parse and validate release candidate manifest contract.                                        |
 | `resolve-stage-eligibility.mjs`             | Stage deploy-required and deployment-pipeline-config eligibility resolution.                   |
 | `decide-release-outcome.mjs`                | Canonical release YES/NO decision artifact writer.                                             |
-| `freeze-release-candidate-refs.mjs`         | Build or capture runtime release candidate digest refs.                                        |
+| `freeze-release-candidate-refs.mjs`         | Capture current runtime release candidate digest refs from deployed ACA apps.                  |
 | `render-infra-parameters.mjs`               | Render Bicep parameter JSON from environment variables.                                        |
 | `workflow-pipeline-contract.test.mjs`       | Structural regression checks for workflow contracts.                                           |
 
@@ -35,3 +35,9 @@
 ## Change Safety
 
 Shared scripts are high-risk deployment-pipeline-config code. Keep changes fail-closed and keep all consuming workflows consistent.
+
+## Release-Candidate Image Build Notes
+
+- Runtime image build/push is handled in `.github/workflows/cloud-deployment-pipeline.yml` with `docker/build-push-action@v6`.
+- Build jobs use Buildx with GitHub cache backend (`cache-from/cache-to: type=gha`) and per-image cache scopes.
+- `freeze-release-candidate-refs.mjs` is now resolve-only for the `resolve-current-runtime-refs` mode.

@@ -165,7 +165,7 @@ jobs:
     timeout-minutes: 45
     environment: production
     outputs:
-      release_candidate_api_ref: ${{ steps.freeze.outputs.release_candidate_api_ref }}
+      release_candidate_api_ref: ${{ steps.set_ref.outputs.release_candidate_api_ref }}
     env:
       HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
       ACR_NAME: ${{ vars.ACR_NAME }}
@@ -174,11 +174,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
@@ -186,11 +181,26 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build release candidate API image
-        id: freeze
-        env:
-          FREEZE_MODE: build-api
-        run: node scripts/pipeline/shared/freeze-release-candidate-refs.mjs
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: ACR login
+        run: az acr login --name "$ACR_NAME" --only-show-errors
+
+      - name: Build and push release candidate API image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: ${{ env.ACR_REGISTRY }}/compass-api:${{ env.HEAD_SHA }}
+          cache-from: type=gha,scope=compass-api
+          cache-to: type=gha,scope=compass-api,mode=max
+
+      - name: Set release candidate API ref
+        id: set_ref
+        run: echo "release_candidate_api_ref=${ACR_REGISTRY}/compass-api@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
   build_release_candidate_web_image:
     name: build-release-candidate-web-image
@@ -201,7 +211,7 @@ jobs:
     timeout-minutes: 45
     environment: production
     outputs:
-      release_candidate_web_ref: ${{ steps.freeze.outputs.release_candidate_web_ref }}
+      release_candidate_web_ref: ${{ steps.set_ref.outputs.release_candidate_web_ref }}
     env:
       HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
       ACR_NAME: ${{ vars.ACR_NAME }}
@@ -210,11 +220,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
@@ -222,11 +227,26 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build release candidate Web image
-        id: freeze
-        env:
-          FREEZE_MODE: build-web
-        run: node scripts/pipeline/shared/freeze-release-candidate-refs.mjs
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: ACR login
+        run: az acr login --name "$ACR_NAME" --only-show-errors
+
+      - name: Build and push release candidate Web image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ${{ env.ACR_REGISTRY }}/compass-web:${{ env.HEAD_SHA }}
+          cache-from: type=gha,scope=compass-web
+          cache-to: type=gha,scope=compass-web,mode=max
+
+      - name: Set release candidate Web ref
+        id: set_ref
+        run: echo "release_candidate_web_ref=${ACR_REGISTRY}/compass-web@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
   build_release_candidate_worker_image:
     name: build-release-candidate-worker-image
@@ -237,7 +257,7 @@ jobs:
     timeout-minutes: 45
     environment: production
     outputs:
-      release_candidate_worker_ref: ${{ steps.freeze.outputs.release_candidate_worker_ref }}
+      release_candidate_worker_ref: ${{ steps.set_ref.outputs.release_candidate_worker_ref }}
     env:
       HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
       ACR_NAME: ${{ vars.ACR_NAME }}
@@ -246,11 +266,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
@@ -258,11 +273,26 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build release candidate Worker image
-        id: freeze
-        env:
-          FREEZE_MODE: build-worker
-        run: node scripts/pipeline/shared/freeze-release-candidate-refs.mjs
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: ACR login
+        run: az acr login --name "$ACR_NAME" --only-show-errors
+
+      - name: Build and push release candidate Worker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/worker/Dockerfile
+          push: true
+          tags: ${{ env.ACR_REGISTRY }}/compass-worker:${{ env.HEAD_SHA }}
+          cache-from: type=gha,scope=compass-worker
+          cache-to: type=gha,scope=compass-worker,mode=max
+
+      - name: Set release candidate Worker ref
+        id: set_ref
+        run: echo "release_candidate_worker_ref=${ACR_REGISTRY}/compass-worker@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
   build_release_candidate_codex_image:
     name: build-release-candidate-codex-image
@@ -273,7 +303,7 @@ jobs:
     timeout-minutes: 45
     environment: production
     outputs:
-      release_candidate_codex_ref: ${{ steps.freeze.outputs.release_candidate_codex_ref }}
+      release_candidate_codex_ref: ${{ steps.set_ref.outputs.release_candidate_codex_ref }}
     env:
       HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
       ACR_NAME: ${{ vars.ACR_NAME }}
@@ -282,11 +312,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
@@ -294,11 +319,26 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build release candidate Codex image
-        id: freeze
-        env:
-          FREEZE_MODE: build-codex
-        run: node scripts/pipeline/shared/freeze-release-candidate-refs.mjs
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: ACR login
+        run: az acr login --name "$ACR_NAME" --only-show-errors
+
+      - name: Build and push release candidate Codex image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/codex-app-server/Dockerfile
+          push: true
+          tags: ${{ env.ACR_REGISTRY }}/compass-codex-app-server:${{ env.HEAD_SHA }}
+          cache-from: type=gha,scope=compass-codex-app-server
+          cache-to: type=gha,scope=compass-codex-app-server,mode=max
+
+      - name: Set release candidate Codex ref
+        id: set_ref
+        run: echo "release_candidate_codex_ref=${ACR_REGISTRY}/compass-codex-app-server@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
   capture_current_runtime_refs:
     name: capture-current-runtime-refs

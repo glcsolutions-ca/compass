@@ -28,7 +28,7 @@ pnpm dev:worker
 
 ## Runtime snapshot
 
-- Web (`apps/web`): React Router 7 framework mode (`ssr: false`) on `WEB_PORT`
+- Web (`apps/web`): React Router 7 framework mode (`ssr: false`), containerized as static non-root nginx on port `3000`
 - API (`apps/api`): Express 5 + contract-backed OpenAPI on `API_PORT`
 - Worker (`apps/worker`): Azure Service Bus consumer (`loop` or `once`)
 - Codex gateway (`apps/codex-app-server`): thread/turn + stream APIs on `CODEX_PORT`

@@ -107,6 +107,25 @@ describe("workflow pipeline contract", () => {
     expect(deployFinalizerJob).not.toContain("docker push");
   });
 
+  it("uses buildx with github cache for release-candidate image builds", () => {
+    const workflow = readUtf8(cloudDeploymentPipelineWorkflowPath);
+    const buildJobs = [
+      "build_release_candidate_api_image",
+      "build_release_candidate_web_image",
+      "build_release_candidate_worker_image",
+      "build_release_candidate_codex_image"
+    ];
+
+    for (const jobName of buildJobs) {
+      const block = extractJobBlock(workflow, jobName);
+      expect(block).toContain("docker/setup-buildx-action@v3");
+      expect(block).toContain("docker/build-push-action@v6");
+      expect(block).toContain("cache-from: type=gha");
+      expect(block).toContain("cache-to: type=gha");
+      expect(block).not.toContain("freeze-release-candidate-refs.mjs");
+    }
+  });
+
   it("keeps wide production mutation topology in delivery and replay", () => {
     const delivery = readUtf8(cloudDeploymentPipelineWorkflowPath);
     const replay = readUtf8(cloudDeploymentPipelineReplayWorkflowPath);

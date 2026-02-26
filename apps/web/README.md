@@ -38,7 +38,9 @@ Local template: `apps/web/.env.example`.
 
 - `react-router.config.ts` sets `ssr: false`.
 - Build command is `react-router build`.
-- Runtime command serves static output from `build/client` on port `3000`.
+- Local runtime command serves static output from `build/client` on port `3000`.
+- Docker runtime serves static output with non-root `nginx` on port `3000`.
+- SPA fallback is configured with `try_files $uri /index.html` in `apps/web/nginx/default.conf`.
 - Docker build supports overriding `VITE_API_BASE_URL` via build arg.
 
 ## Commands

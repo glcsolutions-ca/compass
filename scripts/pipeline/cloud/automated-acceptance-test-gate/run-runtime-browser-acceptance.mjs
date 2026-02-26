@@ -54,7 +54,7 @@ docker run -d \
   --name "$web_container" \
   --network "$docker_network" \
   -p 3000:3000 \
-  -e API_BASE_URL="http://${api_container}:3001" \
+  -e API_BASE_URL="http://$api_container:3001" \
   "${webRef}"
 
 for i in $(seq 1 90); do

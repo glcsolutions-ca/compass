@@ -4,19 +4,27 @@ param managedEnvironmentId string
 param image string
 param registryServer string
 param registryIdentityResourceId string
+param sessionExecutorIdentityResourceId string = ''
 @secure()
 param databaseUrl string
 param logLevel string = 'warn'
 param customDomainName string = ''
+
+var userAssignedIdentityMap = empty(sessionExecutorIdentityResourceId)
+  ? {
+      '${registryIdentityResourceId}': {}
+    }
+  : {
+      '${registryIdentityResourceId}': {}
+      '${sessionExecutorIdentityResourceId}': {}
+    }
 
 resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
   name: containerAppName
   location: location
   identity: {
     type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${registryIdentityResourceId}': {}
-    }
+    userAssignedIdentities: userAssignedIdentityMap
   }
   properties: {
     managedEnvironmentId: managedEnvironmentId

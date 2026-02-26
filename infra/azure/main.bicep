@@ -23,6 +23,8 @@ param webAppName string = 'SET_IN_GITHUB_ENV'
 param workerAppName string = 'SET_IN_GITHUB_ENV'
 param workerRuntimeIdentityName string = 'SET_IN_GITHUB_ENV'
 param codexAppName string = 'SET_IN_GITHUB_ENV'
+param dynamicSessionsPoolName string = 'SET_IN_GITHUB_ENV'
+param dynamicSessionsExecutorIdentityName string = 'SET_IN_GITHUB_ENV'
 param migrationJobName string = 'SET_IN_GITHUB_ENV'
 param acrPullIdentityName string = 'SET_IN_GITHUB_ENV'
 param acrName string = 'SET_IN_GITHUB_ENV'
@@ -42,6 +44,7 @@ param apiImage string = 'SET_IN_GITHUB_ENV'
 param webImage string = 'SET_IN_GITHUB_ENV'
 param workerImage string = 'SET_IN_GITHUB_ENV'
 param codexImage string = 'SET_IN_GITHUB_ENV'
+param dynamicSessionsRuntimeImage string = 'SET_IN_GITHUB_ENV'
 @secure()
 param webSessionSecret string
 param entraLoginEnabled string = 'false'
@@ -85,6 +88,10 @@ var acrPullRoleDefinitionId = subscriptionResourceId(
 var serviceBusDataReceiverRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
   '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0'
+)
+var sessionExecutorRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '0fb8eba5-a2bb-4abe-b1c1-49dfad359bb0'
 )
 
 module network './modules/network.bicep' = {
@@ -178,6 +185,11 @@ resource acrPullIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
 
 resource workerRuntimeIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: workerRuntimeIdentityName
+  location: location
+}
+
+resource dynamicSessionsExecutorIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: dynamicSessionsExecutorIdentityName
   location: location
 }
 
@@ -302,9 +314,27 @@ module codex './modules/containerapp-codex.bicep' = {
     image: codexImage
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
+    sessionExecutorIdentityResourceId: dynamicSessionsExecutorIdentity.id
     databaseUrl: databaseUrl
     logLevel: codexLogLevel
     customDomainName: codexCustomDomain
+  }
+  dependsOn: [
+    acrPullIdentityRoleAssignment
+  ]
+}
+
+module dynamicSessions './modules/sessionpool-dynamic-sessions.bicep' = {
+  name: 'sessionpool-dynamic-sessions'
+  params: {
+    location: location
+    sessionPoolName: dynamicSessionsPoolName
+    environmentId: containerEnvironment.outputs.environmentId
+    image: dynamicSessionsRuntimeImage
+    registryServer: acr.outputs.loginServer
+    registryIdentityResourceId: acrPullIdentity.id
+    sessionExecutorPrincipalId: dynamicSessionsExecutorIdentity.properties.principalId
+    sessionExecutorRoleDefinitionId: sessionExecutorRoleDefinitionId
   }
   dependsOn: [
     acrPullIdentityRoleAssignment
@@ -346,6 +376,8 @@ output acrPullIdentityPrincipalId string = acrPullIdentity.properties.principalI
 output workerRuntimeIdentityId string = workerRuntimeIdentity.id
 output workerRuntimeIdentityPrincipalId string = workerRuntimeIdentity.properties.principalId
 output workerRuntimeIdentityClientId string = workerRuntimeIdentity.properties.clientId
+output dynamicSessionsExecutorIdentityId string = dynamicSessionsExecutorIdentity.id
+output dynamicSessionsExecutorIdentityPrincipalId string = dynamicSessionsExecutorIdentity.properties.principalId
 output serviceBusProdNamespaceNameOutput string = serviceBusProd.outputs.namespaceNameOutput
 output serviceBusProdNamespaceFqdn string = serviceBusProd.outputs.namespaceFqdn
 output serviceBusProdQueueId string = serviceBusProd.outputs.queueId
@@ -366,6 +398,11 @@ output workerLatestRevision string = worker.outputs.latestRevisionName
 output codexContainerAppName string = codex.outputs.appName
 output codexLatestRevision string = codex.outputs.latestRevisionName
 output codexLatestRevisionFqdn string = codex.outputs.latestRevisionFqdn
+
+output dynamicSessionsPoolId string = dynamicSessions.outputs.sessionPoolId
+output dynamicSessionsPoolNameOutput string = dynamicSessions.outputs.sessionPoolNameOutput
+output dynamicSessionsPoolManagementEndpoint string = dynamicSessions.outputs.poolManagementEndpoint
+output dynamicSessionsSessionExecutorRoleAssignmentId string = dynamicSessions.outputs.sessionExecutorRoleAssignmentId
 
 output migrationJobName string = migrateJob.outputs.jobNameOutput
 output migrationJobId string = migrateJob.outputs.jobId

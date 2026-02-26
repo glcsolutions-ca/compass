@@ -78,6 +78,7 @@ jobs:
       release_candidate_web_ref: ${{ steps.manifest.outputs.release_candidate_web_ref }}
       release_candidate_worker_ref: ${{ steps.manifest.outputs.release_candidate_worker_ref }}
       release_candidate_codex_ref: ${{ steps.manifest.outputs.release_candidate_codex_ref }}
+      release_candidate_dynamic_sessions_runtime_ref: ${{ steps.manifest.outputs.release_candidate_dynamic_sessions_runtime_ref }}
       commit_run_id: ${{ steps.manifest.outputs.commit_run_id }}
       release_candidate_ref_contract_status: ${{ steps.manifest.outputs.release_candidate_ref_contract_status }}
       release_candidate_ref_contract_reason_codes_json: ${{ steps.manifest.outputs.release_candidate_ref_contract_reason_codes_json }}
@@ -128,6 +129,7 @@ jobs:
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
       RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
       RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
+      RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
       RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
@@ -343,6 +345,7 @@ jobs:
       WEB_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
       WORKER_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
       CODEX_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
+      DYNAMIC_SESSIONS_RUNTIME_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
       RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
       RELEASE_CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_reason_codes_json }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
@@ -389,6 +392,8 @@ jobs:
       AUTH_BOOTSTRAP_DELEGATED_USER_OID: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_OID }}
       AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL }}
       WORKER_RUNTIME_IDENTITY_NAME: ${{ vars.WORKER_RUNTIME_IDENTITY_NAME }}
+      DYNAMIC_SESSIONS_POOL_NAME: ${{ vars.DYNAMIC_SESSIONS_POOL_NAME }}
+      DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME: ${{ vars.DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME }}
       SERVICE_BUS_PROD_NAMESPACE_NAME: ${{ vars.SERVICE_BUS_PROD_NAMESPACE_NAME }}
       SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME: ${{ vars.SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME }}
       SERVICE_BUS_QUEUE_NAME: ${{ vars.SERVICE_BUS_QUEUE_NAME }}
@@ -424,7 +429,7 @@ jobs:
             exit 1
           fi
 
-          for image in "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$CODEX_IMAGE"; do
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$CODEX_IMAGE" "$DYNAMIC_SESSIONS_RUNTIME_IMAGE"; do
             if [ -z "$image" ]; then
               echo "Release candidate image reference is missing for infra acceptance" >&2
               exit 1
@@ -832,6 +837,8 @@ jobs:
       AUTH_BOOTSTRAP_DELEGATED_USER_OID: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_OID }}
       AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL }}
       WORKER_RUNTIME_IDENTITY_NAME: ${{ vars.WORKER_RUNTIME_IDENTITY_NAME }}
+      DYNAMIC_SESSIONS_POOL_NAME: ${{ vars.DYNAMIC_SESSIONS_POOL_NAME }}
+      DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME: ${{ vars.DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME }}
       SERVICE_BUS_PROD_NAMESPACE_NAME: ${{ vars.SERVICE_BUS_PROD_NAMESPACE_NAME }}
       SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME: ${{ vars.SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME }}
       SERVICE_BUS_QUEUE_NAME: ${{ vars.SERVICE_BUS_QUEUE_NAME }}
@@ -853,7 +860,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_WORKER_REF" "$RELEASE_CANDIDATE_CODEX_REF"; do
+          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_WORKER_REF" "$RELEASE_CANDIDATE_CODEX_REF" "$RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF"; do
             if [ -z "$image" ]; then
               echo "Release candidate image reference is missing for infra deployment" >&2
               exit 1
@@ -900,6 +907,7 @@ jobs:
           WEB_IMAGE: ${{ env.RELEASE_CANDIDATE_WEB_REF }}
           WORKER_IMAGE: ${{ env.RELEASE_CANDIDATE_WORKER_REF }}
           CODEX_IMAGE: ${{ env.RELEASE_CANDIDATE_CODEX_REF }}
+          DYNAMIC_SESSIONS_RUNTIME_IMAGE: ${{ env.RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF }}
           ARM_PARAMETERS_FILE: .artifacts/infra/${{ env.HEAD_SHA }}/runtime.parameters.json
         run: |
           set -euo pipefail
@@ -967,6 +975,7 @@ jobs:
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
       RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
       RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
+      RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
@@ -1165,6 +1174,7 @@ jobs:
           RELEASE_CANDIDATE_WEB_REF: ${{ env.RELEASE_CANDIDATE_WEB_REF }}
           RELEASE_CANDIDATE_WORKER_REF: ${{ env.RELEASE_CANDIDATE_WORKER_REF }}
           RELEASE_CANDIDATE_CODEX_REF: ${{ env.RELEASE_CANDIDATE_CODEX_REF }}
+          RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ env.RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF }}
           CHANGE_CLASS: ${{ env.CHANGE_CLASS }}
         run: node scripts/pipeline/cloud/deployment-stage/record-release.mjs
 
@@ -1183,7 +1193,8 @@ jobs:
               "api": "$RELEASE_CANDIDATE_API_REF",
               "web": "$RELEASE_CANDIDATE_WEB_REF",
               "worker": "$RELEASE_CANDIDATE_WORKER_REF",
-              "codex": "$RELEASE_CANDIDATE_CODEX_REF"
+              "codex": "$RELEASE_CANDIDATE_CODEX_REF",
+              "dynamicSessionsRuntime": "$RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF"
             }
           }
           JSON
@@ -1295,6 +1306,7 @@ jobs:
           RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
           RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
           RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
+          RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
           DEPLOY_RESULT: ${{ needs.deploy_release_candidate.result }}
           VERIFY_RESULT: ${{ needs.production_blackbox_verify.result }}
           DEPLOYMENT_ID: ${{ needs.deploy_release_candidate.outputs.deployment_id }}
@@ -1359,6 +1371,7 @@ jobs:
           RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
           RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
           RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
+          RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
         run: node scripts/pipeline/shared/decide-release-outcome.mjs
 
       - name: Upload release decision artifact

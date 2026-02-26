@@ -101,6 +101,7 @@ describe("workflow pipeline contract", () => {
     expect(workflow).toContain("name: build-release-candidate-web-image");
     expect(workflow).toContain("name: build-release-candidate-worker-image");
     expect(workflow).toContain("name: build-release-candidate-codex-image");
+    expect(workflow).toContain("name: build-release-candidate-dynamic-sessions-runtime-image");
     expect(workflow).toContain("name: capture-current-runtime-refs");
 
     expect(deployFinalizerJob).not.toContain("docker build");
@@ -113,7 +114,8 @@ describe("workflow pipeline contract", () => {
       "build_release_candidate_api_image",
       "build_release_candidate_web_image",
       "build_release_candidate_worker_image",
-      "build_release_candidate_codex_image"
+      "build_release_candidate_codex_image",
+      "build_release_candidate_dynamic_sessions_runtime_image"
     ];
 
     for (const jobName of buildJobs) {
@@ -263,6 +265,7 @@ describe("workflow pipeline contract", () => {
     expect(replay).not.toContain("  build_release_candidate_web_image:");
     expect(replay).not.toContain("  build_release_candidate_worker_image:");
     expect(replay).not.toContain("  build_release_candidate_codex_image:");
+    expect(replay).not.toContain("  build_release_candidate_dynamic_sessions_runtime_image:");
   });
 
   it("keeps dynamic sessions convergence fail-safe in deployment workflows", () => {
@@ -281,7 +284,10 @@ describe("workflow pipeline contract", () => {
       expect(workflow).toContain(
         "RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}"
       );
+      expect(workflow).toContain("release_candidate_dynamic_sessions_runtime_ref");
     }
+
+    expect(delivery).toContain("dynamicSessionsRuntimeRef");
   });
 
   it("keeps shared ARM infra apply script on explicit validate/create deployment names", () => {

@@ -44,6 +44,10 @@ async function main() {
       workerAppName: { value: requireEnv("ACA_WORKER_APP_NAME") },
       workerRuntimeIdentityName: { value: requireEnv("WORKER_RUNTIME_IDENTITY_NAME") },
       codexAppName: { value: requireEnv("ACA_CODEX_APP_NAME") },
+      dynamicSessionsPoolName: { value: requireEnv("DYNAMIC_SESSIONS_POOL_NAME") },
+      dynamicSessionsExecutorIdentityName: {
+        value: requireEnv("DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME")
+      },
       webSessionSecret: { value: requireEnv("WEB_SESSION_SECRET") },
       entraLoginEnabled: { value: entraLoginEnabled },
       entraClientId: { value: readOptional("ENTRA_CLIENT_ID") },
@@ -87,6 +91,7 @@ async function main() {
       webImage: { value: requireEnv("WEB_IMAGE") },
       workerImage: { value: requireEnv("WORKER_IMAGE") },
       codexImage: { value: requireEnv("CODEX_IMAGE") },
+      dynamicSessionsRuntimeImage: { value: requireEnv("DYNAMIC_SESSIONS_RUNTIME_IMAGE") },
       serviceBusProdNamespaceName: { value: requireEnv("SERVICE_BUS_PROD_NAMESPACE_NAME") },
       serviceBusAcceptanceNamespaceName: {
         value: requireEnv("SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME")

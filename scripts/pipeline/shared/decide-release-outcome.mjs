@@ -37,7 +37,8 @@ async function main() {
       apiRef: process.env.RELEASE_CANDIDATE_API_REF || "",
       webRef: process.env.RELEASE_CANDIDATE_WEB_REF || "",
       workerRef: process.env.RELEASE_CANDIDATE_WORKER_REF || "",
-      codexRef: process.env.RELEASE_CANDIDATE_CODEX_REF || ""
+      codexRef: process.env.RELEASE_CANDIDATE_CODEX_REF || "",
+      dynamicSessionsRuntimeRef: process.env.RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF || ""
     }
   });
 

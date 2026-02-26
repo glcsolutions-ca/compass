@@ -42,6 +42,7 @@ It covers only infrastructure and delivery plumbing, not chat-thread routing log
 4. `deploy-infra` now verifies Dynamic Sessions convergence after infra apply (`dynamic-sessions-convergence.json` artifact).
 5. Replay workflow consumes the same manifest and does not rebuild images.
 6. Manual acceptance rehearsal is available in `dynamic-sessions-acceptance-rehearsal.yml` to apply infra and verify Dynamic Sessions convergence for an existing release candidate.
+7. Required GitHub environment vars: `DYNAMIC_SESSIONS_POOL_NAME`, `DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME`.
 
 ## Rollout Guardrails
 

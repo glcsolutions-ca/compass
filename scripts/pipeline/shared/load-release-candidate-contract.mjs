@@ -30,6 +30,9 @@ async function main() {
   const releaseCandidateWebRef = String(manifest?.releaseCandidate?.webRef || "");
   const releaseCandidateWorkerRef = String(manifest?.releaseCandidate?.workerRef || "");
   const releaseCandidateCodexRef = String(manifest?.releaseCandidate?.codexRef || "");
+  const releaseCandidateDynamicSessionsRuntimeRef = String(
+    manifest?.releaseCandidate?.dynamicSessionsRuntimeRef || ""
+  );
 
   const reasonCodes = [];
   const requiresReleasePackageRefs = runtimeChanged || infraChanged || requiresInfraConvergence;
@@ -47,6 +50,9 @@ async function main() {
     if (!releaseCandidateCodexRef) {
       reasonCodes.push("RELEASE_CANDIDATE_CODEX_REF_MISSING");
     }
+    if (!releaseCandidateDynamicSessionsRuntimeRef) {
+      reasonCodes.push("RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF_MISSING");
+    }
 
     if (releaseCandidateApiRef && !DIGEST_PATTERN.test(releaseCandidateApiRef)) {
       reasonCodes.push("RELEASE_CANDIDATE_API_REF_NOT_DIGEST");
@@ -59,6 +65,12 @@ async function main() {
     }
     if (releaseCandidateCodexRef && !DIGEST_PATTERN.test(releaseCandidateCodexRef)) {
       reasonCodes.push("RELEASE_CANDIDATE_CODEX_REF_NOT_DIGEST");
+    }
+    if (
+      releaseCandidateDynamicSessionsRuntimeRef &&
+      !DIGEST_PATTERN.test(releaseCandidateDynamicSessionsRuntimeRef)
+    ) {
+      reasonCodes.push("RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF_NOT_DIGEST");
     }
   }
 
@@ -94,6 +106,7 @@ async function main() {
     release_candidate_web_ref: releaseCandidateWebRef,
     release_candidate_worker_ref: releaseCandidateWorkerRef,
     release_candidate_codex_ref: releaseCandidateCodexRef,
+    release_candidate_dynamic_sessions_runtime_ref: releaseCandidateDynamicSessionsRuntimeRef,
     commit_run_id: runId,
     release_candidate_ref_contract_status: releaseCandidateRefContractStatus,
     release_candidate_ref_contract_reason_codes_json: JSON.stringify(reasonCodes),

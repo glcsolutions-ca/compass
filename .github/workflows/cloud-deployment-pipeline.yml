@@ -340,6 +340,52 @@ jobs:
         id: set_ref
         run: echo "release_candidate_codex_ref=${ACR_REGISTRY}/compass-codex-app-server@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
+  build_release_candidate_dynamic_sessions_runtime_image:
+    name: build-release-candidate-dynamic-sessions-runtime-image
+    needs:
+      - determine_scope
+    if: ${{ needs.determine_scope.outputs.runtime_changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    outputs:
+      release_candidate_dynamic_sessions_runtime_ref: ${{ steps.set_ref.outputs.release_candidate_dynamic_sessions_runtime_ref }}
+    env:
+      HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: ACR login
+        run: az acr login --name "$ACR_NAME" --only-show-errors
+
+      - name: Build and push release candidate Dynamic Sessions runtime image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/codex-session-runtime/Dockerfile
+          push: true
+          tags: ${{ env.ACR_REGISTRY }}/compass-codex-session-runtime:${{ env.HEAD_SHA }}
+          cache-from: type=gha,scope=compass-codex-session-runtime
+          cache-to: type=gha,scope=compass-codex-session-runtime,mode=max
+
+      - name: Set release candidate Dynamic Sessions runtime ref
+        id: set_ref
+        run: echo "release_candidate_dynamic_sessions_runtime_ref=${ACR_REGISTRY}/compass-codex-session-runtime@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
   capture_current_runtime_refs:
     name: capture-current-runtime-refs
     needs:
@@ -353,6 +399,7 @@ jobs:
       release_candidate_web_ref: ${{ steps.freeze.outputs.release_candidate_web_ref }}
       release_candidate_worker_ref: ${{ steps.freeze.outputs.release_candidate_worker_ref }}
       release_candidate_codex_ref: ${{ steps.freeze.outputs.release_candidate_codex_ref }}
+      release_candidate_dynamic_sessions_runtime_ref: ${{ steps.freeze.outputs.release_candidate_dynamic_sessions_runtime_ref }}
     env:
       ACR_NAME: ${{ vars.ACR_NAME }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
@@ -360,6 +407,7 @@ jobs:
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
       ACA_WORKER_APP_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
       ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
+      DYNAMIC_SESSIONS_POOL_NAME: ${{ vars.DYNAMIC_SESSIONS_POOL_NAME }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -392,8 +440,9 @@ jobs:
       - build_release_candidate_web_image
       - build_release_candidate_worker_image
       - build_release_candidate_codex_image
+      - build_release_candidate_dynamic_sessions_runtime_image
       - capture_current_runtime_refs
-    if: ${{ always() && needs.verify_commit_stage_evidence.result == 'success' && needs.verify_integration_gate_evidence.result == 'success' && needs.determine_scope.result == 'success' && ((needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_api_image.result == 'success' && needs.build_release_candidate_web_image.result == 'success' && needs.build_release_candidate_worker_image.result == 'success' && needs.build_release_candidate_codex_image.result == 'success') || ((needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.requires_infra_convergence == 'true') && needs.capture_current_runtime_refs.result == 'success') || (needs.determine_scope.outputs.runtime_changed != 'true' && needs.determine_scope.outputs.infra_changed != 'true' && needs.determine_scope.outputs.requires_infra_convergence != 'true')) }}
+    if: ${{ always() && needs.verify_commit_stage_evidence.result == 'success' && needs.verify_integration_gate_evidence.result == 'success' && needs.determine_scope.result == 'success' && ((needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_api_image.result == 'success' && needs.build_release_candidate_web_image.result == 'success' && needs.build_release_candidate_worker_image.result == 'success' && needs.build_release_candidate_codex_image.result == 'success' && needs.build_release_candidate_dynamic_sessions_runtime_image.result == 'success') || ((needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.requires_infra_convergence == 'true') && needs.capture_current_runtime_refs.result == 'success') || (needs.determine_scope.outputs.runtime_changed != 'true' && needs.determine_scope.outputs.infra_changed != 'true' && needs.determine_scope.outputs.requires_infra_convergence != 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -415,10 +464,12 @@ jobs:
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_web_image.outputs.release_candidate_web_ref || needs.capture_current_runtime_refs.outputs.release_candidate_web_ref }}
       RELEASE_CANDIDATE_WORKER_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_worker_image.outputs.release_candidate_worker_ref || needs.capture_current_runtime_refs.outputs.release_candidate_worker_ref }}
       RELEASE_CANDIDATE_CODEX_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_codex_image.outputs.release_candidate_codex_ref || needs.capture_current_runtime_refs.outputs.release_candidate_codex_ref }}
+      RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_dynamic_sessions_runtime_image.outputs.release_candidate_dynamic_sessions_runtime_ref || needs.capture_current_runtime_refs.outputs.release_candidate_dynamic_sessions_runtime_ref }}
       FREEZE_API_RESULT: ${{ needs.build_release_candidate_api_image.result }}
       FREEZE_WEB_RESULT: ${{ needs.build_release_candidate_web_image.result }}
       FREEZE_WORKER_RESULT: ${{ needs.build_release_candidate_worker_image.result }}
       FREEZE_CODEX_RESULT: ${{ needs.build_release_candidate_codex_image.result }}
+      FREEZE_DYNAMIC_SESSIONS_RUNTIME_RESULT: ${{ needs.build_release_candidate_dynamic_sessions_runtime_image.result }}
       FREEZE_CURRENT_REFS_RESULT: ${{ needs.capture_current_runtime_refs.result }}
     steps:
       - name: Publish release candidate manifest
@@ -435,7 +486,7 @@ jobs:
           fi
 
           if [ "$RUNTIME_CHANGED" = "true" ]; then
-            if [ "$FREEZE_API_RESULT" != "success" ] || [ "$FREEZE_WEB_RESULT" != "success" ] || [ "$FREEZE_WORKER_RESULT" != "success" ] || [ "$FREEZE_CODEX_RESULT" != "success" ]; then
+            if [ "$FREEZE_API_RESULT" != "success" ] || [ "$FREEZE_WEB_RESULT" != "success" ] || [ "$FREEZE_WORKER_RESULT" != "success" ] || [ "$FREEZE_CODEX_RESULT" != "success" ] || [ "$FREEZE_DYNAMIC_SESSIONS_RUNTIME_RESULT" != "success" ]; then
               echo "Runtime release candidate refs are required but runtime freeze jobs did not all succeed." >&2
               exit 1
             fi
@@ -447,7 +498,7 @@ jobs:
           fi
 
           if [ "$requires_refs" = "true" ]; then
-            if [ -z "${RELEASE_CANDIDATE_API_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_WEB_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_WORKER_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_CODEX_REF:-}" ]; then
+            if [ -z "${RELEASE_CANDIDATE_API_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_WEB_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_WORKER_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_CODEX_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF:-}" ]; then
               echo "Release candidate refs are required but missing." >&2
               exit 1
             fi
@@ -476,7 +527,8 @@ jobs:
               "apiRef": "${RELEASE_CANDIDATE_API_REF:-}",
               "webRef": "${RELEASE_CANDIDATE_WEB_REF:-}",
               "workerRef": "${RELEASE_CANDIDATE_WORKER_REF:-}",
-              "codexRef": "${RELEASE_CANDIDATE_CODEX_REF:-}"
+              "codexRef": "${RELEASE_CANDIDATE_CODEX_REF:-}",
+              "dynamicSessionsRuntimeRef": "${RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF:-}"
             }
           }
           JSON
@@ -511,6 +563,7 @@ jobs:
       release_candidate_web_ref: ${{ steps.manifest.outputs.release_candidate_web_ref }}
       release_candidate_worker_ref: ${{ steps.manifest.outputs.release_candidate_worker_ref }}
       release_candidate_codex_ref: ${{ steps.manifest.outputs.release_candidate_codex_ref }}
+      release_candidate_dynamic_sessions_runtime_ref: ${{ steps.manifest.outputs.release_candidate_dynamic_sessions_runtime_ref }}
       commit_run_id: ${{ steps.manifest.outputs.commit_run_id }}
       release_candidate_ref_contract_status: ${{ steps.manifest.outputs.release_candidate_ref_contract_status }}
       release_candidate_ref_contract_reason_codes_json: ${{ steps.manifest.outputs.release_candidate_ref_contract_reason_codes_json }}
@@ -558,6 +611,7 @@ jobs:
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
       RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
       RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
+      RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
       RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
@@ -773,6 +827,7 @@ jobs:
       WEB_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
       WORKER_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
       CODEX_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
+      DYNAMIC_SESSIONS_RUNTIME_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
       RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
       RELEASE_CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_reason_codes_json }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
@@ -819,6 +874,8 @@ jobs:
       AUTH_BOOTSTRAP_DELEGATED_USER_OID: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_OID }}
       AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL }}
       WORKER_RUNTIME_IDENTITY_NAME: ${{ vars.WORKER_RUNTIME_IDENTITY_NAME }}
+      DYNAMIC_SESSIONS_POOL_NAME: ${{ vars.DYNAMIC_SESSIONS_POOL_NAME }}
+      DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME: ${{ vars.DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME }}
       SERVICE_BUS_PROD_NAMESPACE_NAME: ${{ vars.SERVICE_BUS_PROD_NAMESPACE_NAME }}
       SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME: ${{ vars.SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME }}
       SERVICE_BUS_QUEUE_NAME: ${{ vars.SERVICE_BUS_QUEUE_NAME }}
@@ -854,7 +911,7 @@ jobs:
             exit 1
           fi
 
-          for image in "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$CODEX_IMAGE"; do
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$CODEX_IMAGE" "$DYNAMIC_SESSIONS_RUNTIME_IMAGE"; do
             if [ -z "$image" ]; then
               echo "Release candidate image reference is missing for infra acceptance" >&2
               exit 1
@@ -1262,6 +1319,8 @@ jobs:
       AUTH_BOOTSTRAP_DELEGATED_USER_OID: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_OID }}
       AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL }}
       WORKER_RUNTIME_IDENTITY_NAME: ${{ vars.WORKER_RUNTIME_IDENTITY_NAME }}
+      DYNAMIC_SESSIONS_POOL_NAME: ${{ vars.DYNAMIC_SESSIONS_POOL_NAME }}
+      DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME: ${{ vars.DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME }}
       SERVICE_BUS_PROD_NAMESPACE_NAME: ${{ vars.SERVICE_BUS_PROD_NAMESPACE_NAME }}
       SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME: ${{ vars.SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME }}
       SERVICE_BUS_QUEUE_NAME: ${{ vars.SERVICE_BUS_QUEUE_NAME }}
@@ -1283,7 +1342,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_WORKER_REF" "$RELEASE_CANDIDATE_CODEX_REF"; do
+          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_WORKER_REF" "$RELEASE_CANDIDATE_CODEX_REF" "$RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF"; do
             if [ -z "$image" ]; then
               echo "Release candidate image reference is missing for infra deployment" >&2
               exit 1
@@ -1330,6 +1389,7 @@ jobs:
           WEB_IMAGE: ${{ env.RELEASE_CANDIDATE_WEB_REF }}
           WORKER_IMAGE: ${{ env.RELEASE_CANDIDATE_WORKER_REF }}
           CODEX_IMAGE: ${{ env.RELEASE_CANDIDATE_CODEX_REF }}
+          DYNAMIC_SESSIONS_RUNTIME_IMAGE: ${{ env.RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF }}
           ARM_PARAMETERS_FILE: .artifacts/infra/${{ env.HEAD_SHA }}/runtime.parameters.json
         run: |
           set -euo pipefail
@@ -1397,6 +1457,7 @@ jobs:
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
       RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
       RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
+      RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
@@ -1595,6 +1656,7 @@ jobs:
           RELEASE_CANDIDATE_WEB_REF: ${{ env.RELEASE_CANDIDATE_WEB_REF }}
           RELEASE_CANDIDATE_WORKER_REF: ${{ env.RELEASE_CANDIDATE_WORKER_REF }}
           RELEASE_CANDIDATE_CODEX_REF: ${{ env.RELEASE_CANDIDATE_CODEX_REF }}
+          RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ env.RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF }}
           CHANGE_CLASS: ${{ env.CHANGE_CLASS }}
         run: node scripts/pipeline/cloud/deployment-stage/record-release.mjs
 
@@ -1613,7 +1675,8 @@ jobs:
               "api": "$RELEASE_CANDIDATE_API_REF",
               "web": "$RELEASE_CANDIDATE_WEB_REF",
               "worker": "$RELEASE_CANDIDATE_WORKER_REF",
-              "codex": "$RELEASE_CANDIDATE_CODEX_REF"
+              "codex": "$RELEASE_CANDIDATE_CODEX_REF",
+              "dynamicSessionsRuntime": "$RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF"
             }
           }
           JSON
@@ -1725,6 +1788,7 @@ jobs:
           RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
           RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
           RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
+          RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
           DEPLOY_RESULT: ${{ needs.deploy_release_candidate.result }}
           VERIFY_RESULT: ${{ needs.production_blackbox_verify.result }}
           DEPLOYMENT_ID: ${{ needs.deploy_release_candidate.outputs.deployment_id }}
@@ -1790,6 +1854,7 @@ jobs:
           RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
           RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
           RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
+          RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
         run: node scripts/pipeline/shared/decide-release-outcome.mjs
 
       - name: Upload release decision artifact

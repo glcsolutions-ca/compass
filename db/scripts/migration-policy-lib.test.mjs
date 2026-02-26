@@ -25,6 +25,16 @@ async function writeMigration(dir, fileName, content = "export async function up
 }
 
 describe("migration-policy-lib", () => {
+  it("accepts legacy hyphenated migration names for compatibility", async () => {
+    await withTempDir(async (migrationsDir) => {
+      await writeMigration(migrationsDir, "1771913577531_auth-foundation.mjs");
+
+      const result = await validateMigrationDirectory({ migrationsDir });
+      expect(result.failures).toEqual([]);
+      expect(result.migrationFiles).toEqual(["1771913577531_auth-foundation.mjs"]);
+    });
+  });
+
   it("passes policy validation for a valid migration set", async () => {
     await withTempDir(async (migrationsDir) => {
       const checksumsPath = path.join(migrationsDir, "checksums.json");

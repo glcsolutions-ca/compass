@@ -189,9 +189,44 @@ export default tseslint.config(
             "@compass/*/src/*",
             "@compass/*/dist/*",
             "../*",
+            "../../*",
+            "../../../*",
             "~/routes/*",
             "apps/web/app/routes/*"
           ]
+        }
+      ]
+    }
+  },
+  {
+    files: ["apps/web/app/features/auth/**/*.ts", "apps/web/app/features/auth/**/*.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: ["~/features/workspace/*", "~/features/chat/*"]
+        }
+      ]
+    }
+  },
+  {
+    files: ["apps/web/app/features/workspace/**/*.ts", "apps/web/app/features/workspace/**/*.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: ["~/features/chat/*"]
+        }
+      ]
+    }
+  },
+  {
+    files: ["apps/web/app/features/chat/**/*.ts", "apps/web/app/features/chat/**/*.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: ["~/features/workspace/*"]
         }
       ]
     }

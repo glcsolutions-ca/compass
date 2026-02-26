@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { __private__ } from "~/shell/theme-toggle";
+import { __private__ } from "~/components/shell/theme-toggle";
 
 describe("theme toggle internals", () => {
   afterEach(() => {

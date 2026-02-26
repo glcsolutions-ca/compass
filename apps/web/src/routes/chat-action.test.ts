@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { submitTenantChatAction } from "~/routes/app.t.$tenantSlug.chat/action";
+import { clientAction as chatAction } from "~/routes/app/chat/route";
 
 describe("tenant chat action", () => {
   it("requires a prompt", async () => {
@@ -7,7 +7,7 @@ describe("tenant chat action", () => {
     formData.set("intent", "sendMessage");
     formData.set("prompt", "");
 
-    const result = await submitTenantChatAction({
+    const result = await chatAction({
       request: new Request("http://web.test/t/acme/chat", {
         method: "POST",
         body: formData
@@ -26,7 +26,7 @@ describe("tenant chat action", () => {
     formData.set("intent", "sendMessage");
     formData.set("prompt", "hello");
 
-    const result = await submitTenantChatAction({
+    const result = await chatAction({
       request: new Request("http://web.test/t/acme/chat", {
         method: "POST",
         body: formData

@@ -18,14 +18,14 @@ General documentation and architecture records live here.
 - `architecture/foundation-baseline.md`
 - `architecture/brand-architecture.md`
 - `architecture/auth-threat-model-v1.md`
-- `architecture/frontend-constitution.md`
+- `architecture/frontend-constitution.md` (v2)
 - `adr/README.md`
 - `adr/TDR-001-initial-stack-baseline.md`
 - `adr/TDR-002-production-container-registry-strategy.md`
 - `adr/TDR-003-cloud-deployment-pipeline-visualization-model.md`
 - `adr/TDR-004-cloud-deployment-pipeline-and-desktop-naming-followup.md`
 - `adr/TDR-005-entra-only-auth-v1-baseline.md`
-- `adr/TDR-006-frontend-constitution-v1.md`
+- `adr/TDR-006-frontend-constitution-v1.md` (v2 cutover decision record)
 
 ## Runbooks
 

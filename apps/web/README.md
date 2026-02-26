@@ -3,7 +3,7 @@
 ## Purpose
 
 `apps/web` is the React Router 7 frontend for Compass.
-It runs in framework mode with `ssr: false` and follows Frontend Constitution v1.
+It runs in framework mode with `ssr: false` and follows Frontend Constitution v2.
 
 ## Frontend Constitution
 
@@ -14,7 +14,7 @@ Normative architecture and guardrails are defined in:
 
 Key requirements:
 
-- React Router data APIs (`clientLoader`/`clientAction`) for route I/O
+- React Router `clientLoader`/`clientAction` route APIs for route I/O
 - `@compass/sdk` for Compass API calls
 - shadcn/Radix primitive component policy
 - Tailwind + CSS variable tokens with first-class light/dark mode
@@ -24,21 +24,23 @@ Key requirements:
 
 ```text
 app/
-  shell/
-  ui/shadcn/
-  ui/icons/
-  lib/{api,auth,workspace}/
-  styles/globals.css
+  app.css
+  root.tsx
+  routes.ts
+  components/{ui,icons,shell}/
+  features/{auth,workspace,chat}/
+  lib/{api,auth,utils}/
   routes/
-    public.login/
-    app.root/
-    app.workspaces/
-    app.t.$tenantSlug.chat/
+    root-redirect/route.tsx
+    public/login/route.tsx
+    app/layout/route.tsx
+    app/workspaces/route.tsx
+    app/chat/route.tsx
 ```
 
 ## Route Surface
 
-- `GET /` -> login route
+- `GET /` -> auth-aware redirect route
 - `GET /login` -> login route
 - `GET /workspaces` -> authenticated workspace directory
 - `GET /t/:tenantSlug/chat` -> authenticated tenant chat shell route

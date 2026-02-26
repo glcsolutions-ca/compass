@@ -1,5 +1,5 @@
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
-import "./styles/globals.css";
+import "./app.css";
 
 const THEME_SCRIPT = `(() => {
   const key = "compass-theme";

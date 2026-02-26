@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { submitWorkspacesAction } from "~/routes/app.workspaces/action";
+import { clientAction as workspacesAction } from "~/routes/app/workspaces/route";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -12,7 +12,7 @@ describe("workspaces action", () => {
     formData.set("slug", "");
     formData.set("name", "Acme");
 
-    const result = await submitWorkspacesAction({
+    const result = await workspacesAction({
       request: new Request("http://web.test/workspaces", {
         method: "POST",
         body: formData
@@ -45,7 +45,7 @@ describe("workspaces action", () => {
     formData.set("slug", "acme");
     formData.set("name", "Acme Corp");
 
-    const response = (await submitWorkspacesAction({
+    const response = (await workspacesAction({
       request: new Request("http://web.test/workspaces", {
         method: "POST",
         body: formData

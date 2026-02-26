@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWorkspaceMenuItems } from "~/shell/workspace-switcher";
+import { buildWorkspaceMenuItems } from "~/components/shell/workspace-switcher";
 
 describe("workspace switcher", () => {
   it("marks the active workspace", () => {

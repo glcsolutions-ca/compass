@@ -1,4 +1,4 @@
-# Frontend Constitution v1
+# Frontend Constitution v2
 
 ## Purpose
 
@@ -6,38 +6,54 @@ Define the non-negotiable implementation contract for `apps/web` so the frontend
 
 ## Scope
 
-- React Router 7 web frontend in `apps/web`
+- React Router 7 framework frontend in `apps/web`
 - Authenticated shell and workspace switching UX
 - Route/module boundaries
-- Theming and component system standards
+- Tailwind + shadcn theming standards
 
-## Constitution Rules
+## Non-Negotiables
 
-1. **Data APIs only**
-   - Route data and mutations must use React Router data APIs (`clientLoader`, `clientAction`, `useNavigation`, `useFetcher`).
+1. **React Router data-first architecture**
+   - Route data and mutations must use `clientLoader` and `clientAction` APIs.
+   - Use `Form`, `useFetcher`, and `useNavigation` for mutations and pending UI.
+   - `loader` and `action` exports are not allowed in `ssr: false` SPA mode.
+
 2. **SDK-only Compass API access**
    - Route modules and components must not call raw `fetch` for Compass API routes.
    - Use `@compass/sdk` via `apps/web/app/lib/api/compass-client.ts`.
+
 3. **Component primitives policy**
-   - Use shadcn/Radix primitives as the base layer.
-   - Do not introduce bespoke base `Button`, `Input`, `Dialog`, `Dropdown` primitives.
+   - Use shadcn + Radix primitives as the base layer.
+   - Do not introduce bespoke base primitives (`Button`, `Input`, `Dialog`, `Dropdown`, etc.).
+   - Do not mix additional component frameworks.
+
 4. **Styling policy**
    - Tailwind utility classes + shadcn CSS variables are required.
-   - Global theme tokens live in `app/styles/globals.css`.
+   - Global token definitions live in `apps/web/app/app.css`.
+
 5. **Theme policy**
-   - Light and dark mode are required.
-   - Theme persists in local storage and must initialize before hydration flash.
+   - Light and dark mode are required from first commit.
+   - Theme is class-based on `<html>` and persists across reload.
+   - Theme initialization must run pre-hydration to avoid flash.
+
 6. **Workspace context authority**
    - Active workspace context is URL-driven (`/t/:tenantSlug/*`).
-   - Workspace switching must rewrite URL tenant slug rather than hidden local-only context.
+   - Workspace switching rewrites tenant slug in URL and preserves path/query/hash when possible.
+
 7. **Persistent authenticated shell**
-   - All authenticated routes render a common shell.
-   - Profile menu is anchored bottom-right and includes workspace switch + theme toggle + sign-out.
-8. **Route-first capsules**
-   - Each route lives in a route capsule folder (`route.tsx`, `loader.ts`, `action.ts`, `view.tsx`, plus optional `meta.ts`/`schema.ts`).
+   - Authenticated routes render a single shared shell layout.
+   - Shell includes rail navigation, bottom-right profile menu, theme toggle, workspace switcher, and sign-out.
+
+8. **Route-entrypoints + feature modules**
+   - Route entrypoints live in `app/routes/**` with one `route.tsx` per route folder.
+   - Domain logic lives in `app/features/**`.
+   - Shared UI lives in `app/components/**` and utilities in `app/lib/**`.
+
 9. **Boundary hygiene**
-   - Route files must not import from other route capsules using parent-relative imports.
-   - Shared logic belongs in `app/lib` or `app/shell`.
+   - Route modules must not import from other route modules.
+   - Route modules must not use parent-relative imports.
+   - Route modules may import from `~/features/**`, `~/components/**`, and `~/lib/**`.
+
 10. **Fail-closed enforcement**
     - Constitution drift must fail the quick gate via `ci:web-constitution-policy`.
 
@@ -45,29 +61,49 @@ Define the non-negotiable implementation contract for `apps/web` so the frontend
 
 ```text
 apps/web/app/
-  shell/
-  ui/shadcn/
-  ui/icons/
-  lib/api/
-  lib/auth/
-  lib/workspace/
-  styles/globals.css
-  routes/public.login/
-  routes/app.root/
-  routes/app.workspaces/
-  routes/app.t.$tenantSlug.chat/
+  app.css
+  root.tsx
+  routes.ts
+
+  components/
+    ui/
+    icons/
+    shell/
+
+  features/
+    auth/
+    workspace/
+    chat/
+
+  lib/
+    api/
+    auth/
+    utils/
+
+  routes/
+    root-redirect/route.tsx
+    public/login/route.tsx
+    app/layout/route.tsx
+    app/workspaces/route.tsx
+    app/chat/route.tsx
 ```
 
-## Route Contract v1
+## Route Contract
 
-- `/` -> login route
-- `/login` -> login route
-- `/workspaces` -> authenticated workspace selection/create/invite flow
-- `/t/:tenantSlug/chat` -> authenticated tenant-scoped chat shell route
+- `/` -> auth-aware redirect
+- `/login` -> login
+- `/workspaces` -> authenticated workspace management
+- `/t/:tenantSlug/chat` -> authenticated tenant-scoped chat
+
+## Runtime Constraints
+
+- `react-router.config.ts` remains `ssr: false`.
+- The architecture standard is still `clientLoader`/`clientAction` route APIs.
+- Backend contracts remain unchanged for this phase.
 
 ## Enforcement
 
-- ESLint route import restrictions in `eslint.config.mjs`
-- Constitution checks in `scripts/pipeline/commit/check-web-constitution.mjs`
+- ESLint import and boundary rules in `eslint.config.mjs`
+- Constitution policy script in `scripts/pipeline/commit/check-web-constitution.mjs`
 - Quick gate wiring in root `package.json` (`test:quick`)
 - PR checklist requirements in `.github/pull_request_template.md`

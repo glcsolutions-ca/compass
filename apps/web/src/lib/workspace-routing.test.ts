@@ -3,7 +3,7 @@ import {
   isTenantScopedPath,
   resolveWorkspaceHref,
   swapTenantSlugInPath
-} from "~/lib/workspace/workspace-routing";
+} from "~/features/workspace/workspace-routing";
 
 describe("workspace routing utilities", () => {
   it("detects tenant scoped paths", () => {

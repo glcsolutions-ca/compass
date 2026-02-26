@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadAuthShellData } from "~/shell/shell-loader";
+import { loadAuthShellData } from "~/features/auth/shell-loader";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -68,5 +68,15 @@ describe("shell loader", () => {
       ],
       lastActiveTenantSlug: "acme"
     });
+  });
+
+  it("throws when authenticated context cannot be loaded", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
+
+    await expect(
+      loadAuthShellData({
+        request: new Request("http://web.test/workspaces")
+      })
+    ).rejects.toThrow("Unable to load authenticated user context.");
   });
 });

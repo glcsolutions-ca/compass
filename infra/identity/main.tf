@@ -2,7 +2,7 @@ locals {
   repo_slug                  = "${var.github_organization}/${var.github_repository}"
   deploy_subject             = "repo:${local.repo_slug}:environment:${var.github_environment_name}"
   web_custom_domain          = trimspace(var.web_custom_domain)
-  entra_redirect_uri         = local.web_custom_domain != "" ? "https://${local.web_custom_domain}/api/auth/entra/callback" : ""
+  entra_redirect_uri         = local.web_custom_domain != "" ? "https://${local.web_custom_domain}/v1/auth/entra/callback" : ""
   web_redirect_uris_from_env = local.entra_redirect_uri != "" ? [local.entra_redirect_uri] : []
   web_redirect_uris          = distinct(concat(var.web_redirect_uris, local.web_redirect_uris_from_env))
   # Scratch-drill trigger marker: intentionally non-functional.

@@ -24,7 +24,7 @@
 - Web app client secrets are operator-managed (for `ENTRA_CLIENT_SECRET`).
 - Web redirect URIs are sourced from:
   - `infra/identity/env/prod.tfvars` (`web_redirect_uris`) for localhost defaults.
-  - `ACA_WEB_CUSTOM_DOMAIN` (pipeline environment variable), derived to `https://<domain>/api/auth/entra/callback`.
+  - `ACA_WEB_CUSTOM_DOMAIN` (pipeline environment variable), derived to `https://<domain>/v1/auth/entra/callback`.
 
 ## Backend and Auth
 

@@ -2,6 +2,7 @@ export interface ApiConfig {
   host: string;
   port: number;
   logLevel: string;
+  databaseUrl?: string;
 }
 
 const DEFAULT_API_HOST = "0.0.0.0";
@@ -29,10 +30,12 @@ function parseApiPort(rawPort: string | undefined): number {
 export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   const host = env.API_HOST?.trim() || DEFAULT_API_HOST;
   const port = parseApiPort(env.API_PORT);
+  const databaseUrl = env.DATABASE_URL?.trim() || undefined;
 
   return {
     host,
     port,
-    logLevel: env.LOG_LEVEL?.trim().toLowerCase() || DEFAULT_LOG_LEVEL
+    logLevel: env.LOG_LEVEL?.trim().toLowerCase() || DEFAULT_LOG_LEVEL,
+    databaseUrl
   };
 }

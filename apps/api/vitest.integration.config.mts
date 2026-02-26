@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     environment: "node",
+    fileParallelism: false,
     include: ["test/integration/**/*.test.ts"],
     setupFiles: ["../../packages/testkit/guardrails/integration.setup.mjs"]
   }

@@ -7,7 +7,8 @@ describe("loadApiConfig", () => {
     expect(config).toEqual({
       host: "0.0.0.0",
       port: 3001,
-      logLevel: "info"
+      logLevel: "info",
+      databaseUrl: undefined
     });
   });
 
@@ -21,7 +22,8 @@ describe("loadApiConfig", () => {
     expect(config).toEqual({
       host: "127.0.0.1",
       port: 4001,
-      logLevel: "debug"
+      logLevel: "debug",
+      databaseUrl: undefined
     });
   });
 
@@ -35,8 +37,17 @@ describe("loadApiConfig", () => {
     expect(config).toEqual({
       host: "0.0.0.0",
       port: 3001,
-      logLevel: "info"
+      logLevel: "info",
+      databaseUrl: undefined
     });
+  });
+
+  it("uses DATABASE_URL when configured", () => {
+    const config = loadApiConfig({
+      DATABASE_URL: " postgres://user:pass@localhost:5432/compass "
+    });
+
+    expect(config.databaseUrl).toBe("postgres://user:pass@localhost:5432/compass");
   });
 
   it("rejects invalid API ports", () => {

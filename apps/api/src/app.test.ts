@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { buildApiApp } from "./app.js";
+import type { AuthService } from "./auth-service.js";
 
 describe("API app", () => {
   it("returns health status", async () => {
-    const app = buildApiApp(() => new Date("2026-02-25T00:00:00.000Z"));
+    const app = buildApiApp({
+      now: () => new Date("2026-02-25T00:00:00.000Z")
+    });
 
     const response = await request(app).get("/health");
 
@@ -60,6 +63,79 @@ describe("API app", () => {
     expect(response.body).toEqual({
       code: "INVALID_JSON",
       message: "Malformed JSON request body"
+    });
+  });
+
+  it("rate limits Entra start endpoint by client IP", async () => {
+    const authService = {
+      startEntraLogin: vi.fn(async () => ({
+        redirectUrl: "https://login.microsoftonline.com/test"
+      }))
+    } as unknown as AuthService;
+
+    const app = buildApiApp({
+      authService,
+      authRateLimitWindowMs: 60_000,
+      authRateLimitMaxRequests: 1
+    });
+
+    const first = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-for", "203.0.113.1");
+    expect(first.status).toBe(302);
+
+    const second = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-for", "203.0.113.1");
+    expect(second.status).toBe(429);
+    expect(second.body).toEqual({
+      code: "RATE_LIMITED",
+      message: "Too many authentication requests"
+    });
+  });
+
+  it("blocks cross-origin state-changing requests when session cookie is present", async () => {
+    const authService = {
+      logout: vi.fn(async () => {}),
+      clearSessionCookie: vi.fn(() => "__Host-compass_session=; Path=/; Max-Age=0")
+    } as unknown as AuthService;
+
+    const app = buildApiApp({
+      authService,
+      allowedOrigins: ["https://compass.glcsolutions.ca"]
+    });
+
+    const response = await request(app)
+      .post("/v1/auth/logout")
+      .set("cookie", "__Host-compass_session=test")
+      .set("origin", "https://evil.example");
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({
+      code: "CSRF_ORIGIN_DENIED",
+      message: "Cross-origin state-changing requests are not allowed"
+    });
+  });
+
+  it("requires origin header for state-changing requests with session cookie", async () => {
+    const authService = {
+      logout: vi.fn(async () => {}),
+      clearSessionCookie: vi.fn(() => "__Host-compass_session=; Path=/; Max-Age=0")
+    } as unknown as AuthService;
+
+    const app = buildApiApp({
+      authService,
+      allowedOrigins: ["https://compass.glcsolutions.ca"]
+    });
+
+    const response = await request(app)
+      .post("/v1/auth/logout")
+      .set("cookie", "__Host-compass_session=test");
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({
+      code: "CSRF_ORIGIN_REQUIRED",
+      message: "Origin header is required for state-changing requests"
     });
   });
 });

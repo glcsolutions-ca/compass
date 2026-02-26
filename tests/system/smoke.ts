@@ -61,8 +61,12 @@ async function main() {
     const hasPingPath = Boolean(
       (openapi.json as { paths?: Record<string, unknown> } | null)?.paths?.["/v1/ping"]
     );
+    const hasAuthMePath = Boolean(
+      (openapi.json as { paths?: Record<string, unknown> } | null)?.paths?.["/v1/auth/me"]
+    );
     assert.equal(hasHealthPath, true, "openapi should include /health path");
     assert.equal(hasPingPath, true, "openapi should include /v1/ping path");
+    assert.equal(hasAuthMePath, true, "openapi should include /v1/auth/me path");
 
     assertions.push({
       id: "openapi-has-health",
@@ -70,6 +74,11 @@ async function main() {
       details: `hasHealthPath=${hasHealthPath}`
     });
     assertions.push({ id: "openapi-has-ping", pass: true, details: `hasPingPath=${hasPingPath}` });
+    assertions.push({
+      id: "openapi-has-auth-me",
+      pass: true,
+      details: `hasAuthMePath=${hasAuthMePath}`
+    });
 
     const ping = await requestJson(`${baseUrl}/v1/ping`);
     assert.equal(ping.status, 200, "ping endpoint should return 200");

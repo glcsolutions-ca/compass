@@ -22,7 +22,7 @@ Configure enterprise sign-in for `apps/web` and `apps/api` (front-door login and
 
 1. Keep only localhost callback URLs in [`prod.tfvars`](../../infra/identity/env/prod.tfvars) `web_redirect_uris`.
 2. Set `ACA_WEB_CUSTOM_DOMAIN=<web-host>` in GitHub environment variables (`acceptance` and `production`).
-3. Apply identity Terraform (see [`infra/identity/README.md`](../../infra/identity/README.md)); the module merges localhost defaults with `https://<ACA_WEB_CUSTOM_DOMAIN>/api/auth/entra/callback`.
+3. Apply identity Terraform (see [`infra/identity/README.md`](../../infra/identity/README.md)); the module merges localhost defaults with `https://<ACA_WEB_CUSTOM_DOMAIN>/v1/auth/entra/callback`.
 4. Capture the web client id:
 
 ```bash
@@ -105,6 +105,8 @@ az containerapp show \
   - `AUTH_DEV_FALLBACK_ENABLED` is true (must be false in cloud).
 - `ENTRA_CONFIG_REQUIRED` from `/v1/auth/entra/start`:
   - Missing `ENTRA_CLIENT_ID` or infra has not converged `WEB_BASE_URL`.
+- `INTERNAL_SERVER_ERROR` with `relation "auth_oidc_requests" does not exist`:
+  - Runtime is ahead of DB schema; deploy the migration reconciliation checkpoint so `db/migrations/20260226025412877_reconcile_auth_foundation_schema.mjs` is applied.
 - Login returns `tenant_not_allowed`:
   - Add the tenant GUID to `ENTRA_ALLOWED_TENANT_IDS`.
 

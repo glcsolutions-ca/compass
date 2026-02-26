@@ -53,6 +53,15 @@ gh run list --workflow "Cloud Deployment Pipeline Replay" --limit 5
 gh run watch <run-id>
 ```
 
+Latest replay evidence (pilot rollout):
+
+- Run ID: `22456494173`
+- Workflow: `Cloud Deployment Pipeline Replay`
+- Triggered: `2026-02-26T18:52:10Z`
+- Release candidate SHA: `804fd607b457ed7b43859912ac541a3681c68b2e`
+- Result: success (`deploy-runtime`, `production-blackbox-verify`, `release-decision` all green)
+- Run URL: <https://github.com/glcsolutions-ca/compass/actions/runs/22456494173>
+
 ## Daily Verification Checklist (14 Days)
 
 Record one row per day and mark all checks pass/fail.
@@ -86,6 +95,26 @@ Record one row per day and mark all checks pass/fail.
 | Day | Date (UTC) | Health    | OpenAPI   | AuthMe 401 | AuthStart Redirect | GLC Login | Kropp Login | Invite Flow | Boundary Checks | Incidents      | Operator |
 | --- | ---------- | --------- | --------- | ---------- | ------------------ | --------- | ----------- | ----------- | --------------- | -------------- | -------- |
 | 1   | YYYY-MM-DD | pass/fail | pass/fail | pass/fail  | pass/fail          | pass/fail | pass/fail   | pass/fail   | pass/fail       | none / see log | name     |
+
+Day 1 recorded evidence:
+
+| Day | Date (UTC) | Health | OpenAPI | AuthMe 401 | AuthStart Redirect | GLC Login | Kropp Login | Invite Flow | Boundary Checks | Incidents | Operator |
+| --- | ---------- | ------ | ------- | ---------- | ------------------ | --------- | ----------- | ----------- | --------------- | --------- | -------- |
+| 1   | 2026-02-26 | pass   | pass    | pass       | pass               | pass      | pending     | pending     | pending         | none      | codex    |
+
+Day 1 notes:
+
+- Core public checks executed from CLI:
+  - `GET /health` -> `200`
+  - `GET /openapi.json` -> `200`
+  - `GET /v1/auth/me` (anon) -> `401`
+  - `GET /v1/auth/entra/start?returnTo=%2F` -> `302` with:
+    - host `login.microsoftonline.com`
+    - path `/organizations/oauth2/v2.0/authorize`
+    - `client_id=<entra-client-id-redacted>`
+    - `redirect_uri=https://compass.glcsolutions.ca/v1/auth/entra/callback`
+- GLC login marked pass based on successful browser sign-in evidence provided in-thread.
+- Kropp tenant login, invite lifecycle, and boundary checks remain pending manual pilot execution.
 
 ## Incident Log Template
 

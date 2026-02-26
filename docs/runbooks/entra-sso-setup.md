@@ -22,7 +22,7 @@ Configure enterprise sign-in for `apps/web` and `apps/api` (front-door login and
 
 1. Keep only localhost callback URLs in [`prod.tfvars`](../../infra/identity/env/prod.tfvars) `web_redirect_uris`.
 2. Set `ACA_WEB_CUSTOM_DOMAIN=<web-host>` in GitHub environment variables (`acceptance` and `production`).
-3. Apply identity Terraform (see [`infra/identity/README.md`](../../infra/identity/README.md)); the module merges localhost defaults with `https://<ACA_WEB_CUSTOM_DOMAIN>/v1/auth/entra/callback`.
+3. Apply identity Terraform (see [`infra/identity/README.md`](../../infra/identity/README.md)); the module merges localhost defaults with `https://<ACA_WEB_CUSTOM_DOMAIN>/v1/auth/entra/callback` and enforces `signInAudience=AzureADMultipleOrgs` for the web app registration.
 4. Capture the web client id:
 
 ```bash

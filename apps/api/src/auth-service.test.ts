@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildEntraAuthConfig, readSessionTokenFromCookie } from "./auth-service.js";
+import {
+  ApiError,
+  buildEntraAuthConfig,
+  parseAuthError,
+  readSessionTokenFromCookie
+} from "./auth-service.js";
 
 describe("buildEntraAuthConfig", () => {
   it("uses organizations defaults and empty allow-list", () => {
@@ -45,5 +50,25 @@ describe("readSessionTokenFromCookie", () => {
   it("returns null when session cookie is missing", () => {
     const token = readSessionTokenFromCookie("foo=bar; a=b");
     expect(token).toBeNull();
+  });
+});
+
+describe("parseAuthError", () => {
+  it("preserves status/code/message for ApiError", () => {
+    const parsed = parseAuthError(new ApiError(403, "TENANT_FORBIDDEN", "Not a tenant member"));
+    expect(parsed).toEqual({
+      status: 403,
+      code: "TENANT_FORBIDDEN",
+      message: "Not a tenant member"
+    });
+  });
+
+  it("redacts unexpected Error messages from API responses", () => {
+    const parsed = parseAuthError(new Error("sensitive database detail"));
+    expect(parsed).toEqual({
+      status: 500,
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Unexpected server error"
+    });
   });
 });

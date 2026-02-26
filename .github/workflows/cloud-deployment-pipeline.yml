@@ -1718,6 +1718,8 @@ jobs:
       HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
       TARGET_API_BASE_URL: ${{ needs.deploy_release_candidate.outputs.api_prod_url }}
       WEB_BASE_URL: ${{ needs.deploy_release_candidate.outputs.web_prod_url }}
+      EXPECTED_ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
+      EXPECTED_ENTRA_REDIRECT_URI: ${{ format('{0}/v1/auth/entra/callback', needs.deploy_release_candidate.outputs.web_prod_url) }}
       EXPECTED_ENTRYPOINT: /
       REQUIRED_FLOW_IDS_JSON: '["compass-smoke"]'
       API_SMOKE_ALLOWED_TENANT_ID: ${{ vars.API_SMOKE_ALLOWED_TENANT_ID }}

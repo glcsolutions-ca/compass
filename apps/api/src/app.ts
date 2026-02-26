@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import cors from "cors";
 import express, { type ErrorRequestHandler, type Express, type Response } from "express";
 import {
@@ -24,6 +25,7 @@ interface ApiAppOptions {
   allowedOrigins?: string[];
   authRateLimitWindowMs?: number;
   authRateLimitMaxRequests?: number;
+  authRateLimitMaxEntries?: number;
 }
 
 const TenantSlugParamsSchema = z.object({
@@ -56,6 +58,7 @@ const EntraCallbackQuerySchema = z.object({
 
 const DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS = 60_000;
 const DEFAULT_AUTH_RATE_LIMIT_MAX_REQUESTS = 30;
+const DEFAULT_AUTH_RATE_LIMIT_MAX_ENTRIES = 10_000;
 
 interface RateLimitState {
   count: number;
@@ -65,21 +68,26 @@ interface RateLimitState {
 class InMemoryRateLimiter {
   private readonly windowMs: number;
   private readonly maxRequests: number;
+  private readonly maxEntries: number;
   private readonly entries = new Map<string, RateLimitState>();
 
-  constructor(input: { windowMs: number; maxRequests: number }) {
+  constructor(input: { windowMs: number; maxRequests: number; maxEntries: number }) {
     this.windowMs = input.windowMs;
     this.maxRequests = input.maxRequests;
+    this.maxEntries = input.maxEntries;
   }
 
   check(input: { key: string; now: Date }): { allowed: boolean; retryAfterSeconds: number } {
     const nowMs = input.now.getTime();
+    this.pruneExpiredEntries(nowMs);
+
     const existing = this.entries.get(input.key);
     if (!existing || existing.resetAtMs <= nowMs) {
       this.entries.set(input.key, {
         count: 1,
         resetAtMs: nowMs + this.windowMs
       });
+      this.enforceEntryCap();
       return { allowed: true, retryAfterSeconds: Math.ceil(this.windowMs / 1000) };
     }
 
@@ -96,6 +104,24 @@ class InMemoryRateLimiter {
       allowed: true,
       retryAfterSeconds: Math.max(1, Math.ceil((existing.resetAtMs - nowMs) / 1000))
     };
+  }
+
+  private pruneExpiredEntries(nowMs: number): void {
+    for (const [key, state] of this.entries) {
+      if (state.resetAtMs <= nowMs) {
+        this.entries.delete(key);
+      }
+    }
+  }
+
+  private enforceEntryCap(): void {
+    while (this.entries.size > this.maxEntries) {
+      const oldestKey = this.entries.keys().next().value;
+      if (typeof oldestKey !== "string") {
+        return;
+      }
+      this.entries.delete(oldestKey);
+    }
   }
 }
 
@@ -148,8 +174,77 @@ function actorContextFromRequest(request: express.Request): {
   });
 }
 
-function sendAuthError(response: express.Response, error: unknown): void {
+function requestIdFromRequest(request: express.Request): string {
+  const fromLocals = (request.res?.locals as Record<string, unknown> | undefined)?.requestId;
+  return typeof fromLocals === "string" && fromLocals.trim().length > 0 ? fromLocals : "unknown";
+}
+
+function logUnhandledError(input: {
+  request: express.Request;
+  error: unknown;
+  parsed: { status: number; code: string; message: string };
+}): void {
+  const base = {
+    event: "api.auth.unhandled_error",
+    requestId: requestIdFromRequest(input.request),
+    method: input.request.method,
+    path: input.request.originalUrl,
+    code: input.parsed.code,
+    status: input.parsed.status
+  };
+
+  if (input.error instanceof Error) {
+    console.error(
+      JSON.stringify({
+        ...base,
+        error: {
+          name: input.error.name,
+          message: input.error.message,
+          stack: input.error.stack
+        }
+      })
+    );
+    return;
+  }
+
+  console.error(
+    JSON.stringify({
+      ...base,
+      error: {
+        value: String(input.error)
+      }
+    })
+  );
+}
+
+function parseRequestIdCandidate(value: unknown): string | null {
+  if (Array.isArray(value)) {
+    const first = value.find((entry) => typeof entry === "string");
+    return parseRequestIdCandidate(first);
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (!/^[A-Za-z0-9._:-]{1,128}$/u.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
+}
+
+function sendAuthError(request: express.Request, response: express.Response, error: unknown): void {
   const parsed = parseAuthError(error);
+  if (parsed.status >= 500) {
+    logUnhandledError({
+      request,
+      error,
+      parsed
+    });
+  }
   response.status(parsed.status).json({
     code: parsed.code,
     message: parsed.message
@@ -248,6 +343,12 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       parsePositiveInteger(
         process.env.AUTH_RATE_LIMIT_MAX_REQUESTS,
         DEFAULT_AUTH_RATE_LIMIT_MAX_REQUESTS
+      ),
+    maxEntries:
+      options.authRateLimitMaxEntries ??
+      parsePositiveInteger(
+        process.env.AUTH_RATE_LIMIT_MAX_ENTRIES,
+        DEFAULT_AUTH_RATE_LIMIT_MAX_ENTRIES
       )
   });
 
@@ -255,6 +356,16 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
   app.disable("x-powered-by");
   app.use(cors());
   app.use(express.json());
+  app.use((request, response, next) => {
+    const requestId =
+      parseRequestIdCandidate(request.headers["x-request-id"]) ??
+      parseRequestIdCandidate(request.headers["x-correlation-id"]) ??
+      randomUUID();
+
+    response.locals.requestId = requestId;
+    response.setHeader("x-request-id", requestId);
+    next();
+  });
 
   app.use((request, response, next) => {
     if (!shouldApplyCsrfCheck(request)) {
@@ -334,7 +445,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       });
       response.redirect(302, result.redirectUrl);
     } catch (error) {
-      sendAuthError(response, error);
+      sendAuthError(request, response, error);
     }
   });
 
@@ -371,7 +482,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       });
       response.redirect(302, result.redirectUrl);
     } catch (error) {
-      sendAuthError(response, error);
+      sendAuthError(request, response, error);
     }
   });
 
@@ -420,7 +531,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
 
       response.redirect(302, result.redirectTo);
     } catch (error) {
-      sendAuthError(response, error);
+      sendAuthError(request, response, error);
     }
   });
 
@@ -438,7 +549,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
 
       response.status(200).json(result);
     } catch (error) {
-      sendAuthError(response, error);
+      sendAuthError(request, response, error);
     }
   });
 
@@ -457,7 +568,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       response.setHeader("set-cookie", authService.clearSessionCookie());
       response.status(204).send();
     } catch (error) {
-      sendAuthError(response, error);
+      sendAuthError(request, response, error);
     }
   });
 
@@ -481,7 +592,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
 
       response.status(201).json(result);
     } catch (error) {
-      sendAuthError(response, error);
+      sendAuthError(request, response, error);
     }
   });
 
@@ -504,7 +615,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       });
       response.status(200).json(result);
     } catch (error) {
-      sendAuthError(response, error);
+      sendAuthError(request, response, error);
     }
   });
 
@@ -527,7 +638,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       });
       response.status(200).json(result);
     } catch (error) {
-      sendAuthError(response, error);
+      sendAuthError(request, response, error);
     }
   });
 
@@ -556,7 +667,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       });
       response.status(201).json(result);
     } catch (error) {
-      sendAuthError(response, error);
+      sendAuthError(request, response, error);
     }
   });
 
@@ -580,7 +691,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       });
       response.status(200).json(result);
     } catch (error) {
-      sendAuthError(response, error);
+      sendAuthError(request, response, error);
     }
   });
 

@@ -315,4 +315,86 @@ describe("auth schema constraints", () => {
       )
     ).rejects.toThrow(/invites_accepted_by_user_id_fkey/iu);
   });
+
+  it("enforces invite acceptance consistency when accepted_at is set", async () => {
+    await client.query(
+      `insert into users (id, primary_email, display_name, created_at, updated_at)
+       values ('u_1', 'owner@acme.test', 'Owner', now(), now())`
+    );
+    await client.query(
+      `insert into tenants (id, slug, name, status, created_at, updated_at)
+       values ('t_1', 'acme', 'Acme', 'active', now(), now())`
+    );
+
+    await expect(
+      client.query(
+        `insert into invites (
+           id,
+           tenant_id,
+           email_normalized,
+           role,
+           token_hash,
+           invited_by_user_id,
+           expires_at,
+           accepted_at,
+           accepted_by_user_id,
+           created_at
+         ) values (
+           'inv_accepted_missing_user',
+           't_1',
+           'member@acme.test',
+           'member',
+           'token-hash-accepted-missing-user',
+           'u_1',
+           now() + interval '7 day',
+           now(),
+           null,
+           now()
+         )`
+      )
+    ).rejects.toThrow(/invites_acceptance_consistency_check/iu);
+  });
+
+  it("enforces invite acceptance consistency when accepted_by_user_id is set", async () => {
+    await client.query(
+      `insert into users (id, primary_email, display_name, created_at, updated_at)
+       values ('u_1', 'owner@acme.test', 'Owner', now(), now())`
+    );
+    await client.query(
+      `insert into users (id, primary_email, display_name, created_at, updated_at)
+       values ('u_2', 'member@acme.test', 'Member', now(), now())`
+    );
+    await client.query(
+      `insert into tenants (id, slug, name, status, created_at, updated_at)
+       values ('t_1', 'acme', 'Acme', 'active', now(), now())`
+    );
+
+    await expect(
+      client.query(
+        `insert into invites (
+           id,
+           tenant_id,
+           email_normalized,
+           role,
+           token_hash,
+           invited_by_user_id,
+           expires_at,
+           accepted_at,
+           accepted_by_user_id,
+           created_at
+         ) values (
+           'inv_user_missing_accepted_at',
+           't_1',
+           'member@acme.test',
+           'member',
+           'token-hash-user-missing-accepted-at',
+           'u_1',
+           now() + interval '7 day',
+           null,
+           'u_2',
+           now()
+         )`
+      )
+    ).rejects.toThrow(/invites_acceptance_consistency_check/iu);
+  });
 });

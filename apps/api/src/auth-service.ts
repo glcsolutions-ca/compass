@@ -1436,7 +1436,7 @@ export class AuthService {
         return {
           redirectTo: buildLoginRedirect({
             error: "admin_consent_required",
-            returnTo: "/",
+            returnTo: oidcRequest?.returnTo ?? "/",
             tenantHint
           })
         };
@@ -2069,14 +2069,6 @@ export function parseAuthError(error: unknown): { status: number; code: string; 
     return {
       status: error.status,
       code: error.code,
-      message: error.message
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      status: 500,
-      code: "INTERNAL_SERVER_ERROR",
       message: error.message
     };
   }

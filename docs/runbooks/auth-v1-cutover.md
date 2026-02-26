@@ -59,6 +59,11 @@ az postgres flexible-server db create \
 
 - `/openapi.json` includes auth and tenant endpoints
 - `/v1/auth/entra/start` returns redirect to Microsoft
+- `/v1/auth/entra/start` redirect URL includes:
+  - host `login.microsoftonline.com`
+  - path `/organizations/oauth2/v2.0/authorize`
+  - expected `redirect_uri` callback
+  - expected `client_id`
 - callback flow creates `users`, `identities`, and `auth_sessions`
 - `/v1/auth/me` returns authenticated user context when cookie is present
 - tenant create/read/member flows work for authenticated owner

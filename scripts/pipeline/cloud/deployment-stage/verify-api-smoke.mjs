@@ -1,6 +1,10 @@
 import { appendGithubOutput, getHeadSha, requireEnv, writeDeployArtifact } from "./utils.mjs";
 
 const targetBaseUrl = requireEnv("TARGET_API_BASE_URL").replace(/\/$/, "");
+const expectedEntraClientId = requireEnv("EXPECTED_ENTRA_CLIENT_ID").trim();
+const expectedEntraRedirectUri = (
+  process.env.EXPECTED_ENTRA_REDIRECT_URI?.trim() || `${targetBaseUrl}/v1/auth/entra/callback`
+).replace(/\/$/, "");
 const verifyShaHeader = process.env.VERIFY_SHA_HEADER?.trim() === "true";
 const expectedSha = process.env.EXPECTED_SHA?.trim() || getHeadSha();
 const apiSmokeSessionCookie = process.env.API_SMOKE_SESSION_COOKIE?.trim();
@@ -102,10 +106,21 @@ async function main() {
       redirect: "manual"
     });
     const authStartLocation = authStart.headers.get("location") ?? "";
+    let authStartUrl = null;
+    try {
+      authStartUrl = authStartLocation ? new URL(authStartLocation) : null;
+    } catch {
+      authStartUrl = null;
+    }
     const authStartRedirectStatus = authStart.status === 302 || authStart.status === 303;
-    const authStartProviderRedirect = authStartLocation.startsWith(
-      "https://login.microsoftonline.com/"
-    );
+    const authStartProviderRedirect = authStartUrl?.host === "login.microsoftonline.com";
+    const authStartAuthorizePath =
+      authStartUrl?.pathname.includes("/organizations/oauth2/v2.0/authorize") ?? false;
+    const authStartRedirectUriMatches =
+      authStartUrl?.searchParams.get("redirect_uri")?.replace(/\/$/, "") ===
+      expectedEntraRedirectUri;
+    const authStartClientIdMatches =
+      authStartUrl?.searchParams.get("client_id") === expectedEntraClientId;
     assertions.push({
       id: "auth-start-redirect-status",
       pass: authStartRedirectStatus,
@@ -115,6 +130,21 @@ async function main() {
       id: "auth-start-provider-redirect",
       pass: authStartProviderRedirect,
       details: authStartLocation || "missing location header"
+    });
+    assertions.push({
+      id: "auth-start-authorize-path",
+      pass: authStartAuthorizePath,
+      details: authStartUrl?.pathname ?? "invalid location header"
+    });
+    assertions.push({
+      id: "auth-start-redirect-uri",
+      pass: authStartRedirectUriMatches,
+      details: `expected=${expectedEntraRedirectUri}, actual=${authStartUrl?.searchParams.get("redirect_uri") ?? "missing"}`
+    });
+    assertions.push({
+      id: "auth-start-client-id",
+      pass: authStartClientIdMatches,
+      details: `expected=${expectedEntraClientId}, actual=${authStartUrl?.searchParams.get("client_id") ?? "missing"}`
     });
 
     if (verifyShaHeader) {

@@ -419,6 +419,36 @@ describe("API auth integration", () => {
     expect(callbackLocation.searchParams.get("returnTo")).toBe("/");
   });
 
+  it("preserves state-derived returnTo when consent is required during login callback", async () => {
+    const authService = new AuthService({
+      config: buildConfig(),
+      repository,
+      oidcClient: new FakeOidcClient({
+        claimsByCode: {}
+      })
+    });
+
+    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const start = await request(app).get(
+      "/v1/auth/entra/start?returnTo=%2Ft%2Facme%2Fprojects%2F123"
+    );
+    expect(start.status).toBe(302);
+    const state = parseRedirectLocation(start.headers.location).searchParams.get("state");
+    expect(state).toBeTruthy();
+
+    const callback = await request(app).get(
+      `/v1/auth/entra/callback?error=access_denied&error_description=AADSTS65001%3A%20Consent%20required&state=${encodeURIComponent(
+        String(state)
+      )}`
+    );
+
+    expect(callback.status).toBe(302);
+    const callbackLocation = parseAppRedirect(String(callback.headers.location));
+    expect(callbackLocation.pathname).toBe("/login");
+    expect(callbackLocation.searchParams.get("error")).toBe("admin_consent_required");
+    expect(callbackLocation.searchParams.get("returnTo")).toBe("/t/acme/projects/123");
+  });
+
   it("fails closed when Entra login is enabled without OIDC state encryption key", async () => {
     const config = buildConfig();
     delete config.oidcStateEncryptionKey;

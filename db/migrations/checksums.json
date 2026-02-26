@@ -3,6 +3,7 @@
   "algorithm": "sha256",
   "files": {
     "1772083000000_initial_schema.mjs": "ce5e442196941ad6448b56f4f9135f9c3a33c16972e9e14d32d04326fd44f8a3",
-    "1772084000000_auth_hardening_followups.mjs": "0e282b8e940ecfbe8a35fdb44712782952b038fadd24556ce0cb6c4ee2bd18a2"
+    "1772084000000_auth_hardening_followups.mjs": "0e282b8e940ecfbe8a35fdb44712782952b038fadd24556ce0cb6c4ee2bd18a2",
+    "1772085000000_invites_acceptance_consistency.mjs": "09b367e4349fa0945c567d914650e355275776f2c5778509610ee3d7331affbe"
   }
 }

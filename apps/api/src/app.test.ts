@@ -138,4 +138,65 @@ describe("API app", () => {
       message: "Origin header is required for state-changing requests"
     });
   });
+
+  it("redacts unexpected auth handler errors and emits structured logs with request id", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const authService = {
+      readAuthMe: vi.fn(async () => {
+        throw new Error("sensitive database detail");
+      })
+    } as unknown as AuthService;
+
+    const app = buildApiApp({ authService });
+
+    const response = await request(app).get("/v1/auth/me").set("x-request-id", "req-123");
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Unexpected server error"
+    });
+    expect(response.headers["x-request-id"]).toBe("req-123");
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+    expect(String(consoleErrorSpy.mock.calls[0]?.[0] ?? "")).toContain(
+      '"event":"api.auth.unhandled_error"'
+    );
+    expect(String(consoleErrorSpy.mock.calls[0]?.[0] ?? "")).toContain('"requestId":"req-123"');
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("caps auth rate limiter key cardinality to avoid unbounded growth", async () => {
+    const authService = {
+      startEntraLogin: vi.fn(async () => ({
+        redirectUrl: "https://login.microsoftonline.com/test"
+      }))
+    } as unknown as AuthService;
+
+    const app = buildApiApp({
+      authService,
+      authRateLimitWindowMs: 60_000,
+      authRateLimitMaxRequests: 1,
+      authRateLimitMaxEntries: 2
+    });
+
+    const firstIpFirst = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-for", "203.0.113.1");
+    expect(firstIpFirst.status).toBe(302);
+
+    const secondIpFirst = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-for", "203.0.113.2");
+    expect(secondIpFirst.status).toBe(302);
+
+    const thirdIpFirst = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-for", "203.0.113.3");
+    expect(thirdIpFirst.status).toBe(302);
+
+    const firstIpSecond = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-for", "203.0.113.1");
+    expect(firstIpSecond.status).toBe(302);
+  });
 });

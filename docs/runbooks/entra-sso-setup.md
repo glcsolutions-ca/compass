@@ -71,6 +71,24 @@ Generate `AUTH_OIDC_STATE_ENCRYPTION_KEY` (32 bytes, base64url):
 openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
 ```
 
+### Environment Parity Checklist (Required)
+
+Before deployment, verify these values are present in **both** GitHub environments (`acceptance` and
+`production`):
+
+- Variables: `ENTRA_LOGIN_ENABLED`, `ENTRA_CLIENT_ID`, `ACA_WEB_CUSTOM_DOMAIN`,
+  `ENTRA_ALLOWED_TENANT_IDS`, `AUTH_DEV_FALLBACK_ENABLED`
+- Secrets: `ENTRA_CLIENT_SECRET`, `WEB_SESSION_SECRET`, `AUTH_OIDC_STATE_ENCRYPTION_KEY`
+
+Quick checks:
+
+```bash
+gh variable list -e acceptance
+gh variable list -e production
+gh secret list -e acceptance
+gh secret list -e production
+```
+
 ## 3. Deploy Configuration
 
 Run normal pipeline convergence (`deploy-infra` path). The web and API container apps must be updated with Entra settings:
@@ -111,6 +129,11 @@ az containerapp show \
 - `ENTRA_CONFIG_REQUIRED` from `/v1/auth/entra/start`:
   - Missing `ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET`, or `AUTH_OIDC_STATE_ENCRYPTION_KEY`.
   - Infra deployment has not converged `WEB_BASE_URL` and auth secrets.
+- `production-blackbox-verify` fails `auth-start-*` assertions:
+  - Verify Entra app client id in env matches runtime (`ENTRA_CLIENT_ID`).
+  - Verify authorize redirect includes
+    `.../organizations/oauth2/v2.0/authorize` and callback
+    `https://<web-host>/v1/auth/entra/callback`.
 - `AADSTS50011` (redirect URI mismatch):
   - Ensure Entra web redirect URIs include `https://<web-host>/v1/auth/entra/callback` (not `/api/auth/entra/callback`).
   - Re-apply `infra/identity` after updating `ACA_WEB_CUSTOM_DOMAIN` and `infra/identity/env/prod.tfvars`.

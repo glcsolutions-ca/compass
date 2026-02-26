@@ -69,10 +69,12 @@ Out of scope:
 9. Authentication endpoint abuse/brute force noise
 
 - Mitigation: in-memory per-IP auth endpoint rate limits for Entra start/callback/admin-consent entry points.
+- Additional hardening: process-local limiter includes stale-entry pruning and max key cardinality cap to avoid unbounded memory growth.
 
 ## Residual Risks
 
 - No per-endpoint adaptive risk signals in v1.
+- Rate limiting is process-local (not globally distributed across replicas).
 - No SCIM deprovisioning in v1; membership lifecycle remains app-managed.
 - No WebAuthn or phishing-resistant step-up in v1.
 

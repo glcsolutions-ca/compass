@@ -181,6 +181,12 @@ Conditional ENTRA/domain fields are required when `ENTRA_LOGIN_ENABLED=true`.
 Use `AUTH_DEV_FALLBACK_ENABLED=false` in cloud environments.
 Service Bus uses managed identity; do not configure `AZURE_SERVICE_BUS_CONNECTION_STRING`.
 
+Auth hardening note:
+
+- Keep Entra-related secrets/vars in parity across `acceptance` and `production`.
+- `production-blackbox-verify` now asserts auth-start redirect host/path plus `client_id` and callback
+  `redirect_uri`.
+
 6. Push the first infra-scope change to `main` (for example a non-functional comment in `infra/azure/main.bicep`).
 
 This first push run is what creates the full platform (ACA env/apps/job, Postgres, networking, identities wired into infra runtime config).

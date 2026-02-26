@@ -5,90 +5,13 @@ export const shorthands = undefined;
 
 /**
  * @param pgm {import('node-pg-migrate').MigrationBuilder}
- * @param run {() => void | undefined}
  * @returns {Promise<void> | void}
  */
 export const up = (pgm) => {
   pgm.createTable("tenants", {
     id: { type: "text", primaryKey: true },
+    slug: { type: "text", notNull: true },
     name: { type: "text", notNull: true },
-    status: {
-      type: "text",
-      notNull: true,
-      default: "active",
-      check: "status IN ('active', 'inactive')"
-    },
-    safelist_status: {
-      type: "text",
-      notNull: true,
-      default: "pending",
-      check: "safelist_status IN ('approved', 'pending', 'blocked')"
-    },
-    onboarding_mode: {
-      type: "text",
-      notNull: true,
-      default: "hybrid",
-      check: "onboarding_mode IN ('self_serve', 'admin_led', 'hybrid')"
-    },
-    approved_at: { type: "timestamp with time zone" },
-    created_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("current_timestamp")
-    },
-    updated_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("current_timestamp")
-    }
-  });
-
-  pgm.createTable("tenant_domains", {
-    id: { type: "text", primaryKey: true },
-    tenant_id: {
-      type: "text",
-      notNull: true,
-      references: "tenants(id)",
-      onDelete: "CASCADE"
-    },
-    domain: { type: "text", notNull: true },
-    verification_status: {
-      type: "text",
-      notNull: true,
-      default: "pending",
-      check: "verification_status IN ('pending', 'verified', 'failed')"
-    },
-    verified_at: { type: "timestamp with time zone" },
-    created_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("current_timestamp")
-    },
-    updated_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("current_timestamp")
-    }
-  });
-  pgm.addConstraint("tenant_domains", "tenant_domains_unique_domain_per_tenant", {
-    unique: ["tenant_id", "domain"]
-  });
-  pgm.createIndex("tenant_domains", ["tenant_id"]);
-
-  pgm.createTable("principals", {
-    id: { type: "text", primaryKey: true },
-    tenant_id: {
-      type: "text",
-      notNull: true,
-      references: "tenants(id)",
-      onDelete: "CASCADE"
-    },
-    principal_type: {
-      type: "text",
-      notNull: true,
-      check: "principal_type IN ('user', 'app')"
-    },
-    display_name: { type: "text", notNull: true },
     status: {
       type: "text",
       notNull: true,
@@ -106,66 +29,14 @@ export const up = (pgm) => {
       default: pgm.func("current_timestamp")
     }
   });
-  pgm.createIndex("principals", ["tenant_id"]);
-  pgm.addConstraint("principals", "principals_unique_id_per_tenant", {
-    unique: ["tenant_id", "id"]
+  pgm.addConstraint("tenants", "tenants_unique_slug", {
+    unique: ["slug"]
   });
-
-  pgm.createTable("identities", {
-    id: { type: "text", primaryKey: true },
-    tenant_id: {
-      type: "text",
-      notNull: true,
-      references: "tenants(id)",
-      onDelete: "CASCADE"
-    },
-    principal_id: {
-      type: "text",
-      notNull: true,
-      references: "principals(id)",
-      onDelete: "CASCADE"
-    },
-    provider: { type: "text", notNull: true },
-    subject: { type: "text", notNull: true },
-    object_id: { type: "text" },
-    app_id: { type: "text" },
-    claims: { type: "jsonb", notNull: true, default: pgm.func("'{}'::jsonb") },
-    created_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("current_timestamp")
-    },
-    updated_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("current_timestamp")
-    }
-  });
-  pgm.addConstraint("identities", "identities_unique_provider_subject_per_tenant", {
-    unique: ["tenant_id", "provider", "subject"]
-  });
-  pgm.createIndex("identities", ["tenant_id"]);
-  pgm.createIndex("identities", ["principal_id"]);
 
   pgm.createTable("users", {
     id: { type: "text", primaryKey: true },
-    tenant_id: {
-      type: "text",
-      notNull: true,
-      references: "tenants(id)",
-      onDelete: "CASCADE"
-    },
-    principal_id: {
-      type: "text",
-      notNull: true,
-      references: "principals(id)",
-      onDelete: "CASCADE"
-    },
-    email: { type: "text" },
-    given_name: { type: "text" },
-    family_name: { type: "text" },
+    primary_email: { type: "text" },
     display_name: { type: "text" },
-    active: { type: "boolean", notNull: true, default: true },
     created_at: {
       type: "timestamp with time zone",
       notNull: true,
@@ -177,23 +48,27 @@ export const up = (pgm) => {
       default: pgm.func("current_timestamp")
     }
   });
-  pgm.addConstraint("users", "users_unique_principal_per_tenant", {
-    unique: ["tenant_id", "principal_id"]
-  });
-  pgm.createIndex("users", ["tenant_id"]);
-  pgm.createIndex("users", ["email"]);
+  pgm.createIndex("users", ["primary_email"]);
 
-  pgm.createTable("groups", {
+  pgm.createTable("identities", {
     id: { type: "text", primaryKey: true },
-    tenant_id: {
+    user_id: {
       type: "text",
       notNull: true,
-      references: "tenants(id)",
+      references: "users(id)",
       onDelete: "CASCADE"
     },
-    external_id: { type: "text" },
-    display_name: { type: "text", notNull: true },
-    active: { type: "boolean", notNull: true, default: true },
+    provider: {
+      type: "text",
+      notNull: true,
+      default: "entra",
+      check: "provider = 'entra'"
+    },
+    entra_tid: { type: "text", notNull: true },
+    entra_oid: { type: "text", notNull: true },
+    iss: { type: "text", notNull: true },
+    email: { type: "text" },
+    upn: { type: "text" },
     created_at: {
       type: "timestamp with time zone",
       notNull: true,
@@ -205,167 +80,34 @@ export const up = (pgm) => {
       default: pgm.func("current_timestamp")
     }
   });
-  pgm.addConstraint("groups", "groups_unique_external_id_per_tenant", {
-    unique: ["tenant_id", "external_id"]
+  pgm.addConstraint("identities", "identities_unique_entra_subject", {
+    unique: ["provider", "entra_tid", "entra_oid"]
   });
-  pgm.createIndex("groups", ["tenant_id"]);
+  pgm.createIndex("identities", ["user_id"]);
 
-  pgm.createTable("group_memberships", {
+  pgm.createTable("memberships", {
     tenant_id: {
       type: "text",
       notNull: true,
       references: "tenants(id)",
       onDelete: "CASCADE"
     },
-    group_id: {
+    user_id: {
       type: "text",
       notNull: true,
-      references: "groups(id)",
+      references: "users(id)",
       onDelete: "CASCADE"
     },
-    principal_id: {
+    role: {
       type: "text",
       notNull: true,
-      references: "principals(id)",
-      onDelete: "CASCADE"
+      check: "role IN ('owner', 'admin', 'member', 'viewer')"
     },
-    created_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("current_timestamp")
-    }
-  });
-  pgm.addConstraint("group_memberships", "group_memberships_pk", {
-    primaryKey: ["group_id", "principal_id"]
-  });
-  pgm.createIndex("group_memberships", ["tenant_id"]);
-
-  pgm.createTable("permissions", {
-    id: { type: "text", primaryKey: true },
-    description: { type: "text", notNull: true },
-    created_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("current_timestamp")
-    }
-  });
-
-  pgm.createTable("roles", {
-    id: { type: "text", primaryKey: true },
-    tenant_id: {
-      type: "text",
-      notNull: true,
-      references: "tenants(id)",
-      onDelete: "CASCADE"
-    },
-    name: { type: "text", notNull: true },
-    description: { type: "text", notNull: true, default: "" },
-    is_system: { type: "boolean", notNull: true, default: false },
-    created_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("current_timestamp")
-    },
-    updated_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("current_timestamp")
-    }
-  });
-  pgm.addConstraint("roles", "roles_unique_name_per_tenant", {
-    unique: ["tenant_id", "name"]
-  });
-  pgm.createIndex("roles", ["tenant_id"]);
-
-  pgm.createTable("role_permissions", {
-    tenant_id: {
-      type: "text",
-      notNull: true,
-      references: "tenants(id)",
-      onDelete: "CASCADE"
-    },
-    role_id: {
-      type: "text",
-      notNull: true,
-      references: "roles(id)",
-      onDelete: "CASCADE"
-    },
-    permission_id: {
-      type: "text",
-      notNull: true,
-      references: "permissions(id)",
-      onDelete: "CASCADE"
-    },
-    created_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("current_timestamp")
-    }
-  });
-  pgm.addConstraint("role_permissions", "role_permissions_pk", {
-    primaryKey: ["role_id", "permission_id"]
-  });
-  pgm.createIndex("role_permissions", ["tenant_id"]);
-
-  pgm.createTable("principal_role_bindings", {
-    id: { type: "text", primaryKey: true },
-    tenant_id: {
-      type: "text",
-      notNull: true,
-      references: "tenants(id)",
-      onDelete: "CASCADE"
-    },
-    principal_id: {
-      type: "text",
-      notNull: true,
-      references: "principals(id)",
-      onDelete: "CASCADE"
-    },
-    role_id: {
-      type: "text",
-      notNull: true,
-      references: "roles(id)",
-      onDelete: "CASCADE"
-    },
-    source: {
-      type: "text",
-      notNull: true,
-      default: "direct",
-      check: "source IN ('direct', 'group', 'scim')"
-    },
-    created_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("current_timestamp")
-    }
-  });
-  pgm.addConstraint("principal_role_bindings", "principal_role_bindings_unique_assignment", {
-    unique: ["tenant_id", "principal_id", "role_id", "source"]
-  });
-  pgm.createIndex("principal_role_bindings", ["tenant_id"]);
-  pgm.createIndex("principal_role_bindings", ["principal_id"]);
-
-  pgm.createTable("oauth_clients", {
-    id: { type: "text", primaryKey: true },
-    tenant_id: {
-      type: "text",
-      notNull: true,
-      references: "tenants(id)",
-      onDelete: "CASCADE"
-    },
-    client_id: { type: "text", notNull: true },
-    client_name: { type: "text", notNull: true },
     status: {
       type: "text",
       notNull: true,
       default: "active",
-      check: "status IN ('active', 'disabled')"
-    },
-    auth_mode: {
-      type: "text",
-      notNull: true,
-      default: "client_credentials",
-      check: "auth_mode IN ('client_credentials', 'authorization_code', 'device_code')"
+      check: "status IN ('active', 'invited', 'disabled')"
     },
     created_at: {
       type: "timestamp with time zone",
@@ -378,12 +120,12 @@ export const up = (pgm) => {
       default: pgm.func("current_timestamp")
     }
   });
-  pgm.addConstraint("oauth_clients", "oauth_clients_unique_client_per_tenant", {
-    unique: ["tenant_id", "client_id"]
+  pgm.addConstraint("memberships", "memberships_pk", {
+    primaryKey: ["tenant_id", "user_id"]
   });
-  pgm.createIndex("oauth_clients", ["tenant_id"]);
+  pgm.createIndex("memberships", ["user_id"]);
 
-  pgm.createTable("oauth_client_credentials", {
+  pgm.createTable("invites", {
     id: { type: "text", primaryKey: true },
     tenant_id: {
       type: "text",
@@ -391,131 +133,94 @@ export const up = (pgm) => {
       references: "tenants(id)",
       onDelete: "CASCADE"
     },
-    oauth_client_id: {
+    email_normalized: { type: "text", notNull: true },
+    role: {
       type: "text",
       notNull: true,
-      references: "oauth_clients(id)",
-      onDelete: "CASCADE"
+      check: "role IN ('admin', 'member', 'viewer')"
     },
-    credential_name: { type: "text", notNull: true },
-    secret_hash: { type: "text", notNull: true },
-    secret_hint: { type: "text" },
-    expires_at: { type: "timestamp with time zone" },
-    rotated_at: { type: "timestamp with time zone" },
-    revoked_at: { type: "timestamp with time zone" },
+    token_hash: { type: "text", notNull: true },
+    invited_by_user_id: {
+      type: "text",
+      references: "users(id)",
+      onDelete: "SET NULL"
+    },
+    expires_at: { type: "timestamp with time zone", notNull: true },
+    accepted_at: { type: "timestamp with time zone" },
     created_at: {
       type: "timestamp with time zone",
       notNull: true,
       default: pgm.func("current_timestamp")
     }
   });
-  pgm.addConstraint("oauth_client_credentials", "oauth_client_credentials_unique_name", {
-    unique: ["oauth_client_id", "credential_name"]
+  pgm.addConstraint("invites", "invites_unique_token_hash", {
+    unique: ["token_hash"]
   });
-  pgm.createIndex("oauth_client_credentials", ["tenant_id"]);
-  pgm.createIndex("oauth_client_credentials", ["oauth_client_id"]);
+  pgm.createIndex("invites", ["tenant_id"]);
+  pgm.createIndex("invites", ["email_normalized"]);
 
-  pgm.createTable("oauth_consents", {
+  pgm.createTable("auth_oidc_requests", {
     id: { type: "text", primaryKey: true },
-    tenant_id: {
+    state_hash: { type: "text", notNull: true },
+    nonce_hash: { type: "text", notNull: true },
+    pkce_verifier_encrypted_or_hashed: { type: "text", notNull: true },
+    return_to: { type: "text" },
+    expires_at: { type: "timestamp with time zone", notNull: true },
+    consumed_at: { type: "timestamp with time zone" },
+    created_at: {
+      type: "timestamp with time zone",
+      notNull: true,
+      default: pgm.func("current_timestamp")
+    }
+  });
+  pgm.addConstraint("auth_oidc_requests", "auth_oidc_requests_unique_state_hash", {
+    unique: ["state_hash"]
+  });
+  pgm.createIndex("auth_oidc_requests", ["expires_at"]);
+
+  pgm.createTable("auth_sessions", {
+    id: { type: "text", primaryKey: true },
+    user_id: {
       type: "text",
       notNull: true,
-      references: "tenants(id)",
+      references: "users(id)",
       onDelete: "CASCADE"
     },
-    oauth_client_id: {
-      type: "text",
+    token_hash: { type: "text", notNull: true },
+    user_agent_hash: { type: "text" },
+    ip_hash: { type: "text" },
+    created_at: {
+      type: "timestamp with time zone",
       notNull: true,
-      references: "oauth_clients(id)",
-      onDelete: "CASCADE"
+      default: pgm.func("current_timestamp")
     },
-    principal_id: {
-      type: "text",
-      references: "principals(id)",
-      onDelete: "SET NULL"
-    },
-    granted_scopes: { type: "text[]", notNull: true, default: "{}" },
-    granted_at: {
+    expires_at: { type: "timestamp with time zone", notNull: true },
+    last_seen_at: {
       type: "timestamp with time zone",
       notNull: true,
       default: pgm.func("current_timestamp")
     },
     revoked_at: { type: "timestamp with time zone" }
   });
-  pgm.createIndex("oauth_consents", ["tenant_id"]);
-  pgm.createIndex("oauth_consents", ["oauth_client_id"]);
-
-  pgm.createTable("scim_connections", {
-    id: { type: "text", primaryKey: true },
-    tenant_id: {
-      type: "text",
-      notNull: true,
-      references: "tenants(id)",
-      onDelete: "CASCADE"
-    },
-    oauth_client_id: {
-      type: "text",
-      notNull: true,
-      references: "oauth_clients(id)",
-      onDelete: "CASCADE"
-    },
-    status: {
-      type: "text",
-      notNull: true,
-      default: "active",
-      check: "status IN ('active', 'disabled')"
-    },
-    last_synced_at: { type: "timestamp with time zone" },
-    created_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("current_timestamp")
-    },
-    updated_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("current_timestamp")
-    }
+  pgm.addConstraint("auth_sessions", "auth_sessions_unique_token_hash", {
+    unique: ["token_hash"]
   });
-  pgm.addConstraint("scim_connections", "scim_connections_unique_tenant", {
-    unique: ["tenant_id"]
-  });
-  pgm.createIndex("scim_connections", ["oauth_client_id"]);
+  pgm.createIndex("auth_sessions", ["user_id"]);
+  pgm.createIndex("auth_sessions", ["expires_at"]);
 
   pgm.createTable("auth_audit_events", {
     id: { type: "text", primaryKey: true },
-    tenant_id: {
-      type: "text",
-      references: "tenants(id)",
-      onDelete: "SET NULL"
-    },
     event_type: { type: "text", notNull: true },
-    actor_principal_id: { type: "text" },
-    target_principal_id: { type: "text" },
-    metadata: { type: "jsonb", notNull: true, default: pgm.func("'{}'::jsonb") },
-    occurred_at: {
-      type: "timestamp with time zone",
-      notNull: true,
-      default: pgm.func("current_timestamp")
-    }
-  });
-  pgm.createIndex("auth_audit_events", ["tenant_id"]);
-  pgm.createIndex("auth_audit_events", ["occurred_at"]);
-
-  pgm.createTable("session_events", {
-    id: { type: "text", primaryKey: true },
+    actor_user_id: {
+      type: "text",
+      references: "users(id)",
+      onDelete: "SET NULL"
+    },
     tenant_id: {
       type: "text",
       references: "tenants(id)",
       onDelete: "SET NULL"
     },
-    principal_id: { type: "text" },
-    session_id: { type: "text", notNull: true },
-    event_type: {
-      type: "text",
-      notNull: true,
-      check: "event_type IN ('created', 'rotated', 'revoked', 'expired')"
-    },
     metadata: { type: "jsonb", notNull: true, default: pgm.func("'{}'::jsonb") },
     occurred_at: {
       type: "timestamp with time zone",
@@ -523,42 +228,21 @@ export const up = (pgm) => {
       default: pgm.func("current_timestamp")
     }
   });
-  pgm.createIndex("session_events", ["tenant_id"]);
-  pgm.createIndex("session_events", ["session_id"]);
-  pgm.createIndex("session_events", ["occurred_at"]);
-
-  pgm.sql(`
-    INSERT INTO permissions (id, description)
-    VALUES
-      ('profile.read', 'Read authenticated profile context'),
-      ('roles.read', 'List tenant role definitions'),
-      ('roles.write', 'Create and edit tenant role definitions'),
-      ('scim.write', 'Write SCIM users and groups')
-    ON CONFLICT (id) DO NOTHING
-  `);
+  pgm.createIndex("auth_audit_events", ["event_type", "occurred_at"]);
+  pgm.createIndex("auth_audit_events", ["tenant_id"]);
 };
 
 /**
  * @param pgm {import('node-pg-migrate').MigrationBuilder}
- * @param run {() => void | undefined}
  * @returns {Promise<void> | void}
  */
 export const down = (pgm) => {
-  pgm.dropTable("session_events", { ifExists: true, cascade: true });
   pgm.dropTable("auth_audit_events", { ifExists: true, cascade: true });
-  pgm.dropTable("scim_connections", { ifExists: true, cascade: true });
-  pgm.dropTable("oauth_consents", { ifExists: true, cascade: true });
-  pgm.dropTable("oauth_client_credentials", { ifExists: true, cascade: true });
-  pgm.dropTable("oauth_clients", { ifExists: true, cascade: true });
-  pgm.dropTable("principal_role_bindings", { ifExists: true, cascade: true });
-  pgm.dropTable("role_permissions", { ifExists: true, cascade: true });
-  pgm.dropTable("roles", { ifExists: true, cascade: true });
-  pgm.dropTable("permissions", { ifExists: true, cascade: true });
-  pgm.dropTable("group_memberships", { ifExists: true, cascade: true });
-  pgm.dropTable("groups", { ifExists: true, cascade: true });
-  pgm.dropTable("users", { ifExists: true, cascade: true });
+  pgm.dropTable("auth_sessions", { ifExists: true, cascade: true });
+  pgm.dropTable("auth_oidc_requests", { ifExists: true, cascade: true });
+  pgm.dropTable("invites", { ifExists: true, cascade: true });
+  pgm.dropTable("memberships", { ifExists: true, cascade: true });
   pgm.dropTable("identities", { ifExists: true, cascade: true });
-  pgm.dropTable("principals", { ifExists: true, cascade: true });
-  pgm.dropTable("tenant_domains", { ifExists: true, cascade: true });
+  pgm.dropTable("users", { ifExists: true, cascade: true });
   pgm.dropTable("tenants", { ifExists: true, cascade: true });
 };

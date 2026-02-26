@@ -4,6 +4,12 @@ param managedEnvironmentId string
 param image string
 param registryServer string
 param registryIdentityResourceId string
+param webBaseUrl string
+param entraLoginEnabled string = 'false'
+param entraClientId string = ''
+@secure()
+param entraClientSecret string = ''
+param entraAllowedTenantIds string = ''
 @secure()
 param databaseUrl string
 param authIssuer string
@@ -17,6 +23,16 @@ param oauthTokenAudience string
 param oauthTokenSigningSecret string
 param logLevel string = 'warn'
 param customDomainName string = ''
+
+var hasEntraClientSecret = !empty(entraClientSecret)
+var entraClientSecretEnv = hasEntraClientSecret
+  ? [
+      {
+        name: 'ENTRA_CLIENT_SECRET'
+        secretRef: 'entra-client-secret'
+      }
+    ]
+  : []
 
 resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
   name: containerAppName
@@ -52,80 +68,109 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
           identity: registryIdentityResourceId
         }
       ]
-      secrets: [
-        {
-          name: 'database-url'
-          value: databaseUrl
-        }
-        {
-          name: 'oauth-token-signing-secret'
-          value: oauthTokenSigningSecret
-        }
-      ]
+      secrets: concat(
+        [
+          {
+            name: 'database-url'
+            value: databaseUrl
+          }
+          {
+            name: 'oauth-token-signing-secret'
+            value: oauthTokenSigningSecret
+          }
+        ],
+        hasEntraClientSecret
+          ? [
+              {
+                name: 'entra-client-secret'
+                value: entraClientSecret
+              }
+            ]
+          : []
+      )
     }
     template: {
       containers: [
         {
           name: 'compass-api'
           image: image
-          env: [
-            {
-              name: 'API_HOST'
-              value: '0.0.0.0'
-            }
-            {
-              name: 'API_PORT'
-              value: '3001'
-            }
-            {
-              name: 'DATABASE_URL'
-              secretRef: 'database-url'
-            }
-            {
-              name: 'DB_SSL_MODE'
-              value: 'require'
-            }
-            {
-              name: 'DB_SSL_REJECT_UNAUTHORIZED'
-              value: 'true'
-            }
-            {
-              name: 'LOG_LEVEL'
-              value: logLevel
-            }
-            {
-              name: 'AUTH_ISSUER'
-              value: authIssuer
-            }
-            {
-              name: 'AUTH_JWKS_URI'
-              value: authJwksUri
-            }
-            {
-              name: 'AUTH_AUDIENCE'
-              value: authAudience
-            }
-            {
-              name: 'AUTH_ALLOWED_CLIENT_IDS'
-              value: authAllowedClientIds
-            }
-            {
-              name: 'AUTH_ACTIVE_TENANT_IDS'
-              value: authActiveTenantIds
-            }
-            {
-              name: 'OAUTH_TOKEN_ISSUER'
-              value: oauthTokenIssuer
-            }
-            {
-              name: 'OAUTH_TOKEN_AUDIENCE'
-              value: oauthTokenAudience
-            }
-            {
-              name: 'OAUTH_TOKEN_SIGNING_SECRET'
-              secretRef: 'oauth-token-signing-secret'
-            }
-          ]
+          env: concat(
+            [
+              {
+                name: 'API_HOST'
+                value: '0.0.0.0'
+              }
+              {
+                name: 'API_PORT'
+                value: '3001'
+              }
+              {
+                name: 'DATABASE_URL'
+                secretRef: 'database-url'
+              }
+              {
+                name: 'DB_SSL_MODE'
+                value: 'require'
+              }
+              {
+                name: 'DB_SSL_REJECT_UNAUTHORIZED'
+                value: 'true'
+              }
+              {
+                name: 'LOG_LEVEL'
+                value: logLevel
+              }
+              {
+                name: 'WEB_BASE_URL'
+                value: webBaseUrl
+              }
+              {
+                name: 'ENTRA_LOGIN_ENABLED'
+                value: entraLoginEnabled
+              }
+              {
+                name: 'ENTRA_CLIENT_ID'
+                value: entraClientId
+              }
+              {
+                name: 'ENTRA_ALLOWED_TENANT_IDS'
+                value: entraAllowedTenantIds
+              }
+              {
+                name: 'AUTH_ISSUER'
+                value: authIssuer
+              }
+              {
+                name: 'AUTH_JWKS_URI'
+                value: authJwksUri
+              }
+              {
+                name: 'AUTH_AUDIENCE'
+                value: authAudience
+              }
+              {
+                name: 'AUTH_ALLOWED_CLIENT_IDS'
+                value: authAllowedClientIds
+              }
+              {
+                name: 'AUTH_ACTIVE_TENANT_IDS'
+                value: authActiveTenantIds
+              }
+              {
+                name: 'OAUTH_TOKEN_ISSUER'
+                value: oauthTokenIssuer
+              }
+              {
+                name: 'OAUTH_TOKEN_AUDIENCE'
+                value: oauthTokenAudience
+              }
+              {
+                name: 'OAUTH_TOKEN_SIGNING_SECRET'
+                secretRef: 'oauth-token-signing-secret'
+              }
+            ],
+            entraClientSecretEnv
+          )
           resources: {
             cpu: json('0.25')
             memory: '0.5Gi'

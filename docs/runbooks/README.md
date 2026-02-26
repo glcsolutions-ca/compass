@@ -11,3 +11,4 @@
 - [`migration-playbook.md`](./migration-playbook.md): canonical migration fundamentals and operating rules.
 - [`migration-safety.md`](./migration-safety.md): migration rollout and rollback safety practices.
 - [`postgres-local.md`](./postgres-local.md): local Postgres startup, migration, and seed operations.
+- [`dynamic-sessions-one-pager.md`](./dynamic-sessions-one-pager.md): concise Dynamic Sessions production baseline and operating model.

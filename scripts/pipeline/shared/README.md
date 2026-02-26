@@ -20,7 +20,7 @@
 | `load-release-candidate-contract.mjs`       | Parse and validate release candidate manifest contract.                                        |
 | `resolve-stage-eligibility.mjs`             | Stage deploy-required and deployment-pipeline-config eligibility resolution.                   |
 | `decide-release-outcome.mjs`                | Canonical release YES/NO decision artifact writer.                                             |
-| `freeze-release-candidate-refs.mjs`         | Capture current runtime release candidate digest refs from deployed ACA apps.                  |
+| `freeze-release-candidate-refs.mjs`         | Capture current runtime release candidate digest refs from deployed ACA apps and session pool. |
 | `render-infra-parameters.mjs`               | Render Bicep parameter JSON from environment variables.                                        |
 | `workflow-pipeline-contract.test.mjs`       | Structural regression checks for workflow contracts.                                           |
 

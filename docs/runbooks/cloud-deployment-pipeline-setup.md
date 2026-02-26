@@ -109,55 +109,57 @@ Set these in both `acceptance` and `production` unless noted:
 
 ### Required Variables
 
-| Variable                                | production  | acceptance  |
-| --------------------------------------- | ----------- | ----------- |
-| `AZURE_TENANT_ID`                       | required    | required    |
-| `AZURE_SUBSCRIPTION_ID`                 | required    | required    |
-| `AZURE_RESOURCE_GROUP`                  | required    | required    |
-| `AZURE_LOCATION`                        | required    | required    |
-| `AZURE_VNET_NAME`                       | required    | required    |
-| `AZURE_ACA_SUBNET_NAME`                 | required    | required    |
-| `AZURE_POSTGRES_SUBNET_NAME`            | required    | required    |
-| `AZURE_PRIVATE_DNS_ZONE_NAME`           | required    | required    |
-| `AZURE_LOG_ANALYTICS_WORKSPACE_NAME`    | required    | required    |
-| `ACA_ENVIRONMENT_NAME`                  | required    | required    |
-| `ACA_API_APP_NAME`                      | required    | required    |
-| `ACA_WEB_APP_NAME`                      | required    | required    |
-| `ACA_WORKER_APP_NAME`                   | required    | required    |
-| `ACA_CODEX_APP_NAME`                    | required    | required    |
-| `ACA_MIGRATE_JOB_NAME`                  | required    | required    |
-| `ACR_NAME`                              | required    | required    |
-| `ACR_PULL_IDENTITY_NAME`                | required    | required    |
-| `WORKER_RUNTIME_IDENTITY_NAME`          | required    | required    |
-| `SERVICE_BUS_PROD_NAMESPACE_NAME`       | required    | required    |
-| `SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME` | required    | required    |
-| `SERVICE_BUS_QUEUE_NAME`                | required    | required    |
-| `WORKER_RUN_MODE`                       | required    | required    |
-| `POSTGRES_SERVER_NAME`                  | required    | required    |
-| `POSTGRES_DATABASE_NAME`                | required    | required    |
-| `POSTGRES_ADMIN_USERNAME`               | required    | required    |
-| `ENTRA_LOGIN_ENABLED`                   | required    | required    |
-| `ENTRA_CLIENT_ID`                       | conditional | conditional |
-| `ENTRA_ALLOWED_TENANT_IDS`              | optional    | optional    |
-| `AUTH_DEV_FALLBACK_ENABLED`             | required    | required    |
-| `TFSTATE_RESOURCE_GROUP`                | required    | required    |
-| `TFSTATE_STORAGE_ACCOUNT`               | required    | required    |
-| `TFSTATE_CONTAINER`                     | required    | required    |
-| `TFSTATE_KEY`                           | required    | required    |
-| `API_IDENTIFIER_URI`                    | required    | required    |
-| `AUTH_AUDIENCE`                         | required    | required    |
-| `AUTH_ALLOWED_CLIENT_IDS`               | required    | required    |
-| `AUTH_ACTIVE_TENANT_IDS`                | required    | required    |
-| `AUTH_BOOTSTRAP_DELEGATED_USER_OID`     | required    | required    |
-| `AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL`   | required    | required    |
-| `OAUTH_TOKEN_ISSUER`                    | required    | required    |
-| `OAUTH_TOKEN_AUDIENCE`                  | required    | required    |
-| `API_SMOKE_ALLOWED_TENANT_ID`           | required    | required    |
-| `API_SMOKE_DENIED_TENANT_ID`            | required    | required    |
-| `ACA_API_CUSTOM_DOMAIN`                 | optional    | optional    |
-| `ACA_WEB_CUSTOM_DOMAIN`                 | conditional | conditional |
-| `ACA_CODEX_CUSTOM_DOMAIN`               | optional    | optional    |
-| `IDENTITY_OWNER_OBJECT_IDS_JSON`        | required    | required    |
+| Variable                                  | production  | acceptance  |
+| ----------------------------------------- | ----------- | ----------- |
+| `AZURE_TENANT_ID`                         | required    | required    |
+| `AZURE_SUBSCRIPTION_ID`                   | required    | required    |
+| `AZURE_RESOURCE_GROUP`                    | required    | required    |
+| `AZURE_LOCATION`                          | required    | required    |
+| `AZURE_VNET_NAME`                         | required    | required    |
+| `AZURE_ACA_SUBNET_NAME`                   | required    | required    |
+| `AZURE_POSTGRES_SUBNET_NAME`              | required    | required    |
+| `AZURE_PRIVATE_DNS_ZONE_NAME`             | required    | required    |
+| `AZURE_LOG_ANALYTICS_WORKSPACE_NAME`      | required    | required    |
+| `ACA_ENVIRONMENT_NAME`                    | required    | required    |
+| `ACA_API_APP_NAME`                        | required    | required    |
+| `ACA_WEB_APP_NAME`                        | required    | required    |
+| `ACA_WORKER_APP_NAME`                     | required    | required    |
+| `ACA_CODEX_APP_NAME`                      | required    | required    |
+| `DYNAMIC_SESSIONS_POOL_NAME`              | required    | required    |
+| `DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME` | required    | required    |
+| `ACA_MIGRATE_JOB_NAME`                    | required    | required    |
+| `ACR_NAME`                                | required    | required    |
+| `ACR_PULL_IDENTITY_NAME`                  | required    | required    |
+| `WORKER_RUNTIME_IDENTITY_NAME`            | required    | required    |
+| `SERVICE_BUS_PROD_NAMESPACE_NAME`         | required    | required    |
+| `SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME`   | required    | required    |
+| `SERVICE_BUS_QUEUE_NAME`                  | required    | required    |
+| `WORKER_RUN_MODE`                         | required    | required    |
+| `POSTGRES_SERVER_NAME`                    | required    | required    |
+| `POSTGRES_DATABASE_NAME`                  | required    | required    |
+| `POSTGRES_ADMIN_USERNAME`                 | required    | required    |
+| `ENTRA_LOGIN_ENABLED`                     | required    | required    |
+| `ENTRA_CLIENT_ID`                         | conditional | conditional |
+| `ENTRA_ALLOWED_TENANT_IDS`                | optional    | optional    |
+| `AUTH_DEV_FALLBACK_ENABLED`               | required    | required    |
+| `TFSTATE_RESOURCE_GROUP`                  | required    | required    |
+| `TFSTATE_STORAGE_ACCOUNT`                 | required    | required    |
+| `TFSTATE_CONTAINER`                       | required    | required    |
+| `TFSTATE_KEY`                             | required    | required    |
+| `API_IDENTIFIER_URI`                      | required    | required    |
+| `AUTH_AUDIENCE`                           | required    | required    |
+| `AUTH_ALLOWED_CLIENT_IDS`                 | required    | required    |
+| `AUTH_ACTIVE_TENANT_IDS`                  | required    | required    |
+| `AUTH_BOOTSTRAP_DELEGATED_USER_OID`       | required    | required    |
+| `AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL`     | required    | required    |
+| `OAUTH_TOKEN_ISSUER`                      | required    | required    |
+| `OAUTH_TOKEN_AUDIENCE`                    | required    | required    |
+| `API_SMOKE_ALLOWED_TENANT_ID`             | required    | required    |
+| `API_SMOKE_DENIED_TENANT_ID`              | required    | required    |
+| `ACA_API_CUSTOM_DOMAIN`                   | optional    | optional    |
+| `ACA_WEB_CUSTOM_DOMAIN`                   | conditional | conditional |
+| `ACA_CODEX_CUSTOM_DOMAIN`                 | optional    | optional    |
+| `IDENTITY_OWNER_OBJECT_IDS_JSON`          | required    | required    |
 
 ### Required Secrets
 
@@ -179,10 +181,11 @@ Set these in both `acceptance` and `production` unless noted:
 Conditional ENTRA/domain fields are required when `ENTRA_LOGIN_ENABLED=true`.
 Use `AUTH_DEV_FALLBACK_ENABLED=false` in cloud environments.
 Service Bus uses managed identity; do not configure `AZURE_SERVICE_BUS_CONNECTION_STRING`.
+Dynamic Sessions custom-container pools are Dedicated-plan billed capacity; keep pool sizing deliberate and monitor usage.
 
 6. Push the first infra-scope change to `main` (for example a non-functional comment in `infra/azure/main.bicep`).
 
-This first push run is what creates the full platform (ACA env/apps/job, Postgres, networking, identities wired into infra runtime config).
+This first push run is what creates the full platform (ACA env/apps/job, Dynamic Sessions pool, Postgres, networking, identities wired into infra runtime config).
 If the change touches docs-critical infra paths, include a docs-target update in this commit (for example this runbook) to satisfy docs-drift policy gates, including follow-up convergence commits.
 
 7. After first successful deploy, capture the default ACA API FQDN for operator records and smoke troubleshooting.

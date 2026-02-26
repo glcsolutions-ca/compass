@@ -70,6 +70,7 @@ async function freezeCurrentRuntimeRefs() {
   const webAppName = requireEnv("ACA_WEB_APP_NAME");
   const workerAppName = requireEnv("ACA_WORKER_APP_NAME");
   const codexAppName = requireEnv("ACA_CODEX_APP_NAME");
+  const dynamicSessionsPoolName = requireEnv("DYNAMIC_SESSIONS_POOL_NAME");
 
   const apiImage = await capture("az", [
     "containerapp",
@@ -119,17 +120,38 @@ async function freezeCurrentRuntimeRefs() {
     "--output",
     "tsv"
   ]);
+  const dynamicSessionsRuntimeImage = await capture("az", [
+    "resource",
+    "show",
+    "--resource-group",
+    resourceGroup,
+    "--resource-type",
+    "Microsoft.App/sessionPools",
+    "--name",
+    dynamicSessionsPoolName,
+    "--api-version",
+    "2025-07-01",
+    "--query",
+    "properties.customContainerTemplate.containers[0].image",
+    "--output",
+    "tsv"
+  ]);
 
   const releaseCandidateApiRef = await resolveToDigestRef(acrName, apiImage);
   const releaseCandidateWebRef = await resolveToDigestRef(acrName, webImage);
   const releaseCandidateWorkerRef = await resolveToDigestRef(acrName, workerImage);
   const releaseCandidateCodexRef = await resolveToDigestRef(acrName, codexImage);
+  const releaseCandidateDynamicSessionsRuntimeRef = await resolveToDigestRef(
+    acrName,
+    dynamicSessionsRuntimeImage
+  );
 
   await appendGithubOutput({
     release_candidate_api_ref: releaseCandidateApiRef,
     release_candidate_web_ref: releaseCandidateWebRef,
     release_candidate_worker_ref: releaseCandidateWorkerRef,
-    release_candidate_codex_ref: releaseCandidateCodexRef
+    release_candidate_codex_ref: releaseCandidateCodexRef,
+    release_candidate_dynamic_sessions_runtime_ref: releaseCandidateDynamicSessionsRuntimeRef
   });
 }
 

@@ -17,9 +17,11 @@
 4. PostgreSQL Flexible Server + database.
 5. ACR pull managed identity + `AcrPull` assignment.
 6. Worker runtime managed identity + queue-level Service Bus Data Receiver role assignment.
-7. Service Bus namespaces (production + acceptance) and queue baseline (`compass-events`).
-8. Container Apps: API, Web, Worker, Codex.
-9. Manual migration ACA Job.
+7. Dynamic Sessions executor managed identity + session-pool scoped Session Executor role assignment.
+8. Service Bus namespaces (production + acceptance) and queue baseline (`compass-events`).
+9. Container Apps: API, Web, Worker, Codex.
+10. Dynamic Sessions custom-container pool.
+11. Manual migration ACA Job.
 
 ## Runtime Parameter Contract
 
@@ -42,6 +44,8 @@ Runtime parameters are rendered to `.artifacts/infra/<sha>/runtime.parameters.js
 - `ACA_WORKER_APP_NAME`
 - `WORKER_RUNTIME_IDENTITY_NAME`
 - `ACA_CODEX_APP_NAME`
+- `DYNAMIC_SESSIONS_POOL_NAME`
+- `DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME`
 - `ACA_MIGRATE_JOB_NAME`
 - `ACR_NAME`
 - `ACR_PULL_IDENTITY_NAME`
@@ -65,6 +69,7 @@ Runtime parameters are rendered to `.artifacts/infra/<sha>/runtime.parameters.js
 - `SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME`
 - `SERVICE_BUS_QUEUE_NAME`
 - `WORKER_RUN_MODE`
+- `DYNAMIC_SESSIONS_RUNTIME_IMAGE` (pipeline-provided release candidate digest)
 - `ACA_API_CUSTOM_DOMAIN` (optional)
 - `ACA_WEB_CUSTOM_DOMAIN` (optional)
 - `ACA_CODEX_CUSTOM_DOMAIN` (optional)
@@ -83,6 +88,7 @@ Runtime parameters are rendered to `.artifacts/infra/<sha>/runtime.parameters.js
 - `AUTH_ISSUER` is derived from `AZURE_TENANT_ID`.
 - `AUTH_JWKS_URI` is derived from `AZURE_TENANT_ID`.
 - `ACR_LOGIN_SERVER` is derived from `ACR_NAME`.
+- `DYNAMIC_SESSIONS_RUNTIME_IMAGE` is resolved from release-candidate manifest digests in cloud workflows.
 - `WEB_BASE_URL` is derived from `ACA_WEB_CUSTOM_DOMAIN` (or ACA default FQDN when unset).
 - Postgres SKU/version/storage and ACR SKU use IaC defaults in `main.bicep`.
 

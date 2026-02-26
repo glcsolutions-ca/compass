@@ -1,14 +1,14 @@
 # Entra SSO Setup Runbook
 
-Configure enterprise sign-in for `apps/web` (`/login` and `/` front-door gate).
+Configure enterprise sign-in for `apps/web` and `apps/api` (front-door login and OIDC callback handling).
 
 ## Scope
 
 - Web login route: `GET /login`
 - Entra flow routes:
-  - `GET /api/auth/entra/start`
-  - `GET /api/auth/entra/callback`
-  - `POST /api/auth/entra/logout`
+  - `GET /v1/auth/entra/start`
+  - `GET /v1/auth/entra/callback`
+  - `POST /v1/auth/logout`
 - Cloud deployment wiring via `infra/azure/**` and cloud deployment workflows.
 
 ## Prerequisites
@@ -66,24 +66,27 @@ openssl rand -base64 48
 
 ## 3. Deploy Configuration
 
-Run normal pipeline convergence (`deploy-infra` path). The web container app must be updated with:
+Run normal pipeline convergence (`deploy-infra` path). The web and API container apps must be updated with Entra settings:
 
-- `WEB_SESSION_SECRET`
-- `ENTRA_LOGIN_ENABLED`
-- `ENTRA_CLIENT_ID`
-- `ENTRA_CLIENT_SECRET` (secret ref)
-- `WEB_BASE_URL` (derived by infra from `ACA_WEB_CUSTOM_DOMAIN`)
-- `ENTRA_ALLOWED_TENANT_IDS`
-- `AUTH_DEV_FALLBACK_ENABLED`
+- Web app:
+  - `WEB_SESSION_SECRET`
+  - `WEB_BASE_URL` (derived by infra from `ACA_WEB_CUSTOM_DOMAIN`)
+- API app:
+  - `ENTRA_LOGIN_ENABLED`
+  - `ENTRA_CLIENT_ID`
+  - `ENTRA_CLIENT_SECRET` (secret ref)
+  - `WEB_BASE_URL`
+  - `ENTRA_ALLOWED_TENANT_IDS`
+  - `AUTH_DEV_FALLBACK_ENABLED`
 
 ## 4. Verify Runtime Behavior
 
-1. Check container app env:
+1. Check API container app env:
 
 ```bash
 az containerapp show \
   --resource-group "$AZURE_RESOURCE_GROUP" \
-  --name "$ACA_WEB_APP_NAME" \
+  --name "$ACA_API_APP_NAME" \
   --query "properties.template.containers[0].env[].name" \
   -o tsv
 ```
@@ -100,7 +103,7 @@ az containerapp show \
 - `/` does not redirect to `/login`:
   - `ENTRA_LOGIN_ENABLED` is false.
   - `AUTH_DEV_FALLBACK_ENABLED` is true (must be false in cloud).
-- `ENTRA_CONFIG_REQUIRED` from `/api/auth/entra/start`:
+- `ENTRA_CONFIG_REQUIRED` from `/v1/auth/entra/start`:
   - Missing `ENTRA_CLIENT_ID` or infra has not converged `WEB_BASE_URL`.
 - Login returns `tenant_not_allowed`:
   - Add the tenant GUID to `ENTRA_ALLOWED_TENANT_IDS`.

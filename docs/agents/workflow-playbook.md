@@ -6,8 +6,17 @@
 2. Run required local checks:
 
 ```bash
-pnpm test
+pnpm test:quick
+pnpm test:full
 pnpm build
+```
+
+If `pnpm test:full` prints `FULL001 backend prerequisites missing`, run:
+
+```bash
+pnpm db:postgres:up
+pnpm test:full
+pnpm db:postgres:down
 ```
 
 3. For deployment-pipeline-config changes, also run:

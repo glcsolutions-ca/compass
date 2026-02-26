@@ -4,6 +4,8 @@
 
 - [`azure-service-bus-one-pager.md`](./azure-service-bus-one-pager.md): concise Service Bus topology, security, and operations playbook.
 - [`cloud-deployment-pipeline-setup.md`](./cloud-deployment-pipeline-setup.md): canonical cloud runbook for one-time bootstrap and ongoing automated delivery.
+- [`cloud-pipeline-farley-review.md`](./cloud-pipeline-farley-review.md): stage-by-stage Farley-first cloud pipeline review, scoring rubric, and recommendations.
+- [`cloud-pipeline-farley-decision-log.md`](./cloud-pipeline-farley-decision-log.md): decision log for accepted/rejected recommendations at each review stage.
 - [`entra-sso-setup.md`](./entra-sso-setup.md): enterprise Microsoft Entra SSO setup and verification for web front-door login.
 - [`desktop-deployment-pipeline.md`](./desktop-deployment-pipeline.md): desktop installer delivery operations.
 - [`auth-v1-cutover.md`](./auth-v1-cutover.md): Entra-only auth baseline reset and cutover flow.

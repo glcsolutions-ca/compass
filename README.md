@@ -38,9 +38,10 @@ pnpm dev:worker
 - `pnpm dev` - run local core services (API, web, codex gateway)
 - `pnpm dev:all` - run all services including worker
 - `pnpm dev:worker` - run worker only (cloud credentials required)
-- `pnpm test` - run commit-stage checks (static + unit/component + contract)
+- `pnpm test:quick` - run the quick local gate (static + unit/component + contract)
+- `pnpm test` - alias for `pnpm test:quick`
 - `pnpm test:unit` - run workspace unit/component + pipeline contract tests
-- `pnpm test:full` - run commit-stage + integration tests
+- `pnpm test:full` - run backend preflight first, then quick gate + integration + Playwright smoke
 - `pnpm test:integration` - run integration tests only
 - `pnpm test:e2e` - run Playwright smoke flow only
 - `pnpm test:static` - run policy + formatting + lint + typecheck checks
@@ -60,9 +61,19 @@ pnpm dev:worker
 ## Trunk-first flow
 
 1. Implement the change in small, reversible commits.
-2. Run `pnpm test` and `pnpm build`.
-3. Commit and push to `main`.
-4. If high-risk policy blocks direct `main` integration, use a short-lived branch and open a PR.
+2. Run `pnpm test:quick` while iterating.
+3. Before push, run `pnpm test:full`.
+4. Run `pnpm build` when changes affect runtime/build outputs.
+5. Commit and push to `main`.
+6. If high-risk policy blocks direct `main` integration, use a short-lived branch and open a PR.
+
+If `pnpm test:full` fails backend preflight (`FULL001`), run:
+
+```bash
+pnpm db:postgres:up
+pnpm test:full
+pnpm db:postgres:down
+```
 
 ## PR title and format standard
 

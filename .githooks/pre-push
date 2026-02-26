@@ -1,4 +1,4 @@
 #!/bin/sh
 set -eu
 
-pnpm git-hooks:pre-push
+pnpm test:full

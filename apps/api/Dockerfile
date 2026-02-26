@@ -32,6 +32,7 @@ ENV API_PORT=3001
 
 COPY --from=build /opt/app/ ./
 COPY --from=build /workspace/db/migrations ./db/migrations
+COPY --from=build /workspace/db/migration-baseline ./db/migration-baseline
 COPY --from=build /workspace/db/scripts ./db/scripts
 COPY --from=build /workspace/db/seeds ./db/seeds
 

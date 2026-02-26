@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { up } from "../migrations/1772075558000_reconcile_auth_foundation_schema.mjs";
+import { up } from "../migrations/20260226050001_reconcile_auth_foundation_schema.mjs";
 
 describe("reconcile auth foundation schema migration", () => {
   it("creates auth_oidc_requests and required constraints/indexes", async () => {

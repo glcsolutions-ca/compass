@@ -124,7 +124,6 @@ Set these in both `acceptance` and `production` unless noted:
 | `ACA_API_APP_NAME`                        | required    | required    |
 | `ACA_WEB_APP_NAME`                        | required    | required    |
 | `ACA_WORKER_APP_NAME`                     | required    | required    |
-| `ACA_CODEX_APP_NAME`                      | required    | required    |
 | `DYNAMIC_SESSIONS_POOL_NAME`              | required    | required    |
 | `DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME` | required    | required    |
 | `ACA_MIGRATE_JOB_NAME`                    | required    | required    |
@@ -158,7 +157,6 @@ Set these in both `acceptance` and `production` unless noted:
 | `API_SMOKE_DENIED_TENANT_ID`              | required    | required    |
 | `ACA_API_CUSTOM_DOMAIN`                   | optional    | optional    |
 | `ACA_WEB_CUSTOM_DOMAIN`                   | conditional | conditional |
-| `ACA_CODEX_CUSTOM_DOMAIN`                 | optional    | optional    |
 | `IDENTITY_OWNER_OBJECT_IDS_JSON`          | required    | required    |
 
 ### Required Secrets
@@ -197,7 +195,7 @@ echo "API default URL: https://$api_fqdn"
 
 8. Optional custom-domain cut-in (later).
 
-- Set `ACA_API_CUSTOM_DOMAIN`, `ACA_WEB_CUSTOM_DOMAIN`, and optional `ACA_CODEX_CUSTOM_DOMAIN`.
+- Set `ACA_API_CUSTOM_DOMAIN` and `ACA_WEB_CUSTOM_DOMAIN`.
 - Publish DNS records for domain ownership/validation.
 - Run normal infra convergence through the same pipeline path.
 - Update external operational probes to the custom host once cut-in is complete.

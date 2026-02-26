@@ -76,10 +76,8 @@ jobs:
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
       ACA_WORKER_APP_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
-      ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
       ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
       ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
-      ACA_CODEX_CUSTOM_DOMAIN: ${{ vars.ACA_CODEX_CUSTOM_DOMAIN }}
       ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
       ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
       ACR_NAME: ${{ vars.ACR_NAME }}
@@ -152,11 +150,10 @@ jobs:
           API_IMAGE: ${{ steps.manifest.outputs.release_candidate_api_ref }}
           WEB_IMAGE: ${{ steps.manifest.outputs.release_candidate_web_ref }}
           WORKER_IMAGE: ${{ steps.manifest.outputs.release_candidate_worker_ref }}
-          CODEX_IMAGE: ${{ steps.manifest.outputs.release_candidate_codex_ref }}
           DYNAMIC_SESSIONS_RUNTIME_IMAGE: ${{ steps.manifest.outputs.release_candidate_dynamic_sessions_runtime_ref }}
         run: |
           set -euo pipefail
-          for image in "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$CODEX_IMAGE" "$DYNAMIC_SESSIONS_RUNTIME_IMAGE"; do
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$DYNAMIC_SESSIONS_RUNTIME_IMAGE"; do
             if [ -z "$image" ]; then
               echo "Release candidate image reference is missing for acceptance rehearsal" >&2
               exit 1
@@ -182,7 +179,6 @@ jobs:
           API_IMAGE: ${{ steps.manifest.outputs.release_candidate_api_ref }}
           WEB_IMAGE: ${{ steps.manifest.outputs.release_candidate_web_ref }}
           WORKER_IMAGE: ${{ steps.manifest.outputs.release_candidate_worker_ref }}
-          CODEX_IMAGE: ${{ steps.manifest.outputs.release_candidate_codex_ref }}
           DYNAMIC_SESSIONS_RUNTIME_IMAGE: ${{ steps.manifest.outputs.release_candidate_dynamic_sessions_runtime_ref }}
           ARM_PARAMETERS_FILE: .artifacts/infra/${{ env.HEAD_SHA }}/runtime.parameters.json
         run: |

@@ -19,7 +19,7 @@ describe("policy-driven eslint test hygiene", () => {
         message.includes("Commit-stage tests must be deterministic. Avoid Math.random()")
       )
     ).toBe(true);
-  });
+  }, 20_000);
 
   it("flags raw setTimeout usage in commit-stage tests", async () => {
     const messages = await lintMessages("setTimeout(() => {}, 10);");

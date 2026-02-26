@@ -5,7 +5,7 @@ async function main() {
   const headSha = requireEnv("HEAD_SHA");
   const testedSha = process.env.TESTED_SHA?.trim() || headSha;
   const acrName = requireEnv("ACR_NAME");
-  const { apiRef, codexRef, workerRef } = requireReleasePackageRefs();
+  const { apiRef, workerRef } = requireReleasePackageRefs();
 
   const artifactPath = `.artifacts/runtime-api-system/${headSha}/result.json`;
 
@@ -51,7 +51,7 @@ BASE_URL=http://127.0.0.1:3001 pnpm test:acceptance:system
       headSha,
       testedSha,
       status: "pass",
-      releaseCandidate: { apiRef, codexRef, workerRef }
+      releaseCandidate: { apiRef, workerRef }
     });
   } catch (error) {
     await writeJsonFile(artifactPath, {
@@ -60,7 +60,7 @@ BASE_URL=http://127.0.0.1:3001 pnpm test:acceptance:system
       headSha,
       testedSha,
       status: "fail",
-      releaseCandidate: { apiRef, codexRef, workerRef },
+      releaseCandidate: { apiRef, workerRef },
       error: error instanceof Error ? error.message : String(error)
     });
     throw error;

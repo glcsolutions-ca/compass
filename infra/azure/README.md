@@ -19,7 +19,7 @@
 6. Worker runtime managed identity + queue-level Service Bus Data Receiver role assignment.
 7. Dynamic Sessions executor managed identity + session-pool scoped Session Executor role assignment.
 8. Service Bus namespaces (production + acceptance) and queue baseline (`compass-events`).
-9. Container Apps: API, Web, Worker, Codex.
+9. Container Apps: API, Web, Worker.
 10. Dynamic Sessions custom-container pool.
 11. Manual migration ACA Job.
 
@@ -43,7 +43,6 @@ Runtime parameters are rendered to `.artifacts/infra/<sha>/runtime.parameters.js
 - `ACA_WEB_APP_NAME`
 - `ACA_WORKER_APP_NAME`
 - `WORKER_RUNTIME_IDENTITY_NAME`
-- `ACA_CODEX_APP_NAME`
 - `DYNAMIC_SESSIONS_POOL_NAME`
 - `DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME`
 - `ACA_MIGRATE_JOB_NAME`
@@ -72,7 +71,6 @@ Runtime parameters are rendered to `.artifacts/infra/<sha>/runtime.parameters.js
 - `DYNAMIC_SESSIONS_RUNTIME_IMAGE` (pipeline-provided release candidate digest)
 - `ACA_API_CUSTOM_DOMAIN` (optional)
 - `ACA_WEB_CUSTOM_DOMAIN` (optional)
-- `ACA_CODEX_CUSTOM_DOMAIN` (optional)
 
 ### Required Secrets
 
@@ -97,7 +95,7 @@ Runtime parameters are rendered to `.artifacts/infra/<sha>/runtime.parameters.js
 There is one infra path, no mode flags.
 
 1. Default: leave `ACA_*_CUSTOM_DOMAIN` empty, deploy uses ACA default FQDN.
-2. Optional cut-in: set `ACA_API_CUSTOM_DOMAIN`, `ACA_WEB_CUSTOM_DOMAIN`, optional `ACA_CODEX_CUSTOM_DOMAIN`, then run normal pipeline convergence.
+2. Optional cut-in: set `ACA_API_CUSTOM_DOMAIN` and `ACA_WEB_CUSTOM_DOMAIN`, then run normal pipeline convergence.
 
 ## Apply Behavior
 

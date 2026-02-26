@@ -8,12 +8,11 @@ const PORT_RANGE_START = 41_000;
 const PORT_RANGE_END = 60_999;
 const PORT_STRIDE = 10;
 
-const PORT_KEYS = ["WEB_PORT", "API_PORT", "CODEX_PORT", "POSTGRES_PORT"];
+const PORT_KEYS = ["WEB_PORT", "API_PORT", "POSTGRES_PORT"];
 const PORT_OFFSETS = {
   WEB_PORT: 0,
   API_PORT: 1,
-  CODEX_PORT: 2,
-  POSTGRES_PORT: 3
+  POSTGRES_PORT: 2
 };
 
 const MANAGED_ENV_FILES = [
@@ -26,11 +25,6 @@ const MANAGED_ENV_FILES = [
     envPath: "apps/web/.env",
     examplePath: "apps/web/.env.example",
     requiredKeys: ["WEB_PORT", "VITE_API_BASE_URL"]
-  },
-  {
-    envPath: "apps/codex-app-server/.env",
-    examplePath: "apps/codex-app-server/.env.example",
-    requiredKeys: ["CODEX_PORT"]
   },
   {
     envPath: "db/postgres/.env",
@@ -178,7 +172,8 @@ function getWorktreeSeed(rootDir) {
 }
 
 function getSlotCount() {
-  return Math.floor((PORT_RANGE_END - PORT_RANGE_START - 3) / PORT_STRIDE) + 1;
+  const maxOffset = Math.max(...Object.values(PORT_OFFSETS));
+  return Math.floor((PORT_RANGE_END - PORT_RANGE_START - maxOffset) / PORT_STRIDE) + 1;
 }
 
 function getPortTupleForSlot(slot) {
@@ -186,7 +181,6 @@ function getPortTupleForSlot(slot) {
   return {
     WEB_PORT: base + PORT_OFFSETS.WEB_PORT,
     API_PORT: base + PORT_OFFSETS.API_PORT,
-    CODEX_PORT: base + PORT_OFFSETS.CODEX_PORT,
     POSTGRES_PORT: base + PORT_OFFSETS.POSTGRES_PORT
   };
 }
@@ -234,7 +228,7 @@ async function findGeneratedPortTuple({ rootDir, unresolvedPortKeys, isPortAvail
   }
 
   throw new Error(
-    `Unable to find a free generated port tuple in ${PORT_RANGE_START}-${PORT_RANGE_END}. Set explicit WEB_PORT/API_PORT/CODEX_PORT/POSTGRES_PORT values in your .env files or shell env.`
+    `Unable to find a free generated port tuple in ${PORT_RANGE_START}-${PORT_RANGE_END}. Set explicit WEB_PORT/API_PORT/POSTGRES_PORT values in your .env files or shell env.`
   );
 }
 
@@ -287,7 +281,6 @@ export async function resolveLocalEnvValues({
   const existingPorts = {
     WEB_PORT: getExistingValue(state, "apps/web/.env", "WEB_PORT"),
     API_PORT: getExistingValue(state, "apps/api/.env", "API_PORT"),
-    CODEX_PORT: getExistingValue(state, "apps/codex-app-server/.env", "CODEX_PORT"),
     POSTGRES_PORT: getExistingValue(state, "db/postgres/.env", "POSTGRES_PORT")
   };
 
@@ -296,9 +289,6 @@ export async function resolveLocalEnvValues({
       parsePort(env.WEB_PORT, "WEB_PORT") ?? parsePort(existingPorts.WEB_PORT, "WEB_PORT in .env"),
     API_PORT:
       parsePort(env.API_PORT, "API_PORT") ?? parsePort(existingPorts.API_PORT, "API_PORT in .env"),
-    CODEX_PORT:
-      parsePort(env.CODEX_PORT, "CODEX_PORT") ??
-      parsePort(existingPorts.CODEX_PORT, "CODEX_PORT in .env"),
     POSTGRES_PORT:
       parsePort(env.POSTGRES_PORT, "POSTGRES_PORT") ??
       parsePostgresPortFromDatabaseUrl(explicitDatabaseUrl, "DATABASE_URL") ??
@@ -353,9 +343,6 @@ function buildRequiredAssignments(resolvedValues) {
     "apps/web/.env": {
       WEB_PORT: String(resolvedValues.ports.WEB_PORT),
       VITE_API_BASE_URL: resolvedValues.viteApiBaseUrl
-    },
-    "apps/codex-app-server/.env": {
-      CODEX_PORT: String(resolvedValues.ports.CODEX_PORT)
     },
     "db/postgres/.env": {
       COMPOSE_PROJECT_NAME: resolvedValues.composeProjectName,
@@ -422,7 +409,7 @@ export async function ensureLocalEnv({
   }
 
   logger(
-    `ensure-local-env: using WEB/API/CODEX/POSTGRES ports ${resolvedValues.ports.WEB_PORT}/${resolvedValues.ports.API_PORT}/${resolvedValues.ports.CODEX_PORT}/${resolvedValues.ports.POSTGRES_PORT}`
+    `ensure-local-env: using WEB/API/POSTGRES ports ${resolvedValues.ports.WEB_PORT}/${resolvedValues.ports.API_PORT}/${resolvedValues.ports.POSTGRES_PORT}`
   );
 
   return resolvedValues;

@@ -43,7 +43,6 @@ async function main() {
       webAppName: { value: requireEnv("ACA_WEB_APP_NAME") },
       workerAppName: { value: requireEnv("ACA_WORKER_APP_NAME") },
       workerRuntimeIdentityName: { value: requireEnv("WORKER_RUNTIME_IDENTITY_NAME") },
-      codexAppName: { value: requireEnv("ACA_CODEX_APP_NAME") },
       dynamicSessionsPoolName: { value: requireEnv("DYNAMIC_SESSIONS_POOL_NAME") },
       dynamicSessionsExecutorIdentityName: {
         value: requireEnv("DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME")
@@ -56,7 +55,6 @@ async function main() {
       authDevFallbackEnabled: { value: authDevFallbackEnabled },
       apiCustomDomain: { value: readOptional("ACA_API_CUSTOM_DOMAIN") },
       webCustomDomain: { value: readOptional("ACA_WEB_CUSTOM_DOMAIN") },
-      codexCustomDomain: { value: readOptional("ACA_CODEX_CUSTOM_DOMAIN") },
       authIssuer: { value: authIssuer },
       authJwksUri: { value: authJwksUri },
       authAudience: { value: requireEnv("AUTH_AUDIENCE") },
@@ -89,7 +87,6 @@ async function main() {
       apiImage: { value: requireEnv("API_IMAGE") },
       webImage: { value: requireEnv("WEB_IMAGE") },
       workerImage: { value: requireEnv("WORKER_IMAGE") },
-      codexImage: { value: requireEnv("CODEX_IMAGE") },
       dynamicSessionsRuntimeImage: { value: requireEnv("DYNAMIC_SESSIONS_RUNTIME_IMAGE") },
       serviceBusProdNamespaceName: { value: requireEnv("SERVICE_BUS_PROD_NAMESPACE_NAME") },
       serviceBusAcceptanceNamespaceName: {

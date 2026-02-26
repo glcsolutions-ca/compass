@@ -14,13 +14,11 @@ export function requireReleasePackageRefs() {
 
   const apiRef = requireEnv("RELEASE_CANDIDATE_API_REF");
   const webRef = requireEnv("RELEASE_CANDIDATE_WEB_REF");
-  const codexRef = requireEnv("RELEASE_CANDIDATE_CODEX_REF");
   const workerRef = requireEnv("RELEASE_CANDIDATE_WORKER_REF");
 
   for (const [name, ref] of [
     ["API", apiRef],
     ["Web", webRef],
-    ["Codex", codexRef],
     ["Worker", workerRef]
   ]) {
     if (!ref.includes("@sha256:")) {
@@ -28,7 +26,7 @@ export function requireReleasePackageRefs() {
     }
   }
 
-  return { apiRef, webRef, codexRef, workerRef };
+  return { apiRef, webRef, workerRef };
 }
 
 export async function runShell(script) {

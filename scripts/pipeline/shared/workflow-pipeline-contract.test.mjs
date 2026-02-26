@@ -100,7 +100,6 @@ describe("workflow pipeline contract", () => {
     expect(workflow).toContain("name: build-release-candidate-api-image");
     expect(workflow).toContain("name: build-release-candidate-web-image");
     expect(workflow).toContain("name: build-release-candidate-worker-image");
-    expect(workflow).toContain("name: build-release-candidate-codex-image");
     expect(workflow).toContain("name: build-release-candidate-dynamic-sessions-runtime-image");
     expect(workflow).toContain("name: capture-current-runtime-refs");
 
@@ -114,7 +113,6 @@ describe("workflow pipeline contract", () => {
       "build_release_candidate_api_image",
       "build_release_candidate_web_image",
       "build_release_candidate_worker_image",
-      "build_release_candidate_codex_image",
       "build_release_candidate_dynamic_sessions_runtime_image"
     ];
 
@@ -264,7 +262,6 @@ describe("workflow pipeline contract", () => {
     expect(replay).not.toContain("  build_release_candidate_api_image:");
     expect(replay).not.toContain("  build_release_candidate_web_image:");
     expect(replay).not.toContain("  build_release_candidate_worker_image:");
-    expect(replay).not.toContain("  build_release_candidate_codex_image:");
     expect(replay).not.toContain("  build_release_candidate_dynamic_sessions_runtime_image:");
   });
 

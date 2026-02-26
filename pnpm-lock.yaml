@@ -118,51 +118,7 @@ importers:
         specifier: 3.2.4
         version: 3.2.4(@types/node@25.3.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@1.8.0))(lightningcss@1.31.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
-  apps/codex-app-server:
-    dependencies:
-      '@compass/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
-      cors:
-        specifier: ^2.8.5
-        version: 2.8.6
-      dotenv:
-        specifier: ^16.4.7
-        version: 16.6.1
-      express:
-        specifier: ^5.1.0
-        version: 5.2.1
-      pg:
-        specifier: ^8.16.3
-        version: 8.18.0
-      ws:
-        specifier: ^8.18.0
-        version: 8.19.0
-      zod:
-        specifier: ^3.24.2
-        version: 3.25.76
-    devDependencies:
-      '@compass/testkit':
-        specifier: workspace:*
-        version: link:../../packages/testkit
-      '@types/cors':
-        specifier: ^2.8.19
-        version: 2.8.19
-      '@types/express':
-        specifier: ^5.0.5
-        version: 5.0.6
-      '@types/pg':
-        specifier: ^8.15.6
-        version: 8.16.0
-      '@types/ws':
-        specifier: ^8.18.1
-        version: 8.18.1
-      tsx:
-        specifier: 4.21.0
-        version: 4.21.0
-      vitest:
-        specifier: 3.2.4
-        version: 3.2.4(@types/node@25.3.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@1.8.0))(lightningcss@1.31.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+  apps/codex-session-runtime: {}
 
   apps/desktop:
     devDependencies:
@@ -1449,9 +1405,6 @@ packages:
 
   '@types/wrap-ansi@3.0.0':
     resolution: {integrity: sha512-ltIpx+kM7g/MLRZfkbL7EsCEjfzCcScLpkg37eXEtx5kmrAKBkTJwd1GIAjDSL8wTpM6Hzn5YO4pSb91BEwu1g==}
-
-  '@types/ws@8.18.1':
-    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   '@types/yauzl@2.10.3':
     resolution: {integrity: sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q==}
@@ -6436,10 +6389,6 @@ snapshots:
       '@types/superagent': 8.1.9
 
   '@types/wrap-ansi@3.0.0': {}
-
-  '@types/ws@8.18.1':
-    dependencies:
-      '@types/node': 24.10.13
 
   '@types/yauzl@2.10.3':
     dependencies:

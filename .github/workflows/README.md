@@ -41,7 +41,7 @@
   - trigger: `push` to `main`
   - key flow (Farley language):
     - Integration Confidence: `verify-commit-stage-evidence`, `verify-integration-gate-evidence`, `determine-scope`
-    - Build Once: `build-release-candidate-api-image`, `build-release-candidate-web-image`, `build-release-candidate-worker-image`, `build-release-candidate-codex-image`, `build-release-candidate-dynamic-sessions-runtime-image`, `capture-current-runtime-refs`, `publish-release-candidate`
+    - Build Once: `build-release-candidate-api-image`, `build-release-candidate-web-image`, `build-release-candidate-worker-image`, `build-release-candidate-dynamic-sessions-runtime-image`, `capture-current-runtime-refs`, `publish-release-candidate`
     - Promote, Don't Rebuild: `load-release-candidate`
     - Automated Acceptance Test Gate: runtime + infra + identity acceptance jobs, then `automated-acceptance-test-gate`
     - Continuous Delivery: `deploy-release-candidate` (when acceptance is YES and deploy is required)

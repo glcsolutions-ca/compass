@@ -294,52 +294,6 @@ jobs:
         id: set_ref
         run: echo "release_candidate_worker_ref=${ACR_REGISTRY}/compass-worker@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
-  build_release_candidate_codex_image:
-    name: build-release-candidate-codex-image
-    needs:
-      - determine_scope
-    if: ${{ needs.determine_scope.outputs.runtime_changed == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    environment: production
-    outputs:
-      release_candidate_codex_ref: ${{ steps.set_ref.outputs.release_candidate_codex_ref }}
-    env:
-      HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
-      ACR_NAME: ${{ vars.ACR_NAME }}
-      ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: ACR login
-        run: az acr login --name "$ACR_NAME" --only-show-errors
-
-      - name: Build and push release candidate Codex image
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: apps/codex-app-server/Dockerfile
-          push: true
-          tags: ${{ env.ACR_REGISTRY }}/compass-codex-app-server:${{ env.HEAD_SHA }}
-          cache-from: type=gha,scope=compass-codex-app-server
-          cache-to: type=gha,scope=compass-codex-app-server,mode=max
-
-      - name: Set release candidate Codex ref
-        id: set_ref
-        run: echo "release_candidate_codex_ref=${ACR_REGISTRY}/compass-codex-app-server@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
-
   build_release_candidate_dynamic_sessions_runtime_image:
     name: build-release-candidate-dynamic-sessions-runtime-image
     needs:
@@ -398,7 +352,6 @@ jobs:
       release_candidate_api_ref: ${{ steps.freeze.outputs.release_candidate_api_ref }}
       release_candidate_web_ref: ${{ steps.freeze.outputs.release_candidate_web_ref }}
       release_candidate_worker_ref: ${{ steps.freeze.outputs.release_candidate_worker_ref }}
-      release_candidate_codex_ref: ${{ steps.freeze.outputs.release_candidate_codex_ref }}
       release_candidate_dynamic_sessions_runtime_ref: ${{ steps.freeze.outputs.release_candidate_dynamic_sessions_runtime_ref }}
     env:
       ACR_NAME: ${{ vars.ACR_NAME }}
@@ -406,7 +359,6 @@ jobs:
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
       ACA_WORKER_APP_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
-      ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
       DYNAMIC_SESSIONS_POOL_NAME: ${{ vars.DYNAMIC_SESSIONS_POOL_NAME }}
     steps:
       - name: Checkout
@@ -439,10 +391,9 @@ jobs:
       - build_release_candidate_api_image
       - build_release_candidate_web_image
       - build_release_candidate_worker_image
-      - build_release_candidate_codex_image
       - build_release_candidate_dynamic_sessions_runtime_image
       - capture_current_runtime_refs
-    if: ${{ always() && needs.verify_commit_stage_evidence.result == 'success' && needs.verify_integration_gate_evidence.result == 'success' && needs.determine_scope.result == 'success' && ((needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_api_image.result == 'success' && needs.build_release_candidate_web_image.result == 'success' && needs.build_release_candidate_worker_image.result == 'success' && needs.build_release_candidate_codex_image.result == 'success' && needs.build_release_candidate_dynamic_sessions_runtime_image.result == 'success') || ((needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.requires_infra_convergence == 'true') && needs.capture_current_runtime_refs.result == 'success') || (needs.determine_scope.outputs.runtime_changed != 'true' && needs.determine_scope.outputs.infra_changed != 'true' && needs.determine_scope.outputs.requires_infra_convergence != 'true')) }}
+    if: ${{ always() && needs.verify_commit_stage_evidence.result == 'success' && needs.verify_integration_gate_evidence.result == 'success' && needs.determine_scope.result == 'success' && ((needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_api_image.result == 'success' && needs.build_release_candidate_web_image.result == 'success' && needs.build_release_candidate_worker_image.result == 'success' && needs.build_release_candidate_dynamic_sessions_runtime_image.result == 'success') || ((needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.requires_infra_convergence == 'true') && needs.capture_current_runtime_refs.result == 'success') || (needs.determine_scope.outputs.runtime_changed != 'true' && needs.determine_scope.outputs.infra_changed != 'true' && needs.determine_scope.outputs.requires_infra_convergence != 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -463,12 +414,10 @@ jobs:
       RELEASE_CANDIDATE_API_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_api_image.outputs.release_candidate_api_ref || needs.capture_current_runtime_refs.outputs.release_candidate_api_ref }}
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_web_image.outputs.release_candidate_web_ref || needs.capture_current_runtime_refs.outputs.release_candidate_web_ref }}
       RELEASE_CANDIDATE_WORKER_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_worker_image.outputs.release_candidate_worker_ref || needs.capture_current_runtime_refs.outputs.release_candidate_worker_ref }}
-      RELEASE_CANDIDATE_CODEX_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_codex_image.outputs.release_candidate_codex_ref || needs.capture_current_runtime_refs.outputs.release_candidate_codex_ref }}
       RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.determine_scope.outputs.runtime_changed == 'true' && needs.build_release_candidate_dynamic_sessions_runtime_image.outputs.release_candidate_dynamic_sessions_runtime_ref || needs.capture_current_runtime_refs.outputs.release_candidate_dynamic_sessions_runtime_ref }}
       FREEZE_API_RESULT: ${{ needs.build_release_candidate_api_image.result }}
       FREEZE_WEB_RESULT: ${{ needs.build_release_candidate_web_image.result }}
       FREEZE_WORKER_RESULT: ${{ needs.build_release_candidate_worker_image.result }}
-      FREEZE_CODEX_RESULT: ${{ needs.build_release_candidate_codex_image.result }}
       FREEZE_DYNAMIC_SESSIONS_RUNTIME_RESULT: ${{ needs.build_release_candidate_dynamic_sessions_runtime_image.result }}
       FREEZE_CURRENT_REFS_RESULT: ${{ needs.capture_current_runtime_refs.result }}
     steps:
@@ -486,7 +435,7 @@ jobs:
           fi
 
           if [ "$RUNTIME_CHANGED" = "true" ]; then
-            if [ "$FREEZE_API_RESULT" != "success" ] || [ "$FREEZE_WEB_RESULT" != "success" ] || [ "$FREEZE_WORKER_RESULT" != "success" ] || [ "$FREEZE_CODEX_RESULT" != "success" ] || [ "$FREEZE_DYNAMIC_SESSIONS_RUNTIME_RESULT" != "success" ]; then
+            if [ "$FREEZE_API_RESULT" != "success" ] || [ "$FREEZE_WEB_RESULT" != "success" ] || [ "$FREEZE_WORKER_RESULT" != "success" ] || [ "$FREEZE_DYNAMIC_SESSIONS_RUNTIME_RESULT" != "success" ]; then
               echo "Runtime release candidate refs are required but runtime freeze jobs did not all succeed." >&2
               exit 1
             fi
@@ -498,7 +447,7 @@ jobs:
           fi
 
           if [ "$requires_refs" = "true" ]; then
-            if [ -z "${RELEASE_CANDIDATE_API_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_WEB_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_WORKER_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_CODEX_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF:-}" ]; then
+            if [ -z "${RELEASE_CANDIDATE_API_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_WEB_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_WORKER_REF:-}" ] || [ -z "${RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF:-}" ]; then
               echo "Release candidate refs are required but missing." >&2
               exit 1
             fi
@@ -527,7 +476,6 @@ jobs:
               "apiRef": "${RELEASE_CANDIDATE_API_REF:-}",
               "webRef": "${RELEASE_CANDIDATE_WEB_REF:-}",
               "workerRef": "${RELEASE_CANDIDATE_WORKER_REF:-}",
-              "codexRef": "${RELEASE_CANDIDATE_CODEX_REF:-}",
               "dynamicSessionsRuntimeRef": "${RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF:-}"
             }
           }
@@ -562,7 +510,6 @@ jobs:
       release_candidate_api_ref: ${{ steps.manifest.outputs.release_candidate_api_ref }}
       release_candidate_web_ref: ${{ steps.manifest.outputs.release_candidate_web_ref }}
       release_candidate_worker_ref: ${{ steps.manifest.outputs.release_candidate_worker_ref }}
-      release_candidate_codex_ref: ${{ steps.manifest.outputs.release_candidate_codex_ref }}
       release_candidate_dynamic_sessions_runtime_ref: ${{ steps.manifest.outputs.release_candidate_dynamic_sessions_runtime_ref }}
       commit_run_id: ${{ steps.manifest.outputs.commit_run_id }}
       release_candidate_ref_contract_status: ${{ steps.manifest.outputs.release_candidate_ref_contract_status }}
@@ -610,7 +557,6 @@ jobs:
       RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
       RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
-      RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
       RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
@@ -662,7 +608,6 @@ jobs:
           path: |
             .artifacts/runtime-api-system/${{ env.HEAD_SHA }}
             .artifacts/harness-smoke/${{ env.TESTED_SHA }}/result.json
-            .artifacts/codex-smoke/${{ env.TESTED_SHA }}/result.json
             .artifacts/deploy/${{ env.TESTED_SHA }}/api-smoke.json
           if-no-files-found: warn
 
@@ -686,7 +631,6 @@ jobs:
       RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
       RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
-      RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
       RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
@@ -758,7 +702,6 @@ jobs:
       RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
       RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
-      RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
       RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
@@ -825,7 +768,6 @@ jobs:
       API_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
       WEB_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
       WORKER_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
-      CODEX_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
       DYNAMIC_SESSIONS_RUNTIME_IMAGE: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
       RELEASE_CANDIDATE_REF_CONTRACT_STATUS: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_status }}
       RELEASE_CANDIDATE_REF_CONTRACT_REASON_CODES_JSON: ${{ needs.load_release_candidate.outputs.release_candidate_ref_contract_reason_codes_json }}
@@ -842,10 +784,8 @@ jobs:
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
       ACA_WORKER_APP_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
-      ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
       ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
       ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
-      ACA_CODEX_CUSTOM_DOMAIN: ${{ vars.ACA_CODEX_CUSTOM_DOMAIN }}
       ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
       ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
       ACR_NAME: ${{ vars.ACR_NAME }}
@@ -909,7 +849,7 @@ jobs:
             exit 1
           fi
 
-          for image in "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$CODEX_IMAGE" "$DYNAMIC_SESSIONS_RUNTIME_IMAGE"; do
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$DYNAMIC_SESSIONS_RUNTIME_IMAGE"; do
             if [ -z "$image" ]; then
               echo "Release candidate image reference is missing for infra acceptance" >&2
               exit 1
@@ -1265,7 +1205,6 @@ jobs:
       infra_apply_required: ${{ steps.decide_infra_apply.outputs.infra_apply_required }}
       api_prod_url: ${{ steps.current_state.outputs.api_prod_url }}
       web_prod_url: ${{ steps.current_state.outputs.web_prod_url }}
-      codex_prod_url: ${{ steps.current_state.outputs.codex_prod_url }}
     env:
       HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
       RUNTIME_CHANGED: ${{ needs.load_release_candidate.outputs.runtime_changed }}
@@ -1274,7 +1213,6 @@ jobs:
       RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
       RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
-      RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
       RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
@@ -1289,11 +1227,9 @@ jobs:
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
       ACA_WORKER_APP_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
-      ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
       ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
       ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
       ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
-      ACA_CODEX_CUSTOM_DOMAIN: ${{ vars.ACA_CODEX_CUSTOM_DOMAIN }}
       ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
       ACR_NAME: ${{ vars.ACR_NAME }}
       POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
@@ -1340,7 +1276,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_WORKER_REF" "$RELEASE_CANDIDATE_CODEX_REF" "$RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF"; do
+          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_WORKER_REF" "$RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF"; do
             if [ -z "$image" ]; then
               echo "Release candidate image reference is missing for infra deployment" >&2
               exit 1
@@ -1350,23 +1286,6 @@ jobs:
               exit 1
             fi
           done
-
-      - name: Resolve Codex app name
-        if: ${{ env.RUNTIME_CHANGED == 'true' }}
-        run: |
-          set -euo pipefail
-
-          codex_app_name="${ACA_CODEX_APP_NAME:-}"
-          if [ -z "$codex_app_name" ]; then
-            if [[ "$ACA_API_APP_NAME" == *"-api-"* ]]; then
-              codex_app_name="${ACA_API_APP_NAME/-api-/-codex-}"
-            else
-              echo "ACA_CODEX_APP_NAME is empty and fallback from ACA_API_APP_NAME failed" >&2
-              exit 1
-            fi
-          fi
-
-          echo "ACA_CODEX_APP_NAME=$codex_app_name" >> "$GITHUB_ENV"
 
       - name: Decide infra apply necessity
         id: decide_infra_apply
@@ -1386,7 +1305,6 @@ jobs:
           API_IMAGE: ${{ env.RELEASE_CANDIDATE_API_REF }}
           WEB_IMAGE: ${{ env.RELEASE_CANDIDATE_WEB_REF }}
           WORKER_IMAGE: ${{ env.RELEASE_CANDIDATE_WORKER_REF }}
-          CODEX_IMAGE: ${{ env.RELEASE_CANDIDATE_CODEX_REF }}
           DYNAMIC_SESSIONS_RUNTIME_IMAGE: ${{ env.RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF }}
           ARM_PARAMETERS_FILE: .artifacts/infra/${{ env.HEAD_SHA }}/runtime.parameters.json
         run: |
@@ -1417,11 +1335,9 @@ jobs:
 
           api_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_API_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
           web_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_WEB_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
-          codex_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_CODEX_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
 
           echo "api_prod_url=$api_prod_url" >> "$GITHUB_OUTPUT"
           echo "web_prod_url=$web_prod_url" >> "$GITHUB_OUTPUT"
-          echo "codex_prod_url=$codex_prod_url" >> "$GITHUB_OUTPUT"
 
       - name: Upload infra mutation artifacts
         if: ${{ always() }}
@@ -1447,20 +1363,17 @@ jobs:
     outputs:
       api_prod_url: ${{ steps.current_state.outputs.api_prod_url }}
       web_prod_url: ${{ steps.current_state.outputs.web_prod_url }}
-      codex_prod_url: ${{ steps.current_state.outputs.codex_prod_url }}
     env:
       HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
       REQUIRES_MIGRATIONS: ${{ needs.load_release_candidate.outputs.requires_migrations }}
       RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
       RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
-      RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
       RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
       ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
       ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
       ACA_WORKER_APP_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
-      ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
       ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
       ACR_NAME: ${{ vars.ACR_NAME }}
       ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
@@ -1482,7 +1395,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_WORKER_REF" "$RELEASE_CANDIDATE_CODEX_REF" "$RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF"; do
+          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_WORKER_REF" "$RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF"; do
             if [ -z "$image" ]; then
               echo "Release candidate image reference is missing for runtime deployment" >&2
               exit 1
@@ -1492,22 +1405,6 @@ jobs:
               exit 1
             fi
           done
-
-      - name: Resolve Codex app name
-        run: |
-          set -euo pipefail
-
-          codex_app_name="${ACA_CODEX_APP_NAME:-}"
-          if [ -z "$codex_app_name" ]; then
-            if [[ "$ACA_API_APP_NAME" == *"-api-"* ]]; then
-              codex_app_name="${ACA_API_APP_NAME/-api-/-codex-}"
-            else
-              echo "ACA_CODEX_APP_NAME is empty and fallback from ACA_API_APP_NAME failed" >&2
-              exit 1
-            fi
-          fi
-
-          echo "ACA_CODEX_APP_NAME=$codex_app_name" >> "$GITHUB_ENV"
 
       - name: Update migration job image
         run: |
@@ -1559,14 +1456,6 @@ jobs:
           resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
           disableTelemetry: true
 
-      - name: Deploy Codex
-        uses: azure/container-apps-deploy-action@v1
-        with:
-          imageToDeploy: ${{ env.RELEASE_CANDIDATE_CODEX_REF }}
-          containerAppName: ${{ env.ACA_CODEX_APP_NAME }}
-          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
-          disableTelemetry: true
-
       - name: Resolve current production URLs
         id: current_state
         run: |
@@ -1574,11 +1463,9 @@ jobs:
 
           api_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_API_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
           web_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_WEB_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
-          codex_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_CODEX_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
 
           echo "api_prod_url=$api_prod_url" >> "$GITHUB_OUTPUT"
           echo "web_prod_url=$web_prod_url" >> "$GITHUB_OUTPUT"
-          echo "codex_prod_url=$codex_prod_url" >> "$GITHUB_OUTPUT"
 
       - name: Upload runtime mutation artifacts
         if: ${{ always() }}
@@ -1603,7 +1490,6 @@ jobs:
     outputs:
       api_prod_url: ${{ steps.current_state.outputs.api_prod_url }}
       web_prod_url: ${{ steps.current_state.outputs.web_prod_url }}
-      codex_prod_url: ${{ steps.current_state.outputs.codex_prod_url }}
       deployment_id: ${{ steps.record_release.outputs.deployment_id }}
     env:
       HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
@@ -1611,7 +1497,6 @@ jobs:
       RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
       RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
-      RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
       RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
     steps:
       - name: Checkout
@@ -1624,7 +1509,6 @@ jobs:
 
           api_prod_url="${{ needs.deploy_runtime.outputs.api_prod_url }}"
           web_prod_url="${{ needs.deploy_runtime.outputs.web_prod_url }}"
-          codex_prod_url="${{ needs.deploy_runtime.outputs.codex_prod_url }}"
 
           if [ -z "$api_prod_url" ]; then
             api_prod_url="${{ needs.deploy_infra.outputs.api_prod_url }}"
@@ -1632,13 +1516,9 @@ jobs:
           if [ -z "$web_prod_url" ]; then
             web_prod_url="${{ needs.deploy_infra.outputs.web_prod_url }}"
           fi
-          if [ -z "$codex_prod_url" ]; then
-            codex_prod_url="${{ needs.deploy_infra.outputs.codex_prod_url }}"
-          fi
 
           echo "api_prod_url=$api_prod_url" >> "$GITHUB_OUTPUT"
           echo "web_prod_url=$web_prod_url" >> "$GITHUB_OUTPUT"
-          echo "codex_prod_url=$codex_prod_url" >> "$GITHUB_OUTPUT"
 
       - name: Record successful production deployment
         id: record_release
@@ -1653,7 +1533,6 @@ jobs:
           RELEASE_CANDIDATE_API_REF: ${{ env.RELEASE_CANDIDATE_API_REF }}
           RELEASE_CANDIDATE_WEB_REF: ${{ env.RELEASE_CANDIDATE_WEB_REF }}
           RELEASE_CANDIDATE_WORKER_REF: ${{ env.RELEASE_CANDIDATE_WORKER_REF }}
-          RELEASE_CANDIDATE_CODEX_REF: ${{ env.RELEASE_CANDIDATE_CODEX_REF }}
           RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ env.RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF }}
           CHANGE_CLASS: ${{ env.CHANGE_CLASS }}
         run: node scripts/pipeline/cloud/deployment-stage/record-release.mjs
@@ -1673,7 +1552,6 @@ jobs:
               "api": "$RELEASE_CANDIDATE_API_REF",
               "web": "$RELEASE_CANDIDATE_WEB_REF",
               "worker": "$RELEASE_CANDIDATE_WORKER_REF",
-              "codex": "$RELEASE_CANDIDATE_CODEX_REF",
               "dynamicSessionsRuntime": "$RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF"
             }
           }
@@ -1783,7 +1661,6 @@ jobs:
           RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
           RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
           RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
-          RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
           RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
           DEPLOY_RESULT: ${{ needs.deploy_release_candidate.result }}
           VERIFY_RESULT: ${{ needs.production_blackbox_verify.result }}
@@ -1849,7 +1726,6 @@ jobs:
           RELEASE_CANDIDATE_API_REF: ${{ needs.load_release_candidate.outputs.release_candidate_api_ref }}
           RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
           RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
-          RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
           RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
         run: node scripts/pipeline/shared/decide-release-outcome.mjs
 

@@ -22,7 +22,6 @@ param apiAppName string = 'SET_IN_GITHUB_ENV'
 param webAppName string = 'SET_IN_GITHUB_ENV'
 param workerAppName string = 'SET_IN_GITHUB_ENV'
 param workerRuntimeIdentityName string = 'SET_IN_GITHUB_ENV'
-param codexAppName string = 'SET_IN_GITHUB_ENV'
 param dynamicSessionsPoolName string = 'SET_IN_GITHUB_ENV'
 param dynamicSessionsExecutorIdentityName string = 'SET_IN_GITHUB_ENV'
 param migrationJobName string = 'SET_IN_GITHUB_ENV'
@@ -43,7 +42,6 @@ param postgresStorageMb int = 32768
 param apiImage string = 'SET_IN_GITHUB_ENV'
 param webImage string = 'SET_IN_GITHUB_ENV'
 param workerImage string = 'SET_IN_GITHUB_ENV'
-param codexImage string = 'SET_IN_GITHUB_ENV'
 param dynamicSessionsRuntimeImage string = 'SET_IN_GITHUB_ENV'
 @secure()
 param webSessionSecret string
@@ -59,10 +57,8 @@ param serviceBusQueueName string = 'compass-events'
 param workerRunMode string = 'loop'
 param apiCustomDomain string = ''
 param webCustomDomain string = ''
-param codexCustomDomain string = ''
 
 param apiLogLevel string = 'warn'
-param codexLogLevel string = 'warn'
 param authIssuer string = 'SET_IN_GITHUB_ENV'
 param authJwksUri string = 'SET_IN_GITHUB_ENV'
 param authAudience string = 'SET_IN_GITHUB_ENV'
@@ -172,9 +168,6 @@ var apiBaseUrl = empty(apiCustomDomain)
 var webBaseUrl = empty(webCustomDomain)
   ? 'https://${webAppName}.${containerEnvironment.outputs.defaultDomain}'
   : 'https://${webCustomDomain}'
-var codexBaseUrl = empty(codexCustomDomain)
-  ? 'https://${codexAppName}.${containerEnvironment.outputs.defaultDomain}'
-  : 'https://${codexCustomDomain}'
 
 resource acrPullIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: acrPullIdentityName
@@ -302,25 +295,6 @@ module worker './modules/containerapp-worker.bicep' = {
   ]
 }
 
-module codex './modules/containerapp-codex.bicep' = {
-  name: 'containerapp-codex'
-  params: {
-    location: location
-    containerAppName: codexAppName
-    managedEnvironmentId: containerEnvironment.outputs.environmentId
-    image: codexImage
-    registryServer: acr.outputs.loginServer
-    registryIdentityResourceId: acrPullIdentity.id
-    sessionExecutorIdentityResourceId: dynamicSessionsExecutorIdentity.id
-    databaseUrl: databaseUrl
-    logLevel: codexLogLevel
-    customDomainName: codexCustomDomain
-  }
-  dependsOn: [
-    acrPullIdentityRoleAssignment
-  ]
-}
-
 module dynamicSessions './modules/sessionpool-dynamic-sessions.bicep' = {
   name: 'sessionpool-dynamic-sessions'
   params: {
@@ -364,7 +338,6 @@ output containerAppsEnvironmentName string = containerEnvironment.outputs.enviro
 output containerAppsEnvironmentId string = containerEnvironment.outputs.environmentId
 output containerAppsDefaultDomain string = containerEnvironment.outputs.defaultDomain
 output apiBaseUrlOutput string = apiBaseUrl
-output codexBaseUrlOutput string = codexBaseUrl
 output acrId string = acr.outputs.registryId
 output acrNameOutput string = acr.outputs.registryNameOutput
 output acrLoginServer string = acr.outputs.loginServer
@@ -391,10 +364,6 @@ output webLatestRevisionFqdn string = web.outputs.latestRevisionFqdn
 
 output workerContainerAppName string = worker.outputs.appName
 output workerLatestRevision string = worker.outputs.latestRevisionName
-
-output codexContainerAppName string = codex.outputs.appName
-output codexLatestRevision string = codex.outputs.latestRevisionName
-output codexLatestRevisionFqdn string = codex.outputs.latestRevisionFqdn
 
 output dynamicSessionsPoolId string = dynamicSessions.outputs.sessionPoolId
 output dynamicSessionsPoolNameOutput string = dynamicSessions.outputs.sessionPoolNameOutput

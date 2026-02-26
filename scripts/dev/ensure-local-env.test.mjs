@@ -24,10 +24,6 @@ async function seedExampleFiles(repoDir) {
     "WEB_PORT=3000\nVITE_API_BASE_URL=http://localhost:3001\n"
   );
   await writeFileWithParents(
-    path.join(repoDir, "apps/codex-app-server/.env.example"),
-    "NODE_ENV=development\nCODEX_PORT=3010\nCODEX_HOST=0.0.0.0\n"
-  );
-  await writeFileWithParents(
     path.join(repoDir, "apps/worker/.env.example"),
     "WORKER_RUN_MODE=loop\n"
   );

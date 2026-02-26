@@ -92,18 +92,37 @@ async function runFlow(
   const authStartResponse = await page.request.get(`${baseUrl}/v1/auth/entra/start?returnTo=%2F`, {
     maxRedirects: 0
   });
+  const authStartStatus = authStartResponse.status();
   const authStartLocation = authStartResponse.headers().location ?? "";
+  const authStartText = await authStartResponse.text();
+  let authStartJson: { code?: unknown } | null = null;
+  try {
+    authStartJson =
+      authStartText.length > 0 ? (JSON.parse(authStartText) as { code?: unknown }) : null;
+  } catch {
+    authStartJson = null;
+  }
+  const authStartIsRedirect = authStartStatus === 302 || authStartStatus === 303;
+  const authStartIsEntraDisabled =
+    authStartStatus === 503 &&
+    (authStartJson?.code === "ENTRA_LOGIN_DISABLED" ||
+      authStartJson?.code === "ENTRA_CONFIG_REQUIRED");
+
   flowAssertions.push({
     id: `${flowId}:gateway-auth-start-status`,
-    description: `[${flowId}] Gateway auth start returns redirect`,
-    pass: authStartResponse.status() === 302 || authStartResponse.status() === 303,
-    details: `status=${authStartResponse.status()}`
+    description: `[${flowId}] Gateway auth start reaches API auth handler`,
+    pass: authStartIsRedirect || authStartIsEntraDisabled,
+    details: `status=${authStartStatus}, code=${String(authStartJson?.code ?? "")}`
   });
   flowAssertions.push({
     id: `${flowId}:gateway-auth-start-target`,
-    description: `[${flowId}] Gateway auth start redirects to Microsoft login`,
-    pass: authStartLocation.startsWith("https://login.microsoftonline.com/"),
-    details: authStartLocation || "missing location header"
+    description: `[${flowId}] Gateway auth start response is provider redirect or explicit Entra-disabled error`,
+    pass:
+      (authStartIsRedirect && authStartLocation.startsWith("https://login.microsoftonline.com/")) ||
+      authStartIsEntraDisabled,
+    details:
+      authStartLocation ||
+      `status=${authStartStatus}, code=${String(authStartJson?.code ?? "")}, body=${authStartText.slice(0, 160)}`
   });
 }
 

@@ -132,6 +132,17 @@ Day 1 notes:
   - authenticated `/v1/auth/me` returned `200`
   - `POST /v1/auth/logout` returned `204`
   - same session token after logout returned `401`
+- Follow-up recheck (`2026-02-26T19:40:06Z`) using deployment smoke contract:
+  - `node scripts/pipeline/cloud/deployment-stage/verify-api-smoke.mjs` returned pass against `https://compass.glcsolutions.ca`
+  - redirect assertion pass included:
+    - host `login.microsoftonline.com`
+    - path `/organizations/oauth2/v2.0/authorize`
+    - `client_id=<entra-client-id-redacted>`
+    - `redirect_uri=https://compass.glcsolutions.ca/v1/auth/entra/callback`
+- Allow-list parity revalidated (`2026-02-26T19:39:47Z`):
+  - `gh variable list -e acceptance` and `gh variable list -e production` both include:
+    - `ENTRA_ALLOWED_TENANT_IDS=<entra-tenant-id-a>,<entra-tenant-id-b>`
+    - `AUTH_ACTIVE_TENANT_IDS=<entra-tenant-id-a>,<entra-tenant-id-b>`
 
 ## Incident Log Template
 

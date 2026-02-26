@@ -26,6 +26,12 @@ function getEnvValue(containerEnv, name) {
   return String(found.value ?? "");
 }
 
+function normalizePrincipalId(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
 const legacyConnectionStringEnvName = ["AZURE", "SERVICE", "BUS", "CONNECTION", "STRING"].join("_");
 
 async function verifyNamespaceLocalAuthDisabled(resourceGroup, namespaceName) {
@@ -156,19 +162,24 @@ async function main() {
     "json"
   ]);
 
-  const roleAssignments = await azJson([
+  const queueRoleAssignments = await azJson([
     "role",
     "assignment",
     "list",
-    "--assignee-object-id",
-    identity.principalId,
     "--scope",
     queue.id,
-    "--query",
-    "[?roleDefinitionName=='Azure Service Bus Data Receiver'].{role:roleDefinitionName,id:id,roleDefinitionId:roleDefinitionId}",
     "--output",
     "json"
   ]);
+  const normalizedPrincipalId = normalizePrincipalId(identity.principalId);
+  const roleAssignments = queueRoleAssignments
+    .filter((assignment) => normalizePrincipalId(assignment?.principalId) === normalizedPrincipalId)
+    .filter((assignment) => assignment?.roleDefinitionName === "Azure Service Bus Data Receiver")
+    .map((assignment) => ({
+      role: assignment.roleDefinitionName,
+      id: assignment.id,
+      roleDefinitionId: assignment.roleDefinitionId
+    }));
 
   assert(
     Array.isArray(roleAssignments) && roleAssignments.length > 0,

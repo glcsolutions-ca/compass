@@ -36,6 +36,12 @@ function normalizeRoleDefinitionId(value) {
     .toLowerCase();
 }
 
+function normalizePrincipalId(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
 function hasExpectedRoleAssignment(assignments, expectedRoleDefinitionId) {
   const expected = normalizeRoleDefinitionId(expectedRoleDefinitionId);
   return assignments.some(
@@ -51,21 +57,17 @@ async function waitForExpectedRoleAssignment({
   const startedAt = Date.now();
   let attempts = 0;
   let latestAssignments = [];
+  const normalizedAssigneeObjectId = normalizePrincipalId(assigneeObjectId);
 
   while (Date.now() - startedAt <= ROLE_ASSIGNMENT_WAIT_TIMEOUT_MS) {
     attempts += 1;
-    latestAssignments =
-      (await runJson("az", [
-        "role",
-        "assignment",
-        "list",
-        "--assignee-object-id",
-        assigneeObjectId,
-        "--scope",
-        scope,
-        "--output",
-        "json"
-      ])) || [];
+    const scopeAssignments =
+      (await runJson("az", ["role", "assignment", "list", "--scope", scope, "--output", "json"])) ||
+      [];
+
+    latestAssignments = scopeAssignments.filter(
+      (assignment) => normalizePrincipalId(assignment?.principalId) === normalizedAssigneeObjectId
+    );
 
     if (hasExpectedRoleAssignment(latestAssignments, expectedRoleDefinitionId)) {
       return {

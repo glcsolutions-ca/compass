@@ -1,8 +1,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router";
+import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router";
 import LoginRoute, { resolveReturnTo } from "../../app/routes/login.js";
-import { clientLoader as workspacesLoader } from "../../app/routes/workspaces.js";
+import WorkspacesRoute, { clientLoader as workspacesLoader } from "../../app/routes/workspaces.js";
 import { clientLoader as tenantLoader } from "../../app/routes/tenant.js";
 
 afterEach(() => {
@@ -55,6 +55,19 @@ describe("login route", () => {
     const link = screen.getByTestId("admin-consent-link");
     expect(link.getAttribute("href")).toBe(
       "/v1/auth/entra/admin-consent/start?returnTo=%2Ft%2Facme&tenantHint=contoso.onmicrosoft.com"
+    );
+  });
+
+  it("renders admin consent success messaging after consent callback", () => {
+    render(
+      <MemoryRouter initialEntries={["/login?consent=granted&returnTo=%2Ft%2Facme"]}>
+        <LoginRoute />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId("admin-consent-success")).toBeTruthy();
+    expect(screen.getByTestId("sign-in-link").getAttribute("href")).toBe(
+      "/v1/auth/entra/start?returnTo=%2Ft%2Facme"
     );
   });
 });
@@ -113,6 +126,30 @@ describe("workspaces loader", () => {
       ],
       error: null
     });
+  });
+
+  it("renders onboarding actions when authenticated user has no memberships", async () => {
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/workspaces",
+          element: <WorkspacesRoute />,
+          loader: async () => ({
+            authenticated: true,
+            memberships: [],
+            error: null
+          })
+        }
+      ],
+      {
+        initialEntries: ["/workspaces"]
+      }
+    );
+
+    render(<RouterProvider router={router} />);
+
+    expect(await screen.findByTestId("create-organization-form")).toBeTruthy();
+    expect(screen.getByTestId("accept-invite-form")).toBeTruthy();
   });
 });
 

@@ -1,6 +1,7 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { Pool } from "pg";
+import { z } from "zod";
 import {
   AuthMeResponseSchema,
   MembershipRoleSchema,
@@ -17,11 +18,16 @@ const DEFAULT_OIDC_SCOPE = "openid profile email";
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 8;
 const DEFAULT_SESSION_IDLE_TTL_SECONDS = 60 * 60;
 const OIDC_REQUEST_TTL_SECONDS = 10 * 60;
+const ADMIN_CONSENT_REQUEST_MARKER = "admin-consent";
+const EmailAddressSchema = z.string().email();
+const OIDC_ENCRYPTED_PAYLOAD_PREFIX = "enc:v1:";
+const OIDC_STATE_ENCRYPTION_KEY_BYTES = 32;
 
 export interface EntraAuthConfig {
   enabled: boolean;
   clientId?: string;
   clientSecret?: string;
+  oidcStateEncryptionKey?: string;
   redirectUri?: string;
   authorityHost: string;
   tenantSegment: string;
@@ -102,7 +108,7 @@ interface SessionRecord {
 interface OidcRequestRecord {
   id: string;
   nonceHash: string;
-  pkceVerifier: string;
+  encryptedPayload: string;
   returnTo: string | null;
 }
 
@@ -114,6 +120,7 @@ interface InviteRecord {
   role: MembershipRole;
   expiresAt: string;
   acceptedAt: string | null;
+  acceptedByUserId: string | null;
 }
 
 interface TenantMembershipCheck {
@@ -141,7 +148,112 @@ function encodePkceChallenge(verifier: string): string {
 }
 
 function asStringOrNull(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value : null;
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function parseBooleanQueryFlag(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function asValidEmailOrNull(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  return EmailAddressSchema.safeParse(value).success ? value : null;
+}
+
+function resolvePrimaryEmail(input: { email: string | null; upn: string | null }): string | null {
+  return asValidEmailOrNull(input.email) ?? asValidEmailOrNull(input.upn);
+}
+
+function parseOidcStateEncryptionKey(raw: string | undefined): Buffer | null {
+  const value = asStringOrNull(raw);
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const decoded = Buffer.from(value, "base64url");
+    if (decoded.length !== OIDC_STATE_ENCRYPTION_KEY_BYTES) {
+      return null;
+    }
+
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+function encryptOidcRequestPayload(input: {
+  encryptionKey: Buffer;
+  flow: "entra-login" | "admin-consent";
+  nonce: string;
+  pkceVerifier: string;
+}): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", input.encryptionKey, iv);
+  const plaintext = JSON.stringify({
+    flow: input.flow,
+    nonce: input.nonce,
+    pkceVerifier: input.pkceVerifier
+  });
+  const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+
+  return `${OIDC_ENCRYPTED_PAYLOAD_PREFIX}${iv.toString("base64url")}.${ciphertext.toString("base64url")}.${tag.toString("base64url")}`;
+}
+
+function decryptOidcRequestPayload(input: { encryptionKey: Buffer; encodedPayload: string }): {
+  flow: "entra-login" | "admin-consent";
+  nonce: string;
+  pkceVerifier: string;
+} {
+  if (!input.encodedPayload.startsWith(OIDC_ENCRYPTED_PAYLOAD_PREFIX)) {
+    throw new Error("OIDC request payload format is invalid");
+  }
+
+  const encodedParts = input.encodedPayload.slice(OIDC_ENCRYPTED_PAYLOAD_PREFIX.length).split(".");
+  if (encodedParts.length !== 3) {
+    throw new Error("OIDC request payload format is invalid");
+  }
+
+  const [ivEncoded, ciphertextEncoded, tagEncoded] = encodedParts as [string, string, string];
+  const iv = Buffer.from(ivEncoded, "base64url");
+  const ciphertext = Buffer.from(ciphertextEncoded, "base64url");
+  const tag = Buffer.from(tagEncoded, "base64url");
+
+  const decipher = createDecipheriv("aes-256-gcm", input.encryptionKey, iv);
+  decipher.setAuthTag(tag);
+  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
+  const payload = JSON.parse(decrypted) as {
+    flow?: unknown;
+    nonce?: unknown;
+    pkceVerifier?: unknown;
+  };
+
+  const flow = payload.flow;
+  if (flow !== "entra-login" && flow !== "admin-consent") {
+    throw new Error("OIDC request payload flow is invalid");
+  }
+
+  const nonce = asStringOrNull(payload.nonce);
+  const pkceVerifier = asStringOrNull(payload.pkceVerifier);
+  if (!nonce || !pkceVerifier) {
+    throw new Error("OIDC request payload is missing required fields");
+  }
+
+  return {
+    flow,
+    nonce,
+    pkceVerifier
+  };
 }
 
 function sanitizeReturnTo(returnTo: string | undefined): string | null {
@@ -155,6 +267,31 @@ function sanitizeReturnTo(returnTo: string | undefined): string | null {
   }
 
   return trimmed;
+}
+
+function buildLoginRedirect(input: {
+  error?: string;
+  consent?: "granted" | "denied";
+  returnTo?: string | null;
+  tenantHint?: string | null;
+}): string {
+  const query = new URLSearchParams();
+  if (input.error) {
+    query.set("error", input.error);
+  }
+  if (input.consent) {
+    query.set("consent", input.consent);
+  }
+
+  const returnTo = sanitizeReturnTo(input.returnTo ?? undefined) || "/";
+  query.set("returnTo", returnTo);
+
+  const tenantHint = asStringOrNull(input.tenantHint);
+  if (tenantHint) {
+    query.set("tenantHint", tenantHint);
+  }
+
+  return `/login?${query.toString()}`;
 }
 
 function nowPlusSeconds(now: Date, seconds: number): Date {
@@ -354,8 +491,8 @@ export class AuthRepository {
 
   async createOidcRequest(input: {
     state: string;
-    nonce: string;
-    pkceVerifier: string;
+    nonceHash: string;
+    encryptedPayload: string;
     returnTo: string | null;
     now: Date;
   }): Promise<void> {
@@ -376,8 +513,8 @@ export class AuthRepository {
       [
         randomUUID(),
         hashValue(input.state),
-        input.nonce,
-        input.pkceVerifier,
+        input.nonceHash,
+        input.encryptedPayload,
         input.returnTo,
         expiresAt,
         input.now.toISOString()
@@ -411,7 +548,7 @@ export class AuthRepository {
     return {
       id: row.id,
       nonceHash: row.nonce_hash,
-      pkceVerifier: row.pkce_verifier_encrypted_or_hashed,
+      encryptedPayload: row.pkce_verifier_encrypted_or_hashed,
       returnTo: row.return_to
     };
   }
@@ -437,7 +574,10 @@ export class AuthRepository {
         [input.tid, input.oid]
       );
 
-      const email = input.email || input.upn;
+      const email = resolvePrimaryEmail({
+        email: input.email,
+        upn: input.upn
+      });
       if ((existing.rowCount ?? 0) > 0) {
         const row = existing.rows.at(0);
         if (!row) {
@@ -469,7 +609,7 @@ export class AuthRepository {
         await client.query("commit");
         return {
           id: row.user_id,
-          primaryEmail: email,
+          primaryEmail: asValidEmailOrNull(email),
           displayName: input.name
         };
       }
@@ -504,7 +644,7 @@ export class AuthRepository {
       await client.query("commit");
       return {
         id: userId,
-        primaryEmail: email,
+        primaryEmail: asValidEmailOrNull(email),
         displayName: input.name
       };
     } catch (error) {
@@ -809,7 +949,7 @@ export class AuthRepository {
 
     return result.rows.map((row) => ({
       userId: row.user_id,
-      primaryEmail: row.primary_email,
+      primaryEmail: asValidEmailOrNull(row.primary_email),
       displayName: row.display_name,
       role: toMembershipRole(row.role),
       status: row.status
@@ -877,6 +1017,7 @@ export class AuthRepository {
       role: string;
       expires_at: string;
       accepted_at: string | null;
+      accepted_by_user_id: string | null;
     }>(
       `
         select
@@ -886,7 +1027,8 @@ export class AuthRepository {
           i.email_normalized,
           i.role,
           i.expires_at,
-          i.accepted_at
+          i.accepted_at,
+          i.accepted_by_user_id
         from invites i
         join tenants t on t.id = i.tenant_id
         where t.slug = $1
@@ -907,7 +1049,8 @@ export class AuthRepository {
       emailNormalized: row.email_normalized,
       role: toMembershipRole(row.role),
       expiresAt: row.expires_at,
-      acceptedAt: row.accepted_at
+      acceptedAt: row.accepted_at,
+      acceptedByUserId: row.accepted_by_user_id
     };
   }
 
@@ -917,41 +1060,74 @@ export class AuthRepository {
     userId: string;
     role: MembershipRole;
     now: Date;
-  }): Promise<void> {
+  }): Promise<"accepted_now" | "already_accepted_same_user" | "already_accepted_different_user"> {
     const client = await this.pool.connect();
 
     try {
       await client.query("begin");
 
-      await client.query(
+      const acceptance = await client.query<{ accepted_by_user_id: string | null }>(
         `
           update invites
-          set accepted_at = coalesce(accepted_at, $2::timestamptz)
+          set accepted_at = $2::timestamptz,
+              accepted_by_user_id = $3
           where id = $1
+            and accepted_at is null
+          returning accepted_by_user_id
         `,
-        [input.inviteId, input.now.toISOString()]
+        [input.inviteId, input.now.toISOString(), input.userId]
       );
 
-      await client.query(
-        `
-          insert into memberships (
-            tenant_id,
-            user_id,
-            role,
-            status,
-            created_at,
-            updated_at
-          ) values ($1, $2, $3, 'active', $4::timestamptz, $4::timestamptz)
-          on conflict (tenant_id, user_id)
-          do update set
-            role = excluded.role,
-            status = 'active',
-            updated_at = excluded.updated_at
-        `,
-        [input.tenantId, input.userId, input.role, input.now.toISOString()]
-      );
+      let outcome:
+        | "accepted_now"
+        | "already_accepted_same_user"
+        | "already_accepted_different_user" = "accepted_now";
+      if ((acceptance.rowCount ?? 0) === 0) {
+        const existing = await client.query<{ accepted_by_user_id: string | null }>(
+          `
+            select accepted_by_user_id
+            from invites
+            where id = $1
+            for update
+          `,
+          [input.inviteId]
+        );
+
+        const existingRow = existing.rows.at(0);
+        if (!existingRow) {
+          throw new Error("Invite no longer exists");
+        }
+
+        if (existingRow.accepted_by_user_id === input.userId) {
+          outcome = "already_accepted_same_user";
+        } else {
+          outcome = "already_accepted_different_user";
+        }
+      }
+
+      if (outcome !== "already_accepted_different_user") {
+        await client.query(
+          `
+            insert into memberships (
+              tenant_id,
+              user_id,
+              role,
+              status,
+              created_at,
+              updated_at
+            ) values ($1, $2, $3, 'active', $4::timestamptz, $4::timestamptz)
+            on conflict (tenant_id, user_id)
+            do update set
+              role = excluded.role,
+              status = 'active',
+              updated_at = excluded.updated_at
+          `,
+          [input.tenantId, input.userId, input.role, input.now.toISOString()]
+        );
+      }
 
       await client.query("commit");
+      return outcome;
     } catch (error) {
       await client.query("rollback");
       throw error;
@@ -1076,11 +1252,13 @@ export class AuthService {
   private readonly config: EntraAuthConfig;
   private readonly repository: AuthRepository;
   private readonly oidcClient: OidcClient;
+  private readonly oidcStateEncryptionKey: Buffer | null;
 
   constructor(input: AuthServiceInput) {
     this.config = input.config;
     this.repository = input.repository;
     this.oidcClient = input.oidcClient;
+    this.oidcStateEncryptionKey = parseOidcStateEncryptionKey(input.config.oidcStateEncryptionKey);
   }
 
   async startEntraLogin(input: { returnTo?: string; now: Date }): Promise<{ redirectUrl: string }> {
@@ -1090,12 +1268,18 @@ export class AuthService {
     const nonce = randomToken(24);
     const pkceVerifier = randomToken(64);
     const codeChallenge = encodePkceChallenge(pkceVerifier);
+    const encryptedPayload = encryptOidcRequestPayload({
+      encryptionKey: this.requiredOidcStateEncryptionKey(),
+      flow: "entra-login",
+      nonce,
+      pkceVerifier
+    });
 
     const returnTo = sanitizeReturnTo(input.returnTo);
     await this.repository.createOidcRequest({
       state,
-      nonce,
-      pkceVerifier,
+      nonceHash: hashValue(nonce),
+      encryptedPayload,
       returnTo,
       now: input.now
     });
@@ -1118,12 +1302,19 @@ export class AuthService {
     this.assertAuthEnabled();
 
     const state = randomToken(24);
+    const nonce = randomToken(24);
     const returnTo = sanitizeReturnTo(input.returnTo) || "/";
+    const encryptedPayload = encryptOidcRequestPayload({
+      encryptionKey: this.requiredOidcStateEncryptionKey(),
+      flow: "admin-consent",
+      nonce,
+      pkceVerifier: ADMIN_CONSENT_REQUEST_MARKER
+    });
 
     await this.repository.createOidcRequest({
       state,
-      nonce: randomToken(24),
-      pkceVerifier: "admin-consent",
+      nonceHash: hashValue(nonce),
+      encryptedPayload,
       returnTo,
       now: input.now
     });
@@ -1140,6 +1331,9 @@ export class AuthService {
   async handleEntraCallback(input: {
     code?: string;
     state?: string;
+    adminConsent?: string;
+    tenant?: string;
+    scope?: string;
     error?: string;
     errorDescription?: string;
     userAgent: string | undefined;
@@ -1148,7 +1342,72 @@ export class AuthService {
   }): Promise<{ redirectTo: string; sessionToken?: string }> {
     this.assertAuthEnabled();
 
+    const state = asStringOrNull(input.state);
+    const tenantHint = asStringOrNull(input.tenant);
+    const hasAdminConsent = parseBooleanQueryFlag(input.adminConsent);
+
+    let consumedStateRequest: OidcRequestRecord | null | undefined;
+    let consumedStateSecrets:
+      | { flow: "entra-login" | "admin-consent"; nonce: string; pkceVerifier: string }
+      | null
+      | undefined;
+    const consumeStateRequest = async (): Promise<OidcRequestRecord | null> => {
+      if (!state) {
+        return null;
+      }
+      if (consumedStateRequest !== undefined) {
+        return consumedStateRequest;
+      }
+
+      consumedStateRequest = await this.repository.consumeOidcRequest(state, input.now);
+      return consumedStateRequest;
+    };
+    const consumeStateSecrets = async (): Promise<{
+      flow: "entra-login" | "admin-consent";
+      nonce: string;
+      pkceVerifier: string;
+    } | null> => {
+      if (consumedStateSecrets !== undefined) {
+        return consumedStateSecrets;
+      }
+
+      const oidcRequest = await consumeStateRequest();
+      if (!oidcRequest) {
+        consumedStateSecrets = null;
+        return consumedStateSecrets;
+      }
+
+      consumedStateSecrets = this.decodeOidcRequestSecrets(oidcRequest);
+      return consumedStateSecrets;
+    };
+
+    if (hasAdminConsent) {
+      const oidcRequest = await consumeStateRequest();
+      if (!oidcRequest) {
+        throw new ApiError(401, "STATE_INVALID", "OIDC state is invalid or expired");
+      }
+
+      const oidcSecrets = await consumeStateSecrets();
+      if (oidcSecrets?.flow !== "admin-consent") {
+        throw new ApiError(400, "INVALID_CALLBACK", "Callback state does not match admin consent");
+      }
+
+      return {
+        redirectTo: buildLoginRedirect({
+          consent: "granted",
+          returnTo: oidcRequest.returnTo,
+          tenantHint
+        })
+      };
+    }
+
     if (input.error) {
+      const oidcRequest = state ? await consumeStateRequest() : null;
+      if (state && !oidcRequest) {
+        throw new ApiError(401, "STATE_INVALID", "OIDC state is invalid or expired");
+      }
+      const oidcSecrets = state ? await consumeStateSecrets() : null;
+
       await this.repository.insertAuditEvent({
         eventType: "auth.login.failure",
         actorUserId: null,
@@ -1162,34 +1421,55 @@ export class AuthService {
       });
 
       const lower = `${input.error} ${input.errorDescription ?? ""}`.toLowerCase();
+      if (oidcSecrets?.flow === "admin-consent") {
+        return {
+          redirectTo: buildLoginRedirect({
+            consent: "denied",
+            returnTo: oidcRequest?.returnTo,
+            tenantHint
+          })
+        };
+      }
+
       const isConsent = lower.includes("consent") || lower.includes("aadsts65001");
       if (isConsent) {
         return {
-          redirectTo: `/login?error=admin_consent_required`
+          redirectTo: buildLoginRedirect({
+            error: "admin_consent_required",
+            returnTo: "/",
+            tenantHint
+          })
         };
       }
 
       throw new ApiError(401, "OIDC_CALLBACK_ERROR", input.errorDescription || input.error);
     }
 
-    if (!input.code || !input.state) {
+    if (!input.code || !state) {
       throw new ApiError(400, "INVALID_CALLBACK", "Missing callback code or state");
     }
 
-    const oidcRequest = await this.repository.consumeOidcRequest(input.state, input.now);
+    const oidcRequest = await consumeStateRequest();
     if (!oidcRequest) {
       throw new ApiError(401, "STATE_INVALID", "OIDC state is invalid or expired");
+    }
+    const oidcSecrets = await consumeStateSecrets();
+    if (!oidcSecrets) {
+      throw new ApiError(401, "STATE_INVALID", "OIDC state is invalid or expired");
+    }
+    if (oidcSecrets.flow === "admin-consent") {
+      throw new ApiError(400, "INVALID_CALLBACK", "Missing admin consent result");
     }
 
     const idToken = await this.oidcClient.exchangeCodeForIdToken({
       code: input.code,
       redirectUri: this.requiredRedirectUri(),
-      codeVerifier: oidcRequest.pkceVerifier
+      codeVerifier: oidcSecrets.pkceVerifier
     });
 
     const claims = await this.oidcClient.verifyIdToken({
       idToken,
-      expectedNonce: oidcRequest.nonceHash
+      expectedNonce: oidcSecrets.nonce
     });
 
     if (!this.isAllowedTenant(claims.tid)) {
@@ -1462,22 +1742,34 @@ export class AuthService {
       throw new ApiError(410, "INVITE_EXPIRED", "Invite has expired");
     }
 
-    const userEmails = await this.repository.listUserKnownEmails(context.userId);
-    if (!userEmails.includes(invite.emailNormalized)) {
-      throw new ApiError(
-        403,
-        "INVITE_EMAIL_MISMATCH",
-        "Invite email does not match authenticated user"
-      );
+    const alreadyAcceptedByCurrentUser =
+      invite.acceptedAt !== null && invite.acceptedByUserId === context.userId;
+    if (!alreadyAcceptedByCurrentUser) {
+      const userEmails = await this.repository.listUserKnownEmails(context.userId);
+      if (!userEmails.includes(invite.emailNormalized)) {
+        throw new ApiError(
+          403,
+          "INVITE_EMAIL_MISMATCH",
+          "Invite email does not match authenticated user"
+        );
+      }
     }
 
-    await this.repository.markInviteAcceptedAndUpsertMembership({
+    const acceptResult = await this.repository.markInviteAcceptedAndUpsertMembership({
       inviteId: invite.id,
       tenantId: invite.tenantId,
       userId: context.userId,
       role: invite.role,
       now: input.now
     });
+
+    if (acceptResult === "already_accepted_different_user") {
+      throw new ApiError(
+        409,
+        "INVITE_ALREADY_ACCEPTED",
+        "Invite has already been accepted by another user"
+      );
+    }
 
     await this.repository.insertAuditEvent({
       eventType: "tenant.invite.accept",
@@ -1560,7 +1852,7 @@ export class AuthService {
 
     return {
       userId: session.userId,
-      primaryEmail: session.primaryEmail,
+      primaryEmail: asValidEmailOrNull(session.primaryEmail),
       displayName: session.displayName
     };
   }
@@ -1574,6 +1866,40 @@ export class AuthService {
     return redirectUri;
   }
 
+  private requiredOidcStateEncryptionKey(): Buffer {
+    if (!this.oidcStateEncryptionKey) {
+      throw new ApiError(
+        503,
+        "ENTRA_CONFIG_REQUIRED",
+        "AUTH_OIDC_STATE_ENCRYPTION_KEY is required when Entra login is enabled"
+      );
+    }
+
+    return this.oidcStateEncryptionKey;
+  }
+
+  private decodeOidcRequestSecrets(oidcRequest: OidcRequestRecord): {
+    flow: "entra-login" | "admin-consent";
+    nonce: string;
+    pkceVerifier: string;
+  } {
+    let decoded: { flow: "entra-login" | "admin-consent"; nonce: string; pkceVerifier: string };
+    try {
+      decoded = decryptOidcRequestPayload({
+        encryptionKey: this.requiredOidcStateEncryptionKey(),
+        encodedPayload: oidcRequest.encryptedPayload
+      });
+    } catch {
+      throw new ApiError(401, "STATE_INVALID", "OIDC state is invalid or expired");
+    }
+
+    if (hashValue(decoded.nonce) !== oidcRequest.nonceHash) {
+      throw new ApiError(401, "STATE_INVALID", "OIDC state is invalid or expired");
+    }
+
+    return decoded;
+  }
+
   private assertAuthEnabled(): void {
     if (!this.config.enabled) {
       throw new ApiError(503, "ENTRA_LOGIN_DISABLED", "Microsoft Entra login is disabled");
@@ -1581,6 +1907,14 @@ export class AuthService {
 
     if (!this.config.clientId || !this.config.clientSecret) {
       throw new ApiError(503, "ENTRA_CONFIG_REQUIRED", "Entra client configuration is incomplete");
+    }
+
+    if (!this.oidcStateEncryptionKey) {
+      throw new ApiError(
+        503,
+        "ENTRA_CONFIG_REQUIRED",
+        "AUTH_OIDC_STATE_ENCRYPTION_KEY is required when Entra login is enabled"
+      );
     }
   }
 
@@ -1626,6 +1960,7 @@ export function buildEntraAuthConfig(env: NodeJS.ProcessEnv): EntraAuthConfig {
     enabled,
     clientId: asStringOrNull(env.ENTRA_CLIENT_ID) ?? undefined,
     clientSecret: asStringOrNull(env.ENTRA_CLIENT_SECRET) ?? undefined,
+    oidcStateEncryptionKey: asStringOrNull(env.AUTH_OIDC_STATE_ENCRYPTION_KEY) ?? undefined,
     redirectUri: asStringOrNull(env.ENTRA_REDIRECT_URI) ?? defaultRedirectUri,
     authorityHost: asStringOrNull(env.ENTRA_AUTHORITY_HOST) ?? "https://login.microsoftonline.com",
     tenantSegment: asStringOrNull(env.ENTRA_TENANT_SEGMENT) ?? "organizations",

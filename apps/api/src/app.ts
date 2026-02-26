@@ -47,6 +47,9 @@ const EntraAdminConsentQuerySchema = z.object({
 const EntraCallbackQuerySchema = z.object({
   code: z.string().optional(),
   state: z.string().optional(),
+  admin_consent: z.string().optional(),
+  tenant: z.string().optional(),
+  scope: z.string().optional(),
   error: z.string().optional(),
   error_description: z.string().optional()
 });
@@ -401,6 +404,9 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       const result = await authService.handleEntraCallback({
         code: query.code,
         state: query.state,
+        adminConsent: query.admin_consent,
+        tenant: query.tenant,
+        scope: query.scope,
         error: query.error,
         errorDescription: query.error_description,
         userAgent: actorContext.userAgent,

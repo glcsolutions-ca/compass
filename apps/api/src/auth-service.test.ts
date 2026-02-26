@@ -10,6 +10,7 @@ describe("buildEntraAuthConfig", () => {
     expect(config.tenantSegment).toBe("organizations");
     expect(config.allowedTenantIds).toEqual([]);
     expect(config.redirectUri).toBe("https://compass.glcsolutions.ca/v1/auth/entra/callback");
+    expect(config.oidcStateEncryptionKey).toBeUndefined();
   });
 
   it("parses comma-separated allow-list values", () => {
@@ -23,6 +24,15 @@ describe("buildEntraAuthConfig", () => {
       "11111111-1111-1111-1111-111111111111",
       "22222222-2222-2222-2222-222222222222"
     ]);
+  });
+
+  it("reads OIDC state encryption key from environment", () => {
+    const config = buildEntraAuthConfig({
+      AUTH_OIDC_STATE_ENCRYPTION_KEY: "  AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ",
+      WEB_BASE_URL: "https://compass.glcsolutions.ca"
+    });
+
+    expect(config.oidcStateEncryptionKey).toBe("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
   });
 });
 

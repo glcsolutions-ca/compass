@@ -1,5 +1,6 @@
 import type { MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
+import { useState, type FormEvent } from "react";
 
 interface WorkspaceMembership {
   tenantId: string;
@@ -111,6 +112,118 @@ export async function clientLoader({
 
 export default function WorkspacesRoute() {
   const data = useLoaderData<WorkspacesLoaderData>();
+  const [createSlug, setCreateSlug] = useState("");
+  const [createName, setCreateName] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [inviteSlug, setInviteSlug] = useState("");
+  const [inviteToken, setInviteToken] = useState("");
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
+
+  async function submitCreateOrganization(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (createBusy) {
+      return;
+    }
+
+    const slug = createSlug.trim().toLowerCase();
+    const name = createName.trim();
+    if (!slug || !name) {
+      setCreateError("Organization slug and name are required.");
+      return;
+    }
+
+    setCreateError(null);
+    setCreateBusy(true);
+    try {
+      const response = await fetch("/v1/tenants", {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json"
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          slug,
+          name
+        })
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        message?: unknown;
+        tenant?: { slug?: unknown };
+      } | null;
+
+      if (!response.ok) {
+        const message =
+          typeof payload?.message === "string" ? payload.message : "Unable to create organization";
+        setCreateError(message);
+        return;
+      }
+
+      const tenantSlug =
+        typeof payload?.tenant?.slug === "string" && payload.tenant.slug.trim().length > 0
+          ? payload.tenant.slug.trim()
+          : slug;
+      window.location.assign(`/t/${tenantSlug}`);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCreateBusy(false);
+    }
+  }
+
+  async function submitInviteAcceptance(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (inviteBusy) {
+      return;
+    }
+
+    const tenantSlug = inviteSlug.trim();
+    const token = inviteToken.trim();
+    if (!tenantSlug || !token) {
+      setInviteError("Tenant slug and invite token are required.");
+      return;
+    }
+
+    setInviteError(null);
+    setInviteBusy(true);
+    try {
+      const response = await fetch(
+        `/v1/tenants/${encodeURIComponent(tenantSlug)}/invites/${encodeURIComponent(token)}/accept`,
+        {
+          method: "POST",
+          headers: {
+            accept: "application/json"
+          },
+          credentials: "include"
+        }
+      );
+
+      const payload = (await response.json().catch(() => null)) as {
+        message?: unknown;
+        tenantSlug?: unknown;
+      } | null;
+
+      if (!response.ok) {
+        const message =
+          typeof payload?.message === "string" ? payload.message : "Unable to accept invite";
+        setInviteError(message);
+        return;
+      }
+
+      const resolvedSlug =
+        typeof payload?.tenantSlug === "string" && payload.tenantSlug.trim().length > 0
+          ? payload.tenantSlug.trim()
+          : tenantSlug;
+      window.location.assign(`/t/${resolvedSlug}`);
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setInviteBusy(false);
+    }
+  }
 
   if (!data.authenticated) {
     return (
@@ -134,9 +247,71 @@ export default function WorkspacesRoute() {
         <p className="eyebrow">Compass</p>
         <h1>Your workspaces</h1>
         {data.memberships.length === 0 ? (
-          <p className="helper">
-            No memberships found. Create an organization or accept an invite.
-          </p>
+          <>
+            <p className="helper">
+              No memberships found. Create an organization or accept an invite.
+            </p>
+            <form
+              className="list"
+              data-testid="create-organization-form"
+              onSubmit={submitCreateOrganization}
+            >
+              <label>
+                Organization slug
+                <input
+                  name="slug"
+                  value={createSlug}
+                  onChange={(event) => setCreateSlug(event.target.value)}
+                  placeholder="acme"
+                  autoComplete="off"
+                />
+              </label>
+              <label>
+                Organization name
+                <input
+                  name="name"
+                  value={createName}
+                  onChange={(event) => setCreateName(event.target.value)}
+                  placeholder="Acme Corp"
+                  autoComplete="organization"
+                />
+              </label>
+              <button className="button" type="submit" disabled={createBusy}>
+                {createBusy ? "Creating..." : "Create organization"}
+              </button>
+              {createError ? <p className="helper">{createError}</p> : null}
+            </form>
+            <form
+              className="list"
+              data-testid="accept-invite-form"
+              onSubmit={submitInviteAcceptance}
+            >
+              <label>
+                Tenant slug
+                <input
+                  name="tenantSlug"
+                  value={inviteSlug}
+                  onChange={(event) => setInviteSlug(event.target.value)}
+                  placeholder="acme"
+                  autoComplete="off"
+                />
+              </label>
+              <label>
+                Invite token
+                <input
+                  name="inviteToken"
+                  value={inviteToken}
+                  onChange={(event) => setInviteToken(event.target.value)}
+                  placeholder="Paste invite token"
+                  autoComplete="off"
+                />
+              </label>
+              <button className="button secondary" type="submit" disabled={inviteBusy}>
+                {inviteBusy ? "Joining..." : "Have an invite?"}
+              </button>
+              {inviteError ? <p className="helper">{inviteError}</p> : null}
+            </form>
+          </>
         ) : (
           <ul className="list" data-testid="workspace-list">
             {data.memberships.map((membership) => (

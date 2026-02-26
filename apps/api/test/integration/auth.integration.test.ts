@@ -2,6 +2,7 @@ import path from "node:path";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
+import { Client } from "pg";
 import {
   ApiError,
   AuthRepository,
@@ -87,6 +88,9 @@ function buildConfig(): EntraAuthConfig {
     enabled: true,
     clientId: "compass-client-id",
     clientSecret: "compass-client-secret",
+    oidcStateEncryptionKey: Buffer.from("12345678901234567890123456789012", "utf8").toString(
+      "base64url"
+    ),
     redirectUri: "https://compass.glcsolutions.ca/v1/auth/entra/callback",
     authorityHost: "https://login.microsoftonline.com",
     tenantSegment: "organizations",
@@ -173,6 +177,10 @@ function extractInviteToken(payload: unknown): string {
   }
 
   return token;
+}
+
+function parseAppRedirect(location: string): URL {
+  return new URL(location, "https://compass.glcsolutions.ca");
 }
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../../");
@@ -352,6 +360,43 @@ describe("API auth integration", () => {
     });
   });
 
+  it("rejects replayed login callback state", async () => {
+    const authService = new AuthService({
+      config: buildConfig(),
+      repository,
+      oidcClient: new FakeOidcClient({
+        claimsByCode: {
+          "code-user-1": buildClaims(
+            "11111111-1111-1111-1111-111111111111",
+            "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "owner@acme.test",
+            "Owner User"
+          )
+        }
+      })
+    });
+
+    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+
+    const start = await request(app).get("/v1/auth/entra/start");
+    const state = parseRedirectLocation(start.headers.location).searchParams.get("state");
+    expect(state).toBeTruthy();
+
+    const firstCallback = await request(app).get(
+      `/v1/auth/entra/callback?code=code-user-1&state=${encodeURIComponent(String(state))}`
+    );
+    expect(firstCallback.status).toBe(302);
+
+    const replay = await request(app).get(
+      `/v1/auth/entra/callback?code=code-user-1&state=${encodeURIComponent(String(state))}`
+    );
+    expect(replay.status).toBe(401);
+    expect(replay.body).toEqual({
+      code: "STATE_INVALID",
+      message: "OIDC state is invalid or expired"
+    });
+  });
+
   it("redirects to login guidance when admin consent is required", async () => {
     const authService = new AuthService({
       config: buildConfig(),
@@ -368,7 +413,106 @@ describe("API auth integration", () => {
     );
 
     expect(callback.status).toBe(302);
-    expect(callback.headers.location).toBe("/login?error=admin_consent_required");
+    const callbackLocation = parseAppRedirect(String(callback.headers.location));
+    expect(callbackLocation.pathname).toBe("/login");
+    expect(callbackLocation.searchParams.get("error")).toBe("admin_consent_required");
+    expect(callbackLocation.searchParams.get("returnTo")).toBe("/");
+  });
+
+  it("fails closed when Entra login is enabled without OIDC state encryption key", async () => {
+    const config = buildConfig();
+    delete config.oidcStateEncryptionKey;
+
+    const authService = new AuthService({
+      config,
+      repository,
+      oidcClient: new FakeOidcClient({
+        claimsByCode: {}
+      })
+    });
+
+    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const start = await request(app).get("/v1/auth/entra/start");
+
+    expect(start.status).toBe(503);
+    expect(start.body).toEqual({
+      code: "ENTRA_CONFIG_REQUIRED",
+      message: "AUTH_OIDC_STATE_ENCRYPTION_KEY is required when Entra login is enabled"
+    });
+  });
+
+  it("handles admin consent success callback and rejects replayed admin-consent state", async () => {
+    const authService = new AuthService({
+      config: buildConfig(),
+      repository,
+      oidcClient: new FakeOidcClient({
+        claimsByCode: {}
+      })
+    });
+
+    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+
+    const start = await request(app).get(
+      "/v1/auth/entra/admin-consent/start?tenantHint=contoso.onmicrosoft.com&returnTo=%2Ft%2Facme"
+    );
+    expect(start.status).toBe(302);
+    const startLocation = parseRedirectLocation(start.headers.location);
+    const state = startLocation.searchParams.get("state");
+    expect(state).toBeTruthy();
+
+    const callback = await request(app).get(
+      `/v1/auth/entra/callback?admin_consent=True&tenant=11111111-1111-1111-1111-111111111111&state=${encodeURIComponent(String(state))}`
+    );
+
+    expect(callback.status).toBe(302);
+    const callbackLocation = parseAppRedirect(String(callback.headers.location));
+    expect(callbackLocation.pathname).toBe("/login");
+    expect(callbackLocation.searchParams.get("consent")).toBe("granted");
+    expect(callbackLocation.searchParams.get("returnTo")).toBe("/t/acme");
+    expect(callbackLocation.searchParams.get("tenantHint")).toBe(
+      "11111111-1111-1111-1111-111111111111"
+    );
+    expect(callback.headers["set-cookie"]).toBeUndefined();
+
+    const replay = await request(app).get(
+      `/v1/auth/entra/callback?admin_consent=True&tenant=11111111-1111-1111-1111-111111111111&state=${encodeURIComponent(String(state))}`
+    );
+    expect(replay.status).toBe(401);
+    expect(replay.body).toEqual({
+      code: "STATE_INVALID",
+      message: "OIDC state is invalid or expired"
+    });
+  });
+
+  it("handles admin consent denial callback with actionable login redirect", async () => {
+    const authService = new AuthService({
+      config: buildConfig(),
+      repository,
+      oidcClient: new FakeOidcClient({
+        claimsByCode: {}
+      })
+    });
+
+    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+
+    const start = await request(app).get(
+      "/v1/auth/entra/admin-consent/start?tenantHint=contoso.onmicrosoft.com&returnTo=%2Ft%2Facme%2Fprojects%2F123"
+    );
+    expect(start.status).toBe(302);
+    const startLocation = parseRedirectLocation(start.headers.location);
+    const state = startLocation.searchParams.get("state");
+    expect(state).toBeTruthy();
+
+    const callback = await request(app).get(
+      `/v1/auth/entra/callback?error=access_denied&error_description=Permission%20denied&state=${encodeURIComponent(String(state))}&tenant=contoso.onmicrosoft.com`
+    );
+
+    expect(callback.status).toBe(302);
+    const callbackLocation = parseAppRedirect(String(callback.headers.location));
+    expect(callbackLocation.pathname).toBe("/login");
+    expect(callbackLocation.searchParams.get("consent")).toBe("denied");
+    expect(callbackLocation.searchParams.get("returnTo")).toBe("/t/acme/projects/123");
+    expect(callbackLocation.searchParams.get("tenantHint")).toBe("contoso.onmicrosoft.com");
   });
 
   it("rejects tenant read without session", async () => {
@@ -641,6 +785,41 @@ describe("API auth integration", () => {
     expect(rootReturnCallback.headers.location).toBe("/workspaces");
   });
 
+  it("returns /v1/auth/me successfully when Entra preferred_username is not an RFC email", async () => {
+    const authService = new AuthService({
+      config: buildConfig(),
+      repository,
+      oidcClient: new FakeOidcClient({
+        claimsByCode: {
+          "code-user-non-email-upn": {
+            tid: "11111111-1111-1111-1111-111111111111",
+            oid: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            iss: "https://login.microsoftonline.com/11111111-1111-1111-1111-111111111111/v2.0",
+            email: null,
+            upn: "user_without_email_claim",
+            name: "UPN Only User"
+          }
+        }
+      })
+    });
+
+    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const start = await request(app).get("/v1/auth/entra/start");
+    const state = parseRedirectLocation(start.headers.location).searchParams.get("state");
+    const callback = await request(app).get(
+      `/v1/auth/entra/callback?code=code-user-non-email-upn&state=${encodeURIComponent(String(state))}`
+    );
+    expect(callback.status).toBe(302);
+    const cookie = extractCookie(callback.headers["set-cookie"]);
+
+    const me = await request(app).get("/v1/auth/me").set("Cookie", cookie);
+    expect(me.status).toBe(200);
+    expect(me.body.user).toMatchObject({
+      displayName: "UPN Only User",
+      primaryEmail: null
+    });
+  });
+
   it("honors returnTo for authorized tenant deep links and rejects unauthorized tenant returnTo", async () => {
     const authService = new AuthService({
       config: buildConfig(),
@@ -773,5 +952,140 @@ describe("API auth integration", () => {
     expect(eventTypes).toContain("auth.login.failure");
     expect(eventTypes).toContain("tenant.invite.create");
     expect(eventTypes).toContain("tenant.invite.accept");
+  });
+
+  it("enforces strict single-use invite acceptance semantics", async () => {
+    const claimsByCode = {
+      "code-owner": buildClaims(
+        "11111111-1111-1111-1111-111111111111",
+        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "owner@acme.test",
+        "Owner User"
+      ),
+      "code-member-1": buildClaims(
+        "11111111-1111-1111-1111-111111111111",
+        "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "member@acme.test",
+        "Member One"
+      ),
+      "code-member-2": buildClaims(
+        "11111111-1111-1111-1111-111111111111",
+        "dddddddd-dddd-dddd-dddd-dddddddddddd",
+        "member@acme.test",
+        "Member Two"
+      )
+    };
+
+    const authService = new AuthService({
+      config: buildConfig(),
+      repository,
+      oidcClient: new FakeOidcClient({ claimsByCode })
+    });
+
+    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+
+    const ownerStart = await request(app).get("/v1/auth/entra/start");
+    const ownerState = parseRedirectLocation(ownerStart.headers.location).searchParams.get("state");
+    const ownerCallback = await request(app).get(
+      `/v1/auth/entra/callback?code=code-owner&state=${encodeURIComponent(String(ownerState))}`
+    );
+    const ownerCookie = extractCookie(ownerCallback.headers["set-cookie"]);
+
+    const createTenant = await request(app)
+      .post("/v1/tenants")
+      .set("Cookie", ownerCookie)
+      .set("origin", SAME_ORIGIN)
+      .send({ slug: "acme", name: "Acme Corp" });
+    expect(createTenant.status).toBe(201);
+
+    const invite = await request(app)
+      .post("/v1/tenants/acme/invites")
+      .set("Cookie", ownerCookie)
+      .set("origin", SAME_ORIGIN)
+      .send({ email: "member@acme.test", role: "member" });
+    expect(invite.status).toBe(201);
+    const inviteToken = extractInviteToken(invite.body);
+
+    const memberOneStart = await request(app).get("/v1/auth/entra/start");
+    const memberOneState = parseRedirectLocation(memberOneStart.headers.location).searchParams.get(
+      "state"
+    );
+    const memberOneCallback = await request(app).get(
+      `/v1/auth/entra/callback?code=code-member-1&state=${encodeURIComponent(String(memberOneState))}`
+    );
+    const memberOneCookie = extractCookie(memberOneCallback.headers["set-cookie"]);
+
+    const firstAccept = await request(app)
+      .post(`/v1/tenants/acme/invites/${encodeURIComponent(inviteToken)}/accept`)
+      .set("Cookie", memberOneCookie)
+      .set("origin", SAME_ORIGIN);
+    expect(firstAccept.status).toBe(200);
+
+    const sameUserReplay = await request(app)
+      .post(`/v1/tenants/acme/invites/${encodeURIComponent(inviteToken)}/accept`)
+      .set("Cookie", memberOneCookie)
+      .set("origin", SAME_ORIGIN);
+    expect(sameUserReplay.status).toBe(200);
+    expect(sameUserReplay.body.joined).toBe(true);
+
+    const memberTwoStart = await request(app).get("/v1/auth/entra/start");
+    const memberTwoState = parseRedirectLocation(memberTwoStart.headers.location).searchParams.get(
+      "state"
+    );
+    const memberTwoCallback = await request(app).get(
+      `/v1/auth/entra/callback?code=code-member-2&state=${encodeURIComponent(String(memberTwoState))}`
+    );
+    const memberTwoCookie = extractCookie(memberTwoCallback.headers["set-cookie"]);
+
+    const crossUserReplay = await request(app)
+      .post(`/v1/tenants/acme/invites/${encodeURIComponent(inviteToken)}/accept`)
+      .set("Cookie", memberTwoCookie)
+      .set("origin", SAME_ORIGIN);
+    expect(crossUserReplay.status).toBe(409);
+    expect(crossUserReplay.body).toEqual({
+      code: "INVITE_ALREADY_ACCEPTED",
+      message: "Invite has already been accepted by another user"
+    });
+  });
+
+  it("stores hashed nonce and encrypted PKCE verifier for OIDC auth requests", async () => {
+    const authService = new AuthService({
+      config: buildConfig(),
+      repository,
+      oidcClient: new FakeOidcClient({
+        claimsByCode: {}
+      })
+    });
+
+    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const start = await request(app).get("/v1/auth/entra/start?returnTo=%2F");
+    expect(start.status).toBe(302);
+    const startLocation = parseRedirectLocation(start.headers.location);
+    const nonce = startLocation.searchParams.get("nonce");
+    expect(nonce).toBeTruthy();
+
+    const inspector = new Client({ connectionString: databaseUrl });
+    await inspector.connect();
+    try {
+      const rows = await inspector.query<{
+        nonce_hash: string;
+        pkce_verifier_encrypted_or_hashed: string;
+      }>(
+        `
+          select nonce_hash, pkce_verifier_encrypted_or_hashed
+          from auth_oidc_requests
+          order by created_at desc
+          limit 1
+        `
+      );
+
+      const row = rows.rows.at(0);
+      expect(row).toBeTruthy();
+      expect(row?.nonce_hash).toMatch(/^[a-f0-9]{64}$/u);
+      expect(row?.nonce_hash).not.toBe(String(nonce));
+      expect(row?.pkce_verifier_encrypted_or_hashed).toMatch(/^enc:v1:/u);
+    } finally {
+      await inspector.end();
+    }
   });
 });

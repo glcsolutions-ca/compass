@@ -30,6 +30,7 @@ export default function LoginRoute() {
       ? "/v1/auth/entra/start"
       : `/v1/auth/entra/start?returnTo=${encodeURIComponent(returnTo)}`;
   const error = query.get("error");
+  const consent = query.get("consent");
   const tenantHint = query.get("tenantHint")?.trim() || "";
   const adminConsentParams = new URLSearchParams({
     returnTo
@@ -38,6 +39,7 @@ export default function LoginRoute() {
     adminConsentParams.set("tenantHint", tenantHint);
   }
   const adminConsentHref = `/v1/auth/entra/admin-consent/start?${adminConsentParams.toString()}`;
+  const showAdminConsentNotice = error === "admin_consent_required" || consent === "denied";
 
   return (
     <main className="page" data-testid="login-page">
@@ -53,7 +55,16 @@ export default function LoginRoute() {
           Sign in with Microsoft
         </a>
 
-        {error === "admin_consent_required" ? (
+        {consent === "granted" ? (
+          <section className="notice" data-testid="admin-consent-success">
+            <h2>Admin consent granted</h2>
+            <p className="helper">
+              Consent was granted successfully. Continue signing in with Microsoft.
+            </p>
+          </section>
+        ) : null}
+
+        {showAdminConsentNotice ? (
           <section className="notice" data-testid="admin-consent-notice">
             <h2>Admin consent required</h2>
             <p className="helper">

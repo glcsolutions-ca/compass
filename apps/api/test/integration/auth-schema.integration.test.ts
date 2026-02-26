@@ -276,4 +276,43 @@ describe("auth schema constraints", () => {
       )
     ).rejects.toThrow(/auth_oidc_requests_unique_state_hash/iu);
   });
+
+  it("enforces invite accepted_by_user_id foreign key", async () => {
+    await client.query(
+      `insert into users (id, primary_email, display_name, created_at, updated_at)
+       values ('u_1', 'owner@acme.test', 'Owner', now(), now())`
+    );
+    await client.query(
+      `insert into tenants (id, slug, name, status, created_at, updated_at)
+       values ('t_1', 'acme', 'Acme', 'active', now(), now())`
+    );
+
+    await expect(
+      client.query(
+        `insert into invites (
+           id,
+           tenant_id,
+           email_normalized,
+           role,
+           token_hash,
+           invited_by_user_id,
+           expires_at,
+           accepted_at,
+           accepted_by_user_id,
+           created_at
+         ) values (
+           'inv_1',
+           't_1',
+           'member@acme.test',
+           'member',
+           'token-hash-1',
+           'u_1',
+           now() + interval '7 day',
+           now(),
+           'u_missing',
+           now()
+         )`
+      )
+    ).rejects.toThrow(/invites_accepted_by_user_id_fkey/iu);
+  });
 });

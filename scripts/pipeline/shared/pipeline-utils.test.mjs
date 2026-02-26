@@ -1,7 +1,12 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   classifyReleaseCandidateKind,
   evaluateDocsDrift,
+  getChangedFiles,
   loadPipelinePolicyObject,
   matchesAnyPattern,
   resolveChangeScope
@@ -253,6 +258,124 @@ describe("glob matching engine", () => {
   it("keeps dot-path behavior deterministic for '**' patterns", () => {
     expect(matchesAnyPattern(".github/policy/pipeline-policy.json", ["**"])).toBe(false);
     expect(matchesAnyPattern("README.md", ["**"])).toBe(true);
+  });
+});
+
+describe("getChangedFiles", () => {
+  function runGit(repoDir, args, options = {}) {
+    const gitEnv = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_"))
+    );
+
+    return execFileSync("git", args, {
+      cwd: repoDir,
+      env: gitEnv,
+      ...options
+    });
+  }
+
+  function initRepo() {
+    const repoDir = mkdtempSync(path.join(os.tmpdir(), "pipeline-scope-"));
+    runGit(repoDir, ["init"]);
+    runGit(repoDir, ["config", "user.name", "Compass Test"]);
+    runGit(repoDir, ["config", "user.email", "compass-test@example.com"]);
+    return repoDir;
+  }
+
+  it("returns changed files using symmetric diff when base exists", async () => {
+    const repoDir = initRepo();
+    const previousCwd = process.cwd();
+
+    try {
+      writeFileSync(path.join(repoDir, "a.txt"), "one\n", "utf8");
+      runGit(repoDir, ["add", "a.txt"]);
+      runGit(repoDir, ["commit", "-m", "first"]);
+
+      writeFileSync(path.join(repoDir, "b.txt"), "two\n", "utf8");
+      runGit(repoDir, ["add", "b.txt"]);
+      runGit(repoDir, ["commit", "-m", "second"]);
+
+      const baseSha = runGit(repoDir, ["rev-parse", "HEAD^"], {
+        encoding: "utf8"
+      }).trim();
+      const headSha = runGit(repoDir, ["rev-parse", "HEAD"], {
+        encoding: "utf8"
+      }).trim();
+
+      process.chdir(repoDir);
+      await expect(getChangedFiles(baseSha, headSha)).resolves.toEqual(["b.txt"]);
+    } finally {
+      process.chdir(previousCwd);
+      rmSync(repoDir, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back to head commit files when symmetric diff base is missing", async () => {
+    const repoDir = initRepo();
+    const previousCwd = process.cwd();
+
+    try {
+      writeFileSync(path.join(repoDir, "a.txt"), "one\n", "utf8");
+      runGit(repoDir, ["add", "a.txt"]);
+      runGit(repoDir, ["commit", "-m", "first"]);
+
+      writeFileSync(path.join(repoDir, "b.txt"), "two\n", "utf8");
+      runGit(repoDir, ["add", "b.txt"]);
+      runGit(repoDir, ["commit", "-m", "second"]);
+
+      const headSha = runGit(repoDir, ["rev-parse", "HEAD"], {
+        encoding: "utf8"
+      }).trim();
+
+      process.chdir(repoDir);
+      await expect(
+        getChangedFiles("0000000000000000000000000000000000000000", headSha)
+      ).resolves.toEqual(["b.txt"]);
+    } finally {
+      process.chdir(previousCwd);
+      rmSync(repoDir, { recursive: true, force: true });
+    }
+  });
+
+  it("ignores inherited git context env variables", async () => {
+    const repoDir = initRepo();
+    const previousCwd = process.cwd();
+    const envKeys = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"];
+    const previousEnv = new Map(envKeys.map((key) => [key, process.env[key]]));
+
+    try {
+      writeFileSync(path.join(repoDir, "a.txt"), "one\n", "utf8");
+      runGit(repoDir, ["add", "a.txt"]);
+      runGit(repoDir, ["commit", "-m", "first"]);
+
+      writeFileSync(path.join(repoDir, "b.txt"), "two\n", "utf8");
+      runGit(repoDir, ["add", "b.txt"]);
+      runGit(repoDir, ["commit", "-m", "second"]);
+
+      const baseSha = runGit(repoDir, ["rev-parse", "HEAD^"], {
+        encoding: "utf8"
+      }).trim();
+      const headSha = runGit(repoDir, ["rev-parse", "HEAD"], {
+        encoding: "utf8"
+      }).trim();
+
+      process.env.GIT_DIR = "/tmp/not-a-repo";
+      process.env.GIT_WORK_TREE = "/tmp/not-a-work-tree";
+      process.env.GIT_INDEX_FILE = "/tmp/not-an-index";
+
+      process.chdir(repoDir);
+      await expect(getChangedFiles(baseSha, headSha)).resolves.toEqual(["b.txt"]);
+    } finally {
+      for (const [key, value] of previousEnv) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+      process.chdir(previousCwd);
+      rmSync(repoDir, { recursive: true, force: true });
+    }
   });
 });
 

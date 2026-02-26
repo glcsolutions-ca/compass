@@ -6,3 +6,4 @@ This directory contains system architecture and boundary documents.
 
 - `foundation-baseline.md`
 - `brand-architecture.md`
+- `auth-threat-model-v1.md`

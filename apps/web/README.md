@@ -3,29 +3,56 @@
 ## Purpose
 
 `apps/web` is the React Router 7 frontend for Compass.
-It runs in framework mode with `ssr: false`, producing a client-rendered SPA with Entra-first login and tenant-scoped routes.
+It runs in framework mode with `ssr: false` and follows Frontend Constitution v1.
+
+## Frontend Constitution
+
+Normative architecture and guardrails are defined in:
+
+- `docs/architecture/frontend-constitution.md`
+- `docs/adr/TDR-006-frontend-constitution-v1.md`
+
+Key requirements:
+
+- React Router data APIs (`clientLoader`/`clientAction`) for route I/O
+- `@compass/sdk` for Compass API calls
+- shadcn/Radix primitive component policy
+- Tailwind + CSS variable tokens with first-class light/dark mode
+- Persistent authenticated shell and URL-driven workspace context
 
 ## UI Structure
 
-- `app/root.tsx` defines the root HTML layout and app outlet.
-- `app/routes.ts` defines the route manifest.
-- `app/routes/login.tsx` renders the front-door login route (`/` and `/login`) and builds the Entra start link.
-- `app/routes/workspaces.tsx` loads `/v1/auth/me` and renders organization chooser behavior.
-- `app/routes/tenant.tsx` renders tenant-scoped route shell (`/t/:tenantSlug/*`).
-- `src/routes/home.test.tsx` currently covers baseline route utility behavior.
+```text
+app/
+  shell/
+  ui/shadcn/
+  ui/icons/
+  lib/{api,auth,workspace}/
+  styles/globals.css
+  routes/
+    public.login/
+    app.root/
+    app.workspaces/
+    app.t.$tenantSlug.chat/
+```
+
+## Route Surface
+
+- `GET /` -> login route
+- `GET /login` -> login route
+- `GET /workspaces` -> authenticated workspace directory
+- `GET /t/:tenantSlug/chat` -> authenticated tenant chat shell route
 
 ## Runtime Behavior
 
-- `/` and `/login` show the Entra sign-in entrypoint.
-- `/workspaces` calls `GET /v1/auth/me` and renders:
-  - unauthenticated state with a login action
-  - empty-membership onboarding prompt
-  - tenant links when memberships are present
-- `/t/:tenantSlug/*` renders the active tenant slug shell.
+- `/login` shows Entra sign-in and admin-consent messaging.
+- Authenticated routes render one persistent shell:
+  - left navigation rail
+  - center content canvas
+  - bottom-right profile menu with workspace switcher + theme toggle + sign-out
+- Workspace switching preserves route intent by rewriting tenant slug in URL.
 
 ## Env Table
-
-Configuration is consumed in `app/routes/home.tsx`.
 
 | Env Var             | Default                 | Notes                                                            |
 | ------------------- | ----------------------- | ---------------------------------------------------------------- |
@@ -39,11 +66,9 @@ Local template: `apps/web/.env.example`.
 
 - `react-router.config.ts` sets `ssr: false`.
 - Build command is `react-router build`.
-- Local runtime command serves static output from `build/client` on port `3000`.
+- Local runtime serves static output from `build/client` on port `3000`.
 - Docker runtime serves static output with non-root `nginx` on port `3000`.
-- Nginx proxies `/v1/*`, `/health`, and `/openapi.json` to `API_BASE_URL` before SPA fallback.
-- SPA fallback is configured with `try_files $uri /index.html` in `apps/web/nginx/default.conf`.
-- Docker build supports overriding `VITE_API_BASE_URL` via build arg.
+- Nginx proxies `/v1/*`, `/health`, and `/openapi.json` before SPA fallback.
 
 ## Commands
 

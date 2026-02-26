@@ -9,3 +9,4 @@ This directory contains concise architecture and technology decision records.
 - `TDR-003-cloud-deployment-pipeline-visualization-model.md`
 - `TDR-004-cloud-deployment-pipeline-and-desktop-naming-followup.md`
 - `TDR-005-entra-only-auth-v1-baseline.md`
+- `TDR-006-frontend-constitution-v1.md`

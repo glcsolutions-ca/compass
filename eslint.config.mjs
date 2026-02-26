@@ -100,6 +100,7 @@ export default tseslint.config(
       "**/.turbo/**",
       "**/coverage/**",
       "**/vitest*.config.*",
+      "**/postcss.config.mjs",
       "packages/testkit/guardrails/**"
     ]
   },
@@ -175,6 +176,24 @@ export default tseslint.config(
             "no-restricted-syntax": ["error", ...commitStageSyntaxSelectors]
           }
         : {})
+    }
+  },
+  {
+    files: ["apps/web/app/routes/**/*.ts", "apps/web/app/routes/**/*.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            "@/*",
+            "@compass/*/src/*",
+            "@compass/*/dist/*",
+            "../*",
+            "~/routes/*",
+            "apps/web/app/routes/*"
+          ]
+        }
+      ]
     }
   },
   {

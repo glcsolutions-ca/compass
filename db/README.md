@@ -16,7 +16,7 @@ All database concerns live under this directory.
 - Seed execution is generic and no-ops when no `.sql` seed files exist.
 - Product/domain tables should be introduced only through explicit migrations.
 - Current schema baseline is migration `1772075557000_baseline_platform_schema.mjs`.
-- Migration filenames are strict: `^\\d{13}_[a-z0-9_]+\\.mjs$`.
+- Migration filenames are strict: `^\\d{13}_[a-z0-9_-]+\\.mjs$`.
 - `db/migrations/checksums.json` is immutable for historical migration files and enforced by policy checks.
 
 ## Common Commands

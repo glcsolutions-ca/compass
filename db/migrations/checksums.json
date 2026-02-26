@@ -2,6 +2,7 @@
   "schemaVersion": "1",
   "algorithm": "sha256",
   "files": {
+    "1771913577531_auth-foundation.mjs": "7b259b4f2bcd38082eb7bf7f9bcdc2e270a0e82e6b269d00b77997e1987c52f6",
     "1772075557000_baseline_platform_schema.mjs": "960e6239035e2cfbdd2c0fae7548e0f15c1c964f33d210d7e9aed8026df0206f",
     "1772075558000_reconcile_auth_foundation_schema.mjs": "16b7313ed13c60cf1ec189ab60a40fb35875d52dc2129752d1b98b227e438afd"
   }

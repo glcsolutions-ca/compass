@@ -106,9 +106,9 @@ az containerapp show \
 - `ENTRA_CONFIG_REQUIRED` from `/v1/auth/entra/start`:
   - Missing `ENTRA_CLIENT_ID` or infra has not converged `WEB_BASE_URL`.
 - `INTERNAL_SERVER_ERROR` with `relation "auth_oidc_requests" does not exist`:
-  - Runtime is ahead of DB schema; deploy the migration reconciliation checkpoint so `db/migrations/1772075558000_reconcile_auth_foundation_schema.mjs` is applied.
-- `MIGRATION_EXECUTION_FAILED` with `Not run migration 1772075557000_baseline_platform_schema is preceding already run migration 1771913577531_auth-foundation`:
-  - Ensure the legacy-compat shim `db/migrations/1771913577531_auth-foundation.mjs` is present in the deployed image so historical ordering can be resolved.
+  - Runtime is ahead of DB schema; deploy the migration reconciliation checkpoint so `db/migrations/20260226050001_reconcile_auth_foundation_schema.mjs` is applied.
+- `MIGRATION_EXECUTION_FAILED` with `Not run migration 20260226050000_baseline_platform_schema is preceding already run migration ...`:
+  - Ensure the canonical baseline/reconcile migration IDs (`20260226050000` and `20260226050001`) are present in the deployed image and the legacy compat shim `db/migrations/1771913577531_auth-foundation.mjs` is still included.
 - Login returns `tenant_not_allowed`:
   - Add the tenant GUID to `ENTRA_ALLOWED_TENANT_IDS`.
 

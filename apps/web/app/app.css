@@ -52,14 +52,27 @@ h1 {
   margin: 0;
   display: grid;
   gap: 0.9rem;
+  padding: 0;
+  list-style: none;
 }
 
-.list div {
+.list div,
+.list li {
   display: grid;
   gap: 0.3rem;
   padding: 0.8rem;
   border-radius: 10px;
   background: #eef4f8;
+}
+
+.list a {
+  color: #0b3f63;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.list a:hover {
+  text-decoration: underline;
 }
 
 dt {
@@ -75,4 +88,47 @@ dd {
   font-size: 0.9rem;
   color: #10293a;
   word-break: break-word;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #0f4468;
+  background: #0f4468;
+  color: #ffffff;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.button:hover {
+  background: #0b3550;
+  border-color: #0b3550;
+}
+
+.button.secondary {
+  background: #ffffff;
+  color: #0f4468;
+}
+
+.button.secondary:hover {
+  background: #eef4f8;
+  border-color: #0b3550;
+}
+
+.notice {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-radius: 12px;
+  border: 1px solid #9bb6c7;
+  background: #f6fbff;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.notice h2 {
+  margin: 0;
+  font-size: 1.1rem;
 }

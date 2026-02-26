@@ -3,6 +3,7 @@ import { appendGithubOutput, getHeadSha, requireEnv, writeDeployArtifact } from 
 const targetBaseUrl = requireEnv("TARGET_API_BASE_URL").replace(/\/$/, "");
 const verifyShaHeader = process.env.VERIFY_SHA_HEADER?.trim() === "true";
 const expectedSha = process.env.EXPECTED_SHA?.trim() || getHeadSha();
+const apiSmokeSessionCookie = process.env.API_SMOKE_SESSION_COOKIE?.trim();
 
 async function request(path, init) {
   const requestedAt = new Date().toISOString();
@@ -48,6 +49,7 @@ async function main() {
   let health = null;
   let openapi = null;
   let ping = null;
+  let authMe = null;
 
   try {
     health = await request("/health", { method: "GET" });
@@ -82,6 +84,16 @@ async function main() {
       id: "ping-200",
       pass: ping.status === 200,
       details: `status=${ping.status}`
+    });
+
+    authMe = await request("/v1/auth/me", {
+      method: "GET",
+      headers: apiSmokeSessionCookie ? { cookie: apiSmokeSessionCookie } : undefined
+    });
+    assertions.push({
+      id: "auth-me-status",
+      pass: apiSmokeSessionCookie ? authMe.status === 200 : authMe.status === 401,
+      details: `status=${authMe.status}, mode=${apiSmokeSessionCookie ? "authenticated" : "anonymous"}`
     });
 
     if (verifyShaHeader) {
@@ -121,7 +133,8 @@ async function main() {
     responses: {
       health: responsePreview(health),
       openapi: responsePreview(openapi),
-      ping: responsePreview(ping)
+      ping: responsePreview(ping),
+      authMe: responsePreview(authMe)
     },
     assertions
   });

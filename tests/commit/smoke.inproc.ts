@@ -34,6 +34,7 @@ async function main() {
     assert.equal(openapi.status, 200, "openapi endpoint should return 200");
     assert.ok(openapi.body.paths?.["/health"], "openapi should include /health path");
     assert.ok(openapi.body.paths?.["/v1/ping"], "openapi should include /v1/ping path");
+    assert.ok(openapi.body.paths?.["/v1/auth/me"], "openapi should include /v1/auth/me path");
 
     const ping = await request(app).get("/v1/ping");
     assert.equal(ping.status, 200, "ping endpoint should return 200");
@@ -47,6 +48,7 @@ async function main() {
       checks: [
         { id: "api-health", status: "pass" },
         { id: "openapi-available", status: "pass" },
+        { id: "openapi-auth-me", status: "pass" },
         { id: "api-ping", status: "pass" }
       ]
     };

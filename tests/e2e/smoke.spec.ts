@@ -45,20 +45,20 @@ async function runFlow(
     details: headingText.length > 0 ? `Heading: ${headingText}` : "No heading text found"
   });
 
-  const statusText = (await page.getByTestId("api-health-status").textContent())?.trim() ?? "";
+  const signInLink = page.getByTestId("sign-in-link");
+  const signInHref = (await signInLink.getAttribute("href"))?.trim() ?? "";
   flowAssertions.push({
-    id: `${flowId}:api-health-status-visible`,
-    description: `[${flowId}] API health status field is visible`,
-    pass: statusText.length > 0,
-    details: statusText.length > 0 ? `status=${statusText}` : "missing status value"
+    id: `${flowId}:sign-in-link-visible`,
+    description: `[${flowId}] Sign in link is rendered`,
+    pass: signInHref.length > 0,
+    details: signInHref.length > 0 ? `href=${signInHref}` : "missing sign in href"
   });
 
-  const apiBase = (await page.getByTestId("api-base-url").textContent())?.trim() ?? "";
   flowAssertions.push({
-    id: `${flowId}:api-base-visible`,
-    description: `[${flowId}] API base URL is rendered`,
-    pass: apiBase.length > 0,
-    details: apiBase.length > 0 ? apiBase : "missing api base url"
+    id: `${flowId}:sign-in-link-target`,
+    description: `[${flowId}] Sign in link targets Entra start endpoint`,
+    pass: signInHref.startsWith("/v1/auth/entra/start"),
+    details: signInHref.length > 0 ? `href=${signInHref}` : "missing sign in href"
   });
 }
 

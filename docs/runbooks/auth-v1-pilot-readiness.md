@@ -18,8 +18,8 @@ Out of scope:
 
 ## Tenant Roster (Pilot)
 
-| Label | Domain            | Entra Tenant ID                        | Pilot Status |
-| ----- | ----------------- | -------------------------------------- | ------------ |
+| Label | Domain            | Entra Tenant ID       | Pilot Status |
+| ----- | ----------------- | --------------------- | ------------ |
 | GLC   | `glcsolutions.ca` | `<entra-tenant-id-a>` | Active       |
 | Kropp | `kropp.ca`        | `<entra-tenant-id-b>` | Active       |
 

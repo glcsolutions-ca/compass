@@ -7,6 +7,8 @@ const REQUIRED_PATHS = [
   "apps/web/tailwind.config.ts",
   "apps/web/postcss.config.mjs",
   "apps/web/app/app.css",
+  "apps/web/app/components/ui/sidebar.tsx",
+  "apps/web/app/components/shell/app-sidebar.tsx",
   "apps/web/app/routes.ts",
   "apps/web/app/routes/root-redirect/route.tsx",
   "apps/web/app/routes/public/login/route.tsx",
@@ -26,7 +28,9 @@ const LEGACY_PATHS = [
   "apps/web/app/routes/public.login",
   "apps/web/app/routes/app.root",
   "apps/web/app/routes/app.workspaces",
-  "apps/web/app/routes/app.t.$tenantSlug.chat"
+  "apps/web/app/routes/app.t.$tenantSlug.chat",
+  "apps/web/app/components/shell/sidebar.tsx",
+  "apps/web/app/components/shell/profile-menu.tsx"
 ];
 
 const FORBIDDEN_LIBRARY_IMPORT_PATTERNS = [/from\s+["']@mui\//u, /from\s+["']antd["']/u];

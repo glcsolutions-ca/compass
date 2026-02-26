@@ -27,6 +27,7 @@ List the commands you ran and any important outputs.
 - [ ] Web route modules use `clientLoader`/`clientAction` in `ssr:false` mode (no `loader`/`action` exports).
 - [ ] Web route modules do not use raw `fetch`, route-to-route imports, or parent-relative route imports.
 - [ ] Web route structure matches v2 (`app/routes/root-redirect`, `public/login`, `app/layout`, `app/workspaces`, `app/chat`).
+- [ ] Auth shell navigation follows sidebar standard (shadcn sidebar primitives + sidebar footer profile/workspace controls).
 - [ ] Theme and component changes use shadcn tokens/primitives (`app/app.css`, `app/components/ui`).
 - [ ] Contract artifacts are generated and committed when schemas change (`pnpm contract:check`).
 - [ ] If deployment-pipeline-config files changed, pipeline docs were updated (`docs/commit-stage-policy.md` and `.github/workflows/README.md`).

@@ -42,7 +42,7 @@ Define the non-negotiable implementation contract for `apps/web` so the frontend
 
 7. **Persistent authenticated shell**
    - Authenticated routes render a single shared shell layout.
-   - Shell includes rail navigation, bottom-right profile menu, theme toggle, workspace switcher, and sign-out.
+   - Shell includes rail navigation, sidebar footer profile menu, theme toggle, workspace switcher, and sign-out.
 
 8. **Route-entrypoints + feature modules**
    - Route entrypoints live in `app/routes/**` with one `route.tsx` per route folder.

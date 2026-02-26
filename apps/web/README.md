@@ -51,7 +51,7 @@ app/
 - Authenticated routes render one persistent shell:
   - left navigation rail
   - center content canvas
-  - bottom-right profile menu with workspace switcher + theme toggle + sign-out
+  - sidebar footer profile menu with workspace switcher + theme toggle + sign-out
 - Workspace switching preserves route intent by rewriting tenant slug in URL.
 
 ## Env Table

@@ -22,7 +22,7 @@ Adopt Frontend Constitution v2 for `apps/web` and perform a hard cutover with th
 2. Route contract is fixed to `/`, `/login`, `/workspaces`, `/t/:tenantSlug/chat`.
 3. Route entrypoints are single-file `route.tsx` modules under nested `app/routes/**` folders.
 4. Domain logic is organized under `app/features/{auth,workspace,chat}`.
-5. Shared shell/UI lives under `app/components/{shell,ui,icons}`.
+5. Shared shell/UI lives under `app/components/{shell,ui,icons}` with profile/workspace controls anchored in sidebar footer.
 6. Global theming is tokenized in `app/app.css` with light/dark mode from first commit.
 7. Workspace authority remains URL-first (`/t/:tenantSlug/*`).
 8. `@compass/sdk` remains the only Compass API access path from web route/component code.

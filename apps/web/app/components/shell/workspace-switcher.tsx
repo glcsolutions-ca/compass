@@ -4,11 +4,55 @@ import type { WorkspaceMembership, WorkspaceMenuItem } from "~/features/auth/typ
 import { resolveWorkspaceHref } from "~/features/workspace/workspace-routing";
 import { cn } from "~/lib/utils/cn";
 
+function readMembershipPriority(
+  membership: WorkspaceMembership,
+  activeTenantSlug: string | null,
+  lastActiveTenantSlug: string | null
+): number {
+  if (activeTenantSlug && membership.tenantSlug === activeTenantSlug) {
+    return 0;
+  }
+
+  if (
+    lastActiveTenantSlug &&
+    membership.tenantSlug === lastActiveTenantSlug &&
+    membership.tenantSlug !== activeTenantSlug
+  ) {
+    return 1;
+  }
+
+  return 2;
+}
+
+function sortMemberships(
+  memberships: WorkspaceMembership[],
+  activeTenantSlug: string | null,
+  lastActiveTenantSlug: string | null
+): WorkspaceMembership[] {
+  return [...memberships].sort((left, right) => {
+    const leftPriority = readMembershipPriority(left, activeTenantSlug, lastActiveTenantSlug);
+    const rightPriority = readMembershipPriority(right, activeTenantSlug, lastActiveTenantSlug);
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+
+    const nameCompare = left.tenantName.localeCompare(right.tenantName, undefined, {
+      sensitivity: "base"
+    });
+    if (nameCompare !== 0) {
+      return nameCompare;
+    }
+
+    return left.tenantSlug.localeCompare(right.tenantSlug);
+  });
+}
+
 export function buildWorkspaceMenuItems(
   memberships: WorkspaceMembership[],
-  activeTenantSlug: string | null
+  activeTenantSlug: string | null,
+  lastActiveTenantSlug: string | null = null
 ): WorkspaceMenuItem[] {
-  return memberships.map((membership) => ({
+  return sortMemberships(memberships, activeTenantSlug, lastActiveTenantSlug).map((membership) => ({
     ...membership,
     active: activeTenantSlug === membership.tenantSlug
   }));
@@ -17,14 +61,16 @@ export function buildWorkspaceMenuItems(
 export function WorkspaceSwitcher({
   memberships,
   activeTenantSlug,
+  lastActiveTenantSlug = null,
   onSelect
 }: {
   memberships: WorkspaceMembership[];
   activeTenantSlug: string | null;
+  lastActiveTenantSlug?: string | null;
   onSelect?: () => void;
 }) {
   const location = useLocation();
-  const menuItems = buildWorkspaceMenuItems(memberships, activeTenantSlug);
+  const menuItems = buildWorkspaceMenuItems(memberships, activeTenantSlug, lastActiveTenantSlug);
 
   if (menuItems.length === 0) {
     return <p className="px-2 py-1 text-xs text-muted-foreground">No workspaces found.</p>;

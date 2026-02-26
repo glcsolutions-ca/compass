@@ -232,4 +232,48 @@ describe("auth schema constraints", () => {
       )
     ).rejects.toThrow(/auth_sessions_unique_token_hash/iu);
   });
+
+  it("enforces unique OIDC request state hash", async () => {
+    await client.query(
+      `insert into auth_oidc_requests (
+         id,
+         state_hash,
+         nonce_hash,
+         pkce_verifier_encrypted_or_hashed,
+         return_to,
+         expires_at,
+         created_at
+       ) values (
+         'req_1',
+         'state-hash-1',
+         'nonce-1',
+         'pkce-1',
+         '/',
+         now() + interval '10 minute',
+         now()
+       )`
+    );
+
+    await expect(
+      client.query(
+        `insert into auth_oidc_requests (
+           id,
+           state_hash,
+           nonce_hash,
+           pkce_verifier_encrypted_or_hashed,
+           return_to,
+           expires_at,
+           created_at
+         ) values (
+           'req_2',
+           'state-hash-1',
+           'nonce-2',
+           'pkce-2',
+           '/',
+           now() + interval '10 minute',
+           now()
+         )`
+      )
+    ).rejects.toThrow(/auth_oidc_requests_unique_state_hash/iu);
+  });
 });

@@ -9,6 +9,6 @@ required_scope_name = "compass.user"
 owners = []
 
 web_redirect_uris = [
-  "http://localhost:3000/api/auth/entra/callback",
-  "http://127.0.0.1:3000/api/auth/entra/callback"
+  "http://localhost:3000/v1/auth/entra/callback",
+  "http://127.0.0.1:3000/v1/auth/entra/callback"
 ]

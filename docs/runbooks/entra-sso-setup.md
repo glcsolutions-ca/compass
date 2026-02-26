@@ -105,6 +105,9 @@ az containerapp show \
   - `AUTH_DEV_FALLBACK_ENABLED` is true (must be false in cloud).
 - `ENTRA_CONFIG_REQUIRED` from `/v1/auth/entra/start`:
   - Missing `ENTRA_CLIENT_ID` or infra has not converged `WEB_BASE_URL`.
+- `AADSTS50011` (redirect URI mismatch):
+  - Ensure Entra web redirect URIs include `https://<web-host>/v1/auth/entra/callback` (not `/api/auth/entra/callback`).
+  - Re-apply `infra/identity` after updating `ACA_WEB_CUSTOM_DOMAIN` and `infra/identity/env/prod.tfvars`.
 - `INTERNAL_SERVER_ERROR` with `relation "auth_oidc_requests" does not exist`:
   - Runtime is ahead of DB schema; ensure the single baseline migration `db/migrations/1772083000000_initial_schema.mjs` has run in the migration job.
 - `MIGRATION_EXECUTION_FAILED` with `Not run migration ... is preceding already run migration ...`:

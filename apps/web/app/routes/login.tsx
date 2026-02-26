@@ -25,7 +25,10 @@ export default function LoginRoute() {
   const location = useLocation();
   const query = new URLSearchParams(location.search);
   const returnTo = resolveReturnTo(query.get("returnTo") ?? query.get("next"));
-  const signInHref = `/v1/auth/entra/start?returnTo=${encodeURIComponent(returnTo)}`;
+  const signInHref =
+    returnTo === "/"
+      ? "/v1/auth/entra/start"
+      : `/v1/auth/entra/start?returnTo=${encodeURIComponent(returnTo)}`;
   const error = query.get("error");
   const tenantHint = query.get("tenantHint")?.trim() || "";
   const adminConsentParams = new URLSearchParams({

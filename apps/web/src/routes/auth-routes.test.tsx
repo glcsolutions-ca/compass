@@ -29,6 +29,17 @@ describe("login route", () => {
     expect(link.getAttribute("href")).toBe("/v1/auth/entra/start?returnTo=%2Ft%2Facme");
   });
 
+  it("omits default returnTo when rendering sign in link", () => {
+    render(
+      <MemoryRouter initialEntries={["/login"]}>
+        <LoginRoute />
+      </MemoryRouter>
+    );
+
+    const link = screen.getByTestId("sign-in-link");
+    expect(link.getAttribute("href")).toBe("/v1/auth/entra/start");
+  });
+
   it("renders admin consent guidance for consent-required errors", () => {
     render(
       <MemoryRouter

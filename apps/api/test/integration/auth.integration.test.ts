@@ -629,6 +629,16 @@ describe("API auth integration", () => {
     );
     expect(thirdCallback.status).toBe(302);
     expect(thirdCallback.headers.location).toBe("/workspaces");
+
+    const rootReturnStart = await request(app).get("/v1/auth/entra/start?returnTo=%2F");
+    const rootReturnState = parseRedirectLocation(
+      rootReturnStart.headers.location
+    ).searchParams.get("state");
+    const rootReturnCallback = await request(app).get(
+      `/v1/auth/entra/callback?code=code-user-1&state=${encodeURIComponent(String(rootReturnState))}`
+    );
+    expect(rootReturnCallback.status).toBe(302);
+    expect(rootReturnCallback.headers.location).toBe("/workspaces");
   });
 
   it("honors returnTo for authorized tenant deep links and rejects unauthorized tenant returnTo", async () => {

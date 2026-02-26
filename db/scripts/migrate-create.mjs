@@ -6,6 +6,16 @@ import {
   writeChecksumsManifest
 } from "./migration-policy-lib.mjs";
 
+function formatUtcTimestamp(date) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const hour = String(date.getUTCHours()).padStart(2, "0");
+  const minute = String(date.getUTCMinutes()).padStart(2, "0");
+  const second = String(date.getUTCSeconds()).padStart(2, "0");
+  return `${year}${month}${day}${hour}${minute}${second}`;
+}
+
 function normalizeMigrationName(rawName) {
   const normalized = String(rawName || "")
     .trim()
@@ -51,7 +61,7 @@ async function main() {
   }
 
   const normalizedName = normalizeMigrationName(migrationName);
-  const timestamp = String(Date.now());
+  const timestamp = formatUtcTimestamp(new Date());
   const fileName = `${timestamp}_${normalizedName}.mjs`;
   const filePath = path.join(MIGRATIONS_DIR, fileName);
 

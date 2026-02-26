@@ -15,7 +15,7 @@ Migrations are the **source of truth** for schema changes. This is the minimum c
 ## File contract
 
 - Directory: `db/migrations/`
-- Filename: `^\d{17}_[a-z0-9_]+\.mjs$`
+- Filename: `^\d{13}_[a-z0-9_]+\.mjs$`
 - Format: **`.mjs` only**
 - Integrity ledger: `db/migrations/checksums.json`
 - Validate (required): `pnpm db:migrate:check`

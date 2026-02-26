@@ -66,7 +66,7 @@ pnpm db:migrate:status
 
 `db:migrate:create` emits strict migration files using:
 
-- filename pattern: `^\d{17}_[a-z0-9_]+\.mjs$`
+- filename pattern: `^\d{13}_[a-z0-9_]+\.mjs$`
 - extension: `.mjs` only
 - checksums auto-refresh in `db/migrations/checksums.json`
 

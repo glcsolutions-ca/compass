@@ -222,11 +222,6 @@ module api './modules/containerapp-api.bicep' = {
     image: apiImage
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
-    webBaseUrl: webBaseUrl
-    entraLoginEnabled: entraLoginEnabled
-    entraClientId: entraClientId
-    entraClientSecret: entraClientSecret
-    entraAllowedTenantIds: entraAllowedTenantIds
     databaseUrl: databaseUrl
     logLevel: apiLogLevel
     authIssuer: authIssuer

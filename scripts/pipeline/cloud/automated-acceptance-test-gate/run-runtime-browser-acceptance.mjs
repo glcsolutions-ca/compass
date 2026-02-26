@@ -18,19 +18,23 @@ mkdir -p "$artifact_dir" ".artifacts/browser-evidence/${testedSha}"
 
 api_container="acceptance-browser-api"
 web_container="acceptance-browser-web"
+docker_network="acceptance-browser-network"
 
 cleanup() {
   docker rm -f "$web_container" >/dev/null 2>&1 || true
   docker rm -f "$api_container" >/dev/null 2>&1 || true
+  docker network rm "$docker_network" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
 az acr login --name "${acrName}" --only-show-errors
 docker pull "${apiRef}"
 docker pull "${webRef}"
+docker network create "$docker_network" >/dev/null
 
 docker run -d \
   --name "$api_container" \
+  --network "$docker_network" \
   -p 3001:3001 \
   "${apiRef}"
 
@@ -48,7 +52,9 @@ done
 
 docker run -d \
   --name "$web_container" \
+  --network "$docker_network" \
   -p 3000:3000 \
+  -e API_BASE_URL="http://${api_container}:3001" \
   "${webRef}"
 
 for i in $(seq 1 90); do
@@ -67,6 +73,7 @@ PR_NUMBER=0 \
 WEB_BASE_URL=http://127.0.0.1:3000 \
 EXPECTED_ENTRYPOINT=/ \
 REQUIRED_FLOW_IDS_JSON="$(printf '[\"%s\"]' "${flowId}")" \
+REQUIRE_AUTH_GATEWAY=true \
 pnpm test:acceptance:browser
 `);
 

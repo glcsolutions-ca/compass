@@ -30,6 +30,8 @@ function parseRequiredFlowIds() {
 async function runFlow(
   page: Page,
   flowId: string,
+  baseUrl: string,
+  requireAuthGateway: boolean,
   flowAssertions: Array<{
     id: string;
     description: string;
@@ -60,6 +62,49 @@ async function runFlow(
     pass: signInHref.startsWith("/v1/auth/entra/start"),
     details: signInHref.length > 0 ? `href=${signInHref}` : "missing sign in href"
   });
+
+  if (!requireAuthGateway) {
+    return;
+  }
+
+  const pingResponse = await page.request.get(`${baseUrl}/v1/ping`);
+  const pingText = await pingResponse.text();
+  let pingJson: { ok?: unknown } | null = null;
+  try {
+    pingJson = pingText.length > 0 ? (JSON.parse(pingText) as { ok?: unknown }) : null;
+  } catch {
+    pingJson = null;
+  }
+
+  flowAssertions.push({
+    id: `${flowId}:gateway-ping-status`,
+    description: `[${flowId}] Gateway /v1/ping returns 200`,
+    pass: pingResponse.status() === 200,
+    details: `status=${pingResponse.status()}`
+  });
+  flowAssertions.push({
+    id: `${flowId}:gateway-ping-json`,
+    description: `[${flowId}] Gateway /v1/ping returns JSON payload`,
+    pass: pingJson?.ok === true,
+    details: pingText.slice(0, 200)
+  });
+
+  const authStartResponse = await page.request.get(`${baseUrl}/v1/auth/entra/start?returnTo=%2F`, {
+    maxRedirects: 0
+  });
+  const authStartLocation = authStartResponse.headers().location ?? "";
+  flowAssertions.push({
+    id: `${flowId}:gateway-auth-start-status`,
+    description: `[${flowId}] Gateway auth start returns redirect`,
+    pass: authStartResponse.status() === 302 || authStartResponse.status() === 303,
+    details: `status=${authStartResponse.status()}`
+  });
+  flowAssertions.push({
+    id: `${flowId}:gateway-auth-start-target`,
+    description: `[${flowId}] Gateway auth start redirects to Microsoft login`,
+    pass: authStartLocation.startsWith("https://login.microsoftonline.com/"),
+    details: authStartLocation || "missing location header"
+  });
 }
 
 test("compass smoke flow", async ({ page }) => {
@@ -68,6 +113,7 @@ test("compass smoke flow", async ({ page }) => {
   const prNumber = Number(process.env.PR_NUMBER ?? "0");
   const baseUrl = process.env.WEB_BASE_URL ?? "http://127.0.0.1:3000";
   const expectedEntrypoint = process.env.EXPECTED_ENTRYPOINT ?? "/";
+  const requireAuthGateway = process.env.REQUIRE_AUTH_GATEWAY?.trim().toLowerCase() === "true";
   const flowIds = parseRequiredFlowIds();
 
   const outputDir = path.join(".artifacts", "browser-evidence", testedSha);
@@ -109,7 +155,7 @@ test("compass smoke flow", async ({ page }) => {
 
     try {
       await page.goto(`${baseUrl}${expectedEntrypoint}`, { waitUntil: "networkidle" });
-      await runFlow(page, flowId, flowAssertions);
+      await runFlow(page, flowId, baseUrl, requireAuthGateway, flowAssertions);
     } catch (error) {
       flowStatus = "failed";
       flowAssertions.push({

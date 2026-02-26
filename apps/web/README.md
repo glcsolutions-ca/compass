@@ -27,10 +27,11 @@ It runs in framework mode with `ssr: false`, producing a client-rendered SPA wit
 
 Configuration is consumed in `app/routes/home.tsx`.
 
-| Env Var             | Default                 | Notes                                                |
-| ------------------- | ----------------------- | ---------------------------------------------------- |
-| `WEB_PORT`          | `3000`                  | Dev server listen port (`vite server.port`, strict). |
-| `VITE_API_BASE_URL` | `http://localhost:3001` | Optional API origin override for browser runtime.    |
+| Env Var             | Default                 | Notes                                                            |
+| ------------------- | ----------------------- | ---------------------------------------------------------------- |
+| `WEB_PORT`          | `3000`                  | Dev server listen port (`vite server.port`, strict).             |
+| `VITE_API_BASE_URL` | `http://localhost:3001` | Dev proxy target for `/v1`, `/health`, `/openapi.json`.          |
+| `API_BASE_URL`      | _required in container_ | Runtime Nginx upstream for proxied API paths on the same origin. |
 
 Local template: `apps/web/.env.example`.
 
@@ -40,6 +41,7 @@ Local template: `apps/web/.env.example`.
 - Build command is `react-router build`.
 - Local runtime command serves static output from `build/client` on port `3000`.
 - Docker runtime serves static output with non-root `nginx` on port `3000`.
+- Nginx proxies `/v1/*`, `/health`, and `/openapi.json` to `API_BASE_URL` before SPA fallback.
 - SPA fallback is configured with `try_files $uri /index.html` in `apps/web/nginx/default.conf`.
 - Docker build supports overriding `VITE_API_BASE_URL` via build arg.
 

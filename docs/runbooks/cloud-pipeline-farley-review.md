@@ -61,15 +61,16 @@ Primary artifacts:
 
 ### A1. Current-State Technical Map
 
-| Control Point                | Current Behavior                                                                                                | Source                                                |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Quick local gate (canonical) | `pnpm test:quick` runs static policy checks + unit/component + contract drift checks.                           | `package.json`                                        |
-| Alias behavior               | `pnpm test` is an alias to `pnpm test:quick` for compatibility.                                                 | `package.json`                                        |
-| Full local gate              | `pnpm test:full` runs backend preflight first, then `test:quick` + integration + Playwright smoke (`test:e2e`). | `package.json`, `scripts/dev/test-full-preflight.mjs` |
-| Pre-commit hook              | `.githooks/pre-commit` runs `pnpm test:quick`.                                                                  | `.githooks/pre-commit`, `package.json`                |
-| Pre-push hook                | `.githooks/pre-push` runs `pnpm test:full`.                                                                     | `.githooks/pre-push`, `package.json`                  |
-| Contract drift enforcement   | `contract:check` remains inside `test:quick`, so drift blocks both pre-commit and pre-push.                     | `package.json`                                        |
-| Specialist commands          | `test:integration`, `test:e2e`, and policy scripts remain available for CI and troubleshooting.                 | `package.json`                                        |
+| Control Point                | Current Behavior                                                                                                | Source                                                     |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Quick local gate (canonical) | `pnpm test:quick` runs static policy checks + unit/component + contract drift checks.                           | `package.json`                                             |
+| Alias behavior               | `pnpm test` is an alias to `pnpm test:quick` for compatibility.                                                 | `package.json`                                             |
+| Full local gate              | `pnpm test:full` runs backend preflight first, then `test:quick` + integration + Playwright smoke (`test:e2e`). | `package.json`, `scripts/dev/test-full-preflight.mjs`      |
+| Pre-commit hook              | `.githooks/pre-commit` runs `pnpm exec lint-staged` then `pnpm test:quick`.                                     | `.githooks/pre-commit`, `package.json`                     |
+| Pre-push hook                | `.githooks/pre-push` runs `pnpm test:full`.                                                                     | `.githooks/pre-push`, `package.json`                       |
+| Contract drift enforcement   | `contract:check` remains inside `test:quick`, so drift blocks both pre-commit and pre-push.                     | `package.json`                                             |
+| Formatting failure contract  | `format:check` is fail-closed and emits `FMT001` guidance (`lint-staged` or `pnpm format`, then rerun quick).   | `package.json`, `scripts/pipeline/commit/check-format.mjs` |
+| Specialist commands          | `test:integration`, `test:e2e`, and policy scripts remain available for CI and troubleshooting.                 | `package.json`                                             |
 
 ### A2. Farley Alignment Assessment
 
@@ -87,7 +88,7 @@ Primary artifacts:
 
 | Recommendation ID | Outcome    | Implementation                                                                                                                                        |
 | ----------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A-001             | accepted   | Replaced dual-static hook model with tiered hooks: pre-commit `test:quick`, pre-push `test:full`.                                                     |
+| A-001             | accepted   | Replaced dual-static hook model with tiered hooks: pre-commit `lint-staged -> test:quick`, pre-push `test:full`.                                      |
 | A-002             | accepted   | Kept `contract:check` inside `test:quick` so contract drift blocks both quick and full gates.                                                         |
 | A-003             | accepted   | Set simple Stage A SLO guidance in docs: quick gate target "few minutes", hard cap 10 minutes; full gate is allowed longer but tracked and optimized. |
 | A-004             | superseded | Replaced change-class matrix with universal two-command policy (`test:quick`, `test:full`).                                                           |
@@ -96,7 +97,8 @@ Primary artifacts:
 
 1. Iterate with `pnpm test:quick` (or `pnpm test` alias).
 2. Before push, run `pnpm test:full`.
-3. Use specialist commands only for troubleshooting and CI parity investigation.
+3. `git commit` runs staged autofix (`pnpm exec lint-staged`) before the fail-closed quick gate.
+4. Use specialist commands only for troubleshooting and CI parity investigation.
 
 ### A5. Stage A Carry-Forward Constraints (For Stage B)
 
@@ -110,6 +112,7 @@ Primary artifacts:
 1. `A-001` through `A-004` are resolved in the decision log.
 2. Carry-forward constraints are documented in this runbook and decision log.
 3. The Stage A local command contract is explicit and simplified.
+4. Detailed trunk-wide `test:quick` assessment evidence is tracked in `docs/runbooks/test-quick-farley-assessment.md`.
 
 ## Stage B Through Stage G
 

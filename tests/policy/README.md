@@ -40,7 +40,8 @@ What it enforces:
 When it runs:
 
 - First phase inside `pnpm test:quick`
-- Local `pre-commit` and `pre-push` hooks
+- Local `pre-commit` hook after `pnpm exec lint-staged`
+- Local `pre-push` hook (`pnpm test:full`)
 
 ### Layer 1: Testing Policy (fastest)
 
@@ -130,6 +131,9 @@ Rules:
 - `HR001` high-risk mainline commit blocked
   - You are committing high-risk files while on `main`.
   - Create a branch, open a PR, and request review from `@jrkropp`.
+- `FMT001` formatting violations detected
+  - `pnpm test:quick` found repo-wide formatting drift.
+  - Run `pnpm exec lint-staged` for staged-file autofix or `pnpm format` for full-repo fix, then rerun `pnpm test:quick`.
 - `TC001` wrong test layer path
   - Move the file to the expected commit-stage, integration, e2e, or smoke location.
 - `TC010` focused test (`*.only`)

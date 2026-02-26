@@ -30,6 +30,11 @@ Agents can run these locally when needed.
 - `pnpm test:integration` — integration tests only (requires local Postgres)
 - `pnpm test:e2e` — Playwright smoke flow only
 
+Local hook behavior:
+
+- pre-commit: `pnpm exec lint-staged` then `pnpm test:quick`
+- pre-push: `pnpm test:full`
+
 ### Local Postgres (for integration)
 
 - `pnpm db:postgres:up` — start local Postgres, apply migrations, seed data
@@ -58,6 +63,7 @@ pnpm db:postgres:down
 git pull --rebase
 
 # While iterating:
+# git commit triggers: pnpm exec lint-staged && pnpm test:quick
 # pnpm test:quick
 # Before pushing to main:
 pnpm test:full

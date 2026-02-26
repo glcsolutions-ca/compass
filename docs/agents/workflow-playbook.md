@@ -11,12 +11,40 @@ pnpm test:full
 pnpm build
 ```
 
+`git commit` runs pre-commit autofix + gate:
+
+```bash
+pnpm exec lint-staged
+pnpm test:quick
+```
+
 If `pnpm test:full` prints `FULL001 backend prerequisites missing`, run:
 
 ```bash
 pnpm db:postgres:up
 pnpm test:full
 pnpm db:postgres:down
+```
+
+If `pnpm test:quick` prints `FMT001 formatting violations detected`, run:
+
+```bash
+pnpm exec lint-staged
+# or full repo:
+pnpm format
+pnpm test:quick
+```
+
+Quick/unit output contract:
+
+- Green runs: compact summaries only.
+- Red runs: failed task logs and failing test diagnostics.
+
+Deep diagnostics:
+
+```bash
+pnpm turbo run test --output-logs=full --ui=stream --log-order=grouped
+pnpm test:pipeline-contract -- --reporter=default
 ```
 
 3. For deployment-pipeline-config changes, also run:

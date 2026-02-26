@@ -74,6 +74,29 @@ pnpm test:full
 pnpm db:postgres:down
 ```
 
+If `pnpm test:quick` fails formatting (`FMT001`), run:
+
+```bash
+pnpm exec lint-staged
+# or full repo:
+pnpm format
+pnpm test:quick
+```
+
+## Test output behavior
+
+- `pnpm test:quick` and `pnpm test:unit` run with low-noise logging by default.
+- Green runs: compact summaries (`Tasks`, `Cached`, `Time`, Vitest totals).
+- Red runs: failed tasks print their logs and failing test diagnostics.
+- Formatting failures print `FMT001` with explicit fix commands.
+
+For deep diagnostics, rerun:
+
+```bash
+pnpm turbo run test --output-logs=full --ui=stream --log-order=grouped
+pnpm test:pipeline-contract -- --reporter=default
+```
+
 ## PR title and format standard
 
 - Title: `<type>(<scope>): <summary>`

@@ -30,12 +30,12 @@
     "deploy:custom-domain:dns": "node scripts/pipeline/cloud/deployment-stage/custom-domain-dns.mjs",
     "deploy:smoke": "node scripts/pipeline/cloud/deployment-stage/verify-api-smoke.mjs",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format:check": "node scripts/pipeline/commit/check-format.mjs",
     "generate": "turbo run generate",
     "lint": "turbo run lint",
     "test": "pnpm test:quick",
     "test:quick": "pnpm ci:high-risk-mainline-policy && pnpm ci:testing-policy && pnpm ci:terminology-policy && pnpm ci:service-bus-auth-contract && pnpm db:migrate:check && pnpm format:check && pnpm lint && pnpm typecheck:refs && pnpm typecheck && pnpm test:unit && pnpm contract:check",
-    "test:unit": "turbo run test && pnpm test:pipeline-contract",
+    "test:unit": "pnpm turbo run test --ui=stream --log-order=grouped -- --silent=passed-only --reporter=dot && pnpm test:pipeline-contract",
     "test:contracts": "pnpm --filter @compass/contracts test && pnpm --filter @compass/sdk test && pnpm contract:check",
     "test:runtime:unit": "pnpm --filter @compass/api test && pnpm --filter @compass/web test && pnpm --filter @compass/worker test && pnpm --filter @compass/contracts test && pnpm --filter @compass/sdk test",
     "test:runtime:integration": "pnpm --filter @compass/api test:integration",
@@ -53,7 +53,7 @@
     "contract:generate": "pnpm generate",
     "contract:check": "pnpm contract:generate && git diff --exit-code -- packages/contracts/openapi/openapi.json packages/sdk/src/generated/schema.ts",
     "git-hooks:install": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0; if git config --worktree core.hooksPath .githooks 2>/dev/null; then git config --local --unset-all core.hooksPath >/dev/null 2>&1 || true; else git config core.hooksPath .githooks; fi",
-    "git-hooks:pre-commit": "pnpm test:quick",
+    "git-hooks:pre-commit": "pnpm exec lint-staged && pnpm test:quick",
     "git-hooks:pre-push": "pnpm test:full",
     "ci:scope": "node scripts/pipeline/commit/resolve-scope.mjs",
     "ci:docs-drift": "node scripts/pipeline/commit/check-docs-drift.mjs",
@@ -70,7 +70,7 @@
     "desktop:dev": "pnpm --filter @compass/desktop dev:run",
     "desktop:make:mac": "pnpm --filter @compass/desktop make:mac",
     "desktop:make:win": "pnpm --filter @compass/desktop make:win",
-    "test:pipeline-contract": "vitest run db/scripts/migration-policy-lib.test.mjs db/scripts/constants.test.mjs db/scripts/initial-schema-migration.test.mjs scripts/dev/ensure-local-env.test.mjs scripts/dev/test-full-preflight.test.mjs scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/decide-integration-gate-lib.test.mjs scripts/pipeline/commit/auto-recover-main.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/check-high-risk-mainline-policy.test.mjs scripts/pipeline/commit/check-auth-openapi-metadata.test.mjs scripts/pipeline/commit/runtime-coverage-lib.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/decide-automated-acceptance-test-gate-lib.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/acceptance-blackbox-contract.test.mjs scripts/pipeline/cloud/deployment-stage/apply-infra.test.mjs scripts/pipeline/cloud/deployment-stage/entra-config-wiring.test.mjs scripts/pipeline/cloud/deployment-stage/verify-api-smoke.test.mjs"
+    "test:pipeline-contract": "vitest run db/scripts/migration-policy-lib.test.mjs db/scripts/constants.test.mjs db/scripts/initial-schema-migration.test.mjs scripts/dev/ensure-local-env.test.mjs scripts/dev/test-full-preflight.test.mjs scripts/pipeline/commit/check-format.test.mjs scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/decide-integration-gate-lib.test.mjs scripts/pipeline/commit/auto-recover-main.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/check-high-risk-mainline-policy.test.mjs scripts/pipeline/commit/check-auth-openapi-metadata.test.mjs scripts/pipeline/commit/runtime-coverage-lib.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/decide-automated-acceptance-test-gate-lib.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/acceptance-blackbox-contract.test.mjs scripts/pipeline/cloud/deployment-stage/apply-infra.test.mjs scripts/pipeline/cloud/deployment-stage/entra-config-wiring.test.mjs scripts/pipeline/cloud/deployment-stage/verify-api-smoke.test.mjs --silent=passed-only --reporter=dot"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

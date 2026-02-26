@@ -69,8 +69,11 @@ Rule of thumb: use the **cheapest test** that provides enough confidence.
 
 ## Standard commands (CI and humans use the same entrypoints)
 
+- `pnpm test:quick`  
+  Fast gate (canonical)
+
 - `pnpm test`  
-  Fast gate (default)
+  Alias for `pnpm test:quick`
 
 - `pnpm test:full`  
   Fast gate + integration (+ optional E2E if required)
@@ -78,8 +81,19 @@ Rule of thumb: use the **cheapest test** that provides enough confidence.
 - `pnpm test:unit` / `pnpm test:integration` / `pnpm test:e2e`  
   Targeted runs
 
-> If a command is required before pushing to `main`, document it here and keep it fast:
-> `<FAST_CHECK_CMD>`
+### Output behavior (quick/unit)
+
+- Green runs are intentionally compact.
+- Red runs print failed-task logs and failing test diagnostics.
+- Pre-commit auto-fixes staged files with `pnpm exec lint-staged` before running `pnpm test:quick`.
+- `pnpm test:quick` remains fail-closed and repo-wide; formatting failures emit `FMT001` with fix commands.
+
+For deep diagnostics, rerun:
+
+```bash
+pnpm turbo run test --output-logs=full --ui=stream --log-order=grouped
+pnpm test:pipeline-contract -- --reporter=default
+```
 
 ---
 

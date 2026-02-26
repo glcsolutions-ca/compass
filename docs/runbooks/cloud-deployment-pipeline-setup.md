@@ -221,6 +221,22 @@ gh variable list -e acceptance > ".artifacts/bootstrap/$ts/gh-acceptance-vars.tx
 gh secret list -e acceptance > ".artifacts/bootstrap/$ts/gh-acceptance-secrets.txt"
 ```
 
+## Dynamic Sessions Acceptance Rehearsal (Manual)
+
+Use this when you want a focused acceptance infra apply + Dynamic Sessions convergence check for an existing release candidate digest set.
+
+```bash
+gh workflow run dynamic-sessions-acceptance-rehearsal.yml \
+  -f release_candidate_sha=<main_sha>
+```
+
+The workflow:
+
+1. Downloads `release-candidate-<sha>` from the push pipeline run.
+2. Validates release-candidate digest contract.
+3. Applies infra in acceptance using those immutable digests.
+4. Verifies Dynamic Sessions convergence and writes `.artifacts/infra/<sha>/dynamic-sessions-convergence.json`.
+
 ## FAQs
 
 ### Why is bootstrap manual?

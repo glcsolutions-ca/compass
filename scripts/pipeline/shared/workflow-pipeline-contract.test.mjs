@@ -265,6 +265,25 @@ describe("workflow pipeline contract", () => {
     expect(replay).not.toContain("  build_release_candidate_codex_image:");
   });
 
+  it("keeps dynamic sessions convergence fail-safe in deployment workflows", () => {
+    const delivery = readUtf8(cloudDeploymentPipelineWorkflowPath);
+    const replay = readUtf8(cloudDeploymentPipelineReplayWorkflowPath);
+
+    for (const workflow of [delivery, replay]) {
+      expect(workflow).toContain(
+        'if [ "$RUNTIME_CHANGED" = "true" ] || [ "$INFRA_CHANGED" = "true" ] || [ "$REQUIRES_INFRA_CONVERGENCE" = "true" ]; then'
+      );
+      expect(workflow).not.toContain("steps.codex_app_presence.outputs.codex_app_exists");
+      expect(workflow).not.toContain("steps.worker_app_presence.outputs.worker_app_exists");
+      expect(workflow).toContain(
+        "node scripts/pipeline/cloud/deployment-stage/verify-dynamic-sessions-convergence.mjs"
+      );
+      expect(workflow).toContain(
+        "RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}"
+      );
+    }
+  });
+
   it("keeps shared ARM infra apply script on explicit validate/create deployment names", () => {
     const script = readUtf8(sharedApplyScriptPath);
 

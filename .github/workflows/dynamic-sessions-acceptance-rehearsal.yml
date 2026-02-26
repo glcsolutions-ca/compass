@@ -1,0 +1,234 @@
+name: Dynamic Sessions Acceptance Rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_candidate_sha:
+        description: Release candidate SHA to rehearse in acceptance
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+jobs:
+  resolve_rehearsal_source:
+    name: resolve-rehearsal-source
+    runs-on: ubuntu-latest
+    outputs:
+      release_candidate_sha: ${{ steps.source.outputs.release_candidate_sha }}
+      source_run_id: ${{ steps.resolve_run.outputs.run_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Resolve release candidate SHA
+        id: source
+        env:
+          RELEASE_CANDIDATE_SHA: ${{ inputs.release_candidate_sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RELEASE_CANDIDATE_SHA:-}" ]; then
+            echo "release_candidate_sha input is required" >&2
+            exit 1
+          fi
+          echo "release_candidate_sha=$RELEASE_CANDIDATE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve source run id
+        id: resolve_run
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          WORKFLOW_FILE: cloud-deployment-pipeline.yml
+          HEAD_SHA: ${{ steps.source.outputs.release_candidate_sha }}
+          RUN_EVENT: push
+          RUN_STATUS: success
+          RUN_STATUS_FALLBACK: completed
+        run: node scripts/pipeline/shared/resolve-triggered-run-id.mjs
+
+  acceptance_rehearsal:
+    name: acceptance-rehearsal
+    needs:
+      - resolve_rehearsal_source
+    if: ${{ always() && needs.resolve_rehearsal_source.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: acceptance
+    env:
+      RELEASE_CANDIDATE_SHA: ${{ needs.resolve_rehearsal_source.outputs.release_candidate_sha }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_VNET_NAME: ${{ vars.AZURE_VNET_NAME }}
+      AZURE_ACA_SUBNET_NAME: ${{ vars.AZURE_ACA_SUBNET_NAME }}
+      AZURE_POSTGRES_SUBNET_NAME: ${{ vars.AZURE_POSTGRES_SUBNET_NAME }}
+      AZURE_PRIVATE_DNS_ZONE_NAME: ${{ vars.AZURE_PRIVATE_DNS_ZONE_NAME }}
+      ACA_ENVIRONMENT_NAME: ${{ vars.ACA_ENVIRONMENT_NAME }}
+      AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
+      ACA_API_APP_NAME: ${{ vars.ACA_API_APP_NAME }}
+      ACA_WEB_APP_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+      ACA_WORKER_APP_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
+      ACA_CODEX_APP_NAME: ${{ vars.ACA_CODEX_APP_NAME }}
+      ACA_API_CUSTOM_DOMAIN: ${{ vars.ACA_API_CUSTOM_DOMAIN }}
+      ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
+      ACA_CODEX_CUSTOM_DOMAIN: ${{ vars.ACA_CODEX_CUSTOM_DOMAIN }}
+      ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+      ACR_PULL_IDENTITY_NAME: ${{ vars.ACR_PULL_IDENTITY_NAME }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      POSTGRES_SERVER_NAME: ${{ vars.POSTGRES_SERVER_NAME }}
+      POSTGRES_DATABASE_NAME: ${{ vars.POSTGRES_DATABASE_NAME }}
+      POSTGRES_ADMIN_USERNAME: ${{ vars.POSTGRES_ADMIN_USERNAME }}
+      POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+      WEB_SESSION_SECRET: ${{ secrets.WEB_SESSION_SECRET }}
+      ENTRA_LOGIN_ENABLED: ${{ vars.ENTRA_LOGIN_ENABLED }}
+      ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
+      ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
+      ENTRA_ALLOWED_TENANT_IDS: ${{ vars.ENTRA_ALLOWED_TENANT_IDS }}
+      AUTH_DEV_FALLBACK_ENABLED: ${{ vars.AUTH_DEV_FALLBACK_ENABLED }}
+      API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
+      AUTH_AUDIENCE: ${{ vars.AUTH_AUDIENCE }}
+      AUTH_ALLOWED_CLIENT_IDS: ${{ vars.AUTH_ALLOWED_CLIENT_IDS }}
+      AUTH_ACTIVE_TENANT_IDS: ${{ vars.AUTH_ACTIVE_TENANT_IDS }}
+      OAUTH_TOKEN_ISSUER: ${{ vars.OAUTH_TOKEN_ISSUER }}
+      OAUTH_TOKEN_AUDIENCE: ${{ vars.OAUTH_TOKEN_AUDIENCE }}
+      OAUTH_TOKEN_SIGNING_SECRET: ${{ secrets.OAUTH_TOKEN_SIGNING_SECRET }}
+      AUTH_BOOTSTRAP_ALLOWED_TENANT_ID: ${{ vars.API_SMOKE_ALLOWED_TENANT_ID }}
+      AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID: ${{ secrets.API_SMOKE_ALLOWED_CLIENT_ID }}
+      AUTH_BOOTSTRAP_DELEGATED_USER_OID: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_OID }}
+      AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: ${{ vars.AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL }}
+      WORKER_RUNTIME_IDENTITY_NAME: ${{ vars.WORKER_RUNTIME_IDENTITY_NAME }}
+      DYNAMIC_SESSIONS_POOL_NAME: ${{ vars.DYNAMIC_SESSIONS_POOL_NAME }}
+      DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME: ${{ vars.DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME }}
+      SERVICE_BUS_PROD_NAMESPACE_NAME: ${{ vars.SERVICE_BUS_PROD_NAMESPACE_NAME }}
+      SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME: ${{ vars.SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME }}
+      SERVICE_BUS_QUEUE_NAME: ${{ vars.SERVICE_BUS_QUEUE_NAME }}
+      WORKER_RUN_MODE: ${{ vars.WORKER_RUN_MODE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download release candidate artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-candidate-${{ env.RELEASE_CANDIDATE_SHA }}
+          path: .artifacts/release-candidate/${{ env.RELEASE_CANDIDATE_SHA }}
+          run-id: ${{ needs.resolve_rehearsal_source.outputs.source_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Parse release candidate manifest
+        id: manifest
+        env:
+          RELEASE_CANDIDATE_MANIFEST_PATH: .artifacts/release-candidate/${{ env.RELEASE_CANDIDATE_SHA }}/manifest.json
+          RUN_ID: ${{ needs.resolve_rehearsal_source.outputs.source_run_id }}
+        run: node scripts/pipeline/shared/load-release-candidate-contract.mjs
+
+      - name: Capture release candidate head SHA
+        run: echo "HEAD_SHA=${{ steps.manifest.outputs.head_sha }}" >> "$GITHUB_ENV"
+
+      - name: Validate release candidate reference contract
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.manifest.outputs.release_candidate_ref_contract_status }}" != "pass" ]; then
+            echo "Release candidate ref contract status is ${{ steps.manifest.outputs.release_candidate_ref_contract_status }}" >&2
+            echo "Reason codes: ${{ steps.manifest.outputs.release_candidate_ref_contract_reason_codes_json }}" >&2
+            exit 1
+          fi
+
+      - name: Validate release candidate refs for infra apply
+        env:
+          API_IMAGE: ${{ steps.manifest.outputs.release_candidate_api_ref }}
+          WEB_IMAGE: ${{ steps.manifest.outputs.release_candidate_web_ref }}
+          WORKER_IMAGE: ${{ steps.manifest.outputs.release_candidate_worker_ref }}
+          CODEX_IMAGE: ${{ steps.manifest.outputs.release_candidate_codex_ref }}
+          DYNAMIC_SESSIONS_RUNTIME_IMAGE: ${{ steps.manifest.outputs.release_candidate_dynamic_sessions_runtime_ref }}
+        run: |
+          set -euo pipefail
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$CODEX_IMAGE" "$DYNAMIC_SESSIONS_RUNTIME_IMAGE"; do
+            if [ -z "$image" ]; then
+              echo "Release candidate image reference is missing for acceptance rehearsal" >&2
+              exit 1
+            fi
+            if [[ "$image" != *"@sha256:"* ]]; then
+              echo "Release candidate image is not a digest reference: $image" >&2
+              exit 1
+            fi
+          done
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_ACCEPTANCE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate required environment configuration
+        run: node scripts/pipeline/shared/validate-infra-acceptance-config.mjs
+
+      - name: Render infra parameters
+        env:
+          API_IMAGE: ${{ steps.manifest.outputs.release_candidate_api_ref }}
+          WEB_IMAGE: ${{ steps.manifest.outputs.release_candidate_web_ref }}
+          WORKER_IMAGE: ${{ steps.manifest.outputs.release_candidate_worker_ref }}
+          CODEX_IMAGE: ${{ steps.manifest.outputs.release_candidate_codex_ref }}
+          DYNAMIC_SESSIONS_RUNTIME_IMAGE: ${{ steps.manifest.outputs.release_candidate_dynamic_sessions_runtime_ref }}
+          ARM_PARAMETERS_FILE: .artifacts/infra/${{ env.HEAD_SHA }}/runtime.parameters.json
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/infra/$HEAD_SHA"
+          node scripts/pipeline/shared/render-infra-parameters.mjs
+
+      - name: Apply infra in acceptance
+        env:
+          ARM_PARAMETERS_FILE: .artifacts/infra/${{ env.HEAD_SHA }}/runtime.parameters.json
+          ARM_TEMPLATE_FILE: infra/azure/main.bicep
+          ARM_ARTIFACT_DIR: .artifacts/infra/${{ env.HEAD_SHA }}
+        run: node scripts/pipeline/cloud/deployment-stage/apply-infra.mjs
+
+      - name: Verify Dynamic Sessions convergence
+        env:
+          RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ steps.manifest.outputs.release_candidate_dynamic_sessions_runtime_ref }}
+        run: node scripts/pipeline/cloud/deployment-stage/verify-dynamic-sessions-convergence.mjs
+
+      - name: Publish rehearsal summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo "## Dynamic Sessions Acceptance Rehearsal"
+            echo
+            echo "- release candidate sha: \`${RELEASE_CANDIDATE_SHA}\`"
+            echo "- head sha: \`${HEAD_SHA}\`"
+            if [ -f ".artifacts/infra/$HEAD_SHA/dynamic-sessions-convergence.json" ]; then
+              status="$(jq -r '.status' ".artifacts/infra/$HEAD_SHA/dynamic-sessions-convergence.json")"
+              endpoint="$(jq -r '.observed.sessionPool.managementEndpoint // \"\"' ".artifacts/infra/$HEAD_SHA/dynamic-sessions-convergence.json")"
+              image="$(jq -r '.observed.sessionPool.runtimeImage // \"\"' ".artifacts/infra/$HEAD_SHA/dynamic-sessions-convergence.json")"
+              echo "- convergence status: \`${status}\`"
+              echo "- pool management endpoint: \`${endpoint}\`"
+              echo "- session runtime image: \`${image}\`"
+            else
+              echo "- convergence status: \`missing artifact\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload rehearsal artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dynamic-sessions-acceptance-rehearsal-${{ env.HEAD_SHA }}
+          path: |
+            .artifacts/release-candidate/${{ env.RELEASE_CANDIDATE_SHA }}/manifest.json
+            .artifacts/acceptance/${{ env.HEAD_SHA }}/release-candidate-manifest.json
+            .artifacts/infra/${{ env.HEAD_SHA }}
+          if-no-files-found: warn

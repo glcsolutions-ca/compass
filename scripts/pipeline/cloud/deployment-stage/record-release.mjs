@@ -11,6 +11,8 @@ const releaseCandidateApiRef = process.env.RELEASE_CANDIDATE_API_REF?.trim() || 
 const releaseCandidateWebRef = process.env.RELEASE_CANDIDATE_WEB_REF?.trim() || "";
 const releaseCandidateWorkerRef = process.env.RELEASE_CANDIDATE_WORKER_REF?.trim() || "";
 const releaseCandidateCodexRef = process.env.RELEASE_CANDIDATE_CODEX_REF?.trim() || "";
+const releaseCandidateDynamicSessionsRuntimeRef =
+  process.env.RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF?.trim() || "";
 const changeClass = process.env.CHANGE_CLASS?.trim() || "runtime";
 const maxRetryAttempts = 3;
 const baseRetryDelayMs = 1000;
@@ -72,7 +74,8 @@ async function main() {
         releaseCandidateApiRef,
         releaseCandidateWebRef,
         releaseCandidateWorkerRef,
-        releaseCandidateCodexRef
+        releaseCandidateCodexRef,
+        releaseCandidateDynamicSessionsRuntimeRef
       }
     }
   });

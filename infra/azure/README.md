@@ -105,7 +105,8 @@ There is one infra path, no mode flags.
 2. Render runtime parameters.
 3. Run `az deployment group validate`.
 4. Run `az deployment group create`.
-5. Capture artifacts under `.artifacts/infra/<sha>/`.
+5. Verify Dynamic Sessions convergence (`verify-dynamic-sessions-convergence.mjs`) on mutation paths.
+6. Capture artifacts under `.artifacts/infra/<sha>/`.
 
 `apply-infra.mjs` retries once for known transient ARM/ACA failures and fails closed otherwise.
 
@@ -114,4 +115,5 @@ There is one infra path, no mode flags.
 - `scripts/pipeline/shared/render-infra-parameters.mjs`
 - `scripts/pipeline/shared/validate-infra-acceptance-config.mjs`
 - `scripts/pipeline/cloud/deployment-stage/apply-infra.mjs`
+- `scripts/pipeline/cloud/deployment-stage/verify-dynamic-sessions-convergence.mjs`
 - `docs/runbooks/cloud-deployment-pipeline-setup.md`

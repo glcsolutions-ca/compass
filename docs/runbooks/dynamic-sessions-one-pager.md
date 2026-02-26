@@ -38,8 +38,10 @@ It covers only infrastructure and delivery plumbing, not chat-thread routing log
 
 1. `cloud-deployment-pipeline.yml` builds and pushes the Dynamic Sessions runtime image on runtime changes.
 2. Release-candidate manifest now includes `dynamicSessionsRuntimeRef`.
-3. Replay workflow consumes the same manifest and does not rebuild images.
-4. Infra acceptance and infra deploy jobs fail closed if Dynamic Sessions image/vars are missing.
+3. Push/replay deploy workflows fail-safe to infra convergence whenever runtime/infra convergence is required.
+4. `deploy-infra` now verifies Dynamic Sessions convergence after infra apply (`dynamic-sessions-convergence.json` artifact).
+5. Replay workflow consumes the same manifest and does not rebuild images.
+6. Manual acceptance rehearsal is available in `dynamic-sessions-acceptance-rehearsal.yml` to apply infra and verify Dynamic Sessions convergence for an existing release candidate.
 
 ## Rollout Guardrails
 

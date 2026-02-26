@@ -57,6 +57,11 @@
   - required input: `release_candidate_sha`
   - purpose: rerun automated-acceptance-test-gate -> deployment-stage verification for the same release candidate (no rebuild)
 
+- `dynamic-sessions-acceptance-rehearsal.yml`
+  - trigger: `workflow_dispatch`
+  - required input: `release_candidate_sha`
+  - purpose: acceptance infra apply + Dynamic Sessions convergence verification for an existing release candidate (no rebuild)
+
 - `desktop-deployment-pipeline.yml`
   - trigger: `push` to `main`, `workflow_dispatch`
   - purpose: signed desktop installer delivery

@@ -1368,91 +1368,13 @@ jobs:
 
           echo "ACA_CODEX_APP_NAME=$codex_app_name" >> "$GITHUB_ENV"
 
-      - name: Check Codex app presence
-        id: codex_app_presence
-        if: ${{ env.RUNTIME_CHANGED == 'true' }}
-        run: |
-          set -euo pipefail
-
-          if ! az containerapp show \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$ACA_CODEX_APP_NAME" \
-            --query id \
-            --output tsv >/dev/null 2>&1; then
-            echo "codex_app_exists=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          codex_identity_type="$(az containerapp show \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$ACA_CODEX_APP_NAME" \
-            --query 'identity.type' \
-            --output tsv)"
-          codex_registry_identity="$(az containerapp show \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$ACA_CODEX_APP_NAME" \
-            --query 'properties.configuration.registries[0].identity' \
-            --output tsv)"
-          codex_registry_server="$(az containerapp show \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$ACA_CODEX_APP_NAME" \
-            --query 'properties.configuration.registries[0].server' \
-            --output tsv)"
-
-          if [ "$codex_identity_type" != "UserAssigned" ] || [ -z "$codex_registry_identity" ] || [ "$codex_registry_server" != "$ACR_REGISTRY" ] || [[ "$codex_registry_identity" != *"/$ACR_PULL_IDENTITY_NAME" ]]; then
-            echo "Codex app exists but registry identity config is not converged. Forcing infra convergence."
-            echo "codex_app_exists=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "codex_app_exists=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Check Worker app presence
-        id: worker_app_presence
-        if: ${{ env.RUNTIME_CHANGED == 'true' }}
-        run: |
-          set -euo pipefail
-
-          if ! az containerapp show \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$ACA_WORKER_APP_NAME" \
-            --query id \
-            --output tsv >/dev/null 2>&1; then
-            echo "worker_app_exists=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          worker_identity_type="$(az containerapp show \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$ACA_WORKER_APP_NAME" \
-            --query 'identity.type' \
-            --output tsv)"
-          worker_registry_identity="$(az containerapp show \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$ACA_WORKER_APP_NAME" \
-            --query 'properties.configuration.registries[0].identity' \
-            --output tsv)"
-          worker_registry_server="$(az containerapp show \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$ACA_WORKER_APP_NAME" \
-            --query 'properties.configuration.registries[0].server' \
-            --output tsv)"
-
-          if [ "$worker_identity_type" != "UserAssigned" ] || [ -z "$worker_registry_identity" ] || [ "$worker_registry_server" != "$ACR_REGISTRY" ] || [[ "$worker_registry_identity" != *"/$ACR_PULL_IDENTITY_NAME" ]]; then
-            echo "Worker app exists but registry identity config is not converged. Forcing infra convergence."
-            echo "worker_app_exists=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "worker_app_exists=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Decide infra apply necessity
         id: decide_infra_apply
         run: |
           set -euo pipefail
 
           infra_apply_required="false"
-          if [ "$INFRA_CHANGED" = "true" ] || [ "$REQUIRES_INFRA_CONVERGENCE" = "true" ]; then
-            infra_apply_required="true"
-          elif [ "$RUNTIME_CHANGED" = "true" ] && { [ "${{ steps.codex_app_presence.outputs.codex_app_exists }}" != "true" ] || [ "${{ steps.worker_app_presence.outputs.worker_app_exists }}" != "true" ]; }; then
+          if [ "$RUNTIME_CHANGED" = "true" ] || [ "$INFRA_CHANGED" = "true" ] || [ "$REQUIRES_INFRA_CONVERGENCE" = "true" ]; then
             infra_apply_required="true"
           fi
 
@@ -1481,6 +1403,12 @@ jobs:
       - name: Verify worker Service Bus cutover
         if: ${{ steps.decide_infra_apply.outputs.infra_apply_required == 'true' }}
         run: node scripts/pipeline/cloud/deployment-stage/verify-worker-servicebus-cutover.mjs
+
+      - name: Verify Dynamic Sessions convergence
+        if: ${{ steps.decide_infra_apply.outputs.infra_apply_required == 'true' }}
+        env:
+          RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ env.RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF }}
+        run: node scripts/pipeline/cloud/deployment-stage/verify-dynamic-sessions-convergence.mjs
 
       - name: Resolve current production URLs
         id: current_state
@@ -1554,7 +1482,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_WORKER_REF" "$RELEASE_CANDIDATE_CODEX_REF"; do
+          for image in "$RELEASE_CANDIDATE_API_REF" "$RELEASE_CANDIDATE_WEB_REF" "$RELEASE_CANDIDATE_WORKER_REF" "$RELEASE_CANDIDATE_CODEX_REF" "$RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF"; do
             if [ -z "$image" ]; then
               echo "Release candidate image reference is missing for runtime deployment" >&2
               exit 1
@@ -1684,6 +1612,7 @@ jobs:
       RELEASE_CANDIDATE_WEB_REF: ${{ needs.load_release_candidate.outputs.release_candidate_web_ref }}
       RELEASE_CANDIDATE_WORKER_REF: ${{ needs.load_release_candidate.outputs.release_candidate_worker_ref }}
       RELEASE_CANDIDATE_CODEX_REF: ${{ needs.load_release_candidate.outputs.release_candidate_codex_ref }}
+      RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.load_release_candidate.outputs.release_candidate_dynamic_sessions_runtime_ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

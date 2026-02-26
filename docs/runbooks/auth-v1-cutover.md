@@ -1,16 +1,16 @@
 # Auth V1 Cutover Runbook
 
-This runbook applies to the Entra-only auth v1 baseline migration rollout.
+This runbook applies to the Entra-only auth v1 clean-slate rollout.
 
 ## When To Use
 
-- first rollout of auth v1 schema in prelaunch environments
-- destructive reset of prior prototype auth data
+- first rollout of the single v1 baseline schema migration
+- destructive reset of prior prototype auth data in prelaunch/production-like environments
 
 ## Preconditions
 
 - No production users or production data migration requirements
-- Baseline migration and `db/migrations/checksums.json` are updated and committed
+- Baseline migration (`db/migrations/1772083000000_initial_schema.mjs`) and `db/migrations/checksums.json` are updated and committed
 - Entra app registration is configured for multi-tenant organizations flow
 - Runtime environment has Entra auth settings configured (`ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET`, `ENTRA_REDIRECT_URI`)
 - If tenant restrictions are required, `ENTRA_ALLOWED_TENANT_IDS` is set
@@ -18,7 +18,7 @@ This runbook applies to the Entra-only auth v1 baseline migration rollout.
 ## Destructive Reset Sequence
 
 1. Stop runtime services that write auth data.
-2. Reset local Postgres (or prelaunch DB) before applying new baseline:
+2. Reset local Postgres (or prelaunch DB) before applying the new baseline:
 
 ```bash
 pnpm db:postgres:down
@@ -36,6 +36,23 @@ pnpm db:migrate:up
 ```bash
 pnpm db:migrate:check
 pnpm db:migrate:status
+```
+
+For production clean-slate reset on Azure Postgres flexible server:
+
+```bash
+az postgres flexible-server db delete \
+  --resource-group rg-compass-prod-canadacentral-01 \
+  --server-name psql-compass-prod-canadacentral-01-4514 \
+  --database-name compass \
+  --yes
+
+az postgres flexible-server db create \
+  --resource-group rg-compass-prod-canadacentral-01 \
+  --server-name psql-compass-prod-canadacentral-01-4514 \
+  --database-name compass \
+  --charset UTF8 \
+  --collation en_US.utf8
 ```
 
 ## Verification Checklist

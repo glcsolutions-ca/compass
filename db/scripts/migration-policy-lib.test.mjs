@@ -25,42 +25,64 @@ async function writeMigration(dir, fileName, content = "export async function up
 }
 
 describe("migration-policy-lib", () => {
-  it("accepts 14-digit and legacy hyphenated migration names for compatibility", async () => {
+  it("accepts only 13-digit migration names with underscore separators", async () => {
     await withTempDir(async (migrationsDir) => {
-      await writeMigration(migrationsDir, "20260226050000_baseline_platform_schema.mjs");
-      await writeMigration(migrationsDir, "1771913577531_auth-foundation.mjs");
+      await writeMigration(migrationsDir, "1772083000000_initial_schema.mjs");
+      await writeMigration(migrationsDir, "1772083000001_add_indexes.mjs");
 
       const result = await validateMigrationDirectory({ migrationsDir });
       expect(result.failures).toEqual([]);
       expect(result.migrationFiles).toEqual([
-        "1771913577531_auth-foundation.mjs",
-        "20260226050000_baseline_platform_schema.mjs"
+        "1772083000000_initial_schema.mjs",
+        "1772083000001_add_indexes.mjs"
       ]);
+    });
+  });
+
+  it("rejects 14-digit migration names", async () => {
+    await withTempDir(async (migrationsDir) => {
+      await writeMigration(migrationsDir, "20260226050000_baseline_platform_schema.mjs");
+
+      const result = await validateMigrationDirectory({ migrationsDir });
+      expect(result.failures).toContain(
+        "Invalid migration filename '20260226050000_baseline_platform_schema.mjs'. Expected pattern: ^\\d{13}_[a-z0-9_]+\\.mjs$"
+      );
+    });
+  });
+
+  it("rejects hyphenated migration names", async () => {
+    await withTempDir(async (migrationsDir) => {
+      await writeMigration(migrationsDir, "1772083000000_initial-schema.mjs");
+
+      const result = await validateMigrationDirectory({ migrationsDir });
+      expect(result.failures).toContain(
+        "Invalid migration filename '1772083000000_initial-schema.mjs'. Expected pattern: ^\\d{13}_[a-z0-9_]+\\.mjs$"
+      );
     });
   });
 
   it("passes policy validation for a valid migration set", async () => {
     await withTempDir(async (migrationsDir) => {
       const checksumsPath = path.join(migrationsDir, "checksums.json");
-      await writeMigration(migrationsDir, "20260226050000_baseline_platform_schema.mjs");
+      await writeMigration(migrationsDir, "1772083000000_initial_schema.mjs");
 
       await writeChecksumsManifest({ migrationsDir, checksumsPath });
 
       const result = await validateMigrationPolicy({ migrationsDir, checksumsPath });
       expect(result.ok).toBe(true);
       expect(result.failures).toEqual([]);
-      expect(result.migrationFiles).toEqual(["20260226050000_baseline_platform_schema.mjs"]);
+      expect(result.migrationFiles).toEqual(["1772083000000_initial_schema.mjs"]);
     });
   });
 
   it("fails directory validation when non-.mjs migration files are present", async () => {
     await withTempDir(async (migrationsDir) => {
-      await writeMigration(migrationsDir, "20260226050000_baseline_platform_schema.mjs");
-      await writeMigration(migrationsDir, "20260226050001_bad.sql", "select 1;\n");
+      await writeMigration(migrationsDir, "1772083000000_initial_schema.mjs");
+      await writeMigration(migrationsDir, "1772083000001_bad.sql", "select 1;\n");
 
       const result = await validateMigrationDirectory({ migrationsDir });
       expect(result.failures).toContain(
-        "Non-.mjs file found in db/migrations: 20260226050001_bad.sql"
+        "Non-.mjs file found in db/migrations: 1772083000001_bad.sql"
       );
     });
   });
@@ -68,7 +90,7 @@ describe("migration-policy-lib", () => {
   it("fails policy validation when checksums drift", async () => {
     await withTempDir(async (migrationsDir) => {
       const checksumsPath = path.join(migrationsDir, "checksums.json");
-      const fileName = "20260226050000_baseline_platform_schema.mjs";
+      const fileName = "1772083000000_initial_schema.mjs";
       await writeMigration(migrationsDir, fileName);
 
       await writeFile(
@@ -96,22 +118,20 @@ describe("migration-policy-lib", () => {
   it("writes checksums manifest with sorted migration keys", async () => {
     await withTempDir(async (migrationsDir) => {
       const checksumsPath = path.join(migrationsDir, "checksums.json");
-      await writeMigration(migrationsDir, "20260226050002_second.mjs");
-      await writeMigration(migrationsDir, "20260226050001_first.mjs");
+      await writeMigration(migrationsDir, "1772083000002_second.mjs");
+      await writeMigration(migrationsDir, "1772083000001_first.mjs");
 
       const checksums = await calculateMigrationChecksums({ migrationsDir });
       await writeChecksumsManifest({ migrationsDir, checksumsPath });
 
       const manifest = JSON.parse(await readFile(checksumsPath, "utf8"));
       expect(Object.keys(manifest.files)).toEqual([
-        "20260226050001_first.mjs",
-        "20260226050002_second.mjs"
+        "1772083000001_first.mjs",
+        "1772083000002_second.mjs"
       ]);
-      expect(manifest.files["20260226050001_first.mjs"]).toBe(
-        checksums["20260226050001_first.mjs"]
-      );
-      expect(manifest.files["20260226050002_second.mjs"]).toBe(
-        checksums["20260226050002_second.mjs"]
+      expect(manifest.files["1772083000001_first.mjs"]).toBe(checksums["1772083000001_first.mjs"]);
+      expect(manifest.files["1772083000002_second.mjs"]).toBe(
+        checksums["1772083000002_second.mjs"]
       );
     });
   });

@@ -77,8 +77,9 @@ resource "azuread_service_principal" "api" {
 }
 
 resource "azuread_application" "web" {
-  display_name = "compass-web-${var.environment_name}"
-  owners       = var.owners
+  display_name     = "compass-web-${var.environment_name}"
+  owners           = var.owners
+  sign_in_audience = "AzureADMultipleOrgs"
 
   web {
     redirect_uris = local.web_redirect_uris

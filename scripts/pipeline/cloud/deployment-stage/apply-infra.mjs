@@ -59,9 +59,17 @@ export function buildDeploymentCommandArgs({
   parameterOverrides = []
 }) {
   const normalizedCommand = String(command ?? "").trim();
+  const normalizedParametersFile = String(parametersFile ?? "").trim();
   if (normalizedCommand !== "validate" && normalizedCommand !== "create") {
     throw new Error(`Unsupported deployment command: '${normalizedCommand}'`);
   }
+  if (!normalizedParametersFile) {
+    throw new Error("parametersFile is required");
+  }
+
+  const parametersFileArg = normalizedParametersFile.endsWith(".bicepparam")
+    ? normalizedParametersFile
+    : `@${normalizedParametersFile}`;
 
   return [
     "deployment",
@@ -74,7 +82,7 @@ export function buildDeploymentCommandArgs({
     "--template-file",
     templateFile,
     "--parameters",
-    `@${parametersFile}`,
+    parametersFileArg,
     ...(parameterOverrides.length > 0 ? ["--parameters", ...parameterOverrides] : []),
     ...(normalizedCommand === "create" ? ["--output", "json"] : [])
   ];

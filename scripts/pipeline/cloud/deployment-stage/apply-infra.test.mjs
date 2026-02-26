@@ -91,7 +91,7 @@ describe("buildDeploymentCommandArgs", () => {
       "--template-file",
       "infra/azure/main.bicep",
       "--parameters",
-      "@infra/azure/environments/cloud.bicepparam",
+      "infra/azure/environments/cloud.bicepparam",
       "--parameters",
       "apiImage=acr.io/api@sha256:abc",
       "authMode=entra",

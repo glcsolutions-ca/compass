@@ -25,9 +25,11 @@
 5. Managed identities:
    - ACR pull identity (also used for Key Vault secret references at runtime)
    - Worker runtime identity (queue receiver role assignment)
+   - Dynamic Sessions executor identity (session executor role at pool scope)
 6. Service Bus namespace + queue baseline (`compass-events`).
-7. Container Apps: API, Web, Worker, Codex.
-8. Migration Container App job.
+7. Container Apps: API, Web, Worker.
+8. Dynamic Sessions custom-container session pool.
+9. Migration Container App job.
 
 ## Secret Contract (Key Vault)
 
@@ -78,7 +80,7 @@ Pipeline deploy jobs pass release-candidate digest refs as parameter overrides f
 - `apiImage`
 - `webImage`
 - `workerImage`
-- `codexImage`
+- `dynamicSessionsRuntimeImage`
 
 ## Notes
 

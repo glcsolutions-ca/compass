@@ -14,7 +14,7 @@
 
 1. Verify commit-stage evidence.
 2. Verify integration-gate evidence.
-3. Build API/Web/Worker/Codex images once.
+3. Build API/Web/Worker/Dynamic Sessions runtime images once.
 4. Publish release-candidate digest manifest.
 5. Deploy cloud infra/runtime with those digests.
 6. Run production smoke checks.

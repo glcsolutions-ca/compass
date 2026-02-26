@@ -69,7 +69,6 @@ async function freezeCurrentRuntimeRefs() {
   const apiAppName = requireEnv("ACA_API_APP_NAME");
   const webAppName = requireEnv("ACA_WEB_APP_NAME");
   const workerAppName = requireEnv("ACA_WORKER_APP_NAME");
-  const codexAppName = requireEnv("ACA_CODEX_APP_NAME");
   const dynamicSessionsPoolName = requireEnv("DYNAMIC_SESSIONS_POOL_NAME");
 
   const apiImage = await capture("az", [
@@ -108,18 +107,6 @@ async function freezeCurrentRuntimeRefs() {
     "--output",
     "tsv"
   ]);
-  const codexImage = await capture("az", [
-    "containerapp",
-    "show",
-    "--resource-group",
-    resourceGroup,
-    "--name",
-    codexAppName,
-    "--query",
-    "properties.template.containers[0].image",
-    "--output",
-    "tsv"
-  ]);
   const dynamicSessionsRuntimeImage = await capture("az", [
     "resource",
     "show",
@@ -140,7 +127,6 @@ async function freezeCurrentRuntimeRefs() {
   const releaseCandidateApiRef = await resolveToDigestRef(acrName, apiImage);
   const releaseCandidateWebRef = await resolveToDigestRef(acrName, webImage);
   const releaseCandidateWorkerRef = await resolveToDigestRef(acrName, workerImage);
-  const releaseCandidateCodexRef = await resolveToDigestRef(acrName, codexImage);
   const releaseCandidateDynamicSessionsRuntimeRef = await resolveToDigestRef(
     acrName,
     dynamicSessionsRuntimeImage
@@ -150,7 +136,6 @@ async function freezeCurrentRuntimeRefs() {
     release_candidate_api_ref: releaseCandidateApiRef,
     release_candidate_web_ref: releaseCandidateWebRef,
     release_candidate_worker_ref: releaseCandidateWorkerRef,
-    release_candidate_codex_ref: releaseCandidateCodexRef,
     release_candidate_dynamic_sessions_runtime_ref: releaseCandidateDynamicSessionsRuntimeRef
   });
 }

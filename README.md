@@ -31,11 +31,11 @@ pnpm dev:worker
 - Web (`apps/web`): React Router 7 framework mode (`ssr: false`), containerized as static non-root nginx on port `3000`
 - API (`apps/api`): Express 5 + contract-backed OpenAPI on `API_PORT`
 - Worker (`apps/worker`): Azure Service Bus consumer (`loop` or `once`)
-- Codex gateway (`apps/codex-app-server`): thread/turn + stream APIs on `CODEX_PORT`
+- Dynamic Sessions runtime (`apps/codex-session-runtime`): minimal container runtime for session pools
 
 ## Main commands
 
-- `pnpm dev` - run local core services (API, web, codex gateway)
+- `pnpm dev` - run local core services (API, web)
 - `pnpm dev:all` - run all services including worker
 - `pnpm dev:worker` - run worker only (cloud credentials required)
 - `pnpm test:quick` - run the quick local gate (static + unit/component + contract)
@@ -52,10 +52,10 @@ pnpm dev:worker
 
 - `pnpm dev` and `pnpm db:postgres:*` call `scripts/dev/ensure-local-env.mjs` before service startup.
 - `pnpm dev` starts local-core services only. Use `pnpm dev:all` to include worker, or `pnpm dev:worker` to run worker explicitly.
-- Bootstrap manages `apps/api/.env`, `apps/web/.env`, `apps/codex-app-server/.env`, and `db/postgres/.env`, and only appends missing required keys when a file already exists.
+- Bootstrap manages `apps/api/.env`, `apps/web/.env`, and `db/postgres/.env`, and only appends missing required keys when a file already exists.
 - Worker env is intentionally not auto-managed by this script.
 - Value precedence is: explicit shell env var > existing `.env` value > generated worktree default.
-- Generated defaults include per-worktree ports (`WEB_PORT`, `API_PORT`, `CODEX_PORT`, `POSTGRES_PORT`), `VITE_API_BASE_URL`, `DATABASE_URL`, and `COMPOSE_PROJECT_NAME`.
+- Generated defaults include per-worktree ports (`WEB_PORT`, `API_PORT`, `POSTGRES_PORT`), `VITE_API_BASE_URL`, `DATABASE_URL`, and `COMPOSE_PROJECT_NAME`.
 
 ## Trunk-first flow
 

@@ -17,9 +17,8 @@ It covers only infrastructure and delivery plumbing, not chat-thread routing log
 1. Dynamic Sessions custom-container pool is deployed from `infra/azure/main.bicep`.
 2. Runtime image is `compass-codex-session-runtime` and is digest-pinned through the release-candidate manifest.
 3. A dedicated managed identity is provisioned for Session Executor permissions.
-4. Codex app is assigned this dedicated identity (in addition to ACR pull identity).
-5. Session Executor role assignment is scoped to the session pool only.
-6. Pool defaults:
+4. Session Executor role assignment is scoped to the session pool only.
+5. Pool defaults:
    - `readySessionInstances=1`
    - `maxConcurrentSessions=20`
    - `cooldownPeriodInSeconds=300`

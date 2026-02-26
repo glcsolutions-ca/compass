@@ -29,7 +29,6 @@ async function main() {
   const releaseCandidateApiRef = String(manifest?.releaseCandidate?.apiRef || "");
   const releaseCandidateWebRef = String(manifest?.releaseCandidate?.webRef || "");
   const releaseCandidateWorkerRef = String(manifest?.releaseCandidate?.workerRef || "");
-  const releaseCandidateCodexRef = String(manifest?.releaseCandidate?.codexRef || "");
   const releaseCandidateDynamicSessionsRuntimeRef = String(
     manifest?.releaseCandidate?.dynamicSessionsRuntimeRef || ""
   );
@@ -47,9 +46,6 @@ async function main() {
     if (!releaseCandidateWorkerRef) {
       reasonCodes.push("RELEASE_CANDIDATE_WORKER_REF_MISSING");
     }
-    if (!releaseCandidateCodexRef) {
-      reasonCodes.push("RELEASE_CANDIDATE_CODEX_REF_MISSING");
-    }
     if (!releaseCandidateDynamicSessionsRuntimeRef) {
       reasonCodes.push("RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF_MISSING");
     }
@@ -62,9 +58,6 @@ async function main() {
     }
     if (releaseCandidateWorkerRef && !DIGEST_PATTERN.test(releaseCandidateWorkerRef)) {
       reasonCodes.push("RELEASE_CANDIDATE_WORKER_REF_NOT_DIGEST");
-    }
-    if (releaseCandidateCodexRef && !DIGEST_PATTERN.test(releaseCandidateCodexRef)) {
-      reasonCodes.push("RELEASE_CANDIDATE_CODEX_REF_NOT_DIGEST");
     }
     if (
       releaseCandidateDynamicSessionsRuntimeRef &&
@@ -105,7 +98,6 @@ async function main() {
     release_candidate_api_ref: releaseCandidateApiRef,
     release_candidate_web_ref: releaseCandidateWebRef,
     release_candidate_worker_ref: releaseCandidateWorkerRef,
-    release_candidate_codex_ref: releaseCandidateCodexRef,
     release_candidate_dynamic_sessions_runtime_ref: releaseCandidateDynamicSessionsRuntimeRef,
     commit_run_id: runId,
     release_candidate_ref_contract_status: releaseCandidateRefContractStatus,

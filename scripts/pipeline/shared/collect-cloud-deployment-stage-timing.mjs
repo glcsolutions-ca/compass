@@ -174,7 +174,7 @@ async function main() {
     "build-release-candidate-api-image",
     "build-release-candidate-web-image",
     "build-release-candidate-worker-image",
-    "build-release-candidate-codex-image"
+    "build-release-candidate-dynamic-sessions-runtime-image"
   ]);
   const releaseCandidateEnd = latestEndEpoch(jobs, ["publish-release-candidate"]);
 

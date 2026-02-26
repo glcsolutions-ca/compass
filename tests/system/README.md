@@ -21,18 +21,6 @@ Equivalent direct command:
 tsx tests/system/smoke.ts
 ```
 
-Codex gateway smoke:
-
-```bash
-pnpm test:acceptance:codex
-```
-
-Equivalent direct command:
-
-```bash
-tsx tests/system/codex-smoke.ts
-```
-
 ## Harness Behavior
 
 `tests/system/smoke.ts`:
@@ -42,18 +30,9 @@ tsx tests/system/codex-smoke.ts
 3. Verifies OpenAPI includes `/health` and `/v1/ping`.
 4. Writes pass/fail artifact and appends `system_smoke_path` output when running in CI.
 
-`tests/system/codex-smoke.ts`:
-
-1. Resolves `CODEX_BASE_URL` or `TARGET_CODEX_BASE_URL` (defaults to `http://127.0.0.1:3010`).
-2. Sends HTTP requests to `GET /health` and `GET /v1/models`.
-3. Validates `v1/models` returns either model payload (`200`) or auth error shape (`401`).
-4. Opens and closes websocket `GET /v1/stream?threadId=codex_smoke_thread`.
-5. Writes pass/fail artifact and appends `codex_smoke_path` output when running in CI.
-
 ## Output Artifact
 
 - `.artifacts/harness-smoke/<sha>/result.json`
-- `.artifacts/codex-smoke/<sha>/result.json`
 
 Metadata defaults when env is unset:
 

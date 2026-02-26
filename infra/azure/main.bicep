@@ -22,7 +22,8 @@ param apiAppName string = 'SET_IN_GITHUB_ENV'
 param webAppName string = 'SET_IN_GITHUB_ENV'
 param workerAppName string = 'SET_IN_GITHUB_ENV'
 param workerRuntimeIdentityName string = 'SET_IN_GITHUB_ENV'
-param codexAppName string = 'SET_IN_GITHUB_ENV'
+param dynamicSessionsPoolName string = 'SET_IN_GITHUB_ENV'
+param dynamicSessionsExecutorIdentityName string = 'SET_IN_GITHUB_ENV'
 param migrationJobName string = 'SET_IN_GITHUB_ENV'
 param acrPullIdentityName string = 'SET_IN_GITHUB_ENV'
 param acrName string = 'SET_IN_GITHUB_ENV'
@@ -43,7 +44,7 @@ param postgresStorageMb int = 32768
 param apiImage string = 'SET_IN_GITHUB_ENV'
 param webImage string = 'SET_IN_GITHUB_ENV'
 param workerImage string = 'SET_IN_GITHUB_ENV'
-param codexImage string = 'SET_IN_GITHUB_ENV'
+param dynamicSessionsRuntimeImage string = 'SET_IN_GITHUB_ENV'
 param authMode string = 'entra'
 param entraClientId string = ''
 param entraAllowedTenantIds string = ''
@@ -52,10 +53,8 @@ param serviceBusQueueName string = 'compass-events'
 param workerRunMode string = 'loop'
 param apiCustomDomain string = ''
 param webCustomDomain string = ''
-param codexCustomDomain string = ''
 
 param apiLogLevel string = 'warn'
-param codexLogLevel string = 'warn'
 param authIssuer string = 'SET_IN_GITHUB_ENV'
 param authJwksUri string = 'SET_IN_GITHUB_ENV'
 param authAudience string = 'SET_IN_GITHUB_ENV'
@@ -81,6 +80,10 @@ var serviceBusDataReceiverRoleDefinitionId = subscriptionResourceId(
 var keyVaultSecretsUserRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
   '4633458b-17de-408a-b874-0445c86b69e6'
+)
+var sessionExecutorRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '0fb8eba5-a2bb-4abe-b1c1-49dfad359bb0'
 )
 
 module network './modules/network.bicep' = {
@@ -153,9 +156,6 @@ var apiBaseUrl = empty(apiCustomDomain)
 var webBaseUrl = empty(webCustomDomain)
   ? 'https://${webAppName}.${containerEnvironment.outputs.defaultDomain}'
   : 'https://${webCustomDomain}'
-var codexBaseUrl = empty(codexCustomDomain)
-  ? 'https://${codexAppName}.${containerEnvironment.outputs.defaultDomain}'
-  : 'https://${codexCustomDomain}'
 
 resource acrPullIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: acrPullIdentityName
@@ -164,6 +164,11 @@ resource acrPullIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
 
 resource workerRuntimeIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: workerRuntimeIdentityName
+  location: location
+}
+
+resource dynamicSessionsExecutorIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: dynamicSessionsExecutorIdentityName
   location: location
 }
 
@@ -290,18 +295,17 @@ module worker './modules/containerapp-worker.bicep' = {
   ]
 }
 
-module codex './modules/containerapp-codex.bicep' = {
-  name: 'containerapp-codex'
+module dynamicSessions './modules/sessionpool-dynamic-sessions.bicep' = {
+  name: 'sessionpool-dynamic-sessions'
   params: {
     location: location
-    containerAppName: codexAppName
-    managedEnvironmentId: containerEnvironment.outputs.environmentId
-    image: codexImage
+    sessionPoolName: dynamicSessionsPoolName
+    environmentId: containerEnvironment.outputs.environmentId
+    image: dynamicSessionsRuntimeImage
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
-    databaseUrl: databaseUrl
-    logLevel: codexLogLevel
-    customDomainName: codexCustomDomain
+    sessionExecutorPrincipalId: dynamicSessionsExecutorIdentity.properties.principalId
+    sessionExecutorRoleDefinitionId: sessionExecutorRoleDefinitionId
   }
   dependsOn: [
     acrPullIdentityRoleAssignment
@@ -334,7 +338,6 @@ output containerAppsEnvironmentName string = containerEnvironment.outputs.enviro
 output containerAppsEnvironmentId string = containerEnvironment.outputs.environmentId
 output containerAppsDefaultDomain string = containerEnvironment.outputs.defaultDomain
 output apiBaseUrlOutput string = apiBaseUrl
-output codexBaseUrlOutput string = codexBaseUrl
 output acrId string = acr.outputs.registryId
 output acrNameOutput string = acr.outputs.registryNameOutput
 output acrLoginServer string = acr.outputs.loginServer
@@ -343,6 +346,9 @@ output acrPullIdentityPrincipalId string = acrPullIdentity.properties.principalI
 output workerRuntimeIdentityId string = workerRuntimeIdentity.id
 output workerRuntimeIdentityPrincipalId string = workerRuntimeIdentity.properties.principalId
 output workerRuntimeIdentityClientId string = workerRuntimeIdentity.properties.clientId
+output dynamicSessionsExecutorIdentityId string = dynamicSessionsExecutorIdentity.id
+output dynamicSessionsExecutorIdentityName string = dynamicSessionsExecutorIdentity.name
+output dynamicSessionsExecutorIdentityPrincipalId string = dynamicSessionsExecutorIdentity.properties.principalId
 output serviceBusProdNamespaceNameOutput string = serviceBusProd.outputs.namespaceNameOutput
 output serviceBusProdNamespaceFqdn string = serviceBusProd.outputs.namespaceFqdn
 output serviceBusProdQueueId string = serviceBusProd.outputs.queueId
@@ -359,9 +365,10 @@ output webLatestRevisionFqdn string = web.outputs.latestRevisionFqdn
 output workerContainerAppName string = worker.outputs.appName
 output workerLatestRevision string = worker.outputs.latestRevisionName
 
-output codexContainerAppName string = codex.outputs.appName
-output codexLatestRevision string = codex.outputs.latestRevisionName
-output codexLatestRevisionFqdn string = codex.outputs.latestRevisionFqdn
+output dynamicSessionsPoolId string = dynamicSessions.outputs.sessionPoolId
+output dynamicSessionsPoolNameOutput string = dynamicSessions.outputs.sessionPoolNameOutput
+output dynamicSessionsPoolManagementEndpoint string = dynamicSessions.outputs.poolManagementEndpoint
+output dynamicSessionsSessionExecutorRoleAssignmentId string = dynamicSessions.outputs.sessionExecutorRoleAssignmentId
 
 output migrationJobName string = migrateJob.outputs.jobNameOutput
 output migrationJobId string = migrateJob.outputs.jobId

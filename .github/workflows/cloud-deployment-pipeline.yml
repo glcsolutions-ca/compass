@@ -102,9 +102,9 @@ jobs:
           - name: worker
             image_name: compass-worker
             dockerfile: apps/worker/Dockerfile
-          - name: codex
-            image_name: compass-codex-app-server
-            dockerfile: apps/codex-app-server/Dockerfile
+          - name: dynamic-sessions-runtime
+            image_name: compass-codex-session-runtime
+            dockerfile: apps/codex-session-runtime/Dockerfile
     env:
       HEAD_SHA: ${{ github.sha }}
       ACR_NAME: ${{ vars.ACR_NAME }}
@@ -182,9 +182,9 @@ jobs:
           api_ref="$(cat "$artifact_dir/api.ref")"
           web_ref="$(cat "$artifact_dir/web.ref")"
           worker_ref="$(cat "$artifact_dir/worker.ref")"
-          codex_ref="$(cat "$artifact_dir/codex.ref")"
+          dynamic_sessions_runtime_ref="$(cat "$artifact_dir/dynamic-sessions-runtime.ref")"
 
-          for image in "$api_ref" "$web_ref" "$worker_ref" "$codex_ref"; do
+          for image in "$api_ref" "$web_ref" "$worker_ref" "$dynamic_sessions_runtime_ref"; do
             if [[ "$image" != *"@sha256:"* ]]; then
               echo "Release candidate image reference must be digest-pinned: $image" >&2
               exit 1
@@ -204,7 +204,7 @@ jobs:
               "apiRef": "$api_ref",
               "webRef": "$web_ref",
               "workerRef": "$worker_ref",
-              "codexRef": "$codex_ref"
+              "dynamicSessionsRuntimeRef": "$dynamic_sessions_runtime_ref"
             }
           }
           JSON
@@ -233,7 +233,6 @@ jobs:
       head_sha: ${{ steps.set_head.outputs.head_sha }}
       api_prod_url: ${{ steps.resolve_urls.outputs.api_prod_url }}
       web_prod_url: ${{ steps.resolve_urls.outputs.web_prod_url }}
-      codex_prod_url: ${{ steps.resolve_urls.outputs.codex_prod_url }}
     env:
       HEAD_SHA: ${{ needs.publish_release_candidate.outputs.head_sha }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
@@ -277,12 +276,12 @@ jobs:
           echo "API_IMAGE=$(jq -r '.releaseCandidate.apiRef' "$manifest_path")" >> "$GITHUB_ENV"
           echo "WEB_IMAGE=$(jq -r '.releaseCandidate.webRef' "$manifest_path")" >> "$GITHUB_ENV"
           echo "WORKER_IMAGE=$(jq -r '.releaseCandidate.workerRef' "$manifest_path")" >> "$GITHUB_ENV"
-          echo "CODEX_IMAGE=$(jq -r '.releaseCandidate.codexRef' "$manifest_path")" >> "$GITHUB_ENV"
+          echo "DYNAMIC_SESSIONS_RUNTIME_IMAGE=$(jq -r '.releaseCandidate.dynamicSessionsRuntimeRef' "$manifest_path")" >> "$GITHUB_ENV"
 
       - name: Validate release candidate refs
         run: |
           set -euo pipefail
-          for image in "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$CODEX_IMAGE"; do
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$DYNAMIC_SESSIONS_RUNTIME_IMAGE"; do
             if [ -z "$image" ]; then
               echo "Missing release candidate image reference" >&2
               exit 1
@@ -368,7 +367,7 @@ jobs:
           apiImage=$API_IMAGE
           webImage=$WEB_IMAGE
           workerImage=$WORKER_IMAGE
-          codexImage=$CODEX_IMAGE
+          dynamicSessionsRuntimeImage=$DYNAMIC_SESSIONS_RUNTIME_IMAGE
           PARAMS
           )"
 
@@ -384,12 +383,18 @@ jobs:
           echo "ACA_API_APP_NAME=$(jq -er '.properties.outputs.apiContainerAppName.value' "$deployment_json")" >> "$GITHUB_ENV"
           echo "ACA_WEB_APP_NAME=$(jq -er '.properties.outputs.webContainerAppName.value' "$deployment_json")" >> "$GITHUB_ENV"
           echo "ACA_WORKER_APP_NAME=$(jq -er '.properties.outputs.workerContainerAppName.value' "$deployment_json")" >> "$GITHUB_ENV"
-          echo "ACA_CODEX_APP_NAME=$(jq -er '.properties.outputs.codexContainerAppName.value' "$deployment_json")" >> "$GITHUB_ENV"
+          echo "DYNAMIC_SESSIONS_POOL_NAME=$(jq -er '.properties.outputs.dynamicSessionsPoolNameOutput.value' "$deployment_json")" >> "$GITHUB_ENV"
+          echo "DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME=$(jq -er '.properties.outputs.dynamicSessionsExecutorIdentityName.value' "$deployment_json")" >> "$GITHUB_ENV"
           echo "ACA_MIGRATE_JOB_NAME=$(jq -er '.properties.outputs.migrationJobName.value' "$deployment_json")" >> "$GITHUB_ENV"
           echo "SERVICE_BUS_PROD_NAMESPACE_NAME=$(jq -er '.properties.outputs.serviceBusProdNamespaceNameOutput.value' "$deployment_json")" >> "$GITHUB_ENV"
           echo "SERVICE_BUS_QUEUE_NAME=$(jq -er '.properties.outputs.serviceBusQueueNameOutput.value' "$deployment_json")" >> "$GITHUB_ENV"
           echo "WORKER_RUNTIME_IDENTITY_CLIENT_ID=$(jq -er '.properties.outputs.workerRuntimeIdentityClientId.value' "$deployment_json")" >> "$GITHUB_ENV"
           echo "WORKER_RUNTIME_IDENTITY_PRINCIPAL_ID=$(jq -er '.properties.outputs.workerRuntimeIdentityPrincipalId.value' "$deployment_json")" >> "$GITHUB_ENV"
+
+      - name: Verify Dynamic Sessions convergence
+        env:
+          RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ env.DYNAMIC_SESSIONS_RUNTIME_IMAGE }}
+        run: node scripts/pipeline/cloud/deployment-stage/verify-dynamic-sessions-convergence.mjs
 
       - name: Verify worker Service Bus cutover
         run: node scripts/pipeline/cloud/deployment-stage/verify-worker-servicebus-cutover.mjs
@@ -442,14 +447,6 @@ jobs:
           resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
           disableTelemetry: true
 
-      - name: Deploy Codex
-        uses: azure/container-apps-deploy-action@v1
-        with:
-          imageToDeploy: ${{ env.CODEX_IMAGE }}
-          containerAppName: ${{ env.ACA_CODEX_APP_NAME }}
-          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
-          disableTelemetry: true
-
       - name: Resolve production URLs
         id: resolve_urls
         run: |
@@ -457,11 +454,9 @@ jobs:
 
           api_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_API_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
           web_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_WEB_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
-          codex_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_CODEX_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
 
           echo "api_prod_url=$api_prod_url" >> "$GITHUB_OUTPUT"
           echo "web_prod_url=$web_prod_url" >> "$GITHUB_OUTPUT"
-          echo "codex_prod_url=$codex_prod_url" >> "$GITHUB_OUTPUT"
 
       - name: Upload deployment artifacts
         if: ${{ always() }}

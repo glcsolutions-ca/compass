@@ -1522,6 +1522,10 @@ export class AuthService {
   }
 
   private canVisitReturnTo(returnTo: string, memberships: MembershipRecord[]): boolean {
+    if (returnTo === "/" || returnTo === "/login") {
+      return false;
+    }
+
     const match = returnTo.match(/^\/t\/([a-z0-9-]+)(?:\/|$)/u);
     if (!match) {
       return true;

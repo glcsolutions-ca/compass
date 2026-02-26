@@ -4,13 +4,14 @@ param managedEnvironmentId string
 param image string
 param registryServer string
 param registryIdentityResourceId string
+param keyVaultUri string
 param webBaseUrl string
-param entraLoginEnabled string = 'false'
+@allowed([
+  'mock'
+  'entra'
+])
+param authMode string = 'entra'
 param entraClientId string = ''
-@secure()
-param entraClientSecret string = ''
-@secure()
-param authOidcStateEncryptionKey string = ''
 param entraAllowedTenantIds string = ''
 @secure()
 param databaseUrl string
@@ -21,29 +22,11 @@ param authAllowedClientIds string
 param authActiveTenantIds string
 param oauthTokenIssuer string
 param oauthTokenAudience string
-@secure()
-param oauthTokenSigningSecret string
 param logLevel string = 'warn'
 param customDomainName string = ''
 
-var hasEntraClientSecret = !empty(entraClientSecret)
-var entraClientSecretEnv = hasEntraClientSecret
-  ? [
-      {
-        name: 'ENTRA_CLIENT_SECRET'
-        secretRef: 'entra-client-secret'
-      }
-    ]
-  : []
-var hasAuthOidcStateEncryptionKey = !empty(authOidcStateEncryptionKey)
-var authOidcStateEncryptionKeyEnv = hasAuthOidcStateEncryptionKey
-  ? [
-      {
-        name: 'AUTH_OIDC_STATE_ENCRYPTION_KEY'
-        secretRef: 'auth-oidc-state-encryption-key'
-      }
-    ]
-  : []
+var normalizedKeyVaultUri = endsWith(keyVaultUri, '/') ? keyVaultUri : '${keyVaultUri}/'
+var keyVaultSecretBaseUrl = '${normalizedKeyVaultUri}secrets'
 
 resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
   name: containerAppName
@@ -79,118 +62,115 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
           identity: registryIdentityResourceId
         }
       ]
-      secrets: concat(
-        [
-          {
-            name: 'database-url'
-            value: databaseUrl
-          }
-          {
-            name: 'oauth-token-signing-secret'
-            value: oauthTokenSigningSecret
-          }
-        ],
-        hasEntraClientSecret
-          ? [
-              {
-                name: 'entra-client-secret'
-                value: entraClientSecret
-              }
-            ]
-          : [],
-        hasAuthOidcStateEncryptionKey
-          ? [
-              {
-                name: 'auth-oidc-state-encryption-key'
-                value: authOidcStateEncryptionKey
-              }
-            ]
-          : []
-      )
+      secrets: concat([
+        {
+          name: 'database-url'
+          value: databaseUrl
+        }
+        {
+          name: 'oauth-token-signing-secret'
+          keyVaultUrl: '${keyVaultSecretBaseUrl}/oauth-token-signing-secret'
+          identity: registryIdentityResourceId
+        }
+        {
+          name: 'entra-client-secret'
+          keyVaultUrl: '${keyVaultSecretBaseUrl}/entra-client-secret'
+          identity: registryIdentityResourceId
+        }
+        {
+          name: 'auth-oidc-state-encryption-key'
+          keyVaultUrl: '${keyVaultSecretBaseUrl}/auth-oidc-state-encryption-key'
+          identity: registryIdentityResourceId
+        }
+      ])
     }
     template: {
       containers: [
         {
           name: 'compass-api'
           image: image
-          env: concat(
-            [
-              {
-                name: 'API_HOST'
-                value: '0.0.0.0'
-              }
-              {
-                name: 'API_PORT'
-                value: '3001'
-              }
-              {
-                name: 'DATABASE_URL'
-                secretRef: 'database-url'
-              }
-              {
-                name: 'DB_SSL_MODE'
-                value: 'require'
-              }
-              {
-                name: 'DB_SSL_REJECT_UNAUTHORIZED'
-                value: 'true'
-              }
-              {
-                name: 'LOG_LEVEL'
-                value: logLevel
-              }
-              {
-                name: 'WEB_BASE_URL'
-                value: webBaseUrl
-              }
-              {
-                name: 'ENTRA_LOGIN_ENABLED'
-                value: entraLoginEnabled
-              }
-              {
-                name: 'ENTRA_CLIENT_ID'
-                value: entraClientId
-              }
-              {
-                name: 'ENTRA_ALLOWED_TENANT_IDS'
-                value: entraAllowedTenantIds
-              }
-              {
-                name: 'AUTH_ISSUER'
-                value: authIssuer
-              }
-              {
-                name: 'AUTH_JWKS_URI'
-                value: authJwksUri
-              }
-              {
-                name: 'AUTH_AUDIENCE'
-                value: authAudience
-              }
-              {
-                name: 'AUTH_ALLOWED_CLIENT_IDS'
-                value: authAllowedClientIds
-              }
-              {
-                name: 'AUTH_ACTIVE_TENANT_IDS'
-                value: authActiveTenantIds
-              }
-              {
-                name: 'OAUTH_TOKEN_ISSUER'
-                value: oauthTokenIssuer
-              }
-              {
-                name: 'OAUTH_TOKEN_AUDIENCE'
-                value: oauthTokenAudience
-              }
-              {
-                name: 'OAUTH_TOKEN_SIGNING_SECRET'
-                secretRef: 'oauth-token-signing-secret'
-              }
-            ],
-            entraClientSecretEnv,
-            authOidcStateEncryptionKeyEnv
-          )
+          env: [
+            {
+              name: 'API_HOST'
+              value: '0.0.0.0'
+            }
+            {
+              name: 'API_PORT'
+              value: '3001'
+            }
+            {
+              name: 'DATABASE_URL'
+              secretRef: 'database-url'
+            }
+            {
+              name: 'DB_SSL_MODE'
+              value: 'require'
+            }
+            {
+              name: 'DB_SSL_REJECT_UNAUTHORIZED'
+              value: 'true'
+            }
+            {
+              name: 'LOG_LEVEL'
+              value: logLevel
+            }
+            {
+              name: 'WEB_BASE_URL'
+              value: webBaseUrl
+            }
+            {
+              name: 'AUTH_MODE'
+              value: authMode
+            }
+            {
+              name: 'ENTRA_CLIENT_ID'
+              value: entraClientId
+            }
+            {
+              name: 'ENTRA_ALLOWED_TENANT_IDS'
+              value: entraAllowedTenantIds
+            }
+            {
+              name: 'ENTRA_CLIENT_SECRET'
+              secretRef: 'entra-client-secret'
+            }
+            {
+              name: 'AUTH_OIDC_STATE_ENCRYPTION_KEY'
+              secretRef: 'auth-oidc-state-encryption-key'
+            }
+            {
+              name: 'AUTH_ISSUER'
+              value: authIssuer
+            }
+            {
+              name: 'AUTH_JWKS_URI'
+              value: authJwksUri
+            }
+            {
+              name: 'AUTH_AUDIENCE'
+              value: authAudience
+            }
+            {
+              name: 'AUTH_ALLOWED_CLIENT_IDS'
+              value: authAllowedClientIds
+            }
+            {
+              name: 'AUTH_ACTIVE_TENANT_IDS'
+              value: authActiveTenantIds
+            }
+            {
+              name: 'OAUTH_TOKEN_ISSUER'
+              value: oauthTokenIssuer
+            }
+            {
+              name: 'OAUTH_TOKEN_AUDIENCE'
+              value: oauthTokenAudience
+            }
+            {
+              name: 'OAUTH_TOKEN_SIGNING_SECRET'
+              secretRef: 'oauth-token-signing-secret'
+            }
+          ]
           resources: {
             cpu: json('0.25')
             memory: '0.5Gi'

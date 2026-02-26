@@ -32,6 +32,7 @@ async function main() {
   const deploymentPipelineConfigChanged = docsDrift.touchesBlockingPaths;
   const requiresInfraConvergence = scope.runtime && scope.infra;
   const requiresMigrations = scope.runtime && scope.migration;
+  const requiredFlowIds = [];
 
   const scopePath = path.join(".artifacts", "commit-stage", testedSha, "scope.json");
   const prNumber = await getPrNumberFromEvent();
@@ -51,7 +52,7 @@ async function main() {
     requiresInfraConvergence,
     requiresMigrations,
     docsDriftBlocking,
-    requiredFlowIds: policy.automatedAcceptanceTestGate.requiredFlowIds
+    requiredFlowIds
   };
 
   await writeJsonFile(scopePath, payload);
@@ -74,7 +75,7 @@ async function main() {
     requires_infra_convergence: String(requiresInfraConvergence),
     requires_migrations: String(requiresMigrations),
     changed_files_json: JSON.stringify(changedFiles),
-    required_flow_ids_json: JSON.stringify(policy.automatedAcceptanceTestGate.requiredFlowIds),
+    required_flow_ids_json: JSON.stringify(requiredFlowIds),
     docs_drift_blocking: String(docsDriftBlocking)
   });
 

@@ -22,9 +22,15 @@ const ADMIN_CONSENT_REQUEST_MARKER = "admin-consent";
 const EmailAddressSchema = z.string().email();
 const OIDC_ENCRYPTED_PAYLOAD_PREFIX = "enc:v1:";
 const OIDC_STATE_ENCRYPTION_KEY_BYTES = 32;
+const DEFAULT_MOCK_ENTRA_TID = "00000000-0000-0000-0000-000000000000";
+const DEFAULT_MOCK_ENTRA_OID = "11111111-1111-1111-1111-111111111111";
+const DEFAULT_MOCK_EMAIL = "developer@local.test";
+const DEFAULT_MOCK_DISPLAY_NAME = "Local Developer";
+
+export type AuthMode = "mock" | "entra";
 
 export interface EntraAuthConfig {
-  enabled: boolean;
+  authMode: AuthMode;
   clientId?: string;
   clientSecret?: string;
   oidcStateEncryptionKey?: string;
@@ -1261,8 +1267,21 @@ export class AuthService {
     this.oidcStateEncryptionKey = parseOidcStateEncryptionKey(input.config.oidcStateEncryptionKey);
   }
 
-  async startEntraLogin(input: { returnTo?: string; now: Date }): Promise<{ redirectUrl: string }> {
-    this.assertAuthEnabled();
+  async startEntraLogin(input: {
+    returnTo?: string;
+    userAgent: string | undefined;
+    ip: string;
+    now: Date;
+  }): Promise<{ redirectUrl: string; sessionToken?: string }> {
+    if (this.config.authMode === "mock") {
+      const mockResult = await this.startMockLogin(input);
+      return {
+        redirectUrl: mockResult.redirectTo,
+        sessionToken: mockResult.sessionToken
+      };
+    }
+
+    this.assertEntraMode();
 
     const state = randomToken(24);
     const nonce = randomToken(24);
@@ -1299,7 +1318,7 @@ export class AuthService {
     returnTo?: string;
     now: Date;
   }): Promise<{ redirectUrl: string }> {
-    this.assertAuthEnabled();
+    this.assertEntraMode();
 
     const state = randomToken(24);
     const nonce = randomToken(24);
@@ -1340,7 +1359,7 @@ export class AuthService {
     ip: string;
     now: Date;
   }): Promise<{ redirectTo: string; sessionToken?: string }> {
-    this.assertAuthEnabled();
+    this.assertEntraMode();
 
     const state = asStringOrNull(input.state);
     const tenantHint = asStringOrNull(input.tenant);
@@ -1829,6 +1848,65 @@ export class AuthService {
     );
   }
 
+  private async startMockLogin(input: {
+    returnTo?: string;
+    userAgent: string | undefined;
+    ip: string;
+    now: Date;
+  }): Promise<{ redirectTo: string; sessionToken: string }> {
+    const tid = asStringOrNull(process.env.MOCK_AUTH_TENANT_ID) ?? DEFAULT_MOCK_ENTRA_TID;
+    const oid = asStringOrNull(process.env.MOCK_AUTH_USER_OID) ?? DEFAULT_MOCK_ENTRA_OID;
+    const email = asStringOrNull(process.env.MOCK_AUTH_EMAIL) ?? DEFAULT_MOCK_EMAIL;
+    const displayName = asStringOrNull(process.env.MOCK_AUTH_NAME) ?? DEFAULT_MOCK_DISPLAY_NAME;
+
+    const user = await this.repository.findOrCreateUserForIdentity({
+      tid,
+      oid,
+      iss: `https://mock.local/${tid}/v2.0`,
+      email,
+      upn: email,
+      name: displayName
+    });
+
+    const sessionToken = randomToken(32);
+    const sessionTokenHash = hashValue(sessionToken);
+    const normalizedUserAgent = asStringOrNull(input.userAgent);
+    const userAgentHash = normalizedUserAgent ? hashValue(normalizedUserAgent) : null;
+    const ipHash = hashValue(input.ip);
+    const expiresAt = nowPlusSeconds(input.now, this.config.sessionTtlSeconds);
+
+    await this.repository.createSession({
+      userId: user.id,
+      sessionTokenHash,
+      userAgentHash,
+      ipHash,
+      now: input.now,
+      expiresAt
+    });
+
+    await this.repository.insertAuditEvent({
+      eventType: "auth.login.success",
+      actorUserId: user.id,
+      tenantId: null,
+      metadata: {
+        provider: "mock"
+      },
+      now: input.now
+    });
+
+    const memberships = await this.repository.listMemberships(user.id);
+    const returnTo = sanitizeReturnTo(input.returnTo);
+    const redirectTo =
+      returnTo && this.canVisitReturnTo(returnTo, memberships)
+        ? returnTo
+        : this.pickPostLoginRoute(memberships);
+
+    return {
+      redirectTo,
+      sessionToken
+    };
+  }
+
   private async requireSession(
     sessionToken: string | null,
     now: Date
@@ -1900,8 +1978,8 @@ export class AuthService {
     return decoded;
   }
 
-  private assertAuthEnabled(): void {
-    if (!this.config.enabled) {
+  private assertEntraMode(): void {
+    if (this.config.authMode !== "entra") {
       throw new ApiError(503, "ENTRA_LOGIN_DISABLED", "Microsoft Entra login is disabled");
     }
 
@@ -1928,7 +2006,12 @@ export class AuthService {
 }
 
 export function buildEntraAuthConfig(env: NodeJS.ProcessEnv): EntraAuthConfig {
-  const enabled = (env.ENTRA_LOGIN_ENABLED ?? "false").trim().toLowerCase() === "true";
+  const rawAuthMode = asStringOrNull(env.AUTH_MODE)?.toLowerCase();
+  if (rawAuthMode && rawAuthMode !== "mock" && rawAuthMode !== "entra") {
+    throw new Error(`AUTH_MODE must be 'mock' or 'entra' (received '${rawAuthMode}')`);
+  }
+
+  const authMode: AuthMode = rawAuthMode === "entra" ? "entra" : "mock";
   const webBaseUrl = asStringOrNull(env.WEB_BASE_URL) ?? "http://localhost:3000";
   const defaultRedirectUri = `${webBaseUrl.replace(/\/+$/u, "")}/v1/auth/entra/callback`;
 
@@ -1957,7 +2040,7 @@ export function buildEntraAuthConfig(env: NodeJS.ProcessEnv): EntraAuthConfig {
   };
 
   return {
-    enabled,
+    authMode,
     clientId: asStringOrNull(env.ENTRA_CLIENT_ID) ?? undefined,
     clientSecret: asStringOrNull(env.ENTRA_CLIENT_SECRET) ?? undefined,
     oidcStateEncryptionKey: asStringOrNull(env.AUTH_OIDC_STATE_ENCRYPTION_KEY) ?? undefined,
@@ -2009,48 +2092,28 @@ export function buildDefaultAuthService(
   }
 
   const config = buildEntraAuthConfig(env);
-
-  if (!config.clientId || !config.clientSecret) {
-    const repository = new AuthRepository(databaseUrl);
-    const disabledClient: OidcClient = {
-      buildAuthorizeUrl: () => "",
-      buildAdminConsentUrl: () => "",
-      exchangeCodeForIdToken: async () => {
-        throw new ApiError(
-          503,
-          "ENTRA_CONFIG_REQUIRED",
-          "Entra client configuration is incomplete"
-        );
-      },
-      verifyIdToken: async () => {
-        throw new ApiError(
-          503,
-          "ENTRA_CONFIG_REQUIRED",
-          "Entra client configuration is incomplete"
-        );
-      }
-    };
-
-    return {
-      service: new AuthService({
-        config,
-        repository,
-        oidcClient: disabledClient
-      }),
-      close: async () => {
-        await repository.close();
-      }
-    };
-  }
-
   const repository = new AuthRepository(databaseUrl);
-  const oidcClient = new EntraOidcClient({
-    authorityHost: config.authorityHost,
-    tenantSegment: config.tenantSegment,
-    clientId: config.clientId,
-    clientSecret: config.clientSecret,
-    scope: config.scope
-  });
+  const disabledClient: OidcClient = {
+    buildAuthorizeUrl: () => "",
+    buildAdminConsentUrl: () => "",
+    exchangeCodeForIdToken: async () => {
+      throw new ApiError(503, "ENTRA_CONFIG_REQUIRED", "Entra client configuration is incomplete");
+    },
+    verifyIdToken: async () => {
+      throw new ApiError(503, "ENTRA_CONFIG_REQUIRED", "Entra client configuration is incomplete");
+    }
+  };
+
+  const oidcClient =
+    config.authMode === "entra" && config.clientId && config.clientSecret
+      ? new EntraOidcClient({
+          authorityHost: config.authorityHost,
+          tenantSegment: config.tenantSegment,
+          clientId: config.clientId,
+          clientSecret: config.clientSecret,
+          scope: config.scope
+        })
+      : disabledClient;
 
   return {
     service: new AuthService({

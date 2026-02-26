@@ -10,33 +10,39 @@ const readRepoFile = (relativePath) =>
   readFileSync(path.join(repoRoot, relativePath), "utf8").replace(/\r\n/g, "\n");
 
 describe("Entra auth infra wiring", () => {
-  it("injects Entra auth config into the API container app", () => {
+  it("injects auth mode and Key Vault secret refs into the API container app", () => {
     const apiModule = readRepoFile("infra/azure/modules/containerapp-api.bicep");
 
-    expect(apiModule).toContain("param webBaseUrl string");
-    expect(apiModule).toContain("param entraLoginEnabled string = 'false'");
-    expect(apiModule).toContain("param entraClientId string = ''");
-    expect(apiModule).toContain("param entraAllowedTenantIds string = ''");
-    expect(apiModule).toContain("param entraClientSecret string = ''");
-    expect(apiModule).toContain("param authOidcStateEncryptionKey string = ''");
-
-    expect(apiModule).toContain("name: 'WEB_BASE_URL'");
-    expect(apiModule).toContain("name: 'ENTRA_LOGIN_ENABLED'");
+    expect(apiModule).toContain("param keyVaultUri string");
+    expect(apiModule).toContain("param authMode string = 'entra'");
+    expect(apiModule).toContain("name: 'AUTH_MODE'");
     expect(apiModule).toContain("name: 'ENTRA_CLIENT_ID'");
     expect(apiModule).toContain("name: 'ENTRA_ALLOWED_TENANT_IDS'");
-    expect(apiModule).toContain("name: 'ENTRA_CLIENT_SECRET'");
-    expect(apiModule).toContain("name: 'AUTH_OIDC_STATE_ENCRYPTION_KEY'");
+
+    expect(apiModule).toContain("name: 'entra-client-secret'");
+    expect(apiModule).toContain("name: 'auth-oidc-state-encryption-key'");
+    expect(apiModule).toContain("name: 'oauth-token-signing-secret'");
+    expect(apiModule).toContain("keyVaultUrl:");
+    expect(apiModule).not.toContain("name: 'ENTRA_LOGIN_ENABLED'");
   });
 
-  it("passes Entra auth params from main template into API module", () => {
+  it("passes Key Vault and auth mode params from main template into API module", () => {
     const mainTemplate = readRepoFile("infra/azure/main.bicep");
 
     expect(mainTemplate).toContain("module api './modules/containerapp-api.bicep'");
-    expect(mainTemplate).toContain("webBaseUrl: webBaseUrl");
-    expect(mainTemplate).toContain("entraLoginEnabled: entraLoginEnabled");
+    expect(mainTemplate).toContain("keyVaultUri: keyVaultUri");
+    expect(mainTemplate).toContain("authMode: authMode");
     expect(mainTemplate).toContain("entraClientId: entraClientId");
-    expect(mainTemplate).toContain("entraClientSecret: entraClientSecret");
-    expect(mainTemplate).toContain("authOidcStateEncryptionKey: authOidcStateEncryptionKey");
     expect(mainTemplate).toContain("entraAllowedTenantIds: entraAllowedTenantIds");
+  });
+
+  it("wires web session secret via Key Vault and removes auth fallback flags", () => {
+    const webModule = readRepoFile("infra/azure/modules/containerapp-web.bicep");
+
+    expect(webModule).toContain("param keyVaultUri string");
+    expect(webModule).toContain("name: 'web-session-secret'");
+    expect(webModule).toContain("keyVaultUrl:");
+    expect(webModule).not.toContain("name: 'ENTRA_LOGIN_ENABLED'");
+    expect(webModule).not.toContain("name: 'AUTH_DEV_FALLBACK_ENABLED'");
   });
 });

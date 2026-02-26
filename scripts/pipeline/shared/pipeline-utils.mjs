@@ -165,7 +165,6 @@ export function assertPipelinePolicyShape(policy) {
     "scopeRules",
     "commitStage",
     "highRiskMainlinePolicy",
-    "automatedAcceptanceTestGate",
     "deploymentStage",
     "desktopDeploymentPipeline",
     "docsDriftRules"
@@ -320,23 +319,24 @@ export function assertPipelinePolicyShape(policy) {
     }
   }
 
-  if (
-    !Array.isArray(policy.automatedAcceptanceTestGate?.runtimeRequiredChecks) ||
-    !Array.isArray(policy.automatedAcceptanceTestGate?.infraRequiredChecks) ||
-    !Array.isArray(policy.automatedAcceptanceTestGate?.identityRequiredChecks) ||
-    !Array.isArray(policy.automatedAcceptanceTestGate?.requiredFlowIds)
-  ) {
-    throw new Error(
-      "automatedAcceptanceTestGate.requiredFlowIds/runtimeRequiredChecks/infraRequiredChecks/identityRequiredChecks must be arrays"
-    );
-  }
-
   if (typeof policy.deploymentStage?.requireFreshHeadOnAuto !== "boolean") {
     throw new Error("deploymentStage.requireFreshHeadOnAuto must be a boolean");
   }
 
-  const cloudDeploymentPipelineSlo = policy.cloudDeploymentPipeline?.slo;
-  if (cloudDeploymentPipelineSlo !== undefined) {
+  const cloudDeploymentPipeline = policy.cloudDeploymentPipeline;
+  if (cloudDeploymentPipeline !== undefined) {
+    if (!cloudDeploymentPipeline || typeof cloudDeploymentPipeline !== "object") {
+      throw new Error("cloudDeploymentPipeline must be an object when provided");
+    }
+
+    if (
+      !Array.isArray(cloudDeploymentPipeline.requiredChecks) ||
+      cloudDeploymentPipeline.requiredChecks.length === 0
+    ) {
+      throw new Error("cloudDeploymentPipeline.requiredChecks must be a non-empty array");
+    }
+
+    const cloudDeploymentPipelineSlo = cloudDeploymentPipeline.slo;
     if (!cloudDeploymentPipelineSlo || typeof cloudDeploymentPipelineSlo !== "object") {
       throw new Error("cloudDeploymentPipeline.slo must be an object when provided");
     }
@@ -345,16 +345,16 @@ export function assertPipelinePolicyShape(policy) {
       throw new Error("cloudDeploymentPipeline.slo.mode must be one of: observe, enforce");
     }
 
-    const acceptanceTarget = cloudDeploymentPipelineSlo.automatedAcceptanceTestGateTargetSeconds;
-    const productionTarget = cloudDeploymentPipelineSlo.deploymentStageTargetSeconds;
-    if (!Number.isInteger(acceptanceTarget) || acceptanceTarget <= 0) {
+    const deployTarget = cloudDeploymentPipelineSlo.deployCloudTargetSeconds;
+    const smokeTarget = cloudDeploymentPipelineSlo.productionSmokeTargetSeconds;
+    if (!Number.isInteger(deployTarget) || deployTarget <= 0) {
       throw new Error(
-        "cloudDeploymentPipeline.slo.automatedAcceptanceTestGateTargetSeconds must be a positive integer"
+        "cloudDeploymentPipeline.slo.deployCloudTargetSeconds must be a positive integer"
       );
     }
-    if (!Number.isInteger(productionTarget) || productionTarget <= 0) {
+    if (!Number.isInteger(smokeTarget) || smokeTarget <= 0) {
       throw new Error(
-        "cloudDeploymentPipeline.slo.deploymentStageTargetSeconds must be a positive integer"
+        "cloudDeploymentPipeline.slo.productionSmokeTargetSeconds must be a positive integer"
       );
     }
   }

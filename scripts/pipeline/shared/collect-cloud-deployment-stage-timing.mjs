@@ -156,10 +156,10 @@ async function main() {
   const sloMode = String(cloudDeploymentPipelineSlo.mode || "observe")
     .trim()
     .toLowerCase();
-  const acceptanceTarget = parseTarget(
-    cloudDeploymentPipelineSlo.automatedAcceptanceTestGateTargetSeconds
+  const deployCloudTarget = parseTarget(cloudDeploymentPipelineSlo.deployCloudTargetSeconds);
+  const productionSmokeTarget = parseTarget(
+    cloudDeploymentPipelineSlo.productionSmokeTargetSeconds
   );
-  const productionTarget = parseTarget(cloudDeploymentPipelineSlo.deploymentStageTargetSeconds);
 
   const { run, jobs } = await fetchRunAndJobs({ token, repository, runId });
 
@@ -174,26 +174,14 @@ async function main() {
     "build-release-candidate-api-image",
     "build-release-candidate-web-image",
     "build-release-candidate-worker-image",
-    "capture-current-runtime-refs",
-    "freeze-release-candidate-images"
+    "build-release-candidate-codex-image"
   ]);
   const releaseCandidateEnd = latestEndEpoch(jobs, ["publish-release-candidate"]);
 
-  const acceptanceStart = earliestStartEpoch(jobs, [
-    "load-release-candidate",
-    "runtime-api-system-acceptance",
-    "runtime-browser-acceptance",
-    "runtime-migration-image-acceptance",
-    "infra-readonly-acceptance",
-    "identity-readonly-acceptance"
-  ]);
-  const acceptanceEnd = latestEndEpoch(jobs, ["automated-acceptance-test-gate"]);
-
-  const productionStart = earliestStartEpoch(jobs, [
-    "deploy-release-candidate",
-    "production-blackbox-verify"
-  ]);
-  const productionEnd = latestEndEpoch(jobs, ["deployment-stage"]);
+  const deployCloudStart = earliestStartEpoch(jobs, ["deploy-cloud"]);
+  const deployCloudEnd = latestEndEpoch(jobs, ["deploy-cloud"]);
+  const productionSmokeStart = earliestStartEpoch(jobs, ["production-smoke"]);
+  const productionSmokeEnd = latestEndEpoch(jobs, ["production-smoke"]);
 
   const runCreatedAt = parseIsoToEpochSeconds(run?.created_at);
   const runUpdatedAt = parseIsoToEpochSeconds(run?.updated_at);
@@ -206,8 +194,8 @@ async function main() {
 
   const commitDuration = durationFromRange(commitStart, commitEnd);
   const releaseCandidateDuration = durationFromRange(releaseCandidateStart, releaseCandidateEnd);
-  const acceptanceDuration = durationFromRange(acceptanceStart, acceptanceEnd);
-  const productionDuration = durationFromRange(productionStart, productionEnd);
+  const deployCloudDuration = durationFromRange(deployCloudStart, deployCloudEnd);
+  const productionSmokeDuration = durationFromRange(productionSmokeStart, productionSmokeEnd);
 
   const payload = {
     schemaVersion: "1",
@@ -221,15 +209,15 @@ async function main() {
       overallExecutionSeconds,
       commitStageSeconds: commitDuration,
       releaseCandidateBuildSeconds: releaseCandidateDuration,
-      automatedAcceptanceTestGateSeconds: acceptanceDuration,
-      deploymentStageSeconds: productionDuration
+      deployCloudSeconds: deployCloudDuration,
+      productionSmokeSeconds: productionSmokeDuration
     },
     slo: {
       mode: sloMode,
-      automatedAcceptanceTestGateTargetSeconds: acceptanceTarget,
-      deploymentStageTargetSeconds: productionTarget,
-      acceptancePass: stagePass(acceptanceDuration, acceptanceTarget),
-      productionPass: stagePass(productionDuration, productionTarget)
+      deployCloudTargetSeconds: deployCloudTarget,
+      productionSmokeTargetSeconds: productionSmokeTarget,
+      deployCloudPass: stagePass(deployCloudDuration, deployCloudTarget),
+      productionSmokePass: stagePass(productionSmokeDuration, productionSmokeTarget)
     },
     slowestJobsTop3: collectSlowestJobs(jobs, 3)
   };
@@ -239,10 +227,10 @@ async function main() {
 
   await appendGithubOutput({
     pipeline_timing_path: artifactPath,
-    cloud_deployment_pipeline_automated_acceptance_test_gate_seconds:
-      acceptanceDuration === null ? "" : String(acceptanceDuration),
-    cloud_deployment_pipeline_deployment_stage_seconds:
-      productionDuration === null ? "" : String(productionDuration)
+    cloud_deployment_pipeline_deploy_cloud_seconds:
+      deployCloudDuration === null ? "" : String(deployCloudDuration),
+    cloud_deployment_pipeline_production_smoke_seconds:
+      productionSmokeDuration === null ? "" : String(productionSmokeDuration)
   });
 
   await appendGithubStepSummary(
@@ -252,11 +240,11 @@ async function main() {
       `- overall execution: ${formatMetric(overallExecutionSeconds)}`,
       `- commit stage: ${formatMetric(commitDuration)}`,
       `- release candidate build: ${formatMetric(releaseCandidateDuration)}`,
-      `- automated acceptance test gate: ${formatMetric(acceptanceDuration)}`,
-      `- deployment stage: ${formatMetric(productionDuration)}`,
+      `- deploy cloud: ${formatMetric(deployCloudDuration)}`,
+      `- production smoke: ${formatMetric(productionSmokeDuration)}`,
       `- SLO mode: \`${sloMode}\``,
-      `- acceptance target: ${formatMetric(acceptanceTarget)}`,
-      `- production target: ${formatMetric(productionTarget)}`
+      `- deploy cloud target: ${formatMetric(deployCloudTarget)}`,
+      `- production smoke target: ${formatMetric(productionSmokeTarget)}`
     ].join("\n")
   );
 }

@@ -48,7 +48,16 @@ async function main() {
   const violations = [];
 
   for (const filePath of filesToScan) {
-    const content = await readFile(filePath, "utf8");
+    let content;
+    try {
+      content = await readFile(filePath, "utf8");
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+        continue;
+      }
+      throw error;
+    }
+
     if (content.includes(blockedEnvName) || content.includes(blockedBicepParameter)) {
       violations.push(filePath);
     }

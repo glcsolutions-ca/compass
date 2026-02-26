@@ -22,6 +22,18 @@ function isoTimestamp(nowFn) {
   return nowFn().toISOString();
 }
 
+function parseArmParameterOverrides(raw) {
+  const value = String(raw ?? "").trim();
+  if (!value) {
+    return [];
+  }
+
+  return value
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
 export function createArmDeploymentName({
   prefix = "main",
   runId = process.env.GITHUB_RUN_ID,
@@ -43,7 +55,8 @@ export function buildDeploymentCommandArgs({
   resourceGroup,
   deploymentName,
   templateFile,
-  parametersFile
+  parametersFile,
+  parameterOverrides = []
 }) {
   const normalizedCommand = String(command ?? "").trim();
   if (normalizedCommand !== "validate" && normalizedCommand !== "create") {
@@ -62,6 +75,7 @@ export function buildDeploymentCommandArgs({
     templateFile,
     "--parameters",
     `@${parametersFile}`,
+    ...(parameterOverrides.length > 0 ? ["--parameters", ...parameterOverrides] : []),
     ...(normalizedCommand === "create" ? ["--output", "json"] : [])
   ];
 }
@@ -105,6 +119,7 @@ export async function applyBicepTemplate({
   resourceGroup,
   templateFile,
   parametersFile,
+  parameterOverrides = [],
   artifactDir,
   deploymentName,
   maxAttempts = 2,
@@ -118,6 +133,9 @@ export async function applyBicepTemplate({
   const normalizedParametersFile = String(parametersFile ?? "").trim();
   const normalizedArtifactDir = String(artifactDir ?? "").trim();
   const normalizedDeploymentName = String(deploymentName ?? "").trim();
+  const normalizedParameterOverrides = Array.isArray(parameterOverrides)
+    ? parameterOverrides.map((value) => String(value).trim()).filter((value) => value.length > 0)
+    : [];
   const normalizedMaxAttempts = normalizeNumber(maxAttempts, 2);
   const normalizedRetryDelayMs = normalizeNumber(retryDelayMs, 20_000);
 
@@ -158,7 +176,8 @@ export async function applyBicepTemplate({
     resourceGroup: normalizedResourceGroup,
     deploymentName: normalizedDeploymentName,
     templateFile: normalizedTemplateFile,
-    parametersFile: normalizedParametersFile
+    parametersFile: normalizedParametersFile,
+    parameterOverrides: normalizedParameterOverrides
   });
   const validateResult = await runAz(validateArgs);
 
@@ -183,7 +202,8 @@ export async function applyBicepTemplate({
       resourceGroup: normalizedResourceGroup,
       deploymentName: normalizedDeploymentName,
       templateFile: normalizedTemplateFile,
-      parametersFile: normalizedParametersFile
+      parametersFile: normalizedParametersFile,
+      parameterOverrides: normalizedParameterOverrides
     });
     const createResult = await runAz(createArgs);
 
@@ -255,11 +275,13 @@ async function main() {
     createArmDeploymentName({ prefix: process.env.ARM_DEPLOYMENT_NAME_PREFIX?.trim() || "main" });
   const maxAttempts = normalizeNumber(process.env.ARM_MAX_ATTEMPTS, 2);
   const retryDelayMs = normalizeNumber(process.env.ARM_RETRY_DELAY_MS, 20_000);
+  const parameterOverrides = parseArmParameterOverrides(process.env.ARM_PARAMETERS_OVERRIDES);
 
   const result = await applyBicepTemplate({
     resourceGroup,
     templateFile,
     parametersFile,
+    parameterOverrides,
     artifactDir,
     deploymentName,
     maxAttempts,

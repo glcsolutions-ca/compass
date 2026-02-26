@@ -22,9 +22,7 @@ const TEST_CONFIG: CodexAppConfig = {
   entraClientId: undefined,
   entraClientSecret: undefined,
   entraRedirectUri: undefined,
-  entraAllowedTenantIds: [],
-  entraLoginEnabled: false,
-  authDevFallbackEnabled: false
+  entraAllowedTenantIds: []
 };
 
 const TEST_LOGGER = {

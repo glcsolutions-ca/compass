@@ -3,112 +3,85 @@
 ## Scope
 
 - Entry point: `infra/azure/main.bicep`
-- Environment template: `infra/azure/environments/prod.bicepparam`
+- Single environment parameters: `infra/azure/environments/cloud.bicepparam`
 - Modules: `infra/azure/modules/*.bicep`
-- Pipeline usage:
-  - acceptance validate: `.github/workflows/cloud-deployment-pipeline.yml` (`infra-readonly-acceptance`)
-  - production apply: `.github/workflows/cloud-deployment-pipeline.yml` and `.github/workflows/cloud-deployment-pipeline-replay.yml` (`deploy-infra`)
+- Deploy usage:
+  - push pipeline: `.github/workflows/cloud-deployment-pipeline.yml`
+  - replay pipeline: `.github/workflows/cloud-deployment-pipeline-replay.yml`
+
+## Target Model
+
+1. One cloud environment.
+2. One shared Key Vault.
+3. Runtime secrets sourced from Key Vault references in Container Apps.
+4. Non-secrets sourced from one repo-tracked Bicep params file.
 
 ## What This Deploys
 
-1. VNet + ACA/Postgres delegated subnets + private DNS zone/link.
-2. Log Analytics + ACA managed environment.
+1. VNet + delegated ACA/Postgres subnets + private DNS zone/link.
+2. Log Analytics workspace + ACA managed environment.
 3. ACR.
 4. PostgreSQL Flexible Server + database.
-5. ACR pull managed identity + `AcrPull` assignment.
-6. Worker runtime managed identity + queue-level Service Bus Data Receiver role assignment.
-7. Service Bus namespaces (production + acceptance) and queue baseline (`compass-events`).
-8. Container Apps: API, Web, Worker, Codex.
-9. Manual migration ACA Job.
+5. Managed identities:
+   - ACR pull identity (also used for Key Vault secret references at runtime)
+   - Worker runtime identity (queue receiver role assignment)
+6. Service Bus namespace + queue baseline (`compass-events`).
+7. Container Apps: API, Web, Worker, Codex.
+8. Migration Container App job.
 
-## Runtime Parameter Contract
+## Secret Contract (Key Vault)
 
-Runtime parameters are rendered to `.artifacts/infra/<sha>/runtime.parameters.json` by `scripts/pipeline/shared/render-infra-parameters.mjs`.
+- `postgres-admin-password`
+- `web-session-secret`
+- `entra-client-secret`
+- `auth-oidc-state-encryption-key`
+- `oauth-token-signing-secret`
 
-### Required Variables
+## Bootstrap Contract
 
-- `AZURE_TENANT_ID`
-- `AZURE_SUBSCRIPTION_ID`
-- `AZURE_RESOURCE_GROUP`
-- `AZURE_LOCATION`
-- `AZURE_VNET_NAME`
-- `AZURE_ACA_SUBNET_NAME`
-- `AZURE_POSTGRES_SUBNET_NAME`
-- `AZURE_PRIVATE_DNS_ZONE_NAME`
-- `AZURE_LOG_ANALYTICS_WORKSPACE_NAME`
-- `ACA_ENVIRONMENT_NAME`
-- `ACA_API_APP_NAME`
-- `ACA_WEB_APP_NAME`
-- `ACA_WORKER_APP_NAME`
-- `WORKER_RUNTIME_IDENTITY_NAME`
-- `ACA_CODEX_APP_NAME`
-- `ACA_MIGRATE_JOB_NAME`
-- `ACR_NAME`
-- `ACR_PULL_IDENTITY_NAME`
-- `POSTGRES_SERVER_NAME`
-- `POSTGRES_DATABASE_NAME`
-- `POSTGRES_ADMIN_USERNAME`
-- `ENTRA_LOGIN_ENABLED` (`true` or `false`)
-- `AUTH_DEV_FALLBACK_ENABLED` (`false` in cloud environments)
-- `ENTRA_CLIENT_ID` (required when `ENTRA_LOGIN_ENABLED=true`)
-- `ENTRA_ALLOWED_TENANT_IDS` (optional tenant allowlist)
-- `API_IDENTIFIER_URI`
-- `AUTH_AUDIENCE`
-- `AUTH_ALLOWED_CLIENT_IDS`
-- `AUTH_ACTIVE_TENANT_IDS`
-- `AUTH_BOOTSTRAP_DELEGATED_USER_OID`
-- `AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL`
-- `API_SMOKE_ALLOWED_TENANT_ID`
-- `OAUTH_TOKEN_ISSUER`
-- `OAUTH_TOKEN_AUDIENCE`
-- `SERVICE_BUS_PROD_NAMESPACE_NAME`
-- `SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME`
-- `SERVICE_BUS_QUEUE_NAME`
-- `WORKER_RUN_MODE`
-- `ACA_API_CUSTOM_DOMAIN` (optional)
-- `ACA_WEB_CUSTOM_DOMAIN` (optional)
-- `ACA_CODEX_CUSTOM_DOMAIN` (optional)
+The cloud pipeline assumes these prerequisites exist before first push-to-main deploy:
 
-### Required Secrets
+1. Resource group exists.
+2. ACR exists (build jobs push release-candidate images before infra apply).
+3. Key Vault exists and is seeded with required secrets.
+4. Deploy OIDC principal can:
+   - mutate the resource group (`Contributor`, `User Access Administrator`)
+   - read Key Vault secrets (`Key Vault Secrets User`)
+5. Key Vault has `enabledForTemplateDeployment=true` so ARM/Bicep can resolve `az.getSecret(...)`.
 
-- `AZURE_DEPLOY_CLIENT_ID`
-- `POSTGRES_ADMIN_PASSWORD`
-- `OAUTH_TOKEN_SIGNING_SECRET`
-- `API_SMOKE_ALLOWED_CLIENT_ID`
-- `WEB_SESSION_SECRET`
-- `ENTRA_CLIENT_SECRET` (required when `ENTRA_LOGIN_ENABLED=true`)
-- `AUTH_OIDC_STATE_ENCRYPTION_KEY` (required when `ENTRA_LOGIN_ENABLED=true`)
+Bootstrap command:
 
-### Derived Values (not operator inputs)
+```bash
+AZURE_SUBSCRIPTION_ID="<sub-id>" \
+AZURE_RESOURCE_GROUP="<rg-name>" \
+AZURE_GITHUB_CLIENT_ID="<deploy-app-client-id>" \
+node scripts/infra/bootstrap-cloud-environment.mjs
+```
 
-- `AUTH_ISSUER` is derived from `AZURE_TENANT_ID`.
-- `AUTH_JWKS_URI` is derived from `AZURE_TENANT_ID`.
-- `ACR_LOGIN_SERVER` is derived from `ACR_NAME`.
-- `WEB_BASE_URL` is derived from `ACA_WEB_CUSTOM_DOMAIN` (or ACA default FQDN when unset).
-- Postgres SKU/version/storage and ACR SKU use IaC defaults in `main.bicep`.
+The bootstrap script uses `infra/azure/environments/cloud.bicepparam` as the source of truth for:
 
-## Custom Domain Model
-
-There is one infra path, no mode flags.
-
-1. Default: leave `ACA_*_CUSTOM_DOMAIN` empty, deploy uses ACA default FQDN.
-2. Optional cut-in: set `ACA_API_CUSTOM_DOMAIN`, `ACA_WEB_CUSTOM_DOMAIN`, optional `ACA_CODEX_CUSTOM_DOMAIN`, then run normal pipeline convergence.
+- `location`
+- `acrName`
+- `acrSku`
+- `keyVaultName`
 
 ## Apply Behavior
 
-1. Validate config contract.
-2. Render runtime parameters.
-3. Run `az deployment group validate`.
-4. Run `az deployment group create`.
-5. Verify Dynamic Sessions convergence (`verify-dynamic-sessions-convergence.mjs`) on mutation paths.
-6. Capture artifacts under `.artifacts/infra/<sha>/`.
+`scripts/pipeline/cloud/deployment-stage/apply-infra.mjs` performs:
 
-`apply-infra.mjs` retries once for known transient ARM/ACA failures and fails closed otherwise.
+1. `az deployment group validate`
+2. `az deployment group create` (retry once on known transient failures)
+3. Artifact capture in `.artifacts/infra/<sha>/`
 
-## References
+Pipeline deploy jobs pass release-candidate digest refs as parameter overrides for:
 
-- `scripts/pipeline/shared/render-infra-parameters.mjs`
-- `scripts/pipeline/shared/validate-infra-acceptance-config.mjs`
-- `scripts/pipeline/cloud/deployment-stage/apply-infra.mjs`
-- `scripts/pipeline/cloud/deployment-stage/verify-dynamic-sessions-convergence.mjs`
-- `docs/runbooks/cloud-deployment-pipeline-setup.md`
+- `apiImage`
+- `webImage`
+- `workerImage`
+- `codexImage`
+
+## Notes
+
+- Key Vault is standup-managed and intentionally not created by Bicep in this repository.
+- Runtime secrets do not pass through GitHub workflow env secret values.
+- Local development defaults are handled separately (`scripts/dev/ensure-local-env.mjs`).

@@ -11,8 +11,6 @@ describe("loadCodexAppConfig", () => {
     expect(config.clientName).toBe("compass_codex_gateway");
     expect(config.startOnBoot).toBe(true);
     expect(config.entraAllowedTenantIds).toEqual([]);
-    expect(config.entraLoginEnabled).toBe(false);
-    expect(config.authDevFallbackEnabled).toBe(false);
   });
 
   it("parses env overrides", () => {
@@ -26,9 +24,7 @@ describe("loadCodexAppConfig", () => {
       ENTRA_CLIENT_ID: "client-id",
       ENTRA_CLIENT_SECRET: "client-secret",
       ENTRA_REDIRECT_URI: "https://example.com/callback",
-      ENTRA_ALLOWED_TENANT_IDS: "tenant-a,tenant-b",
-      ENTRA_LOGIN_ENABLED: "true",
-      AUTH_DEV_FALLBACK_ENABLED: "true"
+      ENTRA_ALLOWED_TENANT_IDS: "tenant-a,tenant-b"
     });
 
     expect(config.port).toBe(3456);
@@ -41,8 +37,6 @@ describe("loadCodexAppConfig", () => {
     expect(config.entraClientSecret).toBe("client-secret");
     expect(config.entraRedirectUri).toBe("https://example.com/callback");
     expect(config.entraAllowedTenantIds).toEqual(["tenant-a", "tenant-b"]);
-    expect(config.entraLoginEnabled).toBe(true);
-    expect(config.authDevFallbackEnabled).toBe(true);
   });
 
   it("treats blank optional env values as unset", () => {

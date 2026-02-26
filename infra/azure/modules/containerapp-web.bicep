@@ -4,20 +4,22 @@ param managedEnvironmentId string
 param image string
 param registryServer string
 param registryIdentityResourceId string
+param keyVaultUri string
 param apiBaseUrl string
 param webBaseUrl string
-@secure()
-param webSessionSecret string
-param entraLoginEnabled string = 'false'
+@allowed([
+  'mock'
+  'entra'
+])
+param authMode string = 'entra'
 param entraClientId string = ''
-@secure()
-param entraClientSecret string = ''
 param entraAllowedTenantIds string = ''
-param authDevFallbackEnabled string = 'false'
 param customDomainName string = ''
 
-var hasEntraClientSecret = !empty(entraClientSecret)
-var entraClientSecretEnv = hasEntraClientSecret
+var normalizedKeyVaultUri = endsWith(keyVaultUri, '/') ? keyVaultUri : '${keyVaultUri}/'
+var keyVaultSecretBaseUrl = '${normalizedKeyVaultUri}secrets'
+var includeEntraClientSecret = toLower(authMode) == 'entra'
+var entraClientSecretRef = includeEntraClientSecret
   ? [
       {
         name: 'ENTRA_CLIENT_SECRET'
@@ -64,14 +66,16 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
         [
           {
             name: 'web-session-secret'
-            value: webSessionSecret
+            keyVaultUrl: '${keyVaultSecretBaseUrl}/web-session-secret'
+            identity: registryIdentityResourceId
           }
         ],
-        hasEntraClientSecret
+        includeEntraClientSecret
           ? [
               {
                 name: 'entra-client-secret'
-                value: entraClientSecret
+                keyVaultUrl: '${keyVaultSecretBaseUrl}/entra-client-secret'
+                identity: registryIdentityResourceId
               }
             ]
           : []
@@ -93,10 +97,6 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
                 secretRef: 'web-session-secret'
               }
               {
-                name: 'ENTRA_LOGIN_ENABLED'
-                value: entraLoginEnabled
-              }
-              {
                 name: 'ENTRA_CLIENT_ID'
                 value: entraClientId
               }
@@ -109,15 +109,11 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
                 value: entraAllowedTenantIds
               }
               {
-                name: 'AUTH_DEV_FALLBACK_ENABLED'
-                value: authDevFallbackEnabled
-              }
-              {
                 name: 'VITE_API_BASE_URL'
                 value: apiBaseUrl
               }
             ],
-            entraClientSecretEnv
+            entraClientSecretRef
           )
           resources: {
             cpu: json('0.25')

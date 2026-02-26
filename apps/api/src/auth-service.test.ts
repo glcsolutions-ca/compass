@@ -12,6 +12,7 @@ describe("buildEntraAuthConfig", () => {
       WEB_BASE_URL: "https://compass.glcsolutions.ca"
     });
 
+    expect(config.authMode).toBe("mock");
     expect(config.tenantSegment).toBe("organizations");
     expect(config.allowedTenantIds).toEqual([]);
     expect(config.redirectUri).toBe("https://compass.glcsolutions.ca/v1/auth/entra/callback");
@@ -38,6 +39,14 @@ describe("buildEntraAuthConfig", () => {
     });
 
     expect(config.oidcStateEncryptionKey).toBe("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+  });
+
+  it("parses AUTH_MODE and rejects unsupported values", () => {
+    expect(buildEntraAuthConfig({ AUTH_MODE: "entra" }).authMode).toBe("entra");
+    expect(buildEntraAuthConfig({ AUTH_MODE: "mock" }).authMode).toBe("mock");
+    expect(() => buildEntraAuthConfig({ AUTH_MODE: "legacy" })).toThrow(
+      "AUTH_MODE must be 'mock' or 'entra'"
+    );
   });
 });
 

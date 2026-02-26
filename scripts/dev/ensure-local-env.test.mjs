@@ -69,6 +69,7 @@ describe("ensure-local-env", () => {
 
       expect(apiEnv.API_HOST).toBe("0.0.0.0");
       expect(Number(apiEnv.API_PORT)).toBeGreaterThanOrEqual(41_000);
+      expect(apiEnv.AUTH_MODE).toBe("mock");
       expect(webEnv.VITE_API_BASE_URL).toBe(`http://localhost:${apiEnv.API_PORT}`);
       expect(webEnv.WEB_PORT).toBeDefined();
       expect(dbEnv.COMPOSE_PROJECT_NAME).toMatch(/^compass-[a-f0-9]{8}$/u);
@@ -115,7 +116,9 @@ describe("ensure-local-env", () => {
       const workerAfter = await readFile(path.join(repoDir, "apps/worker/.env"), "utf8");
 
       expect(apiEnv.API_PORT).toBe("49991");
+      expect(apiEnv.AUTH_MODE).toBe("mock");
       expect(apiEnvContents.match(/^API_PORT=/gmu)).toHaveLength(1);
+      expect(apiEnvContents.match(/^AUTH_MODE=/gmu)).toHaveLength(1);
       expect(webEnv.VITE_API_BASE_URL).toBe("http://localhost:49991");
       expect(Number(webEnv.WEB_PORT)).toBeGreaterThanOrEqual(41_000);
       expect(dbEnv.DATABASE_URL).toBe("postgres://custom:custom@localhost:50003/custom");

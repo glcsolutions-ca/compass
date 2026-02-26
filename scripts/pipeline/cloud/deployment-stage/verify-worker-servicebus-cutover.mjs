@@ -53,13 +53,15 @@ async function main() {
   const resourceGroup = requireEnv("AZURE_RESOURCE_GROUP");
   const subscriptionId = requireEnv("AZURE_SUBSCRIPTION_ID");
   const workerAppName = requireEnv("ACA_WORKER_APP_NAME");
-  const workerRuntimeIdentityName = requireEnv("WORKER_RUNTIME_IDENTITY_NAME");
   const serviceBusProdNamespaceName = requireEnv("SERVICE_BUS_PROD_NAMESPACE_NAME");
-  const serviceBusAcceptanceNamespaceName = requireEnv("SERVICE_BUS_ACCEPTANCE_NAMESPACE_NAME");
   const serviceBusQueueName = requireEnv("SERVICE_BUS_QUEUE_NAME");
+  const workerRuntimeIdentityName = process.env.WORKER_RUNTIME_IDENTITY_NAME?.trim() || "";
+  const workerRuntimeIdentityClientIdFromEnv =
+    process.env.WORKER_RUNTIME_IDENTITY_CLIENT_ID?.trim() || "";
+  const workerRuntimeIdentityPrincipalIdFromEnv =
+    process.env.WORKER_RUNTIME_IDENTITY_PRINCIPAL_ID?.trim() || "";
 
   await verifyNamespaceLocalAuthDisabled(resourceGroup, serviceBusProdNamespaceName);
-  await verifyNamespaceLocalAuthDisabled(resourceGroup, serviceBusAcceptanceNamespaceName);
 
   const workerApp = await azJson([
     "containerapp",
@@ -106,18 +108,31 @@ async function main() {
     `Worker SERVICE_BUS_QUEUE_NAME must be ${serviceBusQueueName}`
   );
 
-  const identity = await azJson([
-    "identity",
-    "show",
-    "--resource-group",
-    resourceGroup,
-    "--name",
-    workerRuntimeIdentityName,
-    "--query",
-    "{clientId:clientId,principalId:principalId}",
-    "--output",
-    "json"
-  ]);
+  let identity = {
+    clientId: workerRuntimeIdentityClientIdFromEnv,
+    principalId: workerRuntimeIdentityPrincipalIdFromEnv
+  };
+
+  if (!identity.clientId || !identity.principalId) {
+    if (!workerRuntimeIdentityName) {
+      throw new Error(
+        "Set WORKER_RUNTIME_IDENTITY_CLIENT_ID and WORKER_RUNTIME_IDENTITY_PRINCIPAL_ID, or provide WORKER_RUNTIME_IDENTITY_NAME."
+      );
+    }
+
+    identity = await azJson([
+      "identity",
+      "show",
+      "--resource-group",
+      resourceGroup,
+      "--name",
+      workerRuntimeIdentityName,
+      "--query",
+      "{clientId:clientId,principalId:principalId}",
+      "--output",
+      "json"
+    ]);
+  }
 
   const configuredClientId = getEnvValue(workerEnv, "AZURE_CLIENT_ID");
   assert(
@@ -157,7 +172,7 @@ async function main() {
 
   assert(
     Array.isArray(roleAssignments) && roleAssignments.length > 0,
-    `Missing Azure Service Bus Data Receiver role assignment for ${workerRuntimeIdentityName} on queue ${serviceBusQueueName}`
+    `Missing Azure Service Bus Data Receiver role assignment for worker runtime identity on queue ${serviceBusQueueName}`
   );
 
   const expectedRoleDefinitionId = `/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0`;

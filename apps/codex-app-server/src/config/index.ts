@@ -18,9 +18,7 @@ const CodexAppConfigSchema = z.object({
   entraClientId: z.string().min(1).optional(),
   entraClientSecret: z.string().min(1).optional(),
   entraRedirectUri: z.string().min(1).optional(),
-  entraAllowedTenantIds: z.array(z.string().min(1)).default([]),
-  entraLoginEnabled: BooleanStringSchema.default("false"),
-  authDevFallbackEnabled: BooleanStringSchema.default("false")
+  entraAllowedTenantIds: z.array(z.string().min(1)).default([])
 });
 
 export type CodexAppConfig = z.infer<typeof CodexAppConfigSchema>;
@@ -52,9 +50,7 @@ export function loadCodexAppConfig(env: NodeJS.ProcessEnv = process.env): CodexA
     entraClientId: normalizeOptionalString(env.ENTRA_CLIENT_ID),
     entraClientSecret: normalizeOptionalString(env.ENTRA_CLIENT_SECRET),
     entraRedirectUri: normalizeOptionalString(env.ENTRA_REDIRECT_URI),
-    entraAllowedTenantIds,
-    entraLoginEnabled: env.ENTRA_LOGIN_ENABLED,
-    authDevFallbackEnabled: env.AUTH_DEV_FALLBACK_ENABLED
+    entraAllowedTenantIds
   });
 
   return {

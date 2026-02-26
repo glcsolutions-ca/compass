@@ -25,6 +25,8 @@
     "db:postgres:down": "node scripts/dev/ensure-local-env.mjs && docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml down",
     "db:postgres:reset": "node scripts/dev/ensure-local-env.mjs && docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml down --volumes && pnpm db:postgres:up",
     "db:postgres:logs": "node scripts/dev/ensure-local-env.mjs && docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml logs -f postgres",
+    "infra:cloud:bootstrap": "node scripts/infra/bootstrap-cloud-environment.mjs",
+    "infra:keyvault:seed": "node scripts/infra/seed-keyvault-secrets.mjs",
     "deploy:migrate:start": "node scripts/pipeline/cloud/deployment-stage/start-migration-job.mjs",
     "deploy:migrate:wait": "node scripts/pipeline/cloud/deployment-stage/wait-migration-job.mjs",
     "deploy:custom-domain:dns": "node scripts/pipeline/cloud/deployment-stage/custom-domain-dns.mjs",
@@ -47,7 +49,6 @@
     "test:acceptance:browser": "playwright test tests/e2e/smoke.spec.ts --config tests/e2e/playwright.config.ts --reporter=line --workers=1",
     "test:acceptance:system": "tsx tests/system/smoke.ts",
     "test:acceptance:codex": "tsx tests/system/codex-smoke.ts",
-    "test:acceptance:auth-entra-canary": "node scripts/pipeline/cloud/automated-acceptance-test-gate/run-auth-entra-canary.mjs",
     "typecheck": "turbo run typecheck",
     "typecheck:refs": "tsc -b --pretty false",
     "contract:generate": "pnpm generate",
@@ -71,7 +72,7 @@
     "desktop:dev": "pnpm --filter @compass/desktop dev:run",
     "desktop:make:mac": "pnpm --filter @compass/desktop make:mac",
     "desktop:make:win": "pnpm --filter @compass/desktop make:win",
-    "test:pipeline-contract": "vitest run db/scripts/migration-policy-lib.test.mjs db/scripts/constants.test.mjs db/scripts/initial-schema-migration.test.mjs scripts/dev/ensure-local-env.test.mjs scripts/dev/test-full-preflight.test.mjs scripts/pipeline/commit/check-format.test.mjs scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/decide-integration-gate-lib.test.mjs scripts/pipeline/commit/auto-recover-main.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/check-high-risk-mainline-policy.test.mjs scripts/pipeline/commit/check-auth-openapi-metadata.test.mjs scripts/pipeline/commit/runtime-coverage-lib.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/decide-automated-acceptance-test-gate-lib.test.mjs scripts/pipeline/cloud/automated-acceptance-test-gate/acceptance-blackbox-contract.test.mjs scripts/pipeline/cloud/deployment-stage/apply-infra.test.mjs scripts/pipeline/cloud/deployment-stage/entra-config-wiring.test.mjs scripts/pipeline/cloud/deployment-stage/verify-api-smoke.test.mjs --silent=passed-only --reporter=dot"
+    "test:pipeline-contract": "vitest run db/scripts/migration-policy-lib.test.mjs db/scripts/constants.test.mjs db/scripts/initial-schema-migration.test.mjs scripts/dev/ensure-local-env.test.mjs scripts/dev/test-full-preflight.test.mjs scripts/pipeline/commit/check-format.test.mjs scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/decide-integration-gate-lib.test.mjs scripts/pipeline/commit/auto-recover-main.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/check-high-risk-mainline-policy.test.mjs scripts/pipeline/commit/check-auth-openapi-metadata.test.mjs scripts/pipeline/commit/runtime-coverage-lib.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/cloud/deployment-stage/apply-infra.test.mjs scripts/pipeline/cloud/deployment-stage/entra-config-wiring.test.mjs scripts/pipeline/cloud/deployment-stage/verify-api-smoke.test.mjs --silent=passed-only --reporter=dot"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

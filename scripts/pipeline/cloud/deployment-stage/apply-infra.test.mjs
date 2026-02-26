@@ -69,6 +69,36 @@ describe("buildDeploymentCommandArgs", () => {
       "json"
     ]);
   });
+
+  it("appends optional parameter overrides after parameter file", () => {
+    const args = buildDeploymentCommandArgs({
+      command: "create",
+      resourceGroup: "rg-compass-prod",
+      deploymentName: "main-22321678387-1",
+      templateFile: "infra/azure/main.bicep",
+      parametersFile: "infra/azure/environments/cloud.bicepparam",
+      parameterOverrides: ["apiImage=acr.io/api@sha256:abc", "authMode=entra"]
+    });
+
+    expect(args).toEqual([
+      "deployment",
+      "group",
+      "create",
+      "--resource-group",
+      "rg-compass-prod",
+      "--name",
+      "main-22321678387-1",
+      "--template-file",
+      "infra/azure/main.bicep",
+      "--parameters",
+      "@infra/azure/environments/cloud.bicepparam",
+      "--parameters",
+      "apiImage=acr.io/api@sha256:abc",
+      "authMode=entra",
+      "--output",
+      "json"
+    ]);
+  });
 });
 
 describe("applyBicepTemplate", () => {

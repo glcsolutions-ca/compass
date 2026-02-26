@@ -2,84 +2,62 @@
 
 ## Delivery Model
 
-1. Pushes to `main` run `commit-stage.yml` for fast commit-test and policy checks.
-2. Pushes to `main` run `integration-gate.yml` for integration confidence checks.
-3. A push to `main` runs cloud deployment pipeline in `cloud-deployment-pipeline.yml`.
-4. Desktop delivery runs independently in `desktop-deployment-pipeline.yml`.
-5. Replay is separate and manual in `cloud-deployment-pipeline-replay.yml`.
-6. Required gate contexts:
+1. `commit-stage.yml` runs on push to `main` (and optional PR preview).
+2. `integration-gate.yml` runs on push to `main` (and optional PR preview).
+3. `cloud-deployment-pipeline.yml` runs on push to `main`.
+4. `cloud-deployment-pipeline-replay.yml` is manual (`workflow_dispatch`) and redeploys by release-candidate SHA.
+5. `desktop-deployment-pipeline.yml` is independent of cloud runtime delivery.
 
-- Mainline gate: `commit-stage`
-- Integration gate: `integration-gate`
+## Cloud Runtime Path
 
-## Workflow Index
+`cloud-deployment-pipeline.yml`:
 
-- `commit-stage.yml`
-  - trigger: `push` to `main`, optional `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`)
-  - required check: `commit-stage`
-  - key jobs: `determine-scope`, scope-aware `commit-test-suite`, scope-aware `desktop-commit-test-suite`, optional static checks, final `commit-stage`
-  - behavior: push-to-main is authoritative; PR runs provide optional preview feedback
-  - key artifact: `.artifacts/commit-stage/<sha>/timing.json`
+1. Verify commit-stage evidence.
+2. Verify integration-gate evidence.
+3. Build API/Web/Worker/Codex images once.
+4. Publish release-candidate digest manifest.
+5. Deploy cloud infra/runtime with those digests.
+6. Run production smoke checks.
+7. Publish release decision.
 
-- `integration-gate.yml`
-  - trigger: `push` to `main`, optional `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`)
-  - required check: `integration-gate`
-  - key jobs: `determine-scope` (always), push-scoped checks `build-compile`, `migration-safety`, `runtime-contract-smoke`, `minimal-integration-smoke`, optional non-blocking `runtime-coverage-report` (`pnpm ci:runtime-coverage`), final `integration-gate`
-  - key artifacts:
-    - `.artifacts/integration-gate/<sha>/result.json`
-    - `.artifacts/integration-gate/<sha>/timing.json`
-    - `.artifacts/runtime-coverage/<sha>/result.json`
+Key artifacts:
 
-- `main-red-recovery.yml`
-  - trigger: `workflow_run` completion of failed `Integration Gate` push runs
-  - scope: push events on `main`
-  - behavior: rerun failed jobs once on hard deterministic failure, then auto-revert head commit if failure repeats
-  - note: successful `Integration Gate` runs still emit a `workflow_run` event, so this workflow can appear as `skipped`; this is expected
-  - key artifact: `.artifacts/main-recovery/<sha>/result.json`
+- `.artifacts/release-candidate/<sha>/manifest.json`
+- `.artifacts/infra/<sha>/deployment.json`
+- `.artifacts/deploy/<sha>/api-smoke.json`
+- `.artifacts/release/<sha>/decision.json`
+- `.artifacts/pipeline/<sha>/timing.json`
 
-- `cloud-deployment-pipeline.yml`
-  - trigger: `push` to `main`
-  - key flow (Farley language):
-    - Integration Confidence: `verify-commit-stage-evidence`, `verify-integration-gate-evidence`, `determine-scope`
-    - Build Once: `build-release-candidate-api-image`, `build-release-candidate-web-image`, `build-release-candidate-codex-image`, `capture-current-runtime-refs`, `publish-release-candidate`
-    - Promote, Don't Rebuild: `load-release-candidate`
-    - Automated Acceptance Test Gate: runtime + infra + identity acceptance jobs, then `automated-acceptance-test-gate`
-    - Continuous Delivery: `deploy-release-candidate` (when acceptance is YES and deploy is required)
-    - Production Verification: `production-blackbox-verify`, then `deployment-stage`
-    - Release on Demand evidence: `release-decision`
-  - key artifacts:
-    - `.artifacts/release-candidate/<sha>/manifest.json`
-    - `.artifacts/release/<sha>/decision.json`
-    - `.artifacts/pipeline/<sha>/timing.json`
+## Replay Path
 
-- `cloud-deployment-pipeline-replay.yml`
-  - trigger: `workflow_dispatch`
-  - required input: `release_candidate_sha`
-  - purpose: rerun automated-acceptance-test-gate -> deployment-stage verification for the same release candidate (no rebuild)
+`cloud-deployment-pipeline-replay.yml`:
 
-- `dynamic-sessions-acceptance-rehearsal.yml`
-  - trigger: `workflow_dispatch`
-  - required input: `release_candidate_sha`
-  - purpose: acceptance infra apply + Dynamic Sessions convergence verification for an existing release candidate (no rebuild)
+1. Resolve source run for the provided SHA.
+2. Load prior release-candidate manifest artifact.
+3. Redeploy using the same digest refs (no rebuild).
+4. Run smoke + release decision evidence again.
 
-- `desktop-deployment-pipeline.yml`
-  - trigger: `push` to `main`, `workflow_dispatch`
-  - purpose: signed desktop installer delivery
+## Environment Contract (Cloud)
 
-- Auth verification for cloud release happens inside `production-blackbox-verify` in:
-  - `cloud-deployment-pipeline.yml`
-  - `cloud-deployment-pipeline-replay.yml`
-  - scope: app-only allowed/denied/invalid API smoke checks against target SHA
+- One runtime environment: `production`.
+- Runtime secrets come from Key Vault only.
+- Required production vars:
+  - `AZURE_TENANT_ID`
+  - `AZURE_SUBSCRIPTION_ID`
+  - `AZURE_RESOURCE_GROUP`
+  - `AZURE_GITHUB_CLIENT_ID`
+  - `ACR_NAME`
+  - `KEY_VAULT_NAME`
+- Optional identity convergence is disabled by default and only runs when:
+  - `IDENTITY_CONVERGE_ENABLED=true`
+  - required identity backend vars are present.
 
-## Environment Separation
+## Removed Legacy Flow
 
-- `acceptance`: non-mutating automated acceptance test gate checks.
-- `production`: cloud deployment-stage mutation and deployment-stage verification.
-- `desktop-release`: desktop signing and publishing.
+The former cloud acceptance topology and acceptance rehearsal workflow are removed from cloud runtime delivery. Release evidence now comes from one push-to-main cloud deploy path plus one manual replay path.
 
 ## References
 
 - Policy contract: `.github/policy/pipeline-policy.json`
-- Branch protection baseline: `docs/branch-protection.md`
-- Commit-stage policy: `docs/commit-stage-policy.md`
-- Cloud deployment pipeline runbook: `docs/runbooks/cloud-deployment-pipeline-setup.md`
+- Cloud setup runbook: `docs/runbooks/cloud-deployment-pipeline-setup.md`
+- Infra contract: `infra/azure/README.md`

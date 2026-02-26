@@ -85,7 +85,7 @@ class FakeOidcClient implements OidcClient {
 
 function buildConfig(): EntraAuthConfig {
   return {
-    enabled: true,
+    authMode: "entra",
     clientId: "compass-client-id",
     clientSecret: "compass-client-secret",
     oidcStateEncryptionKey: Buffer.from("12345678901234567890123456789012", "utf8").toString(

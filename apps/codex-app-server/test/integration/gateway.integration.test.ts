@@ -31,9 +31,7 @@ function createConfig(startOnBoot = true): CodexAppConfig {
     entraClientId: undefined,
     entraClientSecret: undefined,
     entraRedirectUri: undefined,
-    entraAllowedTenantIds: [],
-    entraLoginEnabled: false,
-    authDevFallbackEnabled: false
+    entraAllowedTenantIds: []
   };
 }
 

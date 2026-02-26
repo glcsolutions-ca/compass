@@ -80,24 +80,26 @@
       }
     ]
   },
-  "automatedAcceptanceTestGate": {
-    "requiredFlowIds": ["compass-smoke"],
-    "runtimeRequiredChecks": [
-      "runtime-api-system-acceptance",
-      "runtime-browser-acceptance",
-      "runtime-migration-image-acceptance"
-    ],
-    "infraRequiredChecks": ["infra-readonly-acceptance"],
-    "identityRequiredChecks": ["identity-readonly-acceptance"]
-  },
   "deploymentStage": {
     "requireFreshHeadOnAuto": true
   },
   "cloudDeploymentPipeline": {
+    "requiredChecks": [
+      "verify-commit-stage-evidence",
+      "verify-integration-gate-evidence",
+      "build-release-candidate-api-image",
+      "build-release-candidate-web-image",
+      "build-release-candidate-worker-image",
+      "build-release-candidate-codex-image",
+      "publish-release-candidate",
+      "deploy-cloud",
+      "production-smoke",
+      "release-decision"
+    ],
     "slo": {
       "mode": "observe",
-      "automatedAcceptanceTestGateTargetSeconds": 900,
-      "deploymentStageTargetSeconds": 1200
+      "deployCloudTargetSeconds": 1200,
+      "productionSmokeTargetSeconds": 600
     }
   },
   "desktopDeploymentPipeline": {

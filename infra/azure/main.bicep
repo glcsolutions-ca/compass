@@ -23,11 +23,11 @@ param webAppName string = 'SET_IN_GITHUB_ENV'
 param workerAppName string = 'SET_IN_GITHUB_ENV'
 param workerRuntimeIdentityName string = 'SET_IN_GITHUB_ENV'
 param codexAppName string = 'SET_IN_GITHUB_ENV'
-param dynamicSessionsPoolName string = 'SET_IN_GITHUB_ENV'
-param dynamicSessionsExecutorIdentityName string = 'SET_IN_GITHUB_ENV'
 param migrationJobName string = 'SET_IN_GITHUB_ENV'
 param acrPullIdentityName string = 'SET_IN_GITHUB_ENV'
 param acrName string = 'SET_IN_GITHUB_ENV'
+param keyVaultName string = 'SET_IN_GITHUB_ENV'
+param keyVaultUri string = 'https://SET_IN_GITHUB_ENV.vault.azure.net/'
 param acrSku string = 'Basic'
 
 param postgresServerName string = 'SET_IN_GITHUB_ENV'
@@ -44,19 +44,10 @@ param apiImage string = 'SET_IN_GITHUB_ENV'
 param webImage string = 'SET_IN_GITHUB_ENV'
 param workerImage string = 'SET_IN_GITHUB_ENV'
 param codexImage string = 'SET_IN_GITHUB_ENV'
-param dynamicSessionsRuntimeImage string = 'SET_IN_GITHUB_ENV'
-@secure()
-param webSessionSecret string
-param entraLoginEnabled string = 'false'
+param authMode string = 'entra'
 param entraClientId string = ''
-@secure()
-param entraClientSecret string = ''
-@secure()
-param authOidcStateEncryptionKey string = ''
 param entraAllowedTenantIds string = ''
-param authDevFallbackEnabled string = 'false'
 param serviceBusProdNamespaceName string = 'SET_IN_GITHUB_ENV'
-param serviceBusAcceptanceNamespaceName string = 'SET_IN_GITHUB_ENV'
 param serviceBusQueueName string = 'compass-events'
 param workerRunMode string = 'loop'
 param apiCustomDomain string = ''
@@ -72,8 +63,6 @@ param authAllowedClientIds string = 'SET_IN_GITHUB_ENV'
 param authActiveTenantIds string = 'SET_IN_GITHUB_ENV'
 param oauthTokenIssuer string = 'SET_IN_GITHUB_ENV'
 param oauthTokenAudience string = 'compass-scim'
-@secure()
-param oauthTokenSigningSecret string
 param authBootstrapAllowedTenantId string = 'SET_IN_GITHUB_ENV'
 param authBootstrapAllowedAppClientId string = 'SET_IN_GITHUB_ENV'
 param authBootstrapDelegatedUserOid string = 'SET_IN_GITHUB_ENV'
@@ -89,9 +78,9 @@ var serviceBusDataReceiverRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
   '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0'
 )
-var sessionExecutorRoleDefinitionId = subscriptionResourceId(
+var keyVaultSecretsUserRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
-  '0fb8eba5-a2bb-4abe-b1c1-49dfad359bb0'
+  '4633458b-17de-408a-b874-0445c86b69e6'
 )
 
 module network './modules/network.bicep' = {
@@ -154,16 +143,6 @@ module serviceBusProd './modules/servicebus.bicep' = {
   }
 }
 
-module serviceBusAcceptance './modules/servicebus.bicep' = {
-  name: 'servicebus-acceptance'
-  params: {
-    location: location
-    namespaceName: serviceBusAcceptanceNamespaceName
-    queueName: serviceBusQueueName
-    disableLocalAuth: true
-  }
-}
-
 var encodedDbUser = uriComponent(postgresAdminUsername)
 var encodedDbPassword = uriComponent(postgresAdminPassword)
 var encodedDbName = uriComponent(postgresDatabaseName)
@@ -188,13 +167,12 @@ resource workerRuntimeIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities
   location: location
 }
 
-resource dynamicSessionsExecutorIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: dynamicSessionsExecutorIdentityName
-  location: location
-}
-
 resource acrRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
   name: acrName
+}
+
+resource keyVault 'Microsoft.KeyVault/vaults@2024-12-01-preview' existing = {
+  name: keyVaultName
 }
 
 resource serviceBusProdQueue 'Microsoft.ServiceBus/namespaces/queues@2024-01-01' existing = {
@@ -211,6 +189,16 @@ resource acrPullIdentityRoleAssignment 'Microsoft.Authorization/roleAssignments@
     principalId: acrPullIdentity.properties.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: acrPullRoleDefinitionId
+  }
+}
+
+resource keyVaultSecretsUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, acrPullIdentityName, 'KeyVaultSecretsUser')
+  scope: keyVault
+  properties: {
+    principalId: acrPullIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: keyVaultSecretsUserRoleDefinitionId
   }
 }
 
@@ -236,11 +224,10 @@ module api './modules/containerapp-api.bicep' = {
     image: apiImage
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
+    keyVaultUri: keyVaultUri
     webBaseUrl: webBaseUrl
-    entraLoginEnabled: entraLoginEnabled
+    authMode: authMode
     entraClientId: entraClientId
-    entraClientSecret: entraClientSecret
-    authOidcStateEncryptionKey: authOidcStateEncryptionKey
     entraAllowedTenantIds: entraAllowedTenantIds
     databaseUrl: databaseUrl
     logLevel: apiLogLevel
@@ -251,12 +238,11 @@ module api './modules/containerapp-api.bicep' = {
     authActiveTenantIds: authActiveTenantIds
     oauthTokenIssuer: oauthTokenIssuer
     oauthTokenAudience: oauthTokenAudience
-    // Required at runtime for OAuth token issuance; keep this managed via infra convergence.
-    oauthTokenSigningSecret: oauthTokenSigningSecret
     customDomainName: apiCustomDomain
   }
   dependsOn: [
     acrPullIdentityRoleAssignment
+    keyVaultSecretsUserRoleAssignment
   ]
 }
 
@@ -269,18 +255,17 @@ module web './modules/containerapp-web.bicep' = {
     image: webImage
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
+    keyVaultUri: keyVaultUri
     apiBaseUrl: apiBaseUrl
     webBaseUrl: webBaseUrl
-    webSessionSecret: webSessionSecret
-    entraLoginEnabled: entraLoginEnabled
+    authMode: authMode
     entraClientId: entraClientId
-    entraClientSecret: entraClientSecret
     entraAllowedTenantIds: entraAllowedTenantIds
-    authDevFallbackEnabled: authDevFallbackEnabled
     customDomainName: webCustomDomain
   }
   dependsOn: [
     acrPullIdentityRoleAssignment
+    keyVaultSecretsUserRoleAssignment
   ]
 }
 
@@ -314,27 +299,9 @@ module codex './modules/containerapp-codex.bicep' = {
     image: codexImage
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
-    sessionExecutorIdentityResourceId: dynamicSessionsExecutorIdentity.id
     databaseUrl: databaseUrl
     logLevel: codexLogLevel
     customDomainName: codexCustomDomain
-  }
-  dependsOn: [
-    acrPullIdentityRoleAssignment
-  ]
-}
-
-module dynamicSessions './modules/sessionpool-dynamic-sessions.bicep' = {
-  name: 'sessionpool-dynamic-sessions'
-  params: {
-    location: location
-    sessionPoolName: dynamicSessionsPoolName
-    environmentId: containerEnvironment.outputs.environmentId
-    image: dynamicSessionsRuntimeImage
-    registryServer: acr.outputs.loginServer
-    registryIdentityResourceId: acrPullIdentity.id
-    sessionExecutorPrincipalId: dynamicSessionsExecutorIdentity.properties.principalId
-    sessionExecutorRoleDefinitionId: sessionExecutorRoleDefinitionId
   }
   dependsOn: [
     acrPullIdentityRoleAssignment
@@ -376,13 +343,10 @@ output acrPullIdentityPrincipalId string = acrPullIdentity.properties.principalI
 output workerRuntimeIdentityId string = workerRuntimeIdentity.id
 output workerRuntimeIdentityPrincipalId string = workerRuntimeIdentity.properties.principalId
 output workerRuntimeIdentityClientId string = workerRuntimeIdentity.properties.clientId
-output dynamicSessionsExecutorIdentityId string = dynamicSessionsExecutorIdentity.id
-output dynamicSessionsExecutorIdentityPrincipalId string = dynamicSessionsExecutorIdentity.properties.principalId
 output serviceBusProdNamespaceNameOutput string = serviceBusProd.outputs.namespaceNameOutput
 output serviceBusProdNamespaceFqdn string = serviceBusProd.outputs.namespaceFqdn
 output serviceBusProdQueueId string = serviceBusProd.outputs.queueId
-output serviceBusAcceptanceNamespaceNameOutput string = serviceBusAcceptance.outputs.namespaceNameOutput
-output serviceBusAcceptanceNamespaceFqdn string = serviceBusAcceptance.outputs.namespaceFqdn
+output serviceBusQueueNameOutput string = serviceBusQueueName
 
 output apiContainerAppName string = api.outputs.appName
 output apiLatestRevision string = api.outputs.latestRevisionName
@@ -398,11 +362,6 @@ output workerLatestRevision string = worker.outputs.latestRevisionName
 output codexContainerAppName string = codex.outputs.appName
 output codexLatestRevision string = codex.outputs.latestRevisionName
 output codexLatestRevisionFqdn string = codex.outputs.latestRevisionFqdn
-
-output dynamicSessionsPoolId string = dynamicSessions.outputs.sessionPoolId
-output dynamicSessionsPoolNameOutput string = dynamicSessions.outputs.sessionPoolNameOutput
-output dynamicSessionsPoolManagementEndpoint string = dynamicSessions.outputs.poolManagementEndpoint
-output dynamicSessionsSessionExecutorRoleAssignmentId string = dynamicSessions.outputs.sessionExecutorRoleAssignmentId
 
 output migrationJobName string = migrateJob.outputs.jobNameOutput
 output migrationJobId string = migrateJob.outputs.jobId

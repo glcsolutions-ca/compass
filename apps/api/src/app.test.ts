@@ -94,6 +94,26 @@ describe("API app", () => {
     });
   });
 
+  it("sets session cookie when Entra start returns a session token", async () => {
+    const authService = {
+      startEntraLogin: vi.fn(async () => ({
+        redirectUrl: "/workspaces",
+        sessionToken: "mock-session-token"
+      })),
+      createSessionCookie: vi.fn(
+        () =>
+          "__Host-compass_session=mock-session-token; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=28800"
+      )
+    } as unknown as AuthService;
+
+    const app = buildApiApp({ authService });
+    const response = await request(app).get("/v1/auth/entra/start");
+
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/workspaces");
+    expect(response.headers["set-cookie"]?.[0]).toContain("__Host-compass_session=");
+  });
+
   it("blocks cross-origin state-changing requests when session cookie is present", async () => {
     const authService = {
       logout: vi.fn(async () => {}),

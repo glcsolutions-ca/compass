@@ -1,13 +1,17 @@
+export type AuthMode = "mock" | "entra";
+
 export interface ApiConfig {
   host: string;
   port: number;
   logLevel: string;
   databaseUrl?: string;
+  authMode: AuthMode;
 }
 
 const DEFAULT_API_HOST = "0.0.0.0";
 const DEFAULT_API_PORT = 3001;
 const DEFAULT_LOG_LEVEL = "info";
+const DEFAULT_AUTH_MODE: AuthMode = "mock";
 
 function parseApiPort(rawPort: string | undefined): number {
   const portCandidate = rawPort?.trim();
@@ -27,6 +31,19 @@ function parseApiPort(rawPort: string | undefined): number {
   return port;
 }
 
+function parseAuthMode(rawAuthMode: string | undefined): AuthMode {
+  const normalized = rawAuthMode?.trim().toLowerCase();
+  if (!normalized) {
+    return DEFAULT_AUTH_MODE;
+  }
+
+  if (normalized === "mock" || normalized === "entra") {
+    return normalized;
+  }
+
+  throw new Error(`Invalid AUTH_MODE: ${rawAuthMode}`);
+}
+
 export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   const host = env.API_HOST?.trim() || DEFAULT_API_HOST;
   const port = parseApiPort(env.API_PORT);
@@ -36,6 +53,7 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     host,
     port,
     logLevel: env.LOG_LEVEL?.trim().toLowerCase() || DEFAULT_LOG_LEVEL,
-    databaseUrl
+    databaseUrl,
+    authMode: parseAuthMode(env.AUTH_MODE)
   };
 }

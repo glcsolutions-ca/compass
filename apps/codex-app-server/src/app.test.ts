@@ -20,9 +20,7 @@ describe("codex gateway app", () => {
         entraClientId: undefined,
         entraClientSecret: undefined,
         entraRedirectUri: undefined,
-        entraAllowedTenantIds: [],
-        entraLoginEnabled: false,
-        authDevFallbackEnabled: false
+        entraAllowedTenantIds: []
       },
       repository: new InMemoryRepository()
     });

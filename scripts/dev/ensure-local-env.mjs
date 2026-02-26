@@ -20,7 +20,7 @@ const MANAGED_ENV_FILES = [
   {
     envPath: "apps/api/.env",
     examplePath: "apps/api/.env.example",
-    requiredKeys: ["API_PORT"]
+    requiredKeys: ["API_PORT", "AUTH_MODE"]
   },
   {
     envPath: "apps/web/.env",
@@ -348,7 +348,8 @@ export async function resolveLocalEnvValues({
 function buildRequiredAssignments(resolvedValues) {
   return {
     "apps/api/.env": {
-      API_PORT: String(resolvedValues.ports.API_PORT)
+      API_PORT: String(resolvedValues.ports.API_PORT),
+      AUTH_MODE: "mock"
     },
     "apps/web/.env": {
       WEB_PORT: String(resolvedValues.ports.WEB_PORT),

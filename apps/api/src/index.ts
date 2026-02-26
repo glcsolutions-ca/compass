@@ -4,6 +4,7 @@ import { buildDefaultAuthService } from "./auth-service.js";
 import { loadApiConfig } from "./config.js";
 
 const config = loadApiConfig();
+process.env.AUTH_MODE = config.authMode;
 const defaultAuth = buildDefaultAuthService(config.databaseUrl, process.env);
 const app = buildApiApp({
   authService: defaultAuth.service

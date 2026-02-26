@@ -441,8 +441,15 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
     try {
       const result = await authService.startEntraLogin({
         returnTo: query.returnTo,
+        userAgent: actor.userAgent,
+        ip: actor.ip,
         now: now()
       });
+
+      if (result.sessionToken) {
+        response.setHeader("set-cookie", authService.createSessionCookie(result.sessionToken));
+      }
+
       response.redirect(302, result.redirectUrl);
     } catch (error) {
       sendAuthError(request, response, error);

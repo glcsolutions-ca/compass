@@ -50,6 +50,7 @@ async function main() {
   let openapi = null;
   let ping = null;
   let authMe = null;
+  let authStart = null;
 
   try {
     health = await request("/health", { method: "GET" });
@@ -96,6 +97,26 @@ async function main() {
       details: `status=${authMe.status}, mode=${apiSmokeSessionCookie ? "authenticated" : "anonymous"}`
     });
 
+    authStart = await request("/v1/auth/entra/start?returnTo=%2F", {
+      method: "GET",
+      redirect: "manual"
+    });
+    const authStartLocation = authStart.headers.get("location") ?? "";
+    const authStartRedirectStatus = authStart.status === 302 || authStart.status === 303;
+    const authStartProviderRedirect = authStartLocation.startsWith(
+      "https://login.microsoftonline.com/"
+    );
+    assertions.push({
+      id: "auth-start-redirect-status",
+      pass: authStartRedirectStatus,
+      details: `status=${authStart.status}`
+    });
+    assertions.push({
+      id: "auth-start-provider-redirect",
+      pass: authStartProviderRedirect,
+      details: authStartLocation || "missing location header"
+    });
+
     if (verifyShaHeader) {
       const headerSha = health.headers.get("x-release-sha") ?? openapi.headers.get("x-release-sha");
       assertions.push({
@@ -134,7 +155,8 @@ async function main() {
       health: responsePreview(health),
       openapi: responsePreview(openapi),
       ping: responsePreview(ping),
-      authMe: responsePreview(authMe)
+      authMe: responsePreview(authMe),
+      authStart: responsePreview(authStart)
     },
     assertions
   });

@@ -18,12 +18,14 @@ describe("Entra auth infra wiring", () => {
     expect(apiModule).toContain("param entraClientId string = ''");
     expect(apiModule).toContain("param entraAllowedTenantIds string = ''");
     expect(apiModule).toContain("param entraClientSecret string = ''");
+    expect(apiModule).toContain("param authOidcStateEncryptionKey string = ''");
 
     expect(apiModule).toContain("name: 'WEB_BASE_URL'");
     expect(apiModule).toContain("name: 'ENTRA_LOGIN_ENABLED'");
     expect(apiModule).toContain("name: 'ENTRA_CLIENT_ID'");
     expect(apiModule).toContain("name: 'ENTRA_ALLOWED_TENANT_IDS'");
     expect(apiModule).toContain("name: 'ENTRA_CLIENT_SECRET'");
+    expect(apiModule).toContain("name: 'AUTH_OIDC_STATE_ENCRYPTION_KEY'");
   });
 
   it("passes Entra auth params from main template into API module", () => {
@@ -34,6 +36,7 @@ describe("Entra auth infra wiring", () => {
     expect(mainTemplate).toContain("entraLoginEnabled: entraLoginEnabled");
     expect(mainTemplate).toContain("entraClientId: entraClientId");
     expect(mainTemplate).toContain("entraClientSecret: entraClientSecret");
+    expect(mainTemplate).toContain("authOidcStateEncryptionKey: authOidcStateEncryptionKey");
     expect(mainTemplate).toContain("entraAllowedTenantIds: entraAllowedTenantIds");
   });
 });

@@ -48,6 +48,7 @@ async function main() {
       entraLoginEnabled: { value: entraLoginEnabled },
       entraClientId: { value: readOptional("ENTRA_CLIENT_ID") },
       entraClientSecret: { value: readOptional("ENTRA_CLIENT_SECRET") },
+      authOidcStateEncryptionKey: { value: readOptional("AUTH_OIDC_STATE_ENCRYPTION_KEY") },
       entraAllowedTenantIds: { value: readOptional("ENTRA_ALLOWED_TENANT_IDS") },
       authDevFallbackEnabled: { value: authDevFallbackEnabled },
       apiCustomDomain: { value: readOptional("ACA_API_CUSTOM_DOMAIN") },

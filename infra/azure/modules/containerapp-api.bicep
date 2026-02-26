@@ -9,6 +9,8 @@ param entraLoginEnabled string = 'false'
 param entraClientId string = ''
 @secure()
 param entraClientSecret string = ''
+@secure()
+param authOidcStateEncryptionKey string = ''
 param entraAllowedTenantIds string = ''
 @secure()
 param databaseUrl string
@@ -30,6 +32,15 @@ var entraClientSecretEnv = hasEntraClientSecret
       {
         name: 'ENTRA_CLIENT_SECRET'
         secretRef: 'entra-client-secret'
+      }
+    ]
+  : []
+var hasAuthOidcStateEncryptionKey = !empty(authOidcStateEncryptionKey)
+var authOidcStateEncryptionKeyEnv = hasAuthOidcStateEncryptionKey
+  ? [
+      {
+        name: 'AUTH_OIDC_STATE_ENCRYPTION_KEY'
+        secretRef: 'auth-oidc-state-encryption-key'
       }
     ]
   : []
@@ -84,6 +95,14 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
               {
                 name: 'entra-client-secret'
                 value: entraClientSecret
+              }
+            ]
+          : [],
+        hasAuthOidcStateEncryptionKey
+          ? [
+              {
+                name: 'auth-oidc-state-encryption-key'
+                value: authOidcStateEncryptionKey
               }
             ]
           : []
@@ -169,7 +188,8 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
                 secretRef: 'oauth-token-signing-secret'
               }
             ],
-            entraClientSecretEnv
+            entraClientSecretEnv,
+            authOidcStateEncryptionKeyEnv
           )
           resources: {
             cpu: json('0.25')

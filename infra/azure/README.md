@@ -77,6 +77,7 @@ Runtime parameters are rendered to `.artifacts/infra/<sha>/runtime.parameters.js
 - `API_SMOKE_ALLOWED_CLIENT_ID`
 - `WEB_SESSION_SECRET`
 - `ENTRA_CLIENT_SECRET` (required when `ENTRA_LOGIN_ENABLED=true`)
+- `AUTH_OIDC_STATE_ENCRYPTION_KEY` (required when `ENTRA_LOGIN_ENABLED=true`)
 
 ### Derived Values (not operator inputs)
 

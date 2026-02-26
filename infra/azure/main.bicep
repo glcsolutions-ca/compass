@@ -48,6 +48,8 @@ param entraLoginEnabled string = 'false'
 param entraClientId string = ''
 @secure()
 param entraClientSecret string = ''
+@secure()
+param authOidcStateEncryptionKey string = ''
 param entraAllowedTenantIds string = ''
 param authDevFallbackEnabled string = 'false'
 param serviceBusProdNamespaceName string = 'SET_IN_GITHUB_ENV'
@@ -226,6 +228,7 @@ module api './modules/containerapp-api.bicep' = {
     entraLoginEnabled: entraLoginEnabled
     entraClientId: entraClientId
     entraClientSecret: entraClientSecret
+    authOidcStateEncryptionKey: authOidcStateEncryptionKey
     entraAllowedTenantIds: entraAllowedTenantIds
     databaseUrl: databaseUrl
     logLevel: apiLogLevel

@@ -803,6 +803,7 @@ jobs:
       ENTRA_LOGIN_ENABLED: ${{ vars.ENTRA_LOGIN_ENABLED }}
       ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
       ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
+      AUTH_OIDC_STATE_ENCRYPTION_KEY: ${{ secrets.AUTH_OIDC_STATE_ENCRYPTION_KEY }}
       ENTRA_ALLOWED_TENANT_IDS: ${{ vars.ENTRA_ALLOWED_TENANT_IDS }}
       AUTH_DEV_FALLBACK_ENABLED: ${{ vars.AUTH_DEV_FALLBACK_ENABLED }}
       JOB_REQUIRED: ${{ (needs.load_release_candidate.outputs.infra_changed == 'true' || needs.load_release_candidate.outputs.requires_infra_convergence == 'true') && needs.load_release_candidate.outputs.docs_only_changed != 'true' }}
@@ -1246,6 +1247,7 @@ jobs:
       ENTRA_LOGIN_ENABLED: ${{ vars.ENTRA_LOGIN_ENABLED }}
       ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
       ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
+      AUTH_OIDC_STATE_ENCRYPTION_KEY: ${{ secrets.AUTH_OIDC_STATE_ENCRYPTION_KEY }}
       ENTRA_ALLOWED_TENANT_IDS: ${{ vars.ENTRA_ALLOWED_TENANT_IDS }}
       AUTH_DEV_FALLBACK_ENABLED: ${{ vars.AUTH_DEV_FALLBACK_ENABLED }}
       API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}

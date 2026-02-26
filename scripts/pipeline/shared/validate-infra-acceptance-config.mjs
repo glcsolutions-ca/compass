@@ -118,6 +118,7 @@ async function main() {
   if (entraLoginEnabled) {
     requireEnv("ENTRA_CLIENT_ID");
     requireEnv("ENTRA_CLIENT_SECRET");
+    requireEnv("AUTH_OIDC_STATE_ENCRYPTION_KEY");
     validateCustomDomain("ACA_WEB_CUSTOM_DOMAIN", requireEnv("ACA_WEB_CUSTOM_DOMAIN"));
   }
 

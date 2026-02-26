@@ -1,5 +1,6 @@
 import { Outlet, redirect, useLoaderData } from "react-router";
 import { AppShell } from "~/components/shell/app-shell";
+import { submitShellAction } from "~/features/auth/shell-action";
 import { loadAuthShellData } from "~/features/auth/shell-loader";
 import type { AuthShellLoaderData, ShellRouteHandle } from "~/features/auth/types";
 
@@ -23,6 +24,10 @@ export async function clientLoader({
   }
 
   return auth;
+}
+
+export async function clientAction({ request }: { request: Request }): Promise<Response> {
+  return submitShellAction({ request });
 }
 
 export default function AppLayoutRoute() {

@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 
 export const MIGRATIONS_DIR = path.resolve("db/migrations");
 export const CHECKSUMS_PATH = path.join(MIGRATIONS_DIR, "checksums.json");
-export const MIGRATION_FILENAME_PATTERN = /^\d{17}_[a-z0-9_]+\.mjs$/u;
+export const MIGRATION_FILENAME_PATTERN = /^\d{13}_[a-z0-9_]+\.mjs$/u;
 const ALLOWED_NON_MIGRATION_FILES = new Set([".gitkeep", "checksums.json"]);
 
 function stableJsonStringify(value) {
@@ -12,7 +12,7 @@ function stableJsonStringify(value) {
 }
 
 function prefixFromMigrationFile(fileName) {
-  return fileName.slice(0, 17);
+  return fileName.slice(0, 13);
 }
 
 export async function validateMigrationDirectory({ migrationsDir = MIGRATIONS_DIR } = {}) {
@@ -36,7 +36,7 @@ export async function validateMigrationDirectory({ migrationsDir = MIGRATIONS_DI
 
     if (!MIGRATION_FILENAME_PATTERN.test(entry.name)) {
       failures.push(
-        `Invalid migration filename '${entry.name}'. Expected pattern: ^\\d{17}_[a-z0-9_]+\\.mjs$`
+        `Invalid migration filename '${entry.name}'. Expected pattern: ^\\d{13}_[a-z0-9_]+\\.mjs$`
       );
       continue;
     }

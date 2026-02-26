@@ -2,33 +2,43 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const OPENAPI_PATH = "packages/contracts/openapi/openapi.json";
-const HTTP_METHODS = ["get", "post", "put", "patch", "delete", "options", "head"];
 
 function readOpenApiDocument() {
   return JSON.parse(readFileSync(OPENAPI_PATH, "utf8"));
 }
 
-describe("openapi baseline contract", () => {
-  it("includes baseline routes", () => {
+describe("openapi auth metadata contract", () => {
+  it("includes baseline system routes", () => {
     const document = readOpenApiDocument();
     expect(document?.paths?.["/health"]).toBeTruthy();
     expect(document?.paths?.["/v1/ping"]).toBeTruthy();
   });
 
-  it("does not include runtime oauth security metadata", () => {
+  it("includes cookie-based security metadata for protected routes", () => {
     const document = readOpenApiDocument();
-    expect(document?.components?.securitySchemes?.oauth2).toBeFalsy();
+    expect(document?.components?.securitySchemes?.sessionCookieAuth).toEqual({
+      type: "apiKey",
+      in: "cookie",
+      name: "__Host-compass_session",
+      description: "Opaque server-side session cookie"
+    });
 
-    const paths = document?.paths ?? {};
-    for (const methods of Object.values(paths)) {
-      for (const method of HTTP_METHODS) {
-        const operation = methods?.[method];
-        if (!operation) {
-          continue;
-        }
-
-        expect(Array.isArray(operation.security)).toBe(false);
-      }
-    }
+    expect(document?.paths?.["/v1/auth/me"]?.get?.security).toEqual([{ sessionCookieAuth: [] }]);
+    expect(document?.paths?.["/v1/auth/logout"]?.post?.security).toEqual([
+      { sessionCookieAuth: [] }
+    ]);
+    expect(document?.paths?.["/v1/tenants"]?.post?.security).toEqual([{ sessionCookieAuth: [] }]);
+    expect(document?.paths?.["/v1/tenants/{tenantSlug}"]?.get?.security).toEqual([
+      { sessionCookieAuth: [] }
+    ]);
+    expect(document?.paths?.["/v1/tenants/{tenantSlug}/members"]?.get?.security).toEqual([
+      { sessionCookieAuth: [] }
+    ]);
+    expect(document?.paths?.["/v1/tenants/{tenantSlug}/invites"]?.post?.security).toEqual([
+      { sessionCookieAuth: [] }
+    ]);
+    expect(
+      document?.paths?.["/v1/tenants/{tenantSlug}/invites/{token}/accept"]?.post?.security
+    ).toEqual([{ sessionCookieAuth: [] }]);
   });
 });

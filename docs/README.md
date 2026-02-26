@@ -17,11 +17,13 @@ General documentation and architecture records live here.
 - `architecture/README.md`
 - `architecture/foundation-baseline.md`
 - `architecture/brand-architecture.md`
+- `architecture/auth-threat-model-v1.md`
 - `adr/README.md`
 - `adr/TDR-001-initial-stack-baseline.md`
 - `adr/TDR-002-production-container-registry-strategy.md`
 - `adr/TDR-003-cloud-deployment-pipeline-visualization-model.md`
 - `adr/TDR-004-cloud-deployment-pipeline-and-desktop-naming-followup.md`
+- `adr/TDR-005-entra-only-auth-v1-baseline.md`
 
 ## Runbooks
 
@@ -32,6 +34,7 @@ General documentation and architecture records live here.
 - `runbooks/postgres-local.md`
 - `runbooks/desktop-deployment-pipeline.md`
 - `runbooks/migration-safety.md`
+- `runbooks/auth-v1-cutover.md`
 
 ## Infrastructure Docs
 

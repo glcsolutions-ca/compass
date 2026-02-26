@@ -1,84 +1,78 @@
-# Entra SSO and Gateway Auth Contracts
+# Entra SSO and App Auth Contracts
 
-This document records the external auth contract behavior introduced for web
-front-door SSO and gateway auth route typing.
+This document records the v1 Entra-only auth contract for Compass API and web entry flows.
 
 ## Scope
 
-- `apps/web` Entra SSO login and callback routes.
-- `apps/web` proxy enforcement of enterprise SSO session cookie.
-- `packages/contracts` typed auth request/response schemas for codex gateway.
-- `apps/api` permission claim handling for Entra tokens that include scopes,
-  roles, or both.
+- API auth endpoints in `apps/api`
+- Tenant membership and invite endpoints in `apps/api`
+- Web front-door and workspace routes in `apps/web`
+- OpenAPI + SDK contract generation in `packages/contracts` and `packages/sdk`
 
-## Web SSO Contract
+## Web Contract
 
-### New routes
+Routes:
 
+- `GET /`
 - `GET /login`
-- `GET /api/auth/entra/start`
-- `GET /api/auth/entra/callback`
-- `POST /api/auth/entra/logout`
+- `GET /workspaces`
+- `GET /t/:tenantSlug/*`
 
-### Start route
+Expected behavior:
 
-- Generates `state`, `nonce`, and PKCE verifier/challenge.
-- Stores transient OIDC state in secure `HttpOnly` cookie with short TTL.
-- Redirects to the Microsoft Entra authorize endpoint for
-  `response_type=code`.
+- `/` and `/login` render “Sign in with Microsoft”.
+- `/workspaces` calls `/v1/auth/me` and renders unauthenticated, empty-membership, or chooser states.
+- `/t/:tenantSlug/*` is tenant-scoped by URL slug.
 
-### Callback route
+## Auth API Contract
 
-- Validates query `state` against transient cookie state.
-- Exchanges authorization code at token endpoint.
-- Validates ID token issuer, audience, nonce, expiry, and tenant.
-- Enforces configured tenant allow-list.
-- Issues `__Host-compass_sso` secure `HttpOnly` cookie with minimal identity
-  claims and expiry.
+Routes:
 
-### Logout route
-
-- Clears `__Host-compass_sso`.
-- Redirects to `/login`.
-
-## Proxy Enforcement Contract
-
-`apps/web` route proxy (`/api/v1/*`) enforces valid `__Host-compass_sso` when
-`ENTRA_LOGIN_ENABLED=true`, except for explicitly public/health routes.
+- `GET /v1/auth/entra/start?returnTo=...`
+- `GET /v1/auth/entra/callback`
+- `GET /v1/auth/entra/admin-consent/start?tenantHint=...&returnTo=...`
+- `GET /v1/auth/me`
+- `POST /v1/auth/logout`
 
 Behavior:
 
-- Missing or invalid SSO cookie for protected paths: `401`.
-- Valid SSO cookie: request continues to existing provider auth flow.
-- Dev fallback is only valid when enabled via configuration and non-production
-  runtime.
+- Start route generates `state`, `nonce`, and PKCE verifier/challenge and persists short-lived request state.
+- Callback route validates state, exchanges code, validates ID token, links/creates user identity, and issues session cookie.
+- Callback route enforces optional Entra tenant allow-listing (`ENTRA_ALLOWED_TENANT_IDS`).
+- Session cookie is `__Host-compass_session`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`.
+- Auth endpoints are rate limited per client IP.
+- Cookie-authenticated state-changing endpoints enforce same-origin CSRF checks using `Origin`/`Referer`.
 
-## Gateway Auth Schemas
+## Tenant and Invite API Contract
 
-`packages/contracts/src/codex-gateway.ts` now defines explicit auth schemas:
+Routes:
 
-- `AuthModeSchema` and `KnownAuthModeSchema`.
-- `AuthAccountSchema`.
-- `AuthLoginStartResponseSchema`.
-- `AuthAccountReadResponseSchema`.
+- `POST /v1/tenants`
+- `GET /v1/tenants/:tenantSlug`
+- `GET /v1/tenants/:tenantSlug/members`
+- `POST /v1/tenants/:tenantSlug/invites`
+- `POST /v1/tenants/:tenantSlug/invites/:token/accept`
 
-This removes `unknown`-shaped auth payloads and standardizes runtime parsing for
-gateway route handlers.
+Behavior:
 
-## Contract Verification Command
+- Tenant context comes from URL slug only.
+- Membership checks are server-side and default deny.
+- Invite creation is restricted to `owner`/`admin` roles.
+- Invite acceptance validates token, expiry, and authenticated email match.
 
-Use the root contract verification command to validate generated OpenAPI and SDK
-schema artifacts are in sync:
+## OpenAPI Metadata Contract
+
+`packages/contracts/openapi/openapi.json` includes:
+
+- all routes listed above
+- `sessionCookieAuth` security scheme (cookie `__Host-compass_session`)
+- operation-level security for protected routes (`/v1/auth/me`, `/v1/auth/logout`, `/v1/tenants/**`)
+
+Validation command:
 
 - `pnpm contract:check`
 
-## API Permission Claims
+## API Auth Identity Rules
 
-API auth token verification now accepts Entra access tokens with:
-
-- `scp` only
-- `roles` only
-- both `scp` and `roles`
-
-Permission checks evaluate merged claim grants per endpoint requirements instead
-of rejecting mixed-claim tokens.
+- Entra identity linkage is immutable and based on `tid + oid`.
+- Authorization decisions do not rely on mutable claims (`email`, `upn`, `name`).

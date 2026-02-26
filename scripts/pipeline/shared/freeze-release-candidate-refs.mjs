@@ -13,13 +13,6 @@ async function capture(cmd, args) {
   return stdout.trim();
 }
 
-async function run(cmd, args) {
-  await execFileAsync(cmd, args, {
-    encoding: "utf8",
-    maxBuffer: COMMAND_MAX_BUFFER
-  });
-}
-
 async function resolveToDigestRef(acrName, image) {
   const acrRegistry = `${acrName}.azurecr.io`;
   if (!image.startsWith(`${acrRegistry}/`)) {
@@ -68,78 +61,6 @@ async function resolveToDigestRef(acrName, image) {
 
   const repo = repoRef.includes(":") ? repoRef.split(":")[0] : repoRef;
   return `${acrRegistry}/${repo}@${resolvedDigest}`;
-}
-
-async function freezeApiImage() {
-  const headSha = requireEnv("HEAD_SHA");
-  const acrName = requireEnv("ACR_NAME");
-  const acrRegistry = requireEnv("ACR_REGISTRY");
-  const image = `${acrRegistry}/compass-api:${headSha}`;
-
-  await run("az", ["acr", "login", "--name", acrName, "--only-show-errors"]);
-  await run("docker", ["build", "-f", "apps/api/Dockerfile", "-t", image, "."]);
-  await run("docker", ["push", image]);
-
-  const releaseCandidateApiRef = await capture("docker", [
-    "inspect",
-    "--format={{index .RepoDigests 0}}",
-    image
-  ]);
-  await appendGithubOutput({ release_candidate_api_ref: releaseCandidateApiRef });
-}
-
-async function freezeWebImage() {
-  const headSha = requireEnv("HEAD_SHA");
-  const acrName = requireEnv("ACR_NAME");
-  const acrRegistry = requireEnv("ACR_REGISTRY");
-  const image = `${acrRegistry}/compass-web:${headSha}`;
-
-  await run("az", ["acr", "login", "--name", acrName, "--only-show-errors"]);
-  await run("docker", ["build", "-f", "apps/web/Dockerfile", "-t", image, "."]);
-  await run("docker", ["push", image]);
-
-  const releaseCandidateWebRef = await capture("docker", [
-    "inspect",
-    "--format={{index .RepoDigests 0}}",
-    image
-  ]);
-  await appendGithubOutput({ release_candidate_web_ref: releaseCandidateWebRef });
-}
-
-async function freezeWorkerImage() {
-  const headSha = requireEnv("HEAD_SHA");
-  const acrName = requireEnv("ACR_NAME");
-  const acrRegistry = requireEnv("ACR_REGISTRY");
-  const image = `${acrRegistry}/compass-worker:${headSha}`;
-
-  await run("az", ["acr", "login", "--name", acrName, "--only-show-errors"]);
-  await run("docker", ["build", "-f", "apps/worker/Dockerfile", "-t", image, "."]);
-  await run("docker", ["push", image]);
-
-  const releaseCandidateWorkerRef = await capture("docker", [
-    "inspect",
-    "--format={{index .RepoDigests 0}}",
-    image
-  ]);
-  await appendGithubOutput({ release_candidate_worker_ref: releaseCandidateWorkerRef });
-}
-
-async function freezeCodexImage() {
-  const headSha = requireEnv("HEAD_SHA");
-  const acrName = requireEnv("ACR_NAME");
-  const acrRegistry = requireEnv("ACR_REGISTRY");
-  const image = `${acrRegistry}/compass-codex-app-server:${headSha}`;
-
-  await run("az", ["acr", "login", "--name", acrName, "--only-show-errors"]);
-  await run("docker", ["build", "-f", "apps/codex-app-server/Dockerfile", "-t", image, "."]);
-  await run("docker", ["push", image]);
-
-  const releaseCandidateCodexRef = await capture("docker", [
-    "inspect",
-    "--format={{index .RepoDigests 0}}",
-    image
-  ]);
-  await appendGithubOutput({ release_candidate_codex_ref: releaseCandidateCodexRef });
 }
 
 async function freezeCurrentRuntimeRefs() {
@@ -215,28 +136,14 @@ async function freezeCurrentRuntimeRefs() {
 async function main() {
   const mode = requireEnv("FREEZE_MODE");
 
-  if (mode === "build-api") {
-    await freezeApiImage();
-    return;
-  }
-  if (mode === "build-web") {
-    await freezeWebImage();
-    return;
-  }
-  if (mode === "build-worker") {
-    await freezeWorkerImage();
-    return;
-  }
-  if (mode === "build-codex") {
-    await freezeCodexImage();
-    return;
-  }
   if (mode === "resolve-current-runtime-refs") {
     await freezeCurrentRuntimeRefs();
     return;
   }
 
-  throw new Error(`Unsupported FREEZE_MODE: ${mode}`);
+  throw new Error(
+    `Unsupported FREEZE_MODE: ${mode}. This script only supports resolve-current-runtime-refs.`
+  );
 }
 
 void main();

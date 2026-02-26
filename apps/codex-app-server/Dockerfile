@@ -1,18 +1,28 @@
-FROM node:22-bookworm-slim AS build
-WORKDIR /workspace
+# syntax=docker/dockerfile:1.7
 
+FROM node:22-bookworm-slim@sha256:dd9d21971ec4395903fa6143c2b9267d048ae01ca6d3ea96f16cb30df6187d94 AS base
+WORKDIR /workspace
 RUN corepack enable
 
+FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig*.json ./
-COPY apps ./apps
-COPY packages ./packages
+COPY apps/codex-app-server/package.json apps/codex-app-server/package.json
+COPY packages/contracts/package.json packages/contracts/package.json
+COPY packages/testkit/package.json packages/testkit/package.json
+
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+  pnpm install --frozen-lockfile --filter . --filter @compass/contracts... --filter @compass/codex-app-server...
+
+FROM deps AS build
+COPY apps/codex-app-server ./apps/codex-app-server
+COPY packages/contracts ./packages/contracts
 COPY db ./db
 
-RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @compass/contracts build \
-  && pnpm --filter @compass/codex-app-server build
+  && pnpm --filter @compass/codex-app-server build \
+  && pnpm --filter @compass/codex-app-server deploy --legacy --prod /opt/app
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:22-bookworm-slim@sha256:dd9d21971ec4395903fa6143c2b9267d048ae01ca6d3ea96f16cb30df6187d94 AS runtime
 WORKDIR /workspace
 
 ARG CODEX_TAG=rust-v0.105.0
@@ -32,11 +42,9 @@ RUN CODEX_BIN_NAME="${CODEX_ASSET%.tar.gz}" \
   && install -m 0755 "/tmp/${CODEX_BIN_NAME}" /usr/local/bin/codex \
   && rm -f /tmp/codex.tgz "/tmp/${CODEX_BIN_NAME}"
 
-COPY --from=build /workspace/apps/codex-app-server/dist ./dist
-COPY --from=build /workspace/apps/codex-app-server/package.json ./package.json
+COPY --from=build /opt/app/ ./
 COPY --from=build /workspace/db/migrations ./db/migrations
 COPY --from=build /workspace/db/scripts ./db/scripts
-COPY --from=build /workspace/node_modules ./node_modules
 
 ENV NODE_ENV=production
 ENV CODEX_HOST=0.0.0.0

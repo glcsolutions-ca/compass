@@ -132,6 +132,9 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       query: z.object({
         code: z.string().optional(),
         state: z.string().optional(),
+        admin_consent: z.string().optional(),
+        tenant: z.string().optional(),
+        scope: z.string().optional(),
         error: z.string().optional(),
         error_description: z.string().optional()
       })
@@ -478,6 +481,14 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       },
       404: {
         description: "Invite not found",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      409: {
+        description: "Invite already accepted by another user",
         content: {
           "application/json": {
             schema: ApiErrorSchema

@@ -170,6 +170,7 @@ Set these in both `acceptance` and `production` unless noted:
 | `POSTGRES_ADMIN_PASSWORD`             | required    | required    |
 | `WEB_SESSION_SECRET`                  | required    | required    |
 | `ENTRA_CLIENT_SECRET`                 | conditional | conditional |
+| `AUTH_OIDC_STATE_ENCRYPTION_KEY`      | conditional | conditional |
 | `OAUTH_TOKEN_SIGNING_SECRET`          | required    | required    |
 | `API_SMOKE_ALLOWED_CLIENT_ID`         | required    | required    |
 | `API_SMOKE_ALLOWED_CLIENT_SECRET`     | required    | required    |

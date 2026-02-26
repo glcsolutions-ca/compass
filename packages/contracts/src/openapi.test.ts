@@ -43,5 +43,22 @@ describe("buildOpenApiDocument", () => {
       document.paths?.["/v1/tenants/{tenantSlug}/invites/{token}/accept"]?.post?.operationId
     ).toBe("acceptTenantInvite");
     expect(document.components?.securitySchemes?.sessionCookieAuth).toBeTruthy();
+
+    const callbackParameters = (
+      document.paths?.["/v1/auth/entra/callback"] as {
+        get?: { parameters?: Array<{ name?: string }> };
+      }
+    )?.get?.parameters;
+    const callbackParameterNames = callbackParameters?.map((parameter) => parameter.name) ?? [];
+    expect(callbackParameterNames).toEqual(
+      expect.arrayContaining(["code", "state", "admin_consent", "tenant", "scope", "error"])
+    );
+
+    const inviteAcceptResponses = (
+      document.paths?.["/v1/tenants/{tenantSlug}/invites/{token}/accept"] as {
+        post?: { responses?: Record<string, unknown> };
+      }
+    )?.post?.responses;
+    expect(inviteAcceptResponses?.["409"]).toBeTruthy();
   });
 });

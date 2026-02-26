@@ -57,11 +57,18 @@ Set these in both `acceptance` and `production`.
 
 - `ENTRA_CLIENT_SECRET=<web app client secret>`
 - `WEB_SESSION_SECRET=<32+ char random secret>`
+- `AUTH_OIDC_STATE_ENCRYPTION_KEY=<32-byte base64url key>`
 
 Generate a strong session secret if needed:
 
 ```bash
 openssl rand -base64 48
+```
+
+Generate `AUTH_OIDC_STATE_ENCRYPTION_KEY` (32 bytes, base64url):
+
+```bash
+openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
 ```
 
 ## 3. Deploy Configuration
@@ -75,6 +82,7 @@ Run normal pipeline convergence (`deploy-infra` path). The web and API container
   - `ENTRA_LOGIN_ENABLED`
   - `ENTRA_CLIENT_ID`
   - `ENTRA_CLIENT_SECRET` (secret ref)
+  - `AUTH_OIDC_STATE_ENCRYPTION_KEY` (secret ref)
   - `WEB_BASE_URL`
   - `ENTRA_ALLOWED_TENANT_IDS`
   - `AUTH_DEV_FALLBACK_ENABLED`
@@ -92,24 +100,22 @@ az containerapp show \
 ```
 
 2. Browser checks:
-   - Open `https://<web-host>/login`: should show "Enterprise Login" and "Sign in with Microsoft".
-   - Open `https://<web-host>/`: without SSO cookie, should redirect to `/login?next=%2F`.
+   - Open `https://<web-host>/login`: should show "Sign in with Microsoft".
+   - Open `https://<web-host>/`: should render the same login front-door experience.
 
 ## Troubleshooting
 
 - `Microsoft Entra Login Disabled`:
   - `ENTRA_LOGIN_ENABLED` is not `true` in deployed env.
   - Infra deployment has not converged with latest env/secrets.
-- `/` does not redirect to `/login`:
-  - `ENTRA_LOGIN_ENABLED` is false.
-  - `AUTH_DEV_FALLBACK_ENABLED` is true (must be false in cloud).
 - `ENTRA_CONFIG_REQUIRED` from `/v1/auth/entra/start`:
-  - Missing `ENTRA_CLIENT_ID` or infra has not converged `WEB_BASE_URL`.
+  - Missing `ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET`, or `AUTH_OIDC_STATE_ENCRYPTION_KEY`.
+  - Infra deployment has not converged `WEB_BASE_URL` and auth secrets.
 - `AADSTS50011` (redirect URI mismatch):
   - Ensure Entra web redirect URIs include `https://<web-host>/v1/auth/entra/callback` (not `/api/auth/entra/callback`).
   - Re-apply `infra/identity` after updating `ACA_WEB_CUSTOM_DOMAIN` and `infra/identity/env/prod.tfvars`.
 - `INTERNAL_SERVER_ERROR` with `relation "auth_oidc_requests" does not exist`:
-  - Runtime is ahead of DB schema; ensure the single baseline migration `db/migrations/1772083000000_initial_schema.mjs` has run in the migration job.
+  - Runtime is ahead of DB schema; ensure all committed migrations have run in the migration job.
 - `MIGRATION_EXECUTION_FAILED` with `Not run migration ... is preceding already run migration ...`:
   - Migration history is out of sync with the deployed image. For clean-slate environments, delete/recreate the `compass` database and redeploy.
 - Login returns `tenant_not_allowed`:

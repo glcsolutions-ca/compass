@@ -416,6 +416,9 @@ export interface operations {
             query?: {
                 code?: string;
                 state?: string;
+                admin_consent?: string;
+                tenant?: string;
+                scope?: string;
                 error?: string;
                 error_description?: string;
             };
@@ -910,6 +913,18 @@ export interface operations {
             };
             /** @description Invite not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Invite already accepted by another user */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

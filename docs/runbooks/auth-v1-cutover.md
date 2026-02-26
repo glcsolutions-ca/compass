@@ -10,9 +10,9 @@ This runbook applies to the Entra-only auth v1 clean-slate rollout.
 ## Preconditions
 
 - No production users or production data migration requirements
-- Baseline migration (`db/migrations/1772083000000_initial_schema.mjs`) and `db/migrations/checksums.json` are updated and committed
+- Auth migrations and `db/migrations/checksums.json` are updated and committed
 - Entra app registration is configured for multi-tenant organizations flow
-- Runtime environment has Entra auth settings configured (`ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET`, `ENTRA_REDIRECT_URI`)
+- Runtime environment has Entra auth settings configured (`ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET`, `AUTH_OIDC_STATE_ENCRYPTION_KEY`, `ENTRA_REDIRECT_URI`)
 - If tenant restrictions are required, `ENTRA_ALLOWED_TENANT_IDS` is set
 
 ## Destructive Reset Sequence
@@ -63,6 +63,7 @@ az postgres flexible-server db create \
 - `/v1/auth/me` returns authenticated user context when cookie is present
 - tenant create/read/member flows work for authenticated owner
 - invite create/accept flow works end to end
+- invite replay from a different user returns `409 INVITE_ALREADY_ACCEPTED`
 - callback consent errors route users to login with admin-consent guidance
 - cross-origin POST with session cookie is denied (`CSRF_ORIGIN_DENIED`)
 - repeated auth start calls trigger rate limiting (`429 RATE_LIMITED`)

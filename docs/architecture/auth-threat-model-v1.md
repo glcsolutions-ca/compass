@@ -36,11 +36,11 @@ Out of scope:
 
 1. OAuth authorization code interception
 
-- Mitigation: authorization code flow with PKCE (`S256`), short-lived state, single-use state consumption.
+- Mitigation: authorization code flow with PKCE (`S256`), short-lived state, single-use state consumption, encrypted PKCE verifier at rest.
 
 2. Callback CSRF and replay
 
-- Mitigation: unguessable `state`, strict callback state lookup, single-use state records with TTL.
+- Mitigation: unguessable `state`, strict callback state lookup, single-use state records with TTL, hashed nonce validation.
 
 3. ID token forgery or claim substitution
 
@@ -60,7 +60,7 @@ Out of scope:
 
 7. Invite token abuse
 
-- Mitigation: token hash at rest, expiry enforcement, email match validation against authenticated identity, idempotent accept flow.
+- Mitigation: token hash at rest, expiry enforcement, email match validation against authenticated identity, strict single-use acceptance with cross-user replay rejection.
 
 8. Account-link hijack via mutable claims
 

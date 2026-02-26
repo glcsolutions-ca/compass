@@ -163,7 +163,7 @@ function SidebarAccountMenu({
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
-        <Form method="post">
+        <Form action="/workspaces" method="post">
           <input name="intent" type="hidden" value="logout" />
           <Button className="w-full justify-start" type="submit" variant="ghost">
             Sign out

@@ -5,6 +5,8 @@
 `apps/api` is the Express 5 backend service for Compass system and auth endpoints.
 It serves health/ping plus Entra-first auth and tenant membership APIs, and publishes OpenAPI from `@compass/contracts`.
 
+Runtime migrations expect the canonical single baseline file `db/migrations/1772083000000_initial_schema.mjs`.
+
 ## Endpoints
 
 - `GET /health`

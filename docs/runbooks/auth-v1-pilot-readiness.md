@@ -100,7 +100,7 @@ Day 1 recorded evidence:
 
 | Day | Date (UTC) | Health | OpenAPI | AuthMe 401 | AuthStart Redirect | GLC Login | Kropp Login | Invite Flow | Boundary Checks | Incidents | Operator |
 | --- | ---------- | ------ | ------- | ---------- | ------------------ | --------- | ----------- | ----------- | --------------- | --------- | -------- |
-| 1   | 2026-02-26 | pass   | pass    | pass       | pass               | pass      | pending     | pending     | pending         | none      | codex    |
+| 1   | 2026-02-26 | pass   | pass    | pass       | pass               | pass      | pass        | pass        | pass            | none      | codex    |
 
 Day 1 notes:
 
@@ -114,7 +114,24 @@ Day 1 notes:
     - `client_id=<entra-client-id-redacted>`
     - `redirect_uri=https://compass.glcsolutions.ca/v1/auth/entra/callback`
 - GLC login marked pass based on successful browser sign-in evidence provided in-thread.
-- Kropp tenant login, invite lifecycle, and boundary checks remain pending manual pilot execution.
+- Kropp login marked pass based on successful browser sign-in evidence provided in-thread.
+- Tenant bootstrap and boundary evidence:
+  - `POST /v1/tenants` as `<pilot-user-email-redacted>` created tenant `kropp` (`201`)
+  - `GET /v1/tenants/kropp` as non-member user returned `403 TENANT_FORBIDDEN`
+  - `GET /v1/tenants/kropp` as owner returned `200`
+  - `GET /v1/tenants/kropp/members` as owner returned `200`
+- Invite lifecycle evidence on `kropp`:
+  - owner create invite returned `201`
+  - invite accept by target user returned `200`
+  - same-user replay returned `200` (idempotent-safe)
+  - different-user replay blocking verified in two ways:
+    - unmatched-email user returned `403 INVITE_EMAIL_MISMATCH`
+    - same-email different-user replay returned `409 INVITE_ALREADY_ACCEPTED` (validated with controlled synthetic pilot user/session, then removed)
+  - expired invite reject returned `410 INVITE_EXPIRED`
+- Session behavior evidence:
+  - authenticated `/v1/auth/me` returned `200`
+  - `POST /v1/auth/logout` returned `204`
+  - same session token after logout returned `401`
 
 ## Incident Log Template
 

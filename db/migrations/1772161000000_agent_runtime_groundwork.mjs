@@ -16,21 +16,9 @@ export async function up(pgm) {
   pgm.renameTable("codex_approvals", "agent_approvals");
   pgm.renameTable("codex_auth_state", "agent_auth_state");
 
-  renameIndexIfExists(
-    pgm,
-    "codex_events_thread_created_idx",
-    "agent_events_thread_created_idx"
-  );
-  renameIndexIfExists(
-    pgm,
-    "codex_turns_thread_started_idx",
-    "agent_turns_thread_started_idx"
-  );
-  renameIndexIfExists(
-    pgm,
-    "codex_items_thread_updated_idx",
-    "agent_items_thread_updated_idx"
-  );
+  renameIndexIfExists(pgm, "codex_events_thread_created_idx", "agent_events_thread_created_idx");
+  renameIndexIfExists(pgm, "codex_turns_thread_started_idx", "agent_turns_thread_started_idx");
+  renameIndexIfExists(pgm, "codex_items_thread_updated_idx", "agent_items_thread_updated_idx");
   renameIndexIfExists(
     pgm,
     "codex_approvals_thread_created_idx",
@@ -130,21 +118,9 @@ export async function down(pgm) {
     "agent_approvals_thread_created_idx",
     "codex_approvals_thread_created_idx"
   );
-  renameIndexIfExists(
-    pgm,
-    "agent_items_thread_updated_idx",
-    "codex_items_thread_updated_idx"
-  );
-  renameIndexIfExists(
-    pgm,
-    "agent_turns_thread_started_idx",
-    "codex_turns_thread_started_idx"
-  );
-  renameIndexIfExists(
-    pgm,
-    "agent_events_thread_created_idx",
-    "codex_events_thread_created_idx"
-  );
+  renameIndexIfExists(pgm, "agent_items_thread_updated_idx", "codex_items_thread_updated_idx");
+  renameIndexIfExists(pgm, "agent_turns_thread_started_idx", "codex_turns_thread_started_idx");
+  renameIndexIfExists(pgm, "agent_events_thread_created_idx", "codex_events_thread_created_idx");
 
   pgm.renameTable("agent_auth_state", "codex_auth_state");
   pgm.renameTable("agent_approvals", "codex_approvals");

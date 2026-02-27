@@ -68,7 +68,7 @@ Windows signing (Azure Artifact Signing):
 Desktop runtime config:
 
 - Variable:
-  - `DESKTOP_WEB_BASE_URL` (used when no `web_base_url` dispatch input is provided)
+  - `DESKTOP_WEB_BASE_URL` (optional override; when unset pipeline defaults to `https://compass.glcsolutions.ca`)
 - Contract:
   - start URL must be non-empty HTTPS (`COMPASS_DESKTOP_START_URL`)
 

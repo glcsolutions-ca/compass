@@ -222,7 +222,7 @@ jobs:
       DOCS_ONLY_CHANGED: ${{ needs.desktop_determine_scope.outputs.docs_only_changed }}
       INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
       INPUT_WEB_BASE_URL: ${{ inputs.web_base_url }}
-      DEFAULT_WEB_BASE_URL: ${{ vars.DESKTOP_WEB_BASE_URL }}
+      DEFAULT_WEB_BASE_URL: ${{ vars.DESKTOP_WEB_BASE_URL || 'https://compass.glcsolutions.ca' }}
       EVENT_NAME: ${{ github.event_name }}
       DRAFT: ${{ needs.desktop_release_candidate_context.outputs.draft }}
     steps:

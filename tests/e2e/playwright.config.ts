@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-const baseURL = process.env.WEB_BASE_URL ?? "http://127.0.0.1:3000";
+const baseURL = process.env.WEB_BASE_URL ?? "http://localhost:3000";
 const useManagedWebServer = process.env.WEB_BASE_URL === undefined;
 
 export default defineConfig({
@@ -12,7 +12,7 @@ export default defineConfig({
   reporter: "line",
   webServer: useManagedWebServer
     ? {
-        command: "pnpm --filter @compass/web dev --host 127.0.0.1 --port 3000",
+        command: "pnpm dev",
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000

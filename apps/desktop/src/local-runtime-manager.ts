@@ -4,8 +4,7 @@ import type {
   RuntimeAccountLoginStartResponse,
   RuntimeAccountLogoutResponse,
   RuntimeAccountRateLimitsReadResponse,
-  RuntimeAccountReadResponse,
-  RuntimeCapabilities
+  RuntimeAccountReadResponse
 } from "@compass/contracts" with { "resolution-mode": "import" };
 
 export type LocalAuthMode = "chatgpt" | "apiKey";
@@ -109,7 +108,7 @@ export interface LocalCodexClient {
 type EventListener = (event: LocalAgentEvent) => void;
 type RuntimeNotificationListener = (notification: LocalRuntimeNotification) => void;
 
-const LOCAL_RUNTIME_CAPABILITIES: RuntimeCapabilities = {
+const LOCAL_RUNTIME_CAPABILITIES = {
   interactiveAuth: true,
   supportsChatgptManaged: true,
   supportsApiKey: true,
@@ -495,8 +494,12 @@ export class LocalRuntimeManager {
     executionMode: "local";
     executionHost: "desktop_local";
   }> {
-    const auth = await this.loginStatus();
-    if (!auth.authMode) {
+    const authState: unknown = await this.loginStatus();
+    const authMode =
+      authState && typeof authState === "object" && "authMode" in authState
+        ? (authState as { authMode?: unknown }).authMode
+        : null;
+    if (typeof authMode !== "string" || authMode.trim().length === 0) {
       throw new Error("Local runtime is not authenticated");
     }
 

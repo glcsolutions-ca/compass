@@ -145,6 +145,43 @@ function emptyAuthState(): LocalAuthState {
   };
 }
 
+function normalizeLocalAuthState(value: unknown): LocalAuthState & { authUrl: string | null } {
+  if (!value || typeof value !== "object") {
+    return {
+      authenticated: false,
+      mode: null,
+      account: null,
+      updatedAt: null,
+      authUrl: null
+    };
+  }
+
+  const candidate = value as {
+    authenticated?: unknown;
+    mode?: unknown;
+    account?: unknown;
+    updatedAt?: unknown;
+    authUrl?: unknown;
+  };
+  const mode = candidate.mode === "chatgpt" || candidate.mode === "apiKey" ? candidate.mode : null;
+  const accountValue = candidate.account;
+  const account =
+    accountValue &&
+    typeof accountValue === "object" &&
+    "label" in accountValue &&
+    typeof (accountValue as { label?: unknown }).label === "string"
+      ? { label: (accountValue as { label: string }).label }
+      : null;
+
+  return {
+    authenticated: candidate.authenticated === true,
+    mode,
+    account,
+    updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : null,
+    authUrl: typeof candidate.authUrl === "string" ? candidate.authUrl : null
+  };
+}
+
 function createEncryptedLocalAuthStore(baseDir: string): {
   read(): Promise<LocalAuthState>;
   write(state: LocalAuthState): Promise<void>;
@@ -227,7 +264,7 @@ function registerIpcHandlers(): void {
         throw new Error("Unsupported local login mode");
       }
 
-      const state = await runtimeManager.loginStart(payload);
+      const state = normalizeLocalAuthState(await runtimeManager.loginStart(payload));
       if (payload.mode === "chatgpt" && state.authUrl) {
         openExternalSafely(state.authUrl);
       }
@@ -236,27 +273,30 @@ function registerIpcHandlers(): void {
     }
   );
 
-  ipcMain.handle(IPC_CHANNELS.agentLocalLoginStatus, async () => {
-    return runtimeManager.loginStatus();
+  ipcMain.handle(IPC_CHANNELS.agentLocalLoginStatus, async (): Promise<unknown> => {
+    return normalizeLocalAuthState(await runtimeManager.loginStatus());
   });
 
   ipcMain.handle(
     IPC_CHANNELS.agentLocalLoginCancel,
-    async (_event, payload: AgentLocalLoginCancelInput) => {
+    async (_event, payload: AgentLocalLoginCancelInput): Promise<unknown> => {
       if (!payload || typeof payload.loginId !== "string") {
         throw new Error("Invalid login cancel payload");
       }
 
-      return runtimeManager.loginCancel(payload);
+      const result: unknown = await runtimeManager.loginCancel(payload);
+      return result;
     }
   );
 
-  ipcMain.handle(IPC_CHANNELS.agentLocalLogout, async () => {
-    return runtimeManager.logout();
+  ipcMain.handle(IPC_CHANNELS.agentLocalLogout, async (): Promise<unknown> => {
+    const result: unknown = await runtimeManager.logout();
+    return result;
   });
 
-  ipcMain.handle(IPC_CHANNELS.agentLocalRateLimitsRead, async () => {
-    return runtimeManager.readRateLimits();
+  ipcMain.handle(IPC_CHANNELS.agentLocalRateLimitsRead, async (): Promise<unknown> => {
+    const result: unknown = await runtimeManager.readRateLimits();
+    return result;
   });
 
   ipcMain.handle(

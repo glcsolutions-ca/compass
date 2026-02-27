@@ -703,6 +703,7 @@ jobs:
       HEAD_SHA: ${{ needs.publish_desktop_release_candidate.outputs.head_sha }}
       RELEASE_TAG: ${{ needs.publish_desktop_release_candidate.outputs.release_tag }}
       DRAFT: ${{ needs.publish_desktop_release_candidate.outputs.draft }}
+      GH_REPO: ${{ github.repository }}
     outputs:
       release_url: ${{ steps.publish.outputs.release_url }}
     steps:
@@ -753,18 +754,18 @@ jobs:
           notes="Desktop deployment pipeline release for release candidate $HEAD_SHA"
           assets=( "${dmg_files[0]}" "${msi_files[0]}" "SHA256SUMS.txt" )
 
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
-            gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" --notes "$notes"
+          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --repo "$GH_REPO" --clobber
+            gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --title "$RELEASE_TAG" --notes "$notes"
           else
             if [ "$DRAFT" = "true" ]; then
-              gh release create "$RELEASE_TAG" "${assets[@]}" --title "$RELEASE_TAG" --notes "$notes" --draft
+              gh release create "$RELEASE_TAG" "${assets[@]}" --repo "$GH_REPO" --title "$RELEASE_TAG" --notes "$notes" --draft
             else
-              gh release create "$RELEASE_TAG" "${assets[@]}" --title "$RELEASE_TAG" --notes "$notes"
+              gh release create "$RELEASE_TAG" "${assets[@]}" --repo "$GH_REPO" --title "$RELEASE_TAG" --notes "$notes"
             fi
           fi
 
-          release_url="$(gh release view "$RELEASE_TAG" --json url --jq .url)"
+          release_url="$(gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json url --jq .url)"
           echo "release_url=$release_url" >> "$GITHUB_OUTPUT"
 
       - name: Write desktop production publish artifact

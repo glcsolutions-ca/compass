@@ -813,7 +813,7 @@ jobs:
       - name: Upload desktop production artifact
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-deployment-stage-${{ env.HEAD_SHA }}
+          name: desktop-production-publish-${{ env.HEAD_SHA }}
           path: |
             .artifacts/desktop-deployment-stage/${{ env.HEAD_SHA }}/release.json
             .artifacts/desktop-deployment-stage/${{ env.HEAD_SHA }}/installers

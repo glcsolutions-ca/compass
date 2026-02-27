@@ -11,6 +11,12 @@ Operate and verify the dual-mode groundwork (`cloud` + `local`) without changing
 3. Dynamic Sessions runtime image is deployed for cloud mode execution.
 4. Desktop app is running for local mode validation.
 
+## Migration Notes
+
+1. Migration `1772161000000_agent_runtime_groundwork.mjs` renames legacy `codex_*` tables to `agent_*` and adds execution metadata fields.
+2. Index renames use raw SQL (`alter index if exists ... rename to ...`) for compatibility with `node-pg-migrate`; avoid `pgm.renameIndex` in this repo.
+3. Keep migration edits forward-only: add a new migration for follow-up fixes instead of modifying an applied migration.
+
 ## Required Environment Flags
 
 1. `AGENT_GATEWAY_ENABLED=true`

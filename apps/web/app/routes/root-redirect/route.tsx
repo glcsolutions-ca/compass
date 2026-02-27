@@ -3,12 +3,7 @@ import { parseAuthShellData, resolveAuthenticatedLandingPath } from "~/features/
 import { getAuthMe } from "~/lib/api/compass-client";
 
 export async function clientLoader({ request }: { request: Request }) {
-  let result: Awaited<ReturnType<typeof getAuthMe>> | null;
-  try {
-    result = await getAuthMe(request);
-  } catch {
-    return redirect("/login");
-  }
+  const result = await getAuthMe(request);
 
   if (result.status === 200 && result.data) {
     const auth = parseAuthShellData(result.data);

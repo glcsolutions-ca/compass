@@ -9,17 +9,10 @@ export async function loadAuthShellData({
 }: {
   request: Request;
 }): Promise<AuthShellLoaderData | Response> {
-  const loginRedirect = `/login?returnTo=${encodeURIComponent(buildReturnTo(request))}`;
+  const result = await getAuthMe(request);
 
-  let result: Awaited<ReturnType<typeof getAuthMe>>;
-  try {
-    result = await getAuthMe(request);
-  } catch {
-    return redirect(loginRedirect);
-  }
-
-  if (result.status === 401 || result.status >= 500) {
-    return redirect(loginRedirect);
+  if (result.status === 401) {
+    return redirect(`/login?returnTo=${encodeURIComponent(buildReturnTo(request))}`);
   }
 
   if (!result.data) {
@@ -29,7 +22,7 @@ export async function loadAuthShellData({
 
   const auth = parseAuthShellData(result.data);
   if (!auth) {
-    return redirect(loginRedirect);
+    return redirect(`/login?returnTo=${encodeURIComponent(buildReturnTo(request))}`);
   }
 
   return auth;

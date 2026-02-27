@@ -98,20 +98,8 @@ describe("shell loader", () => {
     });
   });
 
-  it("redirects to login when auth context service is unavailable", async () => {
+  it("throws when authenticated context cannot be loaded", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
-
-    const result = await loadAuthShellData({
-      request: new Request("http://web.test/workspaces")
-    });
-
-    expect(result).toBeInstanceOf(Response);
-    expect((result as Response).status).toBe(302);
-    expect((result as Response).headers.get("Location")).toBe("/login?returnTo=%2Fworkspaces");
-  });
-
-  it("throws when non-401 auth context errors return without data", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 403 }));
 
     await expect(
       loadAuthShellData({

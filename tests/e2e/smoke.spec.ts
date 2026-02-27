@@ -281,13 +281,7 @@ async function runFlow(
       let composerVisible = await composerInput.isVisible().catch(() => false);
       let sendVisible = await sendButton.isVisible().catch(() => false);
 
-      const shouldAttemptSignInNavigation = requireAuthGateway || smokeChatSendMode === "required";
-
-      if (
-        (!composerVisible || !sendVisible) &&
-        smokeChatSendMode !== "disabled" &&
-        shouldAttemptSignInNavigation
-      ) {
+      if ((!composerVisible || !sendVisible) && smokeChatSendMode !== "disabled") {
         const signInLink = page.getByTestId("sign-in-link").first();
         const signInVisible = await signInLink.isVisible().catch(() => false);
         if (signInVisible) {

@@ -1,4 +1,5 @@
 import { appendGithubOutput, requireEnv, writeJsonFile } from "../../shared/pipeline-utils.mjs";
+import { createCcsError, withCcsGuardrail } from "../../shared/ccs-contract.mjs";
 
 function asBool(value) {
   return (
@@ -70,6 +71,8 @@ async function main() {
   const artifactPath = `.artifacts/deployment-stage/${headSha}/result.json`;
   await writeJsonFile(artifactPath, {
     schemaVersion: "1",
+    ccsVersion: "1",
+    guardrailId: "deployment.stage-decision",
     generatedAt: new Date().toISOString(),
     headSha,
     changeClass,
@@ -99,6 +102,35 @@ async function main() {
     production_decision: productionDecision,
     reason_codes_json: JSON.stringify(reasonCodes)
   });
+
+  if (productionDecision !== "YES") {
+    throw createCcsError({
+      code: reasonCodes[0] || "DEPLOYMENT_STAGE_FAIL",
+      why: `Deployment stage decision is ${productionDecision}.`,
+      fix: "Deployment-stage checks must pass before production decision is YES.",
+      doCommands: [
+        `cat ${artifactPath}`,
+        'gh run view "$GITHUB_RUN_ID" --log',
+        "fix deployment-stage failures and rerun"
+      ],
+      ref: "docs/agents/troubleshooting.md#deployment-stage-failure"
+    });
+  }
+
+  return { status: "pass", code: "DEPLOYMENT_STAGE_PASS" };
 }
 
-void main();
+void withCcsGuardrail({
+  guardrailId: "deployment.stage-decision",
+  command: "node scripts/pipeline/cloud/deployment-stage/decide-deployment-stage.mjs",
+  passCode: "DEPLOYMENT_STAGE_PASS",
+  passRef: "docs/agents/troubleshooting.md#deployment-stage-failure",
+  run: main,
+  mapError: (error) => ({
+    code: "CCS_UNEXPECTED_ERROR",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Resolve deployment stage decision runtime errors.",
+    doCommands: ["node scripts/pipeline/cloud/deployment-stage/decide-deployment-stage.mjs"],
+    ref: "docs/ccs.md#output-format"
+  })
+});

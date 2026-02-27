@@ -1,5 +1,6 @@
 import path from "node:path";
 import { appendGithubOutput, requireEnv, writeJsonFile } from "./pipeline-utils.mjs";
+import { withCcsGuardrail } from "./ccs-contract.mjs";
 
 const GITHUB_API_VERSION = "2022-11-28";
 const DEFAULT_TIMEOUT_SECONDS = 300;
@@ -122,6 +123,8 @@ async function main() {
   const artifactPath = path.join(".artifacts", "commit-stage", headSha, "evidence.json");
   await writeJsonFile(artifactPath, {
     schemaVersion: "1",
+    ccsVersion: "1",
+    guardrailId: "evidence.commit-stage-verify",
     generatedAt: new Date().toISOString(),
     headSha,
     workflowFile,
@@ -141,6 +144,21 @@ async function main() {
     commit_stage_run_id: String(matchedRun.id),
     commit_stage_evidence_path: artifactPath
   });
+
+  return { status: "pass", code: "VERIFY_COMMIT_STAGE_EVIDENCE_PASS" };
 }
 
-void main();
+void withCcsGuardrail({
+  guardrailId: "evidence.commit-stage-verify",
+  command: "node scripts/pipeline/shared/verify-commit-stage-evidence.mjs",
+  passCode: "VERIFY_COMMIT_STAGE_EVIDENCE_PASS",
+  passRef: "docs/runbooks/cloud-deployment-pipeline-setup.md",
+  run: main,
+  mapError: (error) => ({
+    code: "VERIFY_COMMIT_STAGE_EVIDENCE_FAIL",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Ensure commit-stage evidence exists and is successful for the release SHA.",
+    doCommands: ["node scripts/pipeline/shared/verify-commit-stage-evidence.mjs"],
+    ref: "docs/runbooks/cloud-deployment-pipeline-setup.md"
+  })
+});

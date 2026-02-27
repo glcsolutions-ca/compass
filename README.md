@@ -48,6 +48,15 @@ pnpm dev:worker
 - `pnpm db:postgres:up` - start local Postgres, apply migrations, seed data
 - `pnpm db:postgres:down` - stop local Postgres
 
+## Console Contract Steering (CCS)
+
+Primary directive:
+
+**Run guardrails; if they fail, do exactly what the console says until green.**
+
+- Contract: `docs/ccs.md`
+- Guardrail inventory: `.github/policy/ccs-guardrails.json`
+
 ## Local Env Bootstrap
 
 - `pnpm dev` and `pnpm db:postgres:*` call `scripts/dev/ensure-local-env.mjs` before service startup.
@@ -65,23 +74,7 @@ pnpm dev:worker
 4. Run `pnpm build` when changes affect runtime/build outputs.
 5. Commit and push to `main`.
 6. If high-risk policy blocks direct `main` integration, use a short-lived branch and open a PR.
-
-If `pnpm test:full` fails backend preflight (`FULL001`), run:
-
-```bash
-pnpm db:postgres:up
-pnpm test:full
-pnpm db:postgres:down
-```
-
-If `pnpm test:quick` fails formatting (`FMT001`), run:
-
-```bash
-pnpm exec lint-staged
-# or full repo:
-pnpm format
-pnpm test:quick
-```
+7. If any guardrail fails, follow the printed `WHY/FIX/DO/REF` steps exactly.
 
 ## Test output behavior
 

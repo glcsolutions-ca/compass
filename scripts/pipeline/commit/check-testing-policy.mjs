@@ -3,6 +3,7 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { createCcsError, withCcsGuardrail } from "../shared/ccs-contract.mjs";
 import {
   DEFAULT_TEST_POLICY_PATH,
   REQUIRED_TEST_RULE_IDS,
@@ -608,28 +609,48 @@ export async function runTestingPolicy(options = {}) {
 }
 
 export async function main() {
-  const result = await runTestingPolicy();
+  await withCcsGuardrail({
+    guardrailId: "testing.policy",
+    command: "pnpm ci:testing-policy",
+    passCode: "TC000",
+    passRef: "tests/policy/README.md#troubleshooting",
+    run: async () => {
+      const result = await runTestingPolicy();
 
-  if (result.status === "fail") {
-    console.error("Testing policy violations detected:");
-    for (const violation of result.violations) {
-      console.error(formatViolation(violation));
-    }
-    process.exit(1);
-  }
+      if (result.status === "fail") {
+        console.error("Testing policy violations detected:");
+        for (const violation of result.violations) {
+          console.error(formatViolation(violation));
+        }
 
-  console.info(
-    `Testing policy passed (${result.scannedFileCount} files scanned). Artifact: ${result.resultPath}`
-  );
+        const primaryCode = result.violations[0]?.ruleId ?? "TC000";
+        throw createCcsError({
+          code: primaryCode,
+          why: `Testing policy violations detected (${result.violations.length}).`,
+          fix: "Resolve testing policy violations and keep quarantine metadata current.",
+          doCommands: ["pnpm ci:testing-policy", "pnpm test:quick"],
+          ref: "tests/policy/README.md#troubleshooting"
+        });
+      }
+
+      console.info(
+        `Testing policy passed (${result.scannedFileCount} files scanned). Artifact: ${result.resultPath}`
+      );
+      return { status: "pass", code: "TC000" };
+    },
+    mapError: (error) => ({
+      code: "CCS_UNEXPECTED_ERROR",
+      why: error instanceof Error ? error.message : String(error),
+      fix: "Resolve testing policy runtime errors before continuing.",
+      doCommands: ["pnpm ci:testing-policy"],
+      ref: "docs/ccs.md#output-format"
+    })
+  });
 }
 
 const isDirectExecution =
   typeof process.argv[1] === "string" && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isDirectExecution) {
-  void main().catch((error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(message);
-    process.exit(1);
-  });
+  void main();
 }

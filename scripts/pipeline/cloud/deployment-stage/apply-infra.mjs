@@ -4,6 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { getHeadSha, requireEnv, sleep, writeArtifact } from "./utils.mjs";
+import { withCcsGuardrail } from "../../shared/ccs-contract.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -304,14 +305,25 @@ async function main() {
       `Artifact dir: ${artifactDir}`
     ].join("\n")
   );
+  return { status: "pass", code: "INFRA_APPLY_PASS" };
 }
 
 const isDirectExecution =
   process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 
 if (isDirectExecution) {
-  void main().catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
+  void withCcsGuardrail({
+    guardrailId: "deployment.infra-apply",
+    command: "node scripts/pipeline/cloud/deployment-stage/apply-infra.mjs",
+    passCode: "INFRA_APPLY_PASS",
+    passRef: "docs/ccs.md#output-format",
+    run: main,
+    mapError: (error) => ({
+      code: "INFRA_APPLY_FAIL",
+      why: error instanceof Error ? error.message : String(error),
+      fix: "Resolve infra deployment validation/apply failures.",
+      doCommands: ["node scripts/pipeline/cloud/deployment-stage/apply-infra.mjs"],
+      ref: "docs/ccs.md#output-format"
+    })
   });
 }

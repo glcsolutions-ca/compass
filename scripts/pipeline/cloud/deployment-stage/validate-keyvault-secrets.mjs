@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
 import { appendGithubOutput, requireEnv, writeJsonFile } from "../../shared/pipeline-utils.mjs";
+import { withCcsGuardrail } from "../../shared/ccs-contract.mjs";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_REQUIRED_SECRET_NAMES = [
@@ -105,9 +106,21 @@ async function main() {
   if (status !== "pass") {
     throw new Error(`Missing required Key Vault secrets in ${keyVaultName}: ${missing.join(", ")}`);
   }
+
+  return { status: "pass", code: "KEYVAULT_SECRETS_PASS" };
 }
 
-void main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
+void withCcsGuardrail({
+  guardrailId: "deployment.keyvault-secrets-validate",
+  command: "node scripts/pipeline/cloud/deployment-stage/validate-keyvault-secrets.mjs",
+  passCode: "KEYVAULT_SECRETS_PASS",
+  passRef: "docs/runbooks/cloud-deployment-pipeline-setup.md",
+  run: main,
+  mapError: (error) => ({
+    code: "KEYVAULT_SECRETS_FAIL",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Ensure all required Key Vault secrets exist before deployment.",
+    doCommands: ["node scripts/pipeline/cloud/deployment-stage/validate-keyvault-secrets.mjs"],
+    ref: "docs/runbooks/cloud-deployment-pipeline-setup.md"
+  })
 });

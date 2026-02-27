@@ -22,6 +22,16 @@ Agents can run these locally when needed.
 - `pnpm dev` — run local apps/services
 - `pnpm build` — build all apps/packages
 
+## Console Contract Steering (CCS)
+
+Primary directive:
+
+**Run guardrails; if they fail, do exactly what the console says until green.**
+
+- Canonical contract: `docs/ccs.md`
+- Guardrail registry: `.github/policy/ccs-guardrails.json`
+- Do not bypass failing guardrails; follow `WHY/FIX/DO/REF` output.
+
 ### Testing
 
 - `pnpm test:quick` — **commit-stage** checks (policy + formatting + lint + typecheck + unit/component + contract)

@@ -18,21 +18,19 @@ pnpm exec lint-staged
 pnpm test:quick
 ```
 
-If `pnpm test:full` prints `FULL001 backend prerequisites missing`, run:
+Primary CCS directive:
 
-```bash
-pnpm db:postgres:up
-pnpm test:full
-pnpm db:postgres:down
-```
+**Run guardrails; if they fail, do exactly what the console says until green.**
 
-If `pnpm test:quick` prints `FMT001 formatting violations detected`, run:
+Canonical fail envelope:
 
-```bash
-pnpm exec lint-staged
-# or full repo:
-pnpm format
-pnpm test:quick
+```text
+CCS:FAIL <guardrail_id> CODE:<reason_code>
+WHY: <one-line cause>
+FIX: <one-line required state>
+DO:
+<copy/paste command(s)>
+REF: <repo_path[#anchor]>
 ```
 
 Quick/unit output contract:

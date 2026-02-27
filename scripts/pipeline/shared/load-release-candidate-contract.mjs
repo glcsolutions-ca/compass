@@ -1,5 +1,6 @@
 import path from "node:path";
 import { appendGithubOutput, readJsonFile, requireEnv, writeJsonFile } from "./pipeline-utils.mjs";
+import { createCcsError, withCcsGuardrail } from "./ccs-contract.mjs";
 
 const DIGEST_PATTERN = /^.+@sha256:[a-fA-F0-9]{64}$/;
 
@@ -106,9 +107,34 @@ async function main() {
   });
 
   console.info(`Loaded release candidate contract for ${headSha}`);
+  if (releaseCandidateRefContractStatus !== "pass") {
+    throw createCcsError({
+      code: "RCCONTRACT001",
+      why: `Release candidate contract is ${releaseCandidateRefContractStatus}.`,
+      fix: "All release candidate refs must be present and digest-pinned.",
+      doCommands: [
+        `cat ${copyPath}`,
+        "verify RELEASE_CANDIDATE_* refs are digest-pinned",
+        "rerun load-release-candidate-contract"
+      ],
+      ref: "docs/ccs.md#output-format"
+    });
+  }
+
+  return { status: "pass", code: "RCCONTRACT000" };
 }
 
-void main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
+void withCcsGuardrail({
+  guardrailId: "release-candidate.contract-load",
+  command: "node scripts/pipeline/shared/load-release-candidate-contract.mjs",
+  passCode: "RCCONTRACT000",
+  passRef: "docs/ccs.md#output-format",
+  run: main,
+  mapError: (error) => ({
+    code: "CCS_UNEXPECTED_ERROR",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Resolve release-candidate contract loading errors.",
+    doCommands: ["node scripts/pipeline/shared/load-release-candidate-contract.mjs"],
+    ref: "docs/ccs.md#output-format"
+  })
 });

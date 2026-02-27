@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { createCcsError, withCcsGuardrail } from "../shared/ccs-contract.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -71,15 +72,32 @@ async function main() {
     console.error(
       `Remove legacy ${blockedEnvName} and ${blockedBicepParameter} references from active runtime/pipeline paths.`
     );
-    process.exit(1);
+    throw createCcsError({
+      code: "SB001",
+      why: `Legacy Service Bus connection string references detected (${violations.length} files).`,
+      fix: "Use managed identity Service Bus contract across runtime and pipeline paths.",
+      doCommands: ["pnpm ci:service-bus-auth-contract", "pnpm test:quick"],
+      ref: "docs/commit-stage-policy.md"
+    });
   }
 
   console.info(
     `Service Bus managed identity contract passed (${filesToScan.length} files scanned).`
   );
+  return { status: "pass", code: "SB000" };
 }
 
-void main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
+void withCcsGuardrail({
+  guardrailId: "service-bus.auth-contract",
+  command: "pnpm ci:service-bus-auth-contract",
+  passCode: "SB000",
+  passRef: "docs/commit-stage-policy.md",
+  run: main,
+  mapError: (error) => ({
+    code: "CCS_UNEXPECTED_ERROR",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Resolve Service Bus contract runtime errors and rerun the guardrail.",
+    doCommands: ["pnpm ci:service-bus-auth-contract"],
+    ref: "docs/ccs.md#output-format"
+  })
 });

@@ -1,4 +1,5 @@
 import { appendGithubOutput, requireEnv } from "./pipeline-utils.mjs";
+import { withCcsGuardrail } from "./ccs-contract.mjs";
 
 const GITHUB_API_VERSION = "2022-11-28";
 
@@ -90,9 +91,20 @@ async function main() {
   });
 
   console.info(`Resolved ${workflowFile} run ${run.id} for ${headSha} (status=${matchedStatus})`);
+  return { status: "pass", code: "TRIGGERED_RUN000" };
 }
 
-void main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
+void withCcsGuardrail({
+  guardrailId: "triggered-run.resolve",
+  command: "node scripts/pipeline/shared/resolve-triggered-run-id.mjs",
+  passCode: "TRIGGERED_RUN000",
+  passRef: "docs/ccs.md#output-format",
+  run: main,
+  mapError: (error) => ({
+    code: "TRIGGERED_RUN001",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Resolve workflow run resolution inputs and retry.",
+    doCommands: ["node scripts/pipeline/shared/resolve-triggered-run-id.mjs"],
+    ref: "docs/ccs.md#output-format"
+  })
 });

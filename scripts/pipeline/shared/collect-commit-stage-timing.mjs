@@ -1,4 +1,5 @@
 import path from "node:path";
+import { withCcsGuardrail } from "./ccs-contract.mjs";
 import {
   appendGithubOutput,
   appendGithubStepSummary,
@@ -297,6 +298,20 @@ async function main() {
   }
 
   console.info(`commit-stage timing artifact written: ${artifactPath}`);
+  return { status: "pass", code: "COMMIT_TIMING000" };
 }
 
-void main();
+void withCcsGuardrail({
+  guardrailId: "timing.commit-stage",
+  command: "node scripts/pipeline/shared/collect-commit-stage-timing.mjs",
+  passCode: "COMMIT_TIMING000",
+  passRef: "docs/commit-stage-policy.md#commit-stage-timing-slo",
+  run: main,
+  mapError: (error) => ({
+    code: "COMMIT_TIMING001",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Resolve commit-stage timing collection errors.",
+    doCommands: ["node scripts/pipeline/shared/collect-commit-stage-timing.mjs"],
+    ref: "docs/commit-stage-policy.md#commit-stage-timing-slo"
+  })
+});

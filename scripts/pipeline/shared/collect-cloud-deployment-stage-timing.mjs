@@ -1,4 +1,5 @@
 import path from "node:path";
+import { withCcsGuardrail } from "./ccs-contract.mjs";
 import {
   appendGithubOutput,
   appendGithubStepSummary,
@@ -247,6 +248,21 @@ async function main() {
       `- production smoke target: ${formatMetric(productionSmokeTarget)}`
     ].join("\n")
   );
+
+  return { status: "pass", code: "CLOUD_TIMING000" };
 }
 
-void main();
+void withCcsGuardrail({
+  guardrailId: "timing.cloud-deployment-stage",
+  command: "node scripts/pipeline/shared/collect-cloud-deployment-stage-timing.mjs",
+  passCode: "CLOUD_TIMING000",
+  passRef: "docs/ccs.md#output-format",
+  run: main,
+  mapError: (error) => ({
+    code: "CLOUD_TIMING001",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Resolve cloud timing metric collection failures.",
+    doCommands: ["node scripts/pipeline/shared/collect-cloud-deployment-stage-timing.mjs"],
+    ref: "docs/ccs.md#output-format"
+  })
+});

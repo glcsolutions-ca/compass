@@ -1,4 +1,5 @@
 import path from "node:path";
+import { createCcsError, withCcsGuardrail } from "../shared/ccs-contract.mjs";
 import { evaluateIntegrationGateResults } from "./decide-integration-gate-lib.mjs";
 import { appendGithubOutput, requireEnv, writeJsonFile } from "../shared/pipeline-utils.mjs";
 
@@ -68,6 +69,8 @@ async function main() {
   const gatePath = path.join(".artifacts", "integration-gate", testedSha, "result.json");
   const gatePayload = {
     schemaVersion: "1",
+    ccsVersion: "1",
+    guardrailId: "integration-gate.decision",
     generatedAt: new Date().toISOString(),
     headSha,
     testedSha,
@@ -92,10 +95,34 @@ async function main() {
     for (const reason of reasons) {
       console.error(`- [${reason.code}] ${reason.message}`);
     }
-    process.exit(1);
+    throw createCcsError({
+      code: reasons[0]?.code ?? "INTEGRATION_GATE_BLOCKED",
+      why: `Integration gate blocked (${reasons.length} reason(s)).`,
+      fix: "All required integration checks must pass.",
+      doCommands: [
+        'gh run view "$GITHUB_RUN_ID" --log',
+        `cat ${gatePath}`,
+        "fix forward on main and push a corrective commit"
+      ],
+      ref: "docs/commit-stage-policy.md#integration-gate-checks"
+    });
   }
 
   console.info(`integration-gate passed for head=${headSha} tested=${testedSha}`);
+  return { status: "pass", code: "INTEGRATION_GATE_PASS" };
 }
 
-void main();
+void withCcsGuardrail({
+  guardrailId: "integration-gate.decision",
+  command: "node scripts/pipeline/commit/decide-integration-gate.mjs",
+  passCode: "INTEGRATION_GATE_PASS",
+  passRef: "docs/commit-stage-policy.md#integration-gate-checks",
+  run: main,
+  mapError: (error) => ({
+    code: "CCS_UNEXPECTED_ERROR",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Resolve integration-gate decision runtime errors.",
+    doCommands: ["node scripts/pipeline/commit/decide-integration-gate.mjs"],
+    ref: "docs/ccs.md#output-format"
+  })
+});

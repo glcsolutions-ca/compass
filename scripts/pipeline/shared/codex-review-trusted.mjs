@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { withCcsGuardrail } from "./ccs-contract.mjs";
 import {
   appendGithubOutput,
   parsePossiblyFencedJson,
@@ -202,6 +203,20 @@ async function main() {
   console.info(
     `Trusted codex review complete for PR #${prNumber}: overall=${report.overall}; findings=${report.findings.length}`
   );
+  return { status: "pass", code: "CODEX_REVIEW_TRUSTED_PASS" };
 }
 
-void main();
+void withCcsGuardrail({
+  guardrailId: "codex-review.trusted",
+  command: "node scripts/pipeline/shared/codex-review-trusted.mjs",
+  passCode: "CODEX_REVIEW_TRUSTED_PASS",
+  passRef: "docs/agents/troubleshooting.md#codex-review-trusted-failure",
+  run: main,
+  mapError: (error) => ({
+    code: "CODEX_REVIEW_TRUSTED_FAIL",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Resolve trusted review runtime/validation errors.",
+    doCommands: ["node scripts/pipeline/shared/codex-review-trusted.mjs"],
+    ref: "docs/agents/troubleshooting.md#codex-review-trusted-failure"
+  })
+});

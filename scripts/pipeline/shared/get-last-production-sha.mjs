@@ -1,4 +1,5 @@
 import { appendGithubOutput, requireEnv } from "./pipeline-utils.mjs";
+import { withCcsGuardrail } from "./ccs-contract.mjs";
 
 const apiVersion = "2022-11-28";
 const token = requireEnv("GITHUB_TOKEN");
@@ -81,6 +82,20 @@ async function main() {
   console.info(
     `Resolved base SHA for classification: source=${resolution.baseSource} deploymentId=${resolution.baseDeploymentId || "none"} baseSha=${resolution.baseSha || "(empty; classifier fallback)"}`
   );
+  return { status: "pass", code: "LAST_PROD_SHA000" };
 }
 
-void main();
+void withCcsGuardrail({
+  guardrailId: "production-sha.resolve",
+  command: "node scripts/pipeline/shared/get-last-production-sha.mjs",
+  passCode: "LAST_PROD_SHA000",
+  passRef: "docs/ccs.md#output-format",
+  run: main,
+  mapError: (error) => ({
+    code: "LAST_PROD_SHA001",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Resolve production SHA lookup errors and retry.",
+    doCommands: ["node scripts/pipeline/shared/get-last-production-sha.mjs"],
+    ref: "docs/ccs.md#output-format"
+  })
+});

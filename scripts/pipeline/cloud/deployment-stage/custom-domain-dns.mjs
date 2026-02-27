@@ -1,5 +1,6 @@
 import path from "node:path";
 import { getHeadSha, requireEnv, runJson, writeArtifact } from "./utils.mjs";
+import { withCcsGuardrail } from "../../shared/ccs-contract.mjs";
 
 const resourceGroup = requireEnv("AZURE_RESOURCE_GROUP");
 const apiAppName = requireEnv("ACA_API_APP_NAME");
@@ -101,6 +102,20 @@ async function main() {
     console.info(`${record.type} ${record.name} -> ${record.value} (TTL ${record.ttlSeconds})`);
   }
   console.info(`Wrote DNS plan: ${artifactPath}`);
+  return { status: "pass", code: "CUSTOM_DOMAIN_DNS_PLAN" };
 }
 
-void main();
+void withCcsGuardrail({
+  guardrailId: "deployment.custom-domain-dns",
+  command: "node scripts/pipeline/cloud/deployment-stage/custom-domain-dns.mjs",
+  passCode: "CUSTOM_DOMAIN_DNS_PLAN",
+  passRef: "docs/runbooks/cloud-deployment-pipeline-setup.md",
+  run: main,
+  mapError: (error) => ({
+    code: "CUSTOM_DOMAIN_DNS_FAIL",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Resolve custom domain DNS plan prerequisites and retry.",
+    doCommands: ["node scripts/pipeline/cloud/deployment-stage/custom-domain-dns.mjs"],
+    ref: "docs/runbooks/cloud-deployment-pipeline-setup.md"
+  })
+});

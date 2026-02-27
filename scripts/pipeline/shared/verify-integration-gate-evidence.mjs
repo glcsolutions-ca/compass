@@ -1,5 +1,6 @@
 import path from "node:path";
 import { appendGithubOutput, requireEnv, writeJsonFile } from "./pipeline-utils.mjs";
+import { withCcsGuardrail } from "./ccs-contract.mjs";
 
 const GITHUB_API_VERSION = "2022-11-28";
 const DEFAULT_TIMEOUT_SECONDS = 300;
@@ -121,6 +122,8 @@ async function main() {
   const artifactPath = path.join(".artifacts", "integration-gate", headSha, "evidence.json");
   await writeJsonFile(artifactPath, {
     schemaVersion: "1",
+    ccsVersion: "1",
+    guardrailId: "evidence.integration-gate-verify",
     generatedAt: new Date().toISOString(),
     headSha,
     workflowFile,
@@ -140,6 +143,21 @@ async function main() {
     integration_gate_run_id: String(matchedRun.id),
     integration_gate_evidence_path: artifactPath
   });
+
+  return { status: "pass", code: "VERIFY_INTEGRATION_GATE_EVIDENCE_PASS" };
 }
 
-void main();
+void withCcsGuardrail({
+  guardrailId: "evidence.integration-gate-verify",
+  command: "node scripts/pipeline/shared/verify-integration-gate-evidence.mjs",
+  passCode: "VERIFY_INTEGRATION_GATE_EVIDENCE_PASS",
+  passRef: "docs/runbooks/cloud-deployment-pipeline-setup.md",
+  run: main,
+  mapError: (error) => ({
+    code: "VERIFY_INTEGRATION_GATE_EVIDENCE_FAIL",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Ensure integration-gate evidence exists and is successful for the release SHA.",
+    doCommands: ["node scripts/pipeline/shared/verify-integration-gate-evidence.mjs"],
+    ref: "docs/runbooks/cloud-deployment-pipeline-setup.md"
+  })
+});

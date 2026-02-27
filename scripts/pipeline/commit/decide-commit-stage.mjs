@@ -1,4 +1,5 @@
 import path from "node:path";
+import { createCcsError, withCcsGuardrail } from "../shared/ccs-contract.mjs";
 import { evaluateCommitStageResults } from "./decide-commit-stage-lib.mjs";
 import { appendGithubOutput, requireEnv, writeJsonFile } from "../shared/pipeline-utils.mjs";
 
@@ -104,6 +105,8 @@ async function main() {
   const gatePath = path.join(".artifacts", "commit-stage", testedSha, "result.json");
   const gatePayload = {
     schemaVersion: "1",
+    ccsVersion: "1",
+    guardrailId: "commit-stage.decision",
     generatedAt: new Date().toISOString(),
     headSha,
     testedSha,
@@ -134,10 +137,34 @@ async function main() {
     for (const reason of reasons) {
       console.error(`- [${reason.code}] ${reason.message}`);
     }
-    process.exit(1);
+    throw createCcsError({
+      code: reasons[0]?.code ?? "COMMIT_STAGE_BLOCKED",
+      why: `Commit-stage blocked (${reasons.length} reason(s)).`,
+      fix: "All required commit-stage checks must pass.",
+      doCommands: [
+        'gh run view "$GITHUB_RUN_ID" --log',
+        `cat ${gatePath}`,
+        "fix forward on main and push a corrective commit"
+      ],
+      ref: "docs/commit-stage-policy.md#commit-stage-checks"
+    });
   }
 
   console.info(`commit-stage passed for head=${headSha} tested=${testedSha}`);
+  return { status: "pass", code: "COMMIT_STAGE_PASS" };
 }
 
-void main();
+void withCcsGuardrail({
+  guardrailId: "commit-stage.decision",
+  command: "node scripts/pipeline/commit/decide-commit-stage.mjs",
+  passCode: "COMMIT_STAGE_PASS",
+  passRef: "docs/commit-stage-policy.md#commit-stage-checks",
+  run: main,
+  mapError: (error) => ({
+    code: "CCS_UNEXPECTED_ERROR",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Resolve commit-stage decision runtime errors.",
+    doCommands: ["node scripts/pipeline/commit/decide-commit-stage.mjs"],
+    ref: "docs/ccs.md#output-format"
+  })
+});

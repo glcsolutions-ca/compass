@@ -1,5 +1,6 @@
 import path from "node:path";
 import { appendGithubOutput, requireEnv, writeJsonFile } from "../../shared/pipeline-utils.mjs";
+import { createCcsError, withCcsGuardrail } from "../../shared/ccs-contract.mjs";
 
 function normalizeHttpsBaseUrl(rawUrl) {
   const parsed = new URL(rawUrl);
@@ -75,6 +76,8 @@ async function main() {
   const pass = reasons.length === 0;
   await writeJsonFile(artifactPath, {
     schemaVersion: "1",
+    ccsVersion: "1",
+    guardrailId: "desktop.backend-contract-acceptance",
     generatedAt: new Date().toISOString(),
     headSha,
     pass,
@@ -98,8 +101,36 @@ async function main() {
     for (const reason of reasons) {
       console.error(`- ${reason}`);
     }
-    process.exit(1);
+    throw createCcsError({
+      code: "DESKTOP_BACKEND_CONTRACT_NOT_PASS",
+      why: `Desktop backend compatibility contract failed (${reasons.length} reason(s)).`,
+      fix: "Ensure health and OpenAPI contract checks pass for desktop backend URL.",
+      doCommands: [
+        `cat ${artifactPath}`,
+        "verify WEB_BASE_URL / DESKTOP_BACKEND_BASE_URL and backend deployment health",
+        "rerun desktop backend contract acceptance"
+      ],
+      ref: "docs/agents/troubleshooting.md#automated-acceptance-test-gate-failure"
+    });
   }
+
+  return { status: "pass", code: "DESKTOP_BACKEND_CONTRACT_PASS" };
 }
 
-void main();
+void withCcsGuardrail({
+  guardrailId: "desktop.backend-contract-acceptance",
+  command:
+    "node scripts/pipeline/desktop/automated-acceptance-test-gate/run-desktop-backend-contract-acceptance.mjs",
+  passCode: "DESKTOP_BACKEND_CONTRACT_PASS",
+  passRef: "docs/agents/troubleshooting.md#automated-acceptance-test-gate-failure",
+  run: main,
+  mapError: (error) => ({
+    code: "CCS_UNEXPECTED_ERROR",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Resolve desktop backend contract runtime failures.",
+    doCommands: [
+      "node scripts/pipeline/desktop/automated-acceptance-test-gate/run-desktop-backend-contract-acceptance.mjs"
+    ],
+    ref: "docs/ccs.md#output-format"
+  })
+});

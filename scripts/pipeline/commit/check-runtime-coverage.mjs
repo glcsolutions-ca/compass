@@ -1,4 +1,5 @@
 import path from "node:path";
+import { withCcsGuardrail } from "../shared/ccs-contract.mjs";
 import {
   appendGithubStepSummary,
   fileExists,
@@ -119,9 +120,21 @@ async function main() {
       "Runtime coverage policy check failed: one or more packages are below threshold"
     );
   }
+
+  return { status: "pass", code: "RCOV000" };
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
+void withCcsGuardrail({
+  guardrailId: "runtime.coverage",
+  command: "pnpm ci:runtime-coverage",
+  passCode: "RCOV000",
+  passRef: "tests/policy/README.md#layer-4-runtime-coverage-ratchet-observe-first",
+  run: main,
+  mapError: (error) => ({
+    code: "RCOV001",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Resolve runtime coverage summary/threshold failures.",
+    doCommands: ["pnpm ci:runtime-coverage"],
+    ref: "tests/policy/README.md#layer-4-runtime-coverage-ratchet-observe-first"
+  })
 });

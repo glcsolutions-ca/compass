@@ -7,6 +7,7 @@ import {
   sleep,
   writeArtifact
 } from "./utils.mjs";
+import { withCcsGuardrail } from "../../shared/ccs-contract.mjs";
 
 const SESSION_EXECUTOR_ROLE_DEFINITION_GUID = "0fb8eba5-a2bb-4abe-b1c1-49dfad359bb0";
 const EXPECTED_NETWORK_STATUS = "EgressEnabled";
@@ -292,6 +293,23 @@ async function main() {
       `Dynamic Sessions convergence verification failed (${reasonCodes.join(", ") || "UNKNOWN"})`
     );
   }
+
+  return { status: "pass", code: "DYNAMIC_SESSIONS_CONVERGENCE_PASS" };
 }
 
-void main();
+void withCcsGuardrail({
+  guardrailId: "deployment.dynamic-sessions-convergence",
+  command: "node scripts/pipeline/cloud/deployment-stage/verify-dynamic-sessions-convergence.mjs",
+  passCode: "DYNAMIC_SESSIONS_CONVERGENCE_PASS",
+  passRef: "docs/ccs.md#output-format",
+  run: main,
+  mapError: (error) => ({
+    code: "DYNAMIC_SESSIONS_CONVERGENCE_RUNTIME_ERROR",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Resolve dynamic sessions convergence failures before promotion.",
+    doCommands: [
+      "node scripts/pipeline/cloud/deployment-stage/verify-dynamic-sessions-convergence.mjs"
+    ],
+    ref: "docs/ccs.md#output-format"
+  })
+});

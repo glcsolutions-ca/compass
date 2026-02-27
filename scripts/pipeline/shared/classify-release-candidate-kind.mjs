@@ -1,4 +1,5 @@
 import path from "node:path";
+import { withCcsGuardrail } from "./ccs-contract.mjs";
 import {
   appendGithubOutput,
   classifyReleaseCandidateKind,
@@ -42,6 +43,20 @@ async function main() {
   console.info(
     `release-candidate-kind: changeClass=${changeClass} runtime=${scope.runtime} infra=${scope.infra} identity=${scope.identity} docsOnly=${scope.docsOnly} changed=${changedFiles.length}`
   );
+  return { status: "pass", code: "RCCLASS000" };
 }
 
-void main();
+void withCcsGuardrail({
+  guardrailId: "release-candidate.classify",
+  command: "node scripts/pipeline/shared/classify-release-candidate-kind.mjs",
+  passCode: "RCCLASS000",
+  passRef: "docs/commit-stage-policy.md",
+  run: main,
+  mapError: (error) => ({
+    code: "RCCLASS001",
+    why: error instanceof Error ? error.message : String(error),
+    fix: "Resolve release-candidate classification inputs and rerun.",
+    doCommands: ["node scripts/pipeline/shared/classify-release-candidate-kind.mjs"],
+    ref: "docs/commit-stage-policy.md"
+  })
+});

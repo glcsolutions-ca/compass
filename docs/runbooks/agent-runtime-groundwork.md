@@ -15,7 +15,8 @@ Operate and verify the dual-mode groundwork (`cloud` + `local`) without changing
 
 1. Migration `1772161000000_agent_runtime_groundwork.mjs` renames legacy `codex_*` tables to `agent_*` and adds execution metadata fields.
 2. Index renames use raw SQL (`alter index if exists ... rename to ...`) for compatibility with `node-pg-migrate`; avoid `pgm.renameIndex` in this repo.
-3. Keep migration edits forward-only: add a new migration for follow-up fixes instead of modifying an applied migration.
+3. If a migration file must be edited before production apply, update `db/migrations/checksums.json` with `pnpm db:migrate:checksums:update`.
+4. Keep migration edits forward-only after production apply: add a new migration for follow-up fixes instead of modifying an applied migration.
 
 ## Required Environment Flags
 

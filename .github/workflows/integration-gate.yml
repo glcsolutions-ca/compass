@@ -178,6 +178,29 @@ jobs:
           set -euo pipefail
           pnpm db:postgres:up
           pnpm test:integration
+          pnpm exec playwright install chromium
+
+          pnpm --filter @compass/api dev >/tmp/compass-api.log 2>&1 &
+          api_pid=$!
+          cleanup() {
+            kill "$api_pid" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:3001/health >/dev/null; then
+              break
+            fi
+
+            if [ "$attempt" -eq 60 ]; then
+              echo "API failed to become ready on http://127.0.0.1:3001/health"
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          SMOKE_CHAT_SEND=required pnpm test:e2e
 
       - name: Tear down local Postgres
         if: ${{ always() }}

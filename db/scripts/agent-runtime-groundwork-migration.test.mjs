@@ -5,20 +5,20 @@ describe("agent runtime groundwork migration", () => {
   it("renames codex tables to agent tables and adds mode columns", async () => {
     const renamedTables = [];
     const addedColumns = [];
-    const sqlStatements = [];
+    const renamedIndexes = [];
 
     const pgm = {
       renameTable(from, to) {
         renamedTables.push([String(from), String(to)]);
+      },
+      renameIndex(table, from, to) {
+        renamedIndexes.push([String(table), String(from), String(to)]);
       },
       addColumns(table, columns) {
         addedColumns.push([String(table), Object.keys(columns)]);
       },
       addConstraint() {},
       createIndex() {},
-      sql(statement) {
-        sqlStatements.push(String(statement));
-      },
       func(value) {
         return value;
       }
@@ -37,12 +37,16 @@ describe("agent runtime groundwork migration", () => {
       ])
     );
 
-    expect(sqlStatements).toEqual(
+    expect(renamedIndexes).toEqual(
       expect.arrayContaining([
-        'alter index if exists "codex_events_thread_created_idx" rename to "agent_events_thread_created_idx";',
-        'alter index if exists "codex_turns_thread_started_idx" rename to "agent_turns_thread_started_idx";',
-        'alter index if exists "codex_items_thread_updated_idx" rename to "agent_items_thread_updated_idx";',
-        'alter index if exists "codex_approvals_thread_created_idx" rename to "agent_approvals_thread_created_idx";'
+        ["agent_events", "codex_events_thread_created_idx", "agent_events_thread_created_idx"],
+        ["agent_turns", "codex_turns_thread_started_idx", "agent_turns_thread_started_idx"],
+        ["agent_items", "codex_items_thread_updated_idx", "agent_items_thread_updated_idx"],
+        [
+          "agent_approvals",
+          "codex_approvals_thread_created_idx",
+          "agent_approvals_thread_created_idx"
+        ]
       ])
     );
 

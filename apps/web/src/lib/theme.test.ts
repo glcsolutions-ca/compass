@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   applyPreferencesToRoot,
   LEGACY_THEME_STORAGE_KEY,
+  persistPreferences,
   resolveEffectiveMode,
   UI_MODE_STORAGE_KEY,
   UI_THEME_STORAGE_KEY,
@@ -56,5 +57,31 @@ describe("theme helpers", () => {
   it("resolves system mode against current preference", () => {
     expect(resolveEffectiveMode("system", true)).toBe("dark");
     expect(resolveEffectiveMode("system", false)).toBe("light");
+  });
+
+  it("gracefully handles restricted storage access", () => {
+    const restrictedStorage = {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+      removeItem: () => {
+        throw new Error("blocked");
+      }
+    };
+
+    expect(readPreferencesFromStorage(restrictedStorage)).toEqual({
+      theme: "compass",
+      mode: "system"
+    });
+
+    expect(() =>
+      persistPreferences(restrictedStorage, {
+        theme: "rose",
+        mode: "dark"
+      })
+    ).not.toThrow();
   });
 });

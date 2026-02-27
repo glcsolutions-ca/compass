@@ -16,12 +16,18 @@ export function swapTenantSlugInPath(pathname: string, tenantSlug: string): stri
 
   const segmentStart = pathname.indexOf(TENANT_SEGMENT) + TENANT_SEGMENT.length;
   const segmentEnd = pathname.indexOf("/", segmentStart);
+  const normalizedTenantPath = `/t/${encodeURIComponent(normalizedSlug)}`;
 
   if (segmentEnd === -1) {
-    return `/t/${encodeURIComponent(normalizedSlug)}`;
+    return `${normalizedTenantPath}/chat`;
   }
 
-  return `/t/${encodeURIComponent(normalizedSlug)}${pathname.slice(segmentEnd)}`;
+  const remainder = pathname.slice(segmentEnd);
+  if (remainder === "/" || remainder.length === 0) {
+    return `${normalizedTenantPath}/chat`;
+  }
+
+  return `${normalizedTenantPath}${remainder}`;
 }
 
 export function resolveWorkspaceHref(

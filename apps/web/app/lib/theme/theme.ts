@@ -91,6 +91,34 @@ export interface StorageLike {
   removeItem?: (key: string) => void;
 }
 
+function readStorage(storage: StorageLike, key: string): string | null {
+  try {
+    return storage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorage(storage: StorageLike, key: string, value: string): void {
+  try {
+    storage.setItem(key, value);
+  } catch {
+    // Ignore storage write failures in restricted browser contexts.
+  }
+}
+
+function removeStorage(storage: StorageLike, key: string): void {
+  if (typeof storage.removeItem !== "function") {
+    return;
+  }
+
+  try {
+    storage.removeItem(key);
+  } catch {
+    // Ignore storage removal failures in restricted browser contexts.
+  }
+}
+
 function isTheme(value: string | null | undefined): value is UiThemeId {
   return typeof value === "string" && (UI_THEME_IDS as readonly string[]).includes(value);
 }
@@ -134,17 +162,15 @@ export function applyPreferencesToRoot(
 }
 
 export function migrateLegacyModePreference(storage: StorageLike): UiMode | null {
-  const persistedMode = storage.getItem(UI_MODE_STORAGE_KEY);
+  const persistedMode = readStorage(storage, UI_MODE_STORAGE_KEY);
   if (isMode(persistedMode)) {
     return persistedMode;
   }
 
-  const legacyValue = storage.getItem(LEGACY_THEME_STORAGE_KEY);
+  const legacyValue = readStorage(storage, LEGACY_THEME_STORAGE_KEY);
   if (legacyValue === "light" || legacyValue === "dark") {
-    storage.setItem(UI_MODE_STORAGE_KEY, legacyValue);
-    if (typeof storage.removeItem === "function") {
-      storage.removeItem(LEGACY_THEME_STORAGE_KEY);
-    }
+    writeStorage(storage, UI_MODE_STORAGE_KEY, legacyValue);
+    removeStorage(storage, LEGACY_THEME_STORAGE_KEY);
     return legacyValue;
   }
 
@@ -155,14 +181,14 @@ export function readPreferencesFromStorage(storage: StorageLike): ThemePreferenc
   const migratedMode = migrateLegacyModePreference(storage);
 
   return {
-    theme: resolveStoredTheme(storage.getItem(UI_THEME_STORAGE_KEY)),
-    mode: migratedMode ?? resolveStoredMode(storage.getItem(UI_MODE_STORAGE_KEY))
+    theme: resolveStoredTheme(readStorage(storage, UI_THEME_STORAGE_KEY)),
+    mode: migratedMode ?? resolveStoredMode(readStorage(storage, UI_MODE_STORAGE_KEY))
   };
 }
 
 export function persistPreferences(storage: StorageLike, preference: ThemePreference): void {
-  storage.setItem(UI_THEME_STORAGE_KEY, preference.theme);
-  storage.setItem(UI_MODE_STORAGE_KEY, preference.mode);
+  writeStorage(storage, UI_THEME_STORAGE_KEY, preference.theme);
+  writeStorage(storage, UI_MODE_STORAGE_KEY, preference.mode);
 }
 
 export function createThemeBootstrapScript(): string {
@@ -181,18 +207,42 @@ export function createThemeBootstrapScript(): string {
   const resolveMode = (value) =>
     modeCandidates.includes(value) ? value : ${JSON.stringify(DEFAULT_UI_MODE)};
 
-  let rawMode = window.localStorage.getItem(modeKey);
+  const readStorage = (key) => {
+    try {
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  };
+
+  const writeStorage = (key, value) => {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch {
+      // Ignore write failures.
+    }
+  };
+
+  const removeStorage = (key) => {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // Ignore remove failures.
+    }
+  };
+
+  let rawMode = readStorage(modeKey);
   if (!modeCandidates.includes(rawMode)) {
-    const legacyMode = window.localStorage.getItem(legacyKey);
+    const legacyMode = readStorage(legacyKey);
     if (legacyMode === "light" || legacyMode === "dark") {
       rawMode = legacyMode;
-      window.localStorage.setItem(modeKey, legacyMode);
-      window.localStorage.removeItem(legacyKey);
+      writeStorage(modeKey, legacyMode);
+      removeStorage(legacyKey);
     }
   }
 
   const mode = resolveMode(rawMode);
-  const theme = resolveTheme(window.localStorage.getItem(themeKey));
+  const theme = resolveTheme(readStorage(themeKey));
 
   const prefersDark =
     typeof window.matchMedia === "function" &&

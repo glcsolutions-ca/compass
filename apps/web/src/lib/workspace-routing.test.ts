@@ -15,6 +15,11 @@ describe("workspace routing utilities", () => {
     expect(swapTenantSlugInPath("/t/acme/chat", "globex")).toBe("/t/globex/chat");
   });
 
+  it("normalizes root tenant paths to chat when switching workspaces", () => {
+    expect(swapTenantSlugInPath("/t/acme", "globex")).toBe("/t/globex/chat");
+    expect(swapTenantSlugInPath("/t/acme/", "globex")).toBe("/t/globex/chat");
+  });
+
   it("falls back to tenant chat route when path is not tenant-scoped", () => {
     expect(swapTenantSlugInPath("/workspaces", "globex")).toBe("/t/globex/chat");
   });

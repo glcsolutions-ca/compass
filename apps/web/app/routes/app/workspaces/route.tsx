@@ -1,12 +1,5 @@
 import type { MetaFunction } from "react-router";
-import {
-  Form,
-  Link,
-  useActionData,
-  useLoaderData,
-  useNavigation,
-  useOutletContext
-} from "react-router";
+import { Form, useActionData, useLoaderData, useNavigation, useOutletContext } from "react-router";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import type { AuthShellLoaderData, ShellRouteHandle } from "~/features/auth/types";
@@ -69,17 +62,24 @@ export default function WorkspacesRoute() {
     <section className="mx-auto grid w-full max-w-3xl gap-6" data-testid="workspaces-page">
       <header className="grid gap-1">
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-          Workspace Directory
+          Workspace Management
         </p>
-        <h1 className="text-2xl font-semibold tracking-tight">Choose a workspace</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Manage workspaces</h1>
         <p className="text-sm text-muted-foreground">
-          Use an existing workspace or create one to continue into chat.
+          Workspaces are optional for chat in this phase. Use this page to manage collaboration
+          spaces for invites, roles, and shared operations.
         </p>
       </header>
 
       {loaderData.error ? (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {loaderData.error}
+        </div>
+      ) : null}
+      {loaderData.notice ? (
+        <div className="rounded-lg border border-emerald-300/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+          {loaderData.notice === "created" ? "Workspace created" : "Workspace joined"}
+          {loaderData.workspaceSlug ? `: ${loaderData.workspaceSlug}` : ""}.
         </div>
       ) : null}
 
@@ -90,21 +90,19 @@ export default function WorkspacesRoute() {
         >
           {auth.memberships.map((membership) => (
             <li key={membership.tenantId}>
-              <Link
-                className="flex items-center justify-between rounded-md border border-transparent px-3 py-2 text-sm hover:border-border hover:bg-accent"
-                to={`/t/${membership.tenantSlug}/chat`}
-              >
+              <div className="flex items-center justify-between rounded-md border border-transparent px-3 py-2 text-sm">
                 <span>{membership.tenantName}</span>
                 <span className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
                   {membership.role}
                 </span>
-              </Link>
+              </div>
             </li>
           ))}
         </ul>
       ) : (
         <p className="text-sm text-muted-foreground">
-          No memberships found. Create a workspace or accept an invite to get started.
+          You have no workspace memberships yet. Chat is still available at `/chat`; create or join
+          a workspace here when you need collaboration features.
         </p>
       )}
 

@@ -97,7 +97,7 @@ describe("API app", () => {
   it("sets session cookie when Entra start returns a session token", async () => {
     const authService = {
       startEntraLogin: vi.fn(async () => ({
-        redirectUrl: "/workspaces",
+        redirectUrl: "/chat",
         sessionToken: "mock-session-token"
       })),
       createSessionCookie: vi.fn(
@@ -110,7 +110,7 @@ describe("API app", () => {
     const response = await request(app).get("/v1/auth/entra/start");
 
     expect(response.status).toBe(302);
-    expect(response.headers.location).toBe("/workspaces");
+    expect(response.headers.location).toBe("/chat");
     expect(response.headers["set-cookie"]?.[0]).toContain("__Host-compass_session=");
   });
 

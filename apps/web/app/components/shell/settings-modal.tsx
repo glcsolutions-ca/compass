@@ -210,7 +210,7 @@ export function SettingsModal({
                     title="Memory"
                   />
                   <PersonalizationPlaceholderCard
-                    description="Set reusable guidance and preferred response style for your workspace."
+                    description="Set reusable guidance and preferred response style for your account."
                     title="Custom instructions"
                   />
                   <PersonalizationPlaceholderCard

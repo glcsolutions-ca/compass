@@ -21,8 +21,9 @@ export interface AuthShellLoaderData {
   lastActiveTenantSlug: string | null;
 }
 
+export type ChatContextMode = "personal";
+
 export interface ShellRouteHandle {
   requiresAuth?: boolean;
-  requiresTenant?: boolean;
   navLabel?: string;
 }

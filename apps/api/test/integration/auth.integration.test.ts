@@ -241,7 +241,7 @@ describe("API auth integration", () => {
       `/v1/auth/entra/callback?code=code-user-1&state=${encodeURIComponent(String(state))}`
     );
     expect(callbackOwner.status).toBe(302);
-    expect(callbackOwner.headers.location).toBe("/workspaces?onboarding=1");
+    expect(callbackOwner.headers.location).toBe("/chat");
 
     const ownerCookie = extractCookie(callbackOwner.headers["set-cookie"]);
 
@@ -787,7 +787,7 @@ describe("API auth integration", () => {
       `/v1/auth/entra/callback?code=code-user-1&state=${encodeURIComponent(String(secondState))}`
     );
     expect(secondCallback.status).toBe(302);
-    expect(secondCallback.headers.location).toBe("/t/acme");
+    expect(secondCallback.headers.location).toBe("/chat");
 
     const createSecondTenant = await request(app)
       .post("/v1/tenants")
@@ -802,7 +802,7 @@ describe("API auth integration", () => {
       `/v1/auth/entra/callback?code=code-user-1&state=${encodeURIComponent(String(thirdState))}`
     );
     expect(thirdCallback.status).toBe(302);
-    expect(thirdCallback.headers.location).toBe("/workspaces");
+    expect(thirdCallback.headers.location).toBe("/chat");
 
     const rootReturnStart = await request(app).get("/v1/auth/entra/start?returnTo=%2F");
     const rootReturnState = parseRedirectLocation(
@@ -812,7 +812,7 @@ describe("API auth integration", () => {
       `/v1/auth/entra/callback?code=code-user-1&state=${encodeURIComponent(String(rootReturnState))}`
     );
     expect(rootReturnCallback.status).toBe(302);
-    expect(rootReturnCallback.headers.location).toBe("/workspaces");
+    expect(rootReturnCallback.headers.location).toBe("/chat");
   });
 
   it("returns /v1/auth/me successfully when Entra preferred_username is not an RFC email", async () => {
@@ -850,7 +850,7 @@ describe("API auth integration", () => {
     });
   });
 
-  it("honors returnTo for authorized tenant deep links and rejects unauthorized tenant returnTo", async () => {
+  it("normalizes legacy tenant returnTo targets to /chat", async () => {
     const authService = new AuthService({
       config: buildConfig(),
       repository,
@@ -894,7 +894,7 @@ describe("API auth integration", () => {
       `/v1/auth/entra/callback?code=code-user-1&state=${encodeURIComponent(String(allowedReturnState))}`
     );
     expect(allowedReturnCallback.status).toBe(302);
-    expect(allowedReturnCallback.headers.location).toBe("/t/acme/projects/123");
+    expect(allowedReturnCallback.headers.location).toBe("/chat");
 
     const blockedReturnStart = await request(app).get(
       "/v1/auth/entra/start?returnTo=%2Ft%2Fglobex%2Fprojects%2F999"
@@ -906,7 +906,7 @@ describe("API auth integration", () => {
       `/v1/auth/entra/callback?code=code-user-1&state=${encodeURIComponent(String(blockedReturnState))}`
     );
     expect(blockedReturnCallback.status).toBe(302);
-    expect(blockedReturnCallback.headers.location).toBe("/t/acme");
+    expect(blockedReturnCallback.headers.location).toBe("/chat");
   });
 
   it("emits audit events for login success/failure and invite lifecycle", async () => {

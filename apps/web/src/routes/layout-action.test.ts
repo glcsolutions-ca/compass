@@ -13,7 +13,7 @@ describe("shell layout action", () => {
     formData.set("intent", "logout");
 
     const response = await shellAction({
-      request: new Request("http://web.test/t/acme/chat", {
+      request: new Request("http://web.test/chat", {
         method: "POST",
         body: formData
       })
@@ -29,7 +29,7 @@ describe("shell layout action", () => {
     formData.set("intent", "unknown");
 
     const response = await shellAction({
-      request: new Request("http://web.test/t/acme/chat", {
+      request: new Request("http://web.test/chat", {
         method: "POST",
         body: formData
       })

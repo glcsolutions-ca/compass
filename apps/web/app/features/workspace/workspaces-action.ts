@@ -73,7 +73,7 @@ export async function submitWorkspacesAction({
         ? payload.tenant.slug.trim()
         : parsed.data.slug;
 
-    return redirect(`/t/${encodeURIComponent(tenantSlug)}/chat`);
+    return redirect(`/workspaces?notice=created&workspace=${encodeURIComponent(tenantSlug)}`);
   }
 
   const parsed = AcceptInviteSchema.safeParse({
@@ -107,5 +107,5 @@ export async function submitWorkspacesAction({
       ? payload.tenantSlug.trim()
       : parsed.data.tenantSlug;
 
-  return redirect(`/t/${encodeURIComponent(tenantSlug)}/chat`);
+  return redirect(`/workspaces?notice=joined&workspace=${encodeURIComponent(tenantSlug)}`);
 }

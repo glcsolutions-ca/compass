@@ -22,7 +22,7 @@ describe("settings modal URL state", () => {
   it("builds an open modal URL and preserves unrelated query and hash", () => {
     const href = buildSettingsModalUrl(
       {
-        pathname: "/t/acme/chat",
+        pathname: "/chat",
         search: "?foo=1",
         hash: "#anchor"
       },
@@ -32,13 +32,13 @@ describe("settings modal URL state", () => {
       }
     );
 
-    expect(href).toBe("/t/acme/chat?foo=1&modal=settings&section=general#anchor");
+    expect(href).toBe("/chat?foo=1&modal=settings&section=general#anchor");
   });
 
   it("removes modal keys but keeps unrelated params on close", () => {
     const href = buildSettingsModalUrl(
       {
-        pathname: "/t/acme/chat",
+        pathname: "/chat",
         search: "?foo=1&modal=settings&section=personalization&bar=2",
         hash: ""
       },
@@ -47,6 +47,6 @@ describe("settings modal URL state", () => {
       }
     );
 
-    expect(href).toBe("/t/acme/chat?foo=1&bar=2");
+    expect(href).toBe("/chat?foo=1&bar=2");
   });
 });

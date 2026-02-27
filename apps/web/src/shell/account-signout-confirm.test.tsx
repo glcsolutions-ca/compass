@@ -36,12 +36,11 @@ const AUTH_FIXTURE: AuthShellLoaderData = {
 
 function renderSidebarRouter() {
   return render(
-    <MemoryRouter initialEntries={["/t/acme/chat"]}>
+    <MemoryRouter initialEntries={["/chat"]}>
       <SidebarProvider>
         <AppSidebar
-          activeTenantSlug="acme"
           auth={AUTH_FIXTURE}
-          buildSettingsHref={(section) => `/t/acme/chat?modal=settings&section=${section}`}
+          buildSettingsHref={(section) => `/chat?modal=settings&section=${section}`}
         />
       </SidebarProvider>
     </MemoryRouter>

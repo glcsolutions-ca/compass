@@ -7,7 +7,7 @@ export interface ChatActionData {
   answer: string | null;
 }
 
-export async function submitTenantChatAction({
+export async function submitChatAction({
   request
 }: {
   request: Request;

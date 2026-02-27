@@ -12,11 +12,6 @@ import type { SettingsSection } from "~/features/settings/types";
 
 const SIDEBAR_OPEN_STORAGE_KEY = "compass-sidebar-open";
 
-function readActiveTenantSlug(pathname: string): string | null {
-  const match = pathname.match(/^\/t\/([^/]+)/u);
-  return match?.[1] ?? null;
-}
-
 function resolveInitialSidebarOpen(): boolean {
   if (typeof window === "undefined") {
     return true;
@@ -46,10 +41,6 @@ export function AppShell({ auth, children }: { auth: AuthShellLoaderData; childr
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => resolveInitialSidebarOpen());
-  const activeTenantSlug = useMemo(
-    () => readActiveTenantSlug(location.pathname),
-    [location.pathname]
-  );
   const settingsModal = useMemo(() => parseSettingsModalState(location), [location]);
 
   const openSettingsSection = (section: SettingsSection) => {
@@ -80,7 +71,6 @@ export function AppShell({ auth, children }: { auth: AuthShellLoaderData; childr
       }
     >
       <AppSidebar
-        activeTenantSlug={activeTenantSlug}
         auth={auth}
         buildSettingsHref={(section) => buildSettingsModalUrl(location, { open: true, section })}
       />
@@ -112,6 +102,5 @@ export function AppShell({ auth, children }: { auth: AuthShellLoaderData; childr
 export const __private__ = {
   SIDEBAR_OPEN_STORAGE_KEY,
   resolveInitialSidebarOpen,
-  persistSidebarOpenState,
-  readActiveTenantSlug
+  persistSidebarOpenState
 };

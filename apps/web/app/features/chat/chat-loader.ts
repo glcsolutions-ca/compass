@@ -1,55 +1,39 @@
-import { redirect } from "react-router";
-import { getTenant } from "~/lib/api/compass-client";
-import { buildReturnTo } from "~/lib/auth/auth-session";
+import type { ChatContextMode } from "~/features/auth/types";
+import { loadAuthShellData } from "~/features/auth/shell-loader";
 
 export interface ChatLoaderData {
-  tenantSlug: string;
-  tenantName: string;
+  contextMode: ChatContextMode;
+  contextLabel: string;
   threadId: string | null;
 }
 
-function readTenantName(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") {
-    return null;
+function readPersonalContextLabel(input: {
+  user: {
+    displayName: string | null;
+    primaryEmail: string | null;
+  } | null;
+}): string {
+  const displayName = input.user?.displayName?.trim();
+  if (displayName) {
+    return `${displayName} (Personal)`;
   }
 
-  const tenant = (payload as { tenant?: unknown }).tenant;
-  if (!tenant || typeof tenant !== "object") {
-    return null;
+  const email = input.user?.primaryEmail?.trim();
+  if (email) {
+    return `${email} (Personal)`;
   }
 
-  const name = (tenant as { name?: unknown }).name;
-  return typeof name === "string" && name.trim().length > 0 ? name.trim() : null;
+  return "Personal";
 }
 
-export async function loadTenantChatData({
-  request,
-  tenantSlug
+export async function loadChatData({
+  request
 }: {
   request: Request;
-  tenantSlug: string | undefined;
 }): Promise<ChatLoaderData | Response> {
-  const normalizedSlug = tenantSlug?.trim();
-  if (!normalizedSlug) {
-    return redirect("/workspaces");
-  }
-
-  const result = await getTenant(request, normalizedSlug);
-
-  if (result.status === 401) {
-    return redirect(`/login?returnTo=${encodeURIComponent(buildReturnTo(request))}`);
-  }
-
-  if (result.status === 403) {
-    return redirect("/workspaces?error=forbidden");
-  }
-
-  if (result.status === 404) {
-    return redirect("/workspaces?error=not_found");
-  }
-
-  if (!result.data) {
-    throw new Error("Unable to load tenant context for chat route.");
+  const auth = await loadAuthShellData({ request });
+  if (auth instanceof Response) {
+    return auth;
   }
 
   const url = new URL(request.url);
@@ -57,8 +41,8 @@ export async function loadTenantChatData({
   const threadId = threadCandidate && threadCandidate.trim().length > 0 ? threadCandidate : null;
 
   return {
-    tenantSlug: normalizedSlug,
-    tenantName: readTenantName(result.data) ?? normalizedSlug,
+    contextMode: "personal",
+    contextLabel: readPersonalContextLabel({ user: auth.user }),
     threadId
   };
 }

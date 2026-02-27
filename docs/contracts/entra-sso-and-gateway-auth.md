@@ -15,14 +15,15 @@ Routes:
 
 - `GET /`
 - `GET /login`
+- `GET /chat`
 - `GET /workspaces`
-- `GET /t/:tenantSlug/*`
 
 Expected behavior:
 
-- `/` and `/login` render “Sign in with Microsoft”.
-- `/workspaces` calls `/v1/auth/me` and renders unauthenticated, empty-membership, or chooser states.
-- `/t/:tenantSlug/*` is tenant-scoped by URL slug.
+- `/` redirects to `/chat` for authenticated users and `/login` for unauthenticated users.
+- `/login` renders “Sign in with Microsoft” and redirects authenticated users to `/chat`.
+- `/chat` is available for any authenticated user, including users with zero workspace memberships.
+- `/workspaces` provides optional workspace management and invite flows.
 
 ## Auth API Contract
 
@@ -38,6 +39,7 @@ Behavior:
 
 - Start route generates `state`, `nonce`, and PKCE verifier/challenge and persists short-lived request state.
 - Callback route validates state, exchanges code, validates ID token, links/creates user identity, and issues session cookie.
+- Successful callback defaults to `/chat` when `returnTo` is absent or legacy tenant-scoped.
 - Callback route enforces optional Entra tenant allow-listing (`ENTRA_ALLOWED_TENANT_IDS`).
 - Session cookie is `__Host-compass_session`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`.
 - Auth endpoints are rate limited per client IP.

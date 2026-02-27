@@ -64,7 +64,7 @@ export default function SkillsRoute() {
           className="text-sm font-medium text-muted-foreground hover:text-foreground"
           to="/workspaces"
         >
-          Manage workspace context
+          Manage workspaces
         </Link>
       </div>
     </section>

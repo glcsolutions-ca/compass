@@ -7,7 +7,7 @@ Define the non-negotiable implementation contract for `apps/web` so the frontend
 ## Scope
 
 - React Router 7 framework frontend in `apps/web`
-- Authenticated shell and workspace switching UX
+- Authenticated shell and chat-first onboarding UX
 - Route/module boundaries
 - Tailwind + shadcn theming standards
 
@@ -37,14 +37,15 @@ Define the non-negotiable implementation contract for `apps/web` so the frontend
    - Palette is selected via `<html data-theme=\"<themeId>\">` and persists across reload.
    - Theme initialization must run pre-hydration to avoid flash.
 
-6. **Workspace context authority**
-   - Active workspace context is URL-driven (`/t/:tenantSlug/*`).
-   - Workspace switching rewrites tenant slug in URL and preserves path/query/hash when possible.
+6. **Chat-first onboarding authority**
+   - Authenticated users must land directly in `/chat`.
+   - Workspace membership must not be a prerequisite for chat access.
+   - Workspace management remains available at `/workspaces` as an optional collaboration flow.
 
 7. **Persistent authenticated shell**
    - Authenticated routes render a single shared shell layout.
    - Shell includes a top utility cluster with `New thread`, `Automations`, and `Skills`.
-   - Shell includes rail navigation, workspace section, and sidebar footer account launcher.
+   - Shell includes rail navigation, `Workspaces` management entry, and sidebar footer account launcher.
    - Profile menu exposes `Settings` and `Personalization`, both opening one shared settings modal.
    - Profile launcher is action-only (`Personalization`, `Settings`, `Help`, `Log out`) with no workspace rows.
    - Theme controls live in `Settings > General`, not directly in the profile dropdown.
@@ -103,7 +104,7 @@ apps/web/app/
 - `/automations` -> authenticated automations placeholder
 - `/skills` -> authenticated skills placeholder
 - `/workspaces` -> authenticated workspace management
-- `/t/:tenantSlug/chat` -> authenticated tenant-scoped chat
+- `/chat` -> authenticated personal chat
 
 ## Runtime Constraints
 

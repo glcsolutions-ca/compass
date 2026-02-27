@@ -275,6 +275,14 @@ function sanitizeReturnTo(returnTo: string | undefined): string | null {
   return trimmed;
 }
 
+function normalizePostLoginReturnTo(returnTo: string): string {
+  if (/^\/t\/[a-z0-9-]+(?:\/|$)/u.test(returnTo)) {
+    return "/chat";
+  }
+
+  return returnTo;
+}
+
 function buildLoginRedirect(input: {
   error?: string;
   consent?: "granted" | "denied";
@@ -1544,9 +1552,12 @@ export class AuthService {
     });
 
     const memberships = await this.repository.listMemberships(user.id);
+    const normalizedReturnTo = oidcRequest.returnTo
+      ? normalizePostLoginReturnTo(oidcRequest.returnTo)
+      : null;
     const redirectTo =
-      oidcRequest.returnTo && this.canVisitReturnTo(oidcRequest.returnTo, memberships)
-        ? oidcRequest.returnTo
+      normalizedReturnTo && this.canVisitReturnTo(normalizedReturnTo, memberships)
+        ? normalizedReturnTo
         : this.pickPostLoginRoute(memberships);
 
     return {
@@ -1818,21 +1829,11 @@ export class AuthService {
     return `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
   }
 
-  pickPostLoginRoute(memberships: MembershipRecord[]): string {
-    const activeMemberships = memberships.filter((membership) => membership.status === "active");
-    const onlyMembership = activeMemberships.at(0);
-    if (activeMemberships.length === 1 && onlyMembership) {
-      return `/t/${onlyMembership.tenantSlug}`;
-    }
-
-    if (activeMemberships.length > 1) {
-      return "/workspaces";
-    }
-
-    return "/workspaces?onboarding=1";
+  pickPostLoginRoute(_memberships: MembershipRecord[]): string {
+    return "/chat";
   }
 
-  private canVisitReturnTo(returnTo: string, memberships: MembershipRecord[]): boolean {
+  private canVisitReturnTo(returnTo: string, _memberships: MembershipRecord[]): boolean {
     if (returnTo === "/" || returnTo === "/login") {
       return false;
     }
@@ -1842,10 +1843,7 @@ export class AuthService {
       return true;
     }
 
-    const slug = match[1];
-    return memberships.some(
-      (membership) => membership.tenantSlug === slug && membership.status === "active"
-    );
+    return false;
   }
 
   private async startMockLogin(input: {
@@ -1896,9 +1894,10 @@ export class AuthService {
 
     const memberships = await this.repository.listMemberships(user.id);
     const returnTo = sanitizeReturnTo(input.returnTo);
+    const normalizedReturnTo = returnTo ? normalizePostLoginReturnTo(returnTo) : null;
     const redirectTo =
-      returnTo && this.canVisitReturnTo(returnTo, memberships)
-        ? returnTo
+      normalizedReturnTo && this.canVisitReturnTo(normalizedReturnTo, memberships)
+        ? normalizedReturnTo
         : this.pickPostLoginRoute(memberships);
 
     return {

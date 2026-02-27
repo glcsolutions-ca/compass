@@ -54,14 +54,13 @@ describe("app sidebar", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders primary sections and workspace rows", () => {
+  it("renders utility and primary navigation sections", () => {
     render(
       <MemoryRouter initialEntries={["/workspaces"]}>
         <SidebarProvider>
           <AppSidebar
-            activeTenantSlug="acme"
             auth={AUTH_FIXTURE}
-            buildSettingsHref={(section) => `/t/acme/chat?modal=settings&section=${section}`}
+            buildSettingsHref={(section) => `/chat?modal=settings&section=${section}`}
           />
         </SidebarProvider>
       </MemoryRouter>
@@ -71,14 +70,13 @@ describe("app sidebar", () => {
     const automationsLink = screen.getByRole("link", { name: "Automations" });
     const skillsLink = screen.getByRole("link", { name: "Skills" });
 
-    expect(newThreadLink.getAttribute("href")).toContain("/t/acme/chat?thread=");
+    expect(newThreadLink.getAttribute("href")).toContain("/chat?thread=");
     expect(automationsLink.getAttribute("href")).toBe("/automations");
     expect(skillsLink.getAttribute("href")).toBe("/skills");
 
     expect(screen.getByText("Navigate")).toBeTruthy();
-    expect(screen.getAllByText("Workspaces").length).toBeGreaterThan(0);
-    expect(screen.getByText("Acme")).toBeTruthy();
-    expect(screen.getByText("Globex")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Chat" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Workspaces" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
   });
 
@@ -87,9 +85,8 @@ describe("app sidebar", () => {
       <MemoryRouter initialEntries={["/workspaces"]}>
         <SidebarProvider>
           <AppSidebar
-            activeTenantSlug="acme"
             auth={AUTH_FIXTURE}
-            buildSettingsHref={(section) => `/t/acme/chat?modal=settings&section=${section}`}
+            buildSettingsHref={(section) => `/chat?modal=settings&section=${section}`}
           />
         </SidebarProvider>
       </MemoryRouter>
@@ -111,12 +108,11 @@ describe("app sidebar", () => {
     expect(skillsIndex).toBeGreaterThan(automationsIndex);
   });
 
-  it("shows empty workspace state when user has no memberships", () => {
+  it("does not render workspace rows when user has no memberships", () => {
     render(
       <MemoryRouter initialEntries={["/workspaces"]}>
         <SidebarProvider>
           <AppSidebar
-            activeTenantSlug={null}
             auth={{
               ...AUTH_FIXTURE,
               memberships: [],
@@ -128,17 +124,17 @@ describe("app sidebar", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText("No workspaces yet.")).toBeTruthy();
+    expect(screen.queryByText("No workspaces yet.")).toBeNull();
+    expect(screen.getByRole("link", { name: "Workspaces" })).toBeTruthy();
   });
 
   it("keeps icon-mode rows accessible when sidebar is collapsed", () => {
     const { container } = render(
-      <MemoryRouter initialEntries={["/t/acme/chat"]}>
+      <MemoryRouter initialEntries={["/chat"]}>
         <SidebarProvider defaultOpen={false}>
           <AppSidebar
-            activeTenantSlug="acme"
             auth={AUTH_FIXTURE}
-            buildSettingsHref={(section) => `/t/acme/chat?modal=settings&section=${section}`}
+            buildSettingsHref={(section) => `/chat?modal=settings&section=${section}`}
           />
         </SidebarProvider>
       </MemoryRouter>
@@ -152,13 +148,9 @@ describe("app sidebar", () => {
     expect(chatLink.getAttribute("aria-label")).toBe("Chat");
 
     const utilityNewThread = scoped.getByRole("link", { name: "New thread" });
-    expect(utilityNewThread.getAttribute("href")).toContain("/t/acme/chat?thread=");
+    expect(utilityNewThread.getAttribute("href")).toContain("/chat?thread=");
     expect(scoped.getByRole("link", { name: "Automations" })).toBeTruthy();
     expect(scoped.getByRole("link", { name: "Skills" })).toBeTruthy();
-
-    const acmeLink = scoped.getByRole("link", { name: "Acme" });
-    expect(acmeLink.getAttribute("aria-label")).toBe("Acme");
-    expect(acmeLink.querySelector("span[aria-hidden]")?.textContent).toBe("A");
 
     const expandButton = scoped.getByRole("button", { name: "Expand sidebar" });
     expect(expandButton).toBeTruthy();
@@ -173,16 +165,15 @@ describe("app sidebar", () => {
           element: (
             <SidebarProvider>
               <AppSidebar
-                activeTenantSlug="acme"
                 auth={AUTH_FIXTURE}
-                buildSettingsHref={(section) => `/t/acme/chat?modal=settings&section=${section}`}
+                buildSettingsHref={(section) => `/chat?modal=settings&section=${section}`}
               />
             </SidebarProvider>
           )
         }
       ],
       {
-        initialEntries: ["/t/acme/chat"]
+        initialEntries: ["/chat"]
       }
     );
 

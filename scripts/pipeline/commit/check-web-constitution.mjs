@@ -225,6 +225,22 @@ function validateSettingsCutover(cwd, violations) {
   }
 }
 
+function validateRouteMap(cwd, violations) {
+  const routesPath = path.join(cwd, "apps/web/app/routes.ts");
+  if (!existsSync(routesPath)) {
+    return;
+  }
+
+  const source = readFileSync(routesPath, "utf8");
+  if (!source.includes('route("chat", "routes/app/chat/route.tsx")')) {
+    violations.push("routes.ts must register /chat using routes/app/chat/route.tsx.");
+  }
+
+  if (source.includes('route("t/:tenantSlug/chat"')) {
+    violations.push("routes.ts must not register legacy /t/:tenantSlug/chat route.");
+  }
+}
+
 function validateRouteFiles(cwd, violations) {
   const routesDir = path.join(cwd, "apps/web/app/routes");
   if (!existsSync(routesDir)) {
@@ -311,6 +327,7 @@ export function runWebConstitutionCheck({ cwd = process.cwd(), logger = console 
   validateGlobalCss(cwd, violations);
   validateRootThemeBootstrap(cwd, violations);
   validateSettingsCutover(cwd, violations);
+  validateRouteMap(cwd, violations);
   validateComponentsConfig(cwd, violations);
   validateRouteFiles(cwd, violations);
 

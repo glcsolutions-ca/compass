@@ -2,29 +2,25 @@ import type { MetaFunction } from "react-router";
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { submitTenantChatAction, type ChatActionData } from "~/features/chat/chat-action";
-import { loadTenantChatData, type ChatLoaderData } from "~/features/chat/chat-loader";
+import { submitChatAction, type ChatActionData } from "~/features/chat/chat-action";
+import { loadChatData, type ChatLoaderData } from "~/features/chat/chat-loader";
 import type { ShellRouteHandle } from "~/features/auth/types";
 
-export const meta: MetaFunction = ({ params }) => {
-  const slug = params.tenantSlug?.trim() || "workspace";
-  return [{ title: `Compass Chat · ${slug}` }];
+export const meta: MetaFunction = () => {
+  return [{ title: "Compass Chat" }];
 };
 
 export const handle: ShellRouteHandle = {
   requiresAuth: true,
-  requiresTenant: true,
   navLabel: "Chat"
 };
 
 export async function clientLoader({
-  request,
-  params
+  request
 }: {
   request: Request;
-  params: { tenantSlug?: string };
 }): Promise<ChatLoaderData | Response> {
-  return loadTenantChatData({ request, tenantSlug: params.tenantSlug });
+  return loadChatData({ request });
 }
 
 export async function clientAction({
@@ -32,7 +28,7 @@ export async function clientAction({
 }: {
   request: Request;
 }): Promise<Response | ChatActionData> {
-  return submitTenantChatAction({ request });
+  return submitChatAction({ request });
 }
 
 export default function ChatRoute() {
@@ -44,11 +40,11 @@ export default function ChatRoute() {
   return (
     <section
       className="mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-4xl flex-col"
-      data-testid="tenant-chat-page"
+      data-testid="chat-page"
     >
       <header className="mb-8 grid gap-1">
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-          {loaderData.tenantName}
+          {loaderData.contextLabel}
         </p>
         <h1 className="text-4xl font-medium tracking-tight">What&apos;s on the agenda today?</h1>
         {loaderData.threadId ? (
@@ -71,7 +67,7 @@ export default function ChatRoute() {
         ) : (
           <div className="grid place-items-center py-12 text-center text-sm text-muted-foreground">
             <p>
-              Start a conversation for workspace <strong>{loaderData.tenantSlug}</strong>
+              Start a conversation in your <strong>personal context</strong>
               {loaderData.threadId ? " in this fresh thread." : "."}
             </p>
           </div>

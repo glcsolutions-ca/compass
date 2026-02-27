@@ -43,7 +43,7 @@ describe("workspaces action", () => {
     });
   });
 
-  it("redirects to tenant chat after workspace creation", async () => {
+  it("redirects back to workspaces with success state after workspace creation", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -72,6 +72,6 @@ describe("workspaces action", () => {
 
     expect(response).toBeInstanceOf(Response);
     expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toBe("/t/acme/chat");
+    expect(response.headers.get("Location")).toBe("/workspaces?notice=created&workspace=acme");
   });
 });

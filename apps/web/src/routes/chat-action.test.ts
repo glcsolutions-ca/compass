@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { clientAction as chatAction } from "~/routes/app/chat/route";
 
-describe("tenant chat action", () => {
+describe("chat action", () => {
   it("requires a prompt", async () => {
     const formData = new FormData();
     formData.set("intent", "sendMessage");
     formData.set("prompt", "");
 
     const result = await chatAction({
-      request: new Request("http://web.test/t/acme/chat", {
+      request: new Request("http://web.test/chat", {
         method: "POST",
         body: formData
       })
@@ -27,7 +27,7 @@ describe("tenant chat action", () => {
     formData.set("prompt", "hello");
 
     const result = await chatAction({
-      request: new Request("http://web.test/t/acme/chat", {
+      request: new Request("http://web.test/chat", {
         method: "POST",
         body: formData
       })

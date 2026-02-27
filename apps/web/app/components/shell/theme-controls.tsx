@@ -150,7 +150,7 @@ export function ThemeControls() {
       <div className="space-y-1">
         <h3 className="text-base font-semibold tracking-tight text-foreground">Appearance</h3>
         <p className="text-sm text-muted-foreground">
-          Pick a display mode and theme palette for your workspace.
+          Pick a display mode and theme palette for your account.
         </p>
       </div>
 

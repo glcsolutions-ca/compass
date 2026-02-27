@@ -18,7 +18,7 @@ Key requirements:
 - `@compass/sdk` for Compass API calls
 - shadcn/Radix primitive component policy
 - Tailwind + CSS variable tokens with first-class light/dark + palette theming
-- Persistent authenticated shell and URL-driven workspace context
+- Persistent authenticated shell and chat-first onboarding
 
 ## UI Structure
 
@@ -46,19 +46,20 @@ app/
 - `GET /login` -> login route
 - `GET /automations` -> authenticated automations placeholder
 - `GET /skills` -> authenticated skills placeholder
+- `GET /chat` -> authenticated personal chat shell route
 - `GET /workspaces` -> authenticated workspace directory
-- `GET /t/:tenantSlug/chat` -> authenticated tenant chat shell route
 
 ## Runtime Behavior
 
 - `/login` shows Entra sign-in and admin-consent messaging.
+- Authenticated users always land in `/chat` (workspace membership is not required for chat access).
 - Authenticated routes render one persistent shell:
   - left navigation rail
   - top utility cluster (`New thread`, `Automations`, `Skills`)
   - center content canvas
   - sidebar footer profile launcher with `Settings` + `Personalization` + `Help` + `Log out`
-- Workspace switching preserves route intent by rewriting tenant slug in URL.
-- `New thread` creates a fresh thread context via `?thread=<opaque-id>` in tenant chat routes.
+- Sidebar navigation keeps `Workspaces` as a management entrypoint without in-rail workspace rows.
+- `New thread` creates a fresh thread context via `?thread=<opaque-id>` on `/chat`.
 - `Automations` and `Skills` currently ship as polished authenticated placeholder pages.
 - Settings modal state is URL-backed with query params:
   - `?modal=settings&section=general`

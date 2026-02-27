@@ -1,7 +1,6 @@
 import {
   Boxes,
   CircleHelp,
-  Check,
   ChevronsUpDown,
   Clock3,
   Compass,
@@ -53,13 +52,10 @@ import {
 import type { AuthShellLoaderData } from "~/features/auth/types";
 import { buildNewThreadHref } from "~/features/chat/new-thread-routing";
 import type { SettingsSection } from "~/features/settings/types";
-import { resolveWorkspaceHref } from "~/features/workspace/workspace-routing";
 import { cn } from "~/lib/utils/cn";
-import { buildWorkspaceMenuItems } from "~/components/shell/workspace-switcher";
 
 export interface AppSidebarProps {
   auth: AuthShellLoaderData;
-  activeTenantSlug: string | null;
   buildSettingsHref: (section: SettingsSection) => string;
 }
 
@@ -81,23 +77,6 @@ interface UtilityNavItem {
   active: boolean;
 }
 
-function resolvePrimaryWorkspaceSlug(auth: AuthShellLoaderData): string | null {
-  if (auth.memberships.length === 0) {
-    return null;
-  }
-
-  if (auth.lastActiveTenantSlug) {
-    const hasLastActive = auth.memberships.some(
-      (membership) => membership.tenantSlug === auth.lastActiveTenantSlug
-    );
-    if (hasLastActive) {
-      return auth.lastActiveTenantSlug;
-    }
-  }
-
-  return auth.memberships[0]?.tenantSlug ?? null;
-}
-
 function readInitials(value: string): string {
   const segments = value
     .trim()
@@ -112,15 +91,6 @@ function readInitials(value: string): string {
     .slice(0, 2)
     .map((segment) => segment[0]?.toUpperCase() ?? "")
     .join("");
-}
-
-function readWorkspaceMonogram(name: string): string {
-  const trimmed = name.trim();
-  if (trimmed.length === 0) {
-    return "?";
-  }
-
-  return trimmed[0]?.toUpperCase() ?? "?";
 }
 
 function SidebarBrandControl() {
@@ -166,7 +136,7 @@ function SidebarBrandControl() {
         "flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-transparent px-2 py-2",
         "text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
       )}
-      to="/workspaces"
+      to="/chat"
     >
       <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-primary/10 text-sidebar-primary">
         <Compass className="h-4 w-4" />
@@ -362,15 +332,9 @@ function SidebarAccountMenu({
   );
 }
 
-export function AppSidebar({ auth, activeTenantSlug, buildSettingsHref }: AppSidebarProps) {
+export function AppSidebar({ auth, buildSettingsHref }: AppSidebarProps) {
   const location = useLocation();
-  const primaryTenantSlug = resolvePrimaryWorkspaceSlug(auth);
-  const chatHref = primaryTenantSlug ? `/t/${primaryTenantSlug}/chat` : "/workspaces";
-  const newThreadHref = buildNewThreadHref({
-    activeTenantSlug,
-    memberships: auth.memberships,
-    lastActiveTenantSlug: auth.lastActiveTenantSlug
-  });
+  const newThreadHref = buildNewThreadHref();
 
   const utilityItems: UtilityNavItem[] = [
     {
@@ -396,9 +360,9 @@ export function AppSidebar({ auth, activeTenantSlug, buildSettingsHref }: AppSid
   const primaryItems: PrimaryNavItem[] = [
     {
       label: "Chat",
-      to: chatHref,
+      to: "/chat",
       icon: MessageSquareText,
-      active: /^\/t\/[^/]+\/chat(?:\/|$)/u.test(location.pathname)
+      active: location.pathname === "/chat"
     },
     {
       label: "Workspaces",
@@ -407,12 +371,6 @@ export function AppSidebar({ auth, activeTenantSlug, buildSettingsHref }: AppSid
       active: location.pathname.startsWith("/workspaces")
     }
   ];
-
-  const workspaceItems = buildWorkspaceMenuItems(
-    auth.memberships,
-    activeTenantSlug,
-    auth.lastActiveTenantSlug
-  );
 
   return (
     <Sidebar collapsible="icon" side="left" variant="sidebar">
@@ -472,55 +430,6 @@ export function AppSidebar({ auth, activeTenantSlug, buildSettingsHref }: AppSid
                 );
               })}
             </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup className="px-0 pt-1">
-          <SidebarGroupLabel className="px-3 text-[10px] uppercase tracking-[0.14em] text-sidebar-foreground/60">
-            Workspaces
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            {workspaceItems.length === 0 ? (
-              <p className="px-3 py-2 text-xs text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">
-                No workspaces yet.
-              </p>
-            ) : (
-              <SidebarMenu>
-                {workspaceItems.map((item) => {
-                  const href = resolveWorkspaceHref(location, item.tenantSlug);
-
-                  return (
-                    <SidebarMenuItem key={item.tenantId}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={item.active}
-                        size="sm"
-                        tooltip={item.tenantName}
-                      >
-                        <Link
-                          aria-current={item.active ? "page" : undefined}
-                          aria-label={item.tenantName}
-                          to={href}
-                        >
-                          <span
-                            aria-hidden
-                            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-sidebar-border bg-sidebar-accent/70 text-[10px] font-semibold text-sidebar-foreground"
-                          >
-                            {readWorkspaceMonogram(item.tenantName)}
-                          </span>
-                          <span className="truncate group-data-[collapsible=icon]:hidden">
-                            {item.tenantName}
-                          </span>
-                          {item.active ? (
-                            <Check className="ml-auto h-4 w-4 text-sidebar-primary group-data-[collapsible=icon]:hidden" />
-                          ) : null}
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            )}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

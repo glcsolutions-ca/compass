@@ -6,7 +6,8 @@ import type { ShellRouteHandle } from "~/features/auth/types";
 const AUTOMATION_PLACEHOLDERS = [
   {
     title: "Scheduled Runs",
-    description: "Configure recurring jobs that execute prompts against your workspace context."
+    description:
+      "Configure recurring jobs that execute prompts against your selected Compass setup."
   },
   {
     title: "Inbox Notifications",
@@ -64,7 +65,7 @@ export default function AutomationsRoute() {
           className="text-sm font-medium text-muted-foreground hover:text-foreground"
           to="/workspaces"
         >
-          Manage workspace context
+          Manage workspaces
         </Link>
       </div>
     </section>

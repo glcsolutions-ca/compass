@@ -29,7 +29,7 @@ describe("frontend route loaders", () => {
     expect(response.headers.get("Location")).toBe("/login");
   });
 
-  it("redirects root route to workspaces when authenticated without memberships", async () => {
+  it("redirects root route to chat when authenticated without memberships", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -52,25 +52,25 @@ describe("frontend route loaders", () => {
       throw new Error("Expected redirect response");
     }
     expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toBe("/workspaces");
+    expect(response.headers.get("Location")).toBe("/chat");
   });
 
   it("builds login route links when unauthenticated", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 401 }));
 
     const data = await loginLoader({
-      request: new Request("http://web.test/login?returnTo=%2Ft%2Facme%2Fchat")
+      request: new Request("http://web.test/login?returnTo=%2Fchat")
     });
 
     expect(data).toEqual({
-      signInHref: "/v1/auth/entra/start?returnTo=%2Ft%2Facme%2Fchat",
-      adminConsentHref: "/v1/auth/entra/admin-consent/start?returnTo=%2Ft%2Facme%2Fchat",
+      signInHref: "/v1/auth/entra/start?returnTo=%2Fchat",
+      adminConsentHref: "/v1/auth/entra/admin-consent/start?returnTo=%2Fchat",
       showAdminConsentNotice: false,
       showAdminConsentSuccess: false
     });
   });
 
-  it("redirects login route to tenant chat when already authenticated", async () => {
+  it("redirects login route to chat when already authenticated", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -98,7 +98,7 @@ describe("frontend route loaders", () => {
 
     expect(response).toBeInstanceOf(Response);
     expect((response as Response).status).toBe(302);
-    expect((response as Response).headers.get("Location")).toBe("/t/acme/chat");
+    expect((response as Response).headers.get("Location")).toBe("/chat");
   });
 
   it("reads workspaces error from query", async () => {
@@ -107,23 +107,22 @@ describe("frontend route loaders", () => {
     });
 
     expect(data).toEqual({
-      error: "forbidden"
+      error: "forbidden",
+      notice: null,
+      workspaceSlug: null
     });
   });
 
-  it("redirects tenant chat loader to login on 401", async () => {
+  it("redirects chat loader to login on 401", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 401 }));
 
     const response = await chatLoader({
-      request: new Request("http://web.test/t/acme/chat"),
-      params: { tenantSlug: "acme" }
+      request: new Request("http://web.test/chat")
     });
 
     expect(response).toBeInstanceOf(Response);
     expect((response as Response).status).toBe(302);
-    expect((response as Response).headers.get("Location")).toBe(
-      "/login?returnTo=%2Ft%2Facme%2Fchat"
-    );
+    expect((response as Response).headers.get("Location")).toBe("/login?returnTo=%2Fchat");
   });
 
   it("defines authenticated placeholder handles for utility routes", () => {

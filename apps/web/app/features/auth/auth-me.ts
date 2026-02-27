@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AuthShellLoaderData, WorkspaceMembership } from "~/features/auth/types";
+import type { AuthShellLoaderData } from "~/features/auth/types";
 
 const MembershipSchema = z.object({
   tenantId: z.string().min(1),
@@ -23,22 +23,6 @@ const AuthMeSchema = z.object({
   lastActiveTenantSlug: z.string().nullable().optional()
 });
 
-function findMembershipBySlug(
-  memberships: WorkspaceMembership[],
-  tenantSlug: string | null
-): WorkspaceMembership | null {
-  if (!tenantSlug) {
-    return null;
-  }
-
-  const normalized = tenantSlug.trim();
-  if (normalized.length === 0) {
-    return null;
-  }
-
-  return memberships.find((membership) => membership.tenantSlug === normalized) ?? null;
-}
-
 export function parseAuthShellData(payload: unknown): AuthShellLoaderData | null {
   const parsed = AuthMeSchema.safeParse(payload);
   if (!parsed.success || parsed.data.authenticated !== true) {
@@ -61,26 +45,10 @@ export function parseAuthShellData(payload: unknown): AuthShellLoaderData | null
   };
 }
 
-export function resolveDefaultTenantSlug(data: {
-  memberships: WorkspaceMembership[];
-  lastActiveTenantSlug: string | null;
-}): string | null {
-  const fromLastActive = findMembershipBySlug(data.memberships, data.lastActiveTenantSlug);
-  if (fromLastActive) {
-    return fromLastActive.tenantSlug;
-  }
-
-  return data.memberships[0]?.tenantSlug ?? null;
-}
-
 export function resolveAuthenticatedLandingPath(data: {
-  memberships: WorkspaceMembership[];
+  memberships: AuthShellLoaderData["memberships"];
   lastActiveTenantSlug: string | null;
 }): string {
-  const tenantSlug = resolveDefaultTenantSlug(data);
-  if (!tenantSlug) {
-    return "/workspaces";
-  }
-
-  return `/t/${encodeURIComponent(tenantSlug)}/chat`;
+  void data;
+  return "/chat";
 }

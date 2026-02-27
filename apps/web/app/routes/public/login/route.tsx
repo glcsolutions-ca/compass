@@ -65,7 +65,8 @@ export default function LoginRoute() {
           Sign in with Microsoft
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Continue with Entra ID to access your workspace and chat context.
+          Continue with Entra ID to launch directly into chat. Workspace management is available
+          anytime after sign-in.
         </p>
 
         <div className="mt-8">

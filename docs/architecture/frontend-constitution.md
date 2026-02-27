@@ -43,6 +43,7 @@ Define the non-negotiable implementation contract for `apps/web` so the frontend
 
 7. **Persistent authenticated shell**
    - Authenticated routes render a single shared shell layout.
+   - Shell includes a top utility cluster with `New thread`, `Automations`, and `Skills`.
    - Shell includes rail navigation, workspace section, and sidebar footer account launcher.
    - Profile menu exposes `Settings` and `Personalization`, both opening one shared settings modal.
    - Profile launcher is action-only (`Personalization`, `Settings`, `Help`, `Log out`) with no workspace rows.
@@ -89,6 +90,8 @@ apps/web/app/
     root-redirect/route.tsx
     public/login/route.tsx
     app/layout/route.tsx
+    app/automations/route.tsx
+    app/skills/route.tsx
     app/workspaces/route.tsx
     app/chat/route.tsx
 ```
@@ -97,6 +100,8 @@ apps/web/app/
 
 - `/` -> auth-aware redirect
 - `/login` -> login
+- `/automations` -> authenticated automations placeholder
+- `/skills` -> authenticated skills placeholder
 - `/workspaces` -> authenticated workspace management
 - `/t/:tenantSlug/chat` -> authenticated tenant-scoped chat
 

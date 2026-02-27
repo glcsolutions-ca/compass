@@ -1,4 +1,5 @@
 import {
+  Boxes,
   CircleHelp,
   Check,
   ChevronsUpDown,
@@ -8,6 +9,7 @@ import {
   LogOut,
   MessageSquareText,
   PanelLeft,
+  SquarePen,
   Settings2
 } from "lucide-react";
 import { useRef, useState } from "react";
@@ -49,6 +51,7 @@ import {
   useSidebar
 } from "~/components/ui/sidebar";
 import type { AuthShellLoaderData } from "~/features/auth/types";
+import { buildNewThreadHref } from "~/features/chat/new-thread-routing";
 import type { SettingsSection } from "~/features/settings/types";
 import { resolveWorkspaceHref } from "~/features/workspace/workspace-routing";
 import { cn } from "~/lib/utils/cn";
@@ -65,6 +68,13 @@ interface SignOutConfirmState {
 }
 
 interface PrimaryNavItem {
+  label: string;
+  to: string;
+  icon: typeof MessageSquareText;
+  active: boolean;
+}
+
+interface UtilityNavItem {
   label: string;
   to: string;
   icon: typeof MessageSquareText;
@@ -356,6 +366,32 @@ export function AppSidebar({ auth, activeTenantSlug, buildSettingsHref }: AppSid
   const location = useLocation();
   const primaryTenantSlug = resolvePrimaryWorkspaceSlug(auth);
   const chatHref = primaryTenantSlug ? `/t/${primaryTenantSlug}/chat` : "/workspaces";
+  const newThreadHref = buildNewThreadHref({
+    activeTenantSlug,
+    memberships: auth.memberships,
+    lastActiveTenantSlug: auth.lastActiveTenantSlug
+  });
+
+  const utilityItems: UtilityNavItem[] = [
+    {
+      label: "New thread",
+      to: newThreadHref,
+      icon: SquarePen,
+      active: false
+    },
+    {
+      label: "Automations",
+      to: "/automations",
+      icon: Clock3,
+      active: location.pathname.startsWith("/automations")
+    },
+    {
+      label: "Skills",
+      to: "/skills",
+      icon: Boxes,
+      active: location.pathname.startsWith("/skills")
+    }
+  ];
 
   const primaryItems: PrimaryNavItem[] = [
     {
@@ -388,6 +424,30 @@ export function AppSidebar({ auth, activeTenantSlug, buildSettingsHref }: AppSid
       </SidebarHeader>
 
       <SidebarContent className="px-2 pb-3">
+        <SidebarGroup className="px-0 pt-0">
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {utilityItems.map((item) => {
+                const ItemIcon = item.icon;
+                return (
+                  <SidebarMenuItem key={item.label}>
+                    <SidebarMenuButton asChild isActive={item.active} tooltip={item.label}>
+                      <Link
+                        aria-current={item.active ? "page" : undefined}
+                        aria-label={item.label}
+                        to={item.to}
+                      >
+                        <ItemIcon className="h-4 w-4" />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         <SidebarGroup className="px-0 pt-0">
           <SidebarGroupLabel className="px-3 text-[10px] uppercase tracking-[0.14em] text-sidebar-foreground/60">
             Navigate

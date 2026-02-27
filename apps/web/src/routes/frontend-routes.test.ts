@@ -3,6 +3,11 @@ import { clientLoader as rootRedirectLoader } from "~/routes/root-redirect/route
 import { clientLoader as loginLoader } from "~/routes/public/login/route";
 import { clientLoader as workspacesLoader } from "~/routes/app/workspaces/route";
 import { clientLoader as chatLoader } from "~/routes/app/chat/route";
+import {
+  handle as automationsHandle,
+  meta as automationsMeta
+} from "~/routes/app/automations/route";
+import { handle as skillsHandle, meta as skillsMeta } from "~/routes/app/skills/route";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -119,5 +124,21 @@ describe("frontend route loaders", () => {
     expect((response as Response).headers.get("Location")).toBe(
       "/login?returnTo=%2Ft%2Facme%2Fchat"
     );
+  });
+
+  it("defines authenticated placeholder handles for utility routes", () => {
+    expect(automationsHandle).toMatchObject({
+      requiresAuth: true,
+      navLabel: "Automations"
+    });
+    expect(skillsHandle).toMatchObject({
+      requiresAuth: true,
+      navLabel: "Skills"
+    });
+  });
+
+  it("defines metadata for utility placeholder routes", () => {
+    expect(automationsMeta({} as never)).toEqual([{ title: "Compass Automations" }]);
+    expect(skillsMeta({} as never)).toEqual([{ title: "Compass Skills" }]);
   });
 });

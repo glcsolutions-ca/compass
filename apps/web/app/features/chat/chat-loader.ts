@@ -5,6 +5,7 @@ import { buildReturnTo } from "~/lib/auth/auth-session";
 export interface ChatLoaderData {
   tenantSlug: string;
   tenantName: string;
+  threadId: string | null;
 }
 
 function readTenantName(payload: unknown): string | null {
@@ -51,8 +52,13 @@ export async function loadTenantChatData({
     throw new Error("Unable to load tenant context for chat route.");
   }
 
+  const url = new URL(request.url);
+  const threadCandidate = url.searchParams.get("thread");
+  const threadId = threadCandidate && threadCandidate.trim().length > 0 ? threadCandidate : null;
+
   return {
     tenantSlug: normalizedSlug,
-    tenantName: readTenantName(result.data) ?? normalizedSlug
+    tenantName: readTenantName(result.data) ?? normalizedSlug,
+    threadId
   };
 }

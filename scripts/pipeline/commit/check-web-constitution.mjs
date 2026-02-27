@@ -8,6 +8,7 @@ const REQUIRED_PATHS = [
   "apps/web/postcss.config.mjs",
   "apps/web/app/app.css",
   "apps/web/app/lib/theme/theme.ts",
+  "apps/web/app/features/chat/new-thread-routing.ts",
   "apps/web/app/features/settings/types.ts",
   "apps/web/app/features/settings/settings-modal-state.ts",
   "apps/web/app/components/ui/alert-dialog.tsx",
@@ -21,6 +22,8 @@ const REQUIRED_PATHS = [
   "apps/web/app/routes/root-redirect/route.tsx",
   "apps/web/app/routes/public/login/route.tsx",
   "apps/web/app/routes/app/layout/route.tsx",
+  "apps/web/app/routes/app/automations/route.tsx",
+  "apps/web/app/routes/app/skills/route.tsx",
   "apps/web/app/routes/app/workspaces/route.tsx",
   "apps/web/app/routes/app/chat/route.tsx"
 ];
@@ -185,6 +188,22 @@ function validateSettingsCutover(cwd, violations) {
     if (!sidebarSource.includes("AlertDialog")) {
       violations.push(
         "app-sidebar.tsx must require an AlertDialog confirmation before submitting logout."
+      );
+    }
+
+    if (
+      !sidebarSource.includes('"New thread"') ||
+      !sidebarSource.includes('"Automations"') ||
+      !sidebarSource.includes('"Skills"')
+    ) {
+      violations.push(
+        "app-sidebar.tsx must include New thread, Automations, and Skills in the top utility cluster."
+      );
+    }
+
+    if (!sidebarSource.includes("buildNewThreadHref")) {
+      violations.push(
+        "app-sidebar.tsx must build New thread navigation using buildNewThreadHref()."
       );
     }
 

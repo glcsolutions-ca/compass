@@ -67,11 +67,48 @@ describe("app sidebar", () => {
       </MemoryRouter>
     );
 
+    const newThreadLink = screen.getByRole("link", { name: "New thread" });
+    const automationsLink = screen.getByRole("link", { name: "Automations" });
+    const skillsLink = screen.getByRole("link", { name: "Skills" });
+
+    expect(newThreadLink.getAttribute("href")).toContain("/t/acme/chat?thread=");
+    expect(automationsLink.getAttribute("href")).toBe("/automations");
+    expect(skillsLink.getAttribute("href")).toBe("/skills");
+
     expect(screen.getByText("Navigate")).toBeTruthy();
     expect(screen.getAllByText("Workspaces").length).toBeGreaterThan(0);
     expect(screen.getByText("Acme")).toBeTruthy();
     expect(screen.getByText("Globex")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
+  });
+
+  it("keeps utility cluster ordering in sidebar", () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/workspaces"]}>
+        <SidebarProvider>
+          <AppSidebar
+            activeTenantSlug="acme"
+            auth={AUTH_FIXTURE}
+            buildSettingsHref={(section) => `/t/acme/chat?modal=settings&section=${section}`}
+          />
+        </SidebarProvider>
+      </MemoryRouter>
+    );
+
+    const sidebar = container.querySelector('[data-sidebar="sidebar"]');
+    expect(sidebar).toBeTruthy();
+    const links = within(sidebar as HTMLElement).getAllByRole("link");
+    const linkOrder = links.map(
+      (link) => link.getAttribute("aria-label") ?? link.textContent?.replace(/\s+/gu, " ").trim()
+    );
+
+    const newThreadIndex = linkOrder.indexOf("New thread");
+    const automationsIndex = linkOrder.indexOf("Automations");
+    const skillsIndex = linkOrder.indexOf("Skills");
+
+    expect(newThreadIndex).toBeGreaterThanOrEqual(0);
+    expect(automationsIndex).toBeGreaterThan(newThreadIndex);
+    expect(skillsIndex).toBeGreaterThan(automationsIndex);
   });
 
   it("shows empty workspace state when user has no memberships", () => {
@@ -113,6 +150,11 @@ describe("app sidebar", () => {
 
     const chatLink = scoped.getByRole("link", { name: "Chat" });
     expect(chatLink.getAttribute("aria-label")).toBe("Chat");
+
+    const utilityNewThread = scoped.getByRole("link", { name: "New thread" });
+    expect(utilityNewThread.getAttribute("href")).toContain("/t/acme/chat?thread=");
+    expect(scoped.getByRole("link", { name: "Automations" })).toBeTruthy();
+    expect(scoped.getByRole("link", { name: "Skills" })).toBeTruthy();
 
     const acmeLink = scoped.getByRole("link", { name: "Acme" });
     expect(acmeLink.getAttribute("aria-label")).toBe("Acme");

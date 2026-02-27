@@ -34,6 +34,8 @@ app/
     root-redirect/route.tsx
     public/login/route.tsx
     app/layout/route.tsx
+    app/automations/route.tsx
+    app/skills/route.tsx
     app/workspaces/route.tsx
     app/chat/route.tsx
 ```
@@ -42,6 +44,8 @@ app/
 
 - `GET /` -> auth-aware redirect route
 - `GET /login` -> login route
+- `GET /automations` -> authenticated automations placeholder
+- `GET /skills` -> authenticated skills placeholder
 - `GET /workspaces` -> authenticated workspace directory
 - `GET /t/:tenantSlug/chat` -> authenticated tenant chat shell route
 
@@ -50,9 +54,12 @@ app/
 - `/login` shows Entra sign-in and admin-consent messaging.
 - Authenticated routes render one persistent shell:
   - left navigation rail
+  - top utility cluster (`New thread`, `Automations`, `Skills`)
   - center content canvas
   - sidebar footer profile launcher with `Settings` + `Personalization` + `Help` + `Log out`
 - Workspace switching preserves route intent by rewriting tenant slug in URL.
+- `New thread` creates a fresh thread context via `?thread=<opaque-id>` in tenant chat routes.
+- `Automations` and `Skills` currently ship as polished authenticated placeholder pages.
 - Settings modal state is URL-backed with query params:
   - `?modal=settings&section=general`
   - `?modal=settings&section=personalization`

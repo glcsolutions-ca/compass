@@ -4,6 +4,8 @@ export default [
   index("routes/root-redirect/route.tsx"),
   route("login", "routes/public/login/route.tsx"),
   route("", "routes/app/layout/route.tsx", [
+    route("automations", "routes/app/automations/route.tsx"),
+    route("skills", "routes/app/skills/route.tsx"),
     route("workspaces", "routes/app/workspaces/route.tsx"),
     route("t/:tenantSlug/chat", "routes/app/chat/route.tsx")
   ])

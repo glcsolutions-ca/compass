@@ -51,6 +51,11 @@ export default function ChatRoute() {
           {loaderData.tenantName}
         </p>
         <h1 className="text-4xl font-medium tracking-tight">What&apos;s on the agenda today?</h1>
+        {loaderData.threadId ? (
+          <div className="inline-flex w-fit rounded-full border border-border/70 bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+            Thread {loaderData.threadId.slice(0, 8)}
+          </div>
+        ) : null}
       </header>
 
       <div className="flex-1">
@@ -66,7 +71,8 @@ export default function ChatRoute() {
         ) : (
           <div className="grid place-items-center py-12 text-center text-sm text-muted-foreground">
             <p>
-              Start a conversation for workspace <strong>{loaderData.tenantSlug}</strong>.
+              Start a conversation for workspace <strong>{loaderData.tenantSlug}</strong>
+              {loaderData.threadId ? " in this fresh thread." : "."}
             </p>
           </div>
         )}

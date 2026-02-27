@@ -7,7 +7,7 @@ param registryIdentityResourceId string
 param sessionExecutorPrincipalId string
 param sessionExecutorRoleDefinitionId string
 param targetPort int = 8080
-param readySessionInstances int = 1
+param readySessionInstances int = 0
 param maxConcurrentSessions int = 20
 param cooldownPeriodInSeconds int = 300
 param sessionNetworkStatus string = 'EgressEnabled'

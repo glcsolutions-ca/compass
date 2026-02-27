@@ -5,6 +5,7 @@
     "rootDir": ".",
     "outDir": "dist-types",
     "baseUrl": ".",
+    "paths": {},
     "module": "Node16",
     "moduleResolution": "Node16"
   },

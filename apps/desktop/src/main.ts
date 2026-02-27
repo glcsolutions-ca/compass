@@ -1,12 +1,13 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { resolveDesktopRuntimeConfig, type DesktopRuntimeConfig } from "./config";
 import {
-  isInAppAuthBootstrapUrl,
-  isInAppAuthCompletionUrl,
-  isInAppAuthNavigationAllowed
-} from "./in-app-auth-policy";
+  extractDeepLinkFromArgv,
+  parseDesktopAuthDeepLink,
+  resolveDeepLinkNavigationTarget,
+  resolveDesktopAuthScheme
+} from "./auth-deep-link";
+import { resolveDesktopRuntimeConfig, type DesktopRuntimeConfig } from "./config";
 import {
   type AgentLocalLoginStartInput,
   type AgentLocalTurnInterruptInput,
@@ -16,9 +17,10 @@ import {
 import { LocalRuntimeManager, type LocalAuthState } from "./local-runtime-manager";
 import { assertExternalOpenAllowed, isNavigationAllowed } from "./navigation-policy";
 
+const desktopAuthScheme = resolveDesktopAuthScheme(process.env);
 let mainWindow: BrowserWindow | null = null;
-let authWindow: BrowserWindow | null = null;
 let runtimeConfig: DesktopRuntimeConfig | null = null;
+const pendingDeepLinks: string[] = [];
 
 function openExternalSafely(rawUrl: string): void {
   try {
@@ -42,128 +44,55 @@ function focusMainWindow(): void {
   mainWindow.focus();
 }
 
-function closeAuthWindow(): void {
-  if (!authWindow || authWindow.isDestroyed()) {
-    authWindow = null;
+async function processPendingDeepLinks(): Promise<void> {
+  if (!runtimeConfig || !mainWindow || mainWindow.isDestroyed()) {
     return;
   }
 
-  authWindow.close();
-  authWindow = null;
+  while (pendingDeepLinks.length > 0) {
+    const rawUrl = pendingDeepLinks.shift();
+    if (!rawUrl) {
+      continue;
+    }
+
+    const parsed = parseDesktopAuthDeepLink(rawUrl, desktopAuthScheme);
+    if (!parsed) {
+      console.warn(`Ignored unsupported desktop deep link: ${rawUrl}`);
+      continue;
+    }
+
+    const targetUrl = resolveDeepLinkNavigationTarget({
+      startUrl: runtimeConfig.startUrl,
+      deepLink: parsed
+    });
+
+    try {
+      await mainWindow.loadURL(targetUrl);
+      focusMainWindow();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`Failed to route desktop deep link to app window: ${message}`);
+    }
+  }
 }
 
-async function completeInAppAuth(targetUrl: string): Promise<void> {
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    closeAuthWindow();
-    return;
-  }
-
-  try {
-    await mainWindow.loadURL(targetUrl);
-    focusMainWindow();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`Failed to navigate main window after in-app auth: ${message}`);
-  } finally {
-    closeAuthWindow();
-  }
+function enqueueDeepLink(rawUrl: string): void {
+  pendingDeepLinks.push(rawUrl);
+  void processPendingDeepLinks();
 }
 
-function openInAppAuthWindow(nextRuntimeConfig: DesktopRuntimeConfig, authStartUrl: string): void {
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    return;
+function registerDeepLinkProtocolClient(): void {
+  if (process.defaultApp) {
+    const entrypoint = process.argv[1];
+    if (entrypoint) {
+      app.setAsDefaultProtocolClient(desktopAuthScheme, process.execPath, [
+        path.resolve(entrypoint)
+      ]);
+      return;
+    }
   }
 
-  let window = authWindow;
-  if (!window || window.isDestroyed()) {
-    let completionStarted = false;
-    const maybeCompleteAuth = (url: string): void => {
-      if (completionStarted) {
-        return;
-      }
-      if (!isInAppAuthCompletionUrl({ rawUrl: url, startUrl: nextRuntimeConfig.startUrl })) {
-        return;
-      }
-
-      completionStarted = true;
-      void completeInAppAuth(url);
-    };
-
-    window = new BrowserWindow({
-      width: 520,
-      height: 760,
-      minWidth: 420,
-      minHeight: 620,
-      autoHideMenuBar: true,
-      title: "Compass Sign In",
-      parent: mainWindow,
-      webPreferences: {
-        contextIsolation: true,
-        sandbox: true,
-        nodeIntegration: false
-      }
-    });
-
-    window.once("ready-to-show", () => {
-      if (window && !window.isDestroyed()) {
-        window.show();
-        window.focus();
-      }
-    });
-
-    window.on("closed", () => {
-      if (authWindow === window) {
-        authWindow = null;
-      }
-    });
-
-    window.webContents.setWindowOpenHandler(({ url }) => {
-      openExternalSafely(url);
-      return { action: "deny" };
-    });
-
-    window.webContents.on("will-navigate", (event, url) => {
-      if (
-        isInAppAuthNavigationAllowed({
-          rawUrl: url,
-          startUrl: nextRuntimeConfig.startUrl,
-          authProviderOrigins: nextRuntimeConfig.authProviderOrigins
-        })
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-      openExternalSafely(url);
-    });
-
-    window.webContents.on("will-redirect", (event, url) => {
-      if (
-        !isInAppAuthNavigationAllowed({
-          rawUrl: url,
-          startUrl: nextRuntimeConfig.startUrl,
-          authProviderOrigins: nextRuntimeConfig.authProviderOrigins
-        })
-      ) {
-        event.preventDefault();
-        openExternalSafely(url);
-        return;
-      }
-
-      if (isInAppAuthCompletionUrl({ rawUrl: url, startUrl: nextRuntimeConfig.startUrl })) {
-        event.preventDefault();
-        maybeCompleteAuth(url);
-      }
-    });
-
-    window.webContents.on("did-navigate", (_event, url) => {
-      maybeCompleteAuth(url);
-    });
-
-    authWindow = window;
-  }
-
-  void window.loadURL(authStartUrl);
+  app.setAsDefaultProtocolClient(desktopAuthScheme);
 }
 
 function createMainWindow(nextRuntimeConfig: DesktopRuntimeConfig): BrowserWindow {
@@ -182,22 +111,11 @@ function createMainWindow(nextRuntimeConfig: DesktopRuntimeConfig): BrowserWindo
   });
 
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (isInAppAuthBootstrapUrl({ rawUrl: url, startUrl: nextRuntimeConfig.startUrl })) {
-      openInAppAuthWindow(nextRuntimeConfig, url);
-      return { action: "deny" };
-    }
-
     openExternalSafely(url);
     return { action: "deny" };
   });
 
   window.webContents.on("will-navigate", (event, url) => {
-    if (isInAppAuthBootstrapUrl({ rawUrl: url, startUrl: nextRuntimeConfig.startUrl })) {
-      event.preventDefault();
-      openInAppAuthWindow(nextRuntimeConfig, url);
-      return;
-    }
-
     if (isNavigationAllowed(url, nextRuntimeConfig.allowedOrigins)) {
       return;
     }
@@ -345,13 +263,24 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
+  app.on("second-instance", (_event, argv) => {
+    const deepLink = extractDeepLinkFromArgv(argv, desktopAuthScheme);
+    if (deepLink) {
+      enqueueDeepLink(deepLink);
+    }
+
     focusMainWindow();
+  });
+
+  app.on("open-url", (event, rawUrl) => {
+    event.preventDefault();
+    enqueueDeepLink(rawUrl);
   });
 
   void app
     .whenReady()
     .then(() => {
+      registerDeepLinkProtocolClient();
       registerIpcHandlers();
 
       runtimeConfig = resolveDesktopRuntimeConfig({
@@ -360,6 +289,11 @@ if (!hasSingleInstanceLock) {
         resourcesPath: process.resourcesPath
       });
       mainWindow = createMainWindow(runtimeConfig);
+
+      const startupDeepLink = extractDeepLinkFromArgv(process.argv, desktopAuthScheme);
+      if (startupDeepLink) {
+        enqueueDeepLink(startupDeepLink);
+      }
 
       app.on("activate", () => {
         if (BrowserWindow.getAllWindows().length === 0) {
@@ -375,6 +309,7 @@ if (!hasSingleInstanceLock) {
         }
 
         focusMainWindow();
+        void processPendingDeepLinks();
       });
     })
     .catch((error) => {

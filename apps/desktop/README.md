@@ -14,6 +14,8 @@ The renderer is the existing web app loaded from `COMPASS_DESKTOP_START_URL` in 
 
 The main process blocks in-app navigation to unknown origins and only allows `https:`/`mailto:`
 for external URL opens.
+Desktop auth callbacks return through the custom `ca.glsolutions.compass://auth/callback` deep link, then
+the app completes auth via `/v1/auth/desktop/complete` inside the Electron session.
 
 ## Runtime Configuration
 

@@ -18,16 +18,19 @@ const DEFAULT_OIDC_SCOPE = "openid profile email";
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 8;
 const DEFAULT_SESSION_IDLE_TTL_SECONDS = 60 * 60;
 const OIDC_REQUEST_TTL_SECONDS = 10 * 60;
+const DESKTOP_HANDOFF_TTL_SECONDS = 2 * 60;
 const ADMIN_CONSENT_REQUEST_MARKER = "admin-consent";
 const EmailAddressSchema = z.string().email();
 const OIDC_ENCRYPTED_PAYLOAD_PREFIX = "enc:v1:";
 const OIDC_STATE_ENCRYPTION_KEY_BYTES = 32;
+const DEFAULT_DESKTOP_AUTH_SCHEME = "ca.glsolutions.compass";
 const DEFAULT_MOCK_ENTRA_TID = "00000000-0000-0000-0000-000000000000";
 const DEFAULT_MOCK_ENTRA_OID = "11111111-1111-1111-1111-111111111111";
 const DEFAULT_MOCK_EMAIL = "developer@local.test";
 const DEFAULT_MOCK_DISPLAY_NAME = "Local Developer";
 
 export type AuthMode = "mock" | "entra";
+export type AuthClient = "browser" | "desktop";
 
 export interface EntraAuthConfig {
   authMode: AuthMode;
@@ -40,6 +43,7 @@ export interface EntraAuthConfig {
   allowedTenantIds: string[];
   scope: string;
   webBaseUrl: string;
+  desktopAuthScheme: string;
   sessionTtlSeconds: number;
   sessionIdleTtlSeconds: number;
 }
@@ -118,6 +122,12 @@ interface OidcRequestRecord {
   returnTo: string | null;
 }
 
+interface DesktopHandoffRecord {
+  id: string;
+  userId: string;
+  redirectTo: string;
+}
+
 interface InviteRecord {
   id: string;
   tenantId: string;
@@ -165,6 +175,11 @@ function asStringOrNull(value: unknown): string | null {
 function parseBooleanQueryFlag(value: string | undefined): boolean {
   const normalized = value?.trim().toLowerCase();
   return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function sanitizeUriScheme(value: string | undefined): string {
+  const normalized = asStringOrNull(value)?.toLowerCase() ?? DEFAULT_DESKTOP_AUTH_SCHEME;
+  return /^[a-z][a-z0-9+.-]*$/u.test(normalized) ? normalized : DEFAULT_DESKTOP_AUTH_SCHEME;
 }
 
 function asValidEmailOrNull(value: string | null): string | null {
@@ -226,6 +241,7 @@ function parseOidcStateEncryptionKey(raw: string | undefined): Buffer | null {
 function encryptOidcRequestPayload(input: {
   encryptionKey: Buffer;
   flow: "entra-login" | "admin-consent";
+  client: AuthClient;
   nonce: string;
   pkceVerifier: string;
 }): string {
@@ -233,6 +249,7 @@ function encryptOidcRequestPayload(input: {
   const cipher = createCipheriv("aes-256-gcm", input.encryptionKey, iv);
   const plaintext = JSON.stringify({
     flow: input.flow,
+    client: input.client,
     nonce: input.nonce,
     pkceVerifier: input.pkceVerifier
   });
@@ -244,6 +261,7 @@ function encryptOidcRequestPayload(input: {
 
 function decryptOidcRequestPayload(input: { encryptionKey: Buffer; encodedPayload: string }): {
   flow: "entra-login" | "admin-consent";
+  client: AuthClient;
   nonce: string;
   pkceVerifier: string;
 } {
@@ -266,6 +284,7 @@ function decryptOidcRequestPayload(input: { encryptionKey: Buffer; encodedPayloa
   const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
   const payload = JSON.parse(decrypted) as {
     flow?: unknown;
+    client?: unknown;
     nonce?: unknown;
     pkceVerifier?: unknown;
   };
@@ -277,12 +296,15 @@ function decryptOidcRequestPayload(input: { encryptionKey: Buffer; encodedPayloa
 
   const nonce = asStringOrNull(payload.nonce);
   const pkceVerifier = asStringOrNull(payload.pkceVerifier);
+  const client =
+    payload.client === "browser" || payload.client === "desktop" ? payload.client : "browser";
   if (!nonce || !pkceVerifier) {
     throw new Error("OIDC request payload is missing required fields");
   }
 
   return {
     flow,
+    client,
     nonce,
     pkceVerifier
   };
@@ -515,6 +537,7 @@ export class AuthRepository {
       truncate table
         auth_audit_events,
         auth_sessions,
+        auth_desktop_handoffs,
         auth_oidc_requests,
         invites,
         memberships,
@@ -590,6 +613,68 @@ export class AuthRepository {
       nonceHash: row.nonce_hash,
       encryptedPayload: row.pkce_verifier_encrypted_or_hashed,
       returnTo: row.return_to
+    };
+  }
+
+  async createDesktopHandoff(input: {
+    handoffToken: string;
+    userId: string;
+    redirectTo: string;
+    now: Date;
+  }): Promise<void> {
+    const expiresAt = nowPlusSeconds(input.now, DESKTOP_HANDOFF_TTL_SECONDS).toISOString();
+
+    await this.pool.query(
+      `
+        insert into auth_desktop_handoffs (
+          id,
+          handoff_token_hash,
+          user_id,
+          redirect_to,
+          expires_at,
+          created_at
+        ) values ($1, $2, $3, $4, $5::timestamptz, $6::timestamptz)
+      `,
+      [
+        randomUUID(),
+        hashValue(input.handoffToken),
+        input.userId,
+        input.redirectTo,
+        expiresAt,
+        input.now.toISOString()
+      ]
+    );
+  }
+
+  async consumeDesktopHandoff(
+    handoffToken: string,
+    now: Date
+  ): Promise<DesktopHandoffRecord | null> {
+    const result = await this.pool.query<{
+      id: string;
+      user_id: string;
+      redirect_to: string;
+    }>(
+      `
+        update auth_desktop_handoffs
+        set consumed_at = $2::timestamptz
+        where handoff_token_hash = $1
+          and consumed_at is null
+          and expires_at > $2::timestamptz
+        returning id, user_id, redirect_to
+      `,
+      [hashValue(handoffToken), now.toISOString()]
+    );
+
+    const row = result.rows.at(0);
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      userId: row.user_id,
+      redirectTo: row.redirect_to
     };
   }
 
@@ -1435,6 +1520,7 @@ export class AuthService {
 
   async startEntraLogin(input: {
     returnTo?: string;
+    client?: AuthClient;
     userAgent: string | undefined;
     ip: string;
     now: Date;
@@ -1456,6 +1542,7 @@ export class AuthService {
     const encryptedPayload = encryptOidcRequestPayload({
       encryptionKey: this.requiredOidcStateEncryptionKey(),
       flow: "entra-login",
+      client: input.client ?? "browser",
       nonce,
       pkceVerifier
     });
@@ -1482,6 +1569,7 @@ export class AuthService {
   async startAdminConsent(input: {
     tenantHint?: string;
     returnTo?: string;
+    client?: AuthClient;
     now: Date;
   }): Promise<{ redirectUrl: string }> {
     this.assertEntraMode();
@@ -1492,6 +1580,7 @@ export class AuthService {
     const encryptedPayload = encryptOidcRequestPayload({
       encryptionKey: this.requiredOidcStateEncryptionKey(),
       flow: "admin-consent",
+      client: input.client ?? "browser",
       nonce,
       pkceVerifier: ADMIN_CONSENT_REQUEST_MARKER
     });
@@ -1533,7 +1622,12 @@ export class AuthService {
 
     let consumedStateRequest: OidcRequestRecord | null | undefined;
     let consumedStateSecrets:
-      | { flow: "entra-login" | "admin-consent"; nonce: string; pkceVerifier: string }
+      | {
+          flow: "entra-login" | "admin-consent";
+          client: AuthClient;
+          nonce: string;
+          pkceVerifier: string;
+        }
       | null
       | undefined;
     const consumeStateRequest = async (): Promise<OidcRequestRecord | null> => {
@@ -1549,6 +1643,7 @@ export class AuthService {
     };
     const consumeStateSecrets = async (): Promise<{
       flow: "entra-login" | "admin-consent";
+      client: AuthClient;
       nonce: string;
       pkceVerifier: string;
     } | null> => {
@@ -1577,12 +1672,17 @@ export class AuthService {
         throw new ApiError(400, "INVALID_CALLBACK", "Callback state does not match admin consent");
       }
 
+      const loginRedirect = buildLoginRedirect({
+        consent: "granted",
+        returnTo: oidcRequest.returnTo,
+        tenantHint
+      });
+
       return {
-        redirectTo: buildLoginRedirect({
-          consent: "granted",
-          returnTo: oidcRequest.returnTo,
-          tenantHint
-        })
+        redirectTo:
+          oidcSecrets.client === "desktop"
+            ? this.buildDesktopCallbackDeepLink({ nextPath: loginRedirect })
+            : loginRedirect
       };
     }
 
@@ -1607,23 +1707,31 @@ export class AuthService {
 
       const lower = `${input.error} ${input.errorDescription ?? ""}`.toLowerCase();
       if (oidcSecrets?.flow === "admin-consent") {
+        const loginRedirect = buildLoginRedirect({
+          consent: "denied",
+          returnTo: oidcRequest?.returnTo,
+          tenantHint
+        });
         return {
-          redirectTo: buildLoginRedirect({
-            consent: "denied",
-            returnTo: oidcRequest?.returnTo,
-            tenantHint
-          })
+          redirectTo:
+            oidcSecrets.client === "desktop"
+              ? this.buildDesktopCallbackDeepLink({ nextPath: loginRedirect })
+              : loginRedirect
         };
       }
 
       const isConsent = lower.includes("consent") || lower.includes("aadsts65001");
       if (isConsent) {
+        const loginRedirect = buildLoginRedirect({
+          error: "admin_consent_required",
+          returnTo: oidcRequest?.returnTo ?? "/",
+          tenantHint
+        });
         return {
-          redirectTo: buildLoginRedirect({
-            error: "admin_consent_required",
-            returnTo: oidcRequest?.returnTo ?? "/",
-            tenantHint
-          })
+          redirectTo:
+            oidcSecrets?.client === "desktop"
+              ? this.buildDesktopCallbackDeepLink({ nextPath: loginRedirect })
+              : loginRedirect
         };
       }
 
@@ -1686,23 +1794,6 @@ export class AuthService {
       primaryEmail: user.primaryEmail
     });
 
-    const sessionToken = randomToken(32);
-    const sessionTokenHash = hashValue(sessionToken);
-    const userAgentHash = asStringOrNull(input.userAgent)
-      ? hashValue(input.userAgent as string)
-      : null;
-    const ipHash = hashValue(input.ip);
-    const expiresAt = nowPlusSeconds(input.now, this.config.sessionTtlSeconds);
-
-    await this.repository.createSession({
-      userId: user.id,
-      sessionTokenHash,
-      userAgentHash,
-      ipHash,
-      now: input.now,
-      expiresAt
-    });
-
     await this.repository.insertAuditEvent({
       eventType: "auth.login.success",
       actorUserId: user.id,
@@ -1723,6 +1814,27 @@ export class AuthService {
       normalizedReturnTo && this.canVisitReturnTo(normalizedReturnTo, memberships)
         ? normalizedReturnTo
         : this.pickPostLoginRoute(memberships);
+
+    if (oidcSecrets.client === "desktop") {
+      const handoffToken = randomToken(24);
+      await this.repository.createDesktopHandoff({
+        handoffToken,
+        userId: user.id,
+        redirectTo,
+        now: input.now
+      });
+
+      return {
+        redirectTo: this.buildDesktopCallbackDeepLink({ handoffToken })
+      };
+    }
+
+    const sessionToken = await this.createSessionForUser({
+      userId: user.id,
+      userAgent: input.userAgent,
+      ip: input.ip,
+      now: input.now
+    });
 
     return {
       redirectTo,
@@ -1765,6 +1877,32 @@ export class AuthService {
     }
 
     await this.repository.revokeSessionByTokenHash(hashValue(input.sessionToken), input.now);
+  }
+
+  async completeDesktopLogin(input: {
+    handoffToken: string;
+    userAgent: string | undefined;
+    ip: string;
+    now: Date;
+  }): Promise<{ redirectTo: string; sessionToken: string }> {
+    this.assertEntraMode();
+
+    const handoff = await this.repository.consumeDesktopHandoff(input.handoffToken, input.now);
+    if (!handoff) {
+      throw new ApiError(401, "DESKTOP_HANDOFF_INVALID", "Desktop auth handoff is invalid");
+    }
+
+    const sessionToken = await this.createSessionForUser({
+      userId: handoff.userId,
+      userAgent: input.userAgent,
+      ip: input.ip,
+      now: input.now
+    });
+
+    return {
+      redirectTo: sanitizeReturnTo(handoff.redirectTo) || this.pickPostLoginRoute([]),
+      sessionToken
+    };
   }
 
   async createTenant(input: {
@@ -2043,20 +2181,11 @@ export class AuthService {
       primaryEmail: user.primaryEmail
     });
 
-    const sessionToken = randomToken(32);
-    const sessionTokenHash = hashValue(sessionToken);
-    const normalizedUserAgent = asStringOrNull(input.userAgent);
-    const userAgentHash = normalizedUserAgent ? hashValue(normalizedUserAgent) : null;
-    const ipHash = hashValue(input.ip);
-    const expiresAt = nowPlusSeconds(input.now, this.config.sessionTtlSeconds);
-
-    await this.repository.createSession({
+    const sessionToken = await this.createSessionForUser({
       userId: user.id,
-      sessionTokenHash,
-      userAgentHash,
-      ipHash,
-      now: input.now,
-      expiresAt
+      userAgent: input.userAgent,
+      ip: input.ip,
+      now: input.now
     });
 
     await this.repository.insertAuditEvent({
@@ -2134,10 +2263,16 @@ export class AuthService {
 
   private decodeOidcRequestSecrets(oidcRequest: OidcRequestRecord): {
     flow: "entra-login" | "admin-consent";
+    client: AuthClient;
     nonce: string;
     pkceVerifier: string;
   } {
-    let decoded: { flow: "entra-login" | "admin-consent"; nonce: string; pkceVerifier: string };
+    let decoded: {
+      flow: "entra-login" | "admin-consent";
+      client: AuthClient;
+      nonce: string;
+      pkceVerifier: string;
+    };
     try {
       decoded = decryptOidcRequestPayload({
         encryptionKey: this.requiredOidcStateEncryptionKey(),
@@ -2152,6 +2287,47 @@ export class AuthService {
     }
 
     return decoded;
+  }
+
+  private buildDesktopCallbackDeepLink(input: {
+    handoffToken?: string;
+    nextPath?: string;
+  }): string {
+    const url = new URL(`${this.config.desktopAuthScheme}://auth/callback`);
+
+    if (input.handoffToken) {
+      url.searchParams.set("handoff", input.handoffToken);
+      return url.toString();
+    }
+
+    const nextPath = sanitizeReturnTo(input.nextPath);
+    url.searchParams.set("next", nextPath || "/login");
+    return url.toString();
+  }
+
+  private async createSessionForUser(input: {
+    userId: string;
+    userAgent: string | undefined;
+    ip: string;
+    now: Date;
+  }): Promise<string> {
+    const sessionToken = randomToken(32);
+    const sessionTokenHash = hashValue(sessionToken);
+    const normalizedUserAgent = asStringOrNull(input.userAgent);
+    const userAgentHash = normalizedUserAgent ? hashValue(normalizedUserAgent) : null;
+    const ipHash = hashValue(input.ip);
+    const expiresAt = nowPlusSeconds(input.now, this.config.sessionTtlSeconds);
+
+    await this.repository.createSession({
+      userId: input.userId,
+      sessionTokenHash,
+      userAgentHash,
+      ipHash,
+      now: input.now,
+      expiresAt
+    });
+
+    return sessionToken;
   }
 
   private assertEntraMode(): void {
@@ -2226,6 +2402,7 @@ export function buildEntraAuthConfig(env: NodeJS.ProcessEnv): EntraAuthConfig {
     allowedTenantIds: parseCommaList(env.ENTRA_ALLOWED_TENANT_IDS),
     scope: asStringOrNull(env.ENTRA_SCOPE) ?? DEFAULT_OIDC_SCOPE,
     webBaseUrl,
+    desktopAuthScheme: sanitizeUriScheme(env.DESKTOP_AUTH_SCHEME),
     sessionTtlSeconds: parseSeconds(env.AUTH_SESSION_TTL_SECONDS, DEFAULT_SESSION_TTL_SECONDS),
     sessionIdleTtlSeconds: parseSeconds(
       env.AUTH_SESSION_IDLE_TTL_SECONDS,

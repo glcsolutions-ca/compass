@@ -17,6 +17,7 @@ describe("buildEntraAuthConfig", () => {
     expect(config.allowedTenantIds).toEqual([]);
     expect(config.redirectUri).toBe("https://compass.glcsolutions.ca/v1/auth/entra/callback");
     expect(config.oidcStateEncryptionKey).toBeUndefined();
+    expect(config.desktopAuthScheme).toBe("ca.glsolutions.compass");
   });
 
   it("parses comma-separated allow-list values", () => {
@@ -46,6 +47,15 @@ describe("buildEntraAuthConfig", () => {
     expect(buildEntraAuthConfig({ AUTH_MODE: "mock" }).authMode).toBe("mock");
     expect(() => buildEntraAuthConfig({ AUTH_MODE: "legacy" })).toThrow(
       "AUTH_MODE must be 'mock' or 'entra'"
+    );
+  });
+
+  it("sanitizes desktop deep-link scheme configuration", () => {
+    expect(buildEntraAuthConfig({ DESKTOP_AUTH_SCHEME: "Compass-App" }).desktopAuthScheme).toBe(
+      "compass-app"
+    );
+    expect(buildEntraAuthConfig({ DESKTOP_AUTH_SCHEME: "123bad" }).desktopAuthScheme).toBe(
+      "ca.glsolutions.compass"
     );
   });
 });

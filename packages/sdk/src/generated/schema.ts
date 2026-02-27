@@ -89,6 +89,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/desktop/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Complete desktop auth handoff and set session cookie */
+        get: operations["completeDesktopLogin"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/me": {
         parameters: {
             query?: never;
@@ -659,6 +676,7 @@ export interface operations {
         parameters: {
             query?: {
                 returnTo?: string;
+                client?: "browser" | "desktop";
             };
             header?: never;
             path?: never;
@@ -778,6 +796,7 @@ export interface operations {
             query?: {
                 tenantHint?: string;
                 returnTo?: string;
+                client?: "browser" | "desktop";
             };
             header?: never;
             path?: never;
@@ -791,6 +810,50 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    completeDesktopLogin: {
+        parameters: {
+            query: {
+                handoff: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to app route with established session or login guidance */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
             };
             /** @description Rate limited */
             429: {

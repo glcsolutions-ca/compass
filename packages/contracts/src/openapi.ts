@@ -120,7 +120,8 @@ export function buildOpenApiDocument(): Record<string, unknown> {
     tags: ["Auth"],
     request: {
       query: z.object({
-        returnTo: z.string().optional()
+        returnTo: z.string().optional(),
+        client: z.enum(["browser", "desktop"]).optional()
       })
     },
     responses: {
@@ -211,12 +212,47 @@ export function buildOpenApiDocument(): Record<string, unknown> {
     request: {
       query: z.object({
         tenantHint: z.string().optional(),
-        returnTo: z.string().optional()
+        returnTo: z.string().optional(),
+        client: z.enum(["browser", "desktop"]).optional()
       })
     },
     responses: {
       302: {
         description: "Redirect to Entra admin consent endpoint"
+      },
+      429: {
+        description: "Rate limited",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/v1/auth/desktop/complete",
+    operationId: "completeDesktopLogin",
+    summary: "Complete desktop auth handoff and set session cookie",
+    tags: ["Auth"],
+    request: {
+      query: z.object({
+        handoff: z.string().min(1)
+      })
+    },
+    responses: {
+      302: {
+        description: "Redirect to app route with established session or login guidance"
+      },
+      400: {
+        description: "Invalid request",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
       },
       429: {
         description: "Rate limited",

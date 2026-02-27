@@ -9,6 +9,7 @@ General documentation and architecture records live here.
 - Root agent index is in `/AGENTS.md`.
 - `engineering-baseline.md` is retained as a short pointer.
 - Commit-stage policy documentation is in `commit-stage-policy.md`.
+- Console Contract Steering guidance is in `ccs.md`.
 - Branch protection setup is in `branch-protection.md`.
 - Agent playbooks and troubleshooting are in `agents/README.md`.
 

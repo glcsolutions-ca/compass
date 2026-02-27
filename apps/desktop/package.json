@@ -11,7 +11,7 @@
     "dev:run": "pnpm run prepack:deps && pnpm run build && cross-env npm_config_node_linker=hoisted electron-forge start",
     "lint": "eslint src forge.config.ts --ext .ts --max-warnings=0",
     "test": "vitest run --config vitest.config.mts",
-    "typecheck": "tsc -p tsconfig.ref.json --noEmit",
+    "typecheck": "pnpm --filter @compass/contracts build && tsc -p tsconfig.ref.json --noEmit",
     "make:mac": "pnpm run prepack:deps && pnpm run build && node ./scripts/write-runtime-config.mjs && cross-env npm_config_node_linker=hoisted electron-forge make --platform=darwin --arch=arm64",
     "make:win": "pnpm run prepack:deps && pnpm run build && node ./scripts/write-runtime-config.mjs && cross-env npm_config_node_linker=hoisted electron-forge make --platform=win32 --arch=x64"
   },

@@ -3,6 +3,10 @@ export const shorthands = undefined;
 const THREAD_MODE_CHECK = "execution_mode in ('cloud', 'local')";
 const THREAD_HOST_CHECK = "execution_host in ('dynamic_sessions', 'desktop_local')";
 
+function renameIndexIfExists(pgm, fromName, toName) {
+  pgm.sql(`alter index if exists "${fromName}" rename to "${toName}";`);
+}
+
 export async function up(pgm) {
   pgm.renameTable("codex_threads", "agent_threads");
   pgm.renameTable("codex_turns", "agent_turns");
@@ -11,23 +15,11 @@ export async function up(pgm) {
   pgm.renameTable("codex_approvals", "agent_approvals");
   pgm.renameTable("codex_auth_state", "agent_auth_state");
 
-  pgm.renameIndex(
-    "agent_events",
-    "codex_events_thread_created_idx",
-    "agent_events_thread_created_idx"
-  );
-  pgm.renameIndex(
-    "agent_turns",
-    "codex_turns_thread_started_idx",
-    "agent_turns_thread_started_idx"
-  );
-  pgm.renameIndex(
-    "agent_items",
-    "codex_items_thread_updated_idx",
-    "agent_items_thread_updated_idx"
-  );
-  pgm.renameIndex(
-    "agent_approvals",
+  renameIndexIfExists(pgm, "codex_events_thread_created_idx", "agent_events_thread_created_idx");
+  renameIndexIfExists(pgm, "codex_turns_thread_started_idx", "agent_turns_thread_started_idx");
+  renameIndexIfExists(pgm, "codex_items_thread_updated_idx", "agent_items_thread_updated_idx");
+  renameIndexIfExists(
+    pgm,
     "codex_approvals_thread_created_idx",
     "agent_approvals_thread_created_idx"
   );
@@ -120,26 +112,14 @@ export async function down(pgm) {
     "tenant_id"
   ]);
 
-  pgm.renameIndex(
-    "agent_approvals",
+  renameIndexIfExists(
+    pgm,
     "agent_approvals_thread_created_idx",
     "codex_approvals_thread_created_idx"
   );
-  pgm.renameIndex(
-    "agent_items",
-    "agent_items_thread_updated_idx",
-    "codex_items_thread_updated_idx"
-  );
-  pgm.renameIndex(
-    "agent_turns",
-    "agent_turns_thread_started_idx",
-    "codex_turns_thread_started_idx"
-  );
-  pgm.renameIndex(
-    "agent_events",
-    "agent_events_thread_created_idx",
-    "codex_events_thread_created_idx"
-  );
+  renameIndexIfExists(pgm, "agent_items_thread_updated_idx", "codex_items_thread_updated_idx");
+  renameIndexIfExists(pgm, "agent_turns_thread_started_idx", "codex_turns_thread_started_idx");
+  renameIndexIfExists(pgm, "agent_events_thread_created_idx", "codex_events_thread_created_idx");
 
   pgm.renameTable("agent_auth_state", "codex_auth_state");
   pgm.renameTable("agent_approvals", "codex_approvals");

@@ -2,6 +2,13 @@ export const shorthands = undefined;
 
 const THREAD_MODE_CHECK = "execution_mode in ('cloud', 'local')";
 const THREAD_HOST_CHECK = "execution_host in ('dynamic_sessions', 'desktop_local')";
+const INDEX_RENAMES_UP = [
+  ["codex_events_thread_created_idx", "agent_events_thread_created_idx"],
+  ["codex_turns_thread_started_idx", "agent_turns_thread_started_idx"],
+  ["codex_items_thread_updated_idx", "agent_items_thread_updated_idx"],
+  ["codex_approvals_thread_created_idx", "agent_approvals_thread_created_idx"]
+];
+const INDEX_RENAMES_DOWN = INDEX_RENAMES_UP.map(([from, to]) => [to, from]);
 
 export async function up(pgm) {
   pgm.renameTable("codex_threads", "agent_threads");
@@ -11,26 +18,9 @@ export async function up(pgm) {
   pgm.renameTable("codex_approvals", "agent_approvals");
   pgm.renameTable("codex_auth_state", "agent_auth_state");
 
-  pgm.renameIndex(
-    "agent_events",
-    "codex_events_thread_created_idx",
-    "agent_events_thread_created_idx"
-  );
-  pgm.renameIndex(
-    "agent_turns",
-    "codex_turns_thread_started_idx",
-    "agent_turns_thread_started_idx"
-  );
-  pgm.renameIndex(
-    "agent_items",
-    "codex_items_thread_updated_idx",
-    "agent_items_thread_updated_idx"
-  );
-  pgm.renameIndex(
-    "agent_approvals",
-    "codex_approvals_thread_created_idx",
-    "agent_approvals_thread_created_idx"
-  );
+  for (const [fromName, toName] of INDEX_RENAMES_UP) {
+    pgm.sql(`alter index if exists "${fromName}" rename to "${toName}"`);
+  }
 
   pgm.addColumns("agent_threads", {
     tenant_id: {
@@ -120,26 +110,9 @@ export async function down(pgm) {
     "tenant_id"
   ]);
 
-  pgm.renameIndex(
-    "agent_approvals",
-    "agent_approvals_thread_created_idx",
-    "codex_approvals_thread_created_idx"
-  );
-  pgm.renameIndex(
-    "agent_items",
-    "agent_items_thread_updated_idx",
-    "codex_items_thread_updated_idx"
-  );
-  pgm.renameIndex(
-    "agent_turns",
-    "agent_turns_thread_started_idx",
-    "codex_turns_thread_started_idx"
-  );
-  pgm.renameIndex(
-    "agent_events",
-    "agent_events_thread_created_idx",
-    "codex_events_thread_created_idx"
-  );
+  for (const [fromName, toName] of INDEX_RENAMES_DOWN) {
+    pgm.sql(`alter index if exists "${fromName}" rename to "${toName}"`);
+  }
 
   pgm.renameTable("agent_auth_state", "codex_auth_state");
   pgm.renameTable("agent_approvals", "codex_approvals");

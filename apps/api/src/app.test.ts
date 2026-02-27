@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { buildApiApp } from "./app.js";
-import { ApiError } from "./auth-service.js";
 import type { AuthService } from "./auth-service.js";
 import type { AgentService } from "./agent-service.js";
 
@@ -114,20 +113,6 @@ describe("API app", () => {
     expect(response.status).toBe(302);
     expect(response.headers.location).toBe("/chat");
     expect(response.headers["set-cookie"]?.[0]).toContain("__Host-compass_session=");
-  });
-
-  it("redirects to login when desktop handoff token is invalid", async () => {
-    const authService = {
-      completeDesktopLogin: vi.fn(async () => {
-        throw new ApiError(401, "DESKTOP_HANDOFF_INVALID", "Desktop auth handoff is invalid");
-      })
-    } as unknown as AuthService;
-
-    const app = buildApiApp({ authService });
-    const response = await request(app).get("/v1/auth/desktop/complete?handoff=expired");
-
-    expect(response.status).toBe(302);
-    expect(response.headers.location).toBe("/login?error=desktop_handoff_invalid");
   });
 
   it("blocks cross-origin state-changing requests when session cookie is present", async () => {

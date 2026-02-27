@@ -1,13 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import {
-  extractDeepLinkFromArgv,
-  parseDesktopAuthDeepLink,
-  resolveDeepLinkNavigationTarget,
-  resolveDesktopAuthScheme
-} from "./auth-deep-link";
-import { resolveDesktopRuntimeConfig, type DesktopRuntimeConfig } from "./config";
+import { resolveDesktopRuntimeConfig } from "./config";
 import {
   type AgentLocalLoginStartInput,
   type AgentLocalTurnInterruptInput,
@@ -16,11 +10,6 @@ import {
 } from "./ipc";
 import { LocalRuntimeManager, type LocalAuthState } from "./local-runtime-manager";
 import { assertExternalOpenAllowed, isNavigationAllowed } from "./navigation-policy";
-
-const desktopAuthScheme = resolveDesktopAuthScheme(process.env);
-let mainWindow: BrowserWindow | null = null;
-let runtimeConfig: DesktopRuntimeConfig | null = null;
-const pendingDeepLinks: string[] = [];
 
 function openExternalSafely(rawUrl: string): void {
   try {
@@ -32,70 +21,13 @@ function openExternalSafely(rawUrl: string): void {
   }
 }
 
-function focusMainWindow(): void {
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    return;
-  }
+function createMainWindow(): BrowserWindow {
+  const runtimeConfig = resolveDesktopRuntimeConfig({
+    isPackaged: app.isPackaged,
+    env: process.env,
+    resourcesPath: process.resourcesPath
+  });
 
-  if (mainWindow.isMinimized()) {
-    mainWindow.restore();
-  }
-
-  mainWindow.focus();
-}
-
-async function processPendingDeepLinks(): Promise<void> {
-  if (!runtimeConfig || !mainWindow || mainWindow.isDestroyed()) {
-    return;
-  }
-
-  while (pendingDeepLinks.length > 0) {
-    const rawUrl = pendingDeepLinks.shift();
-    if (!rawUrl) {
-      continue;
-    }
-
-    const parsed = parseDesktopAuthDeepLink(rawUrl, desktopAuthScheme);
-    if (!parsed) {
-      console.warn(`Ignored unsupported desktop deep link: ${rawUrl}`);
-      continue;
-    }
-
-    const targetUrl = resolveDeepLinkNavigationTarget({
-      startUrl: runtimeConfig.startUrl,
-      deepLink: parsed
-    });
-
-    try {
-      await mainWindow.loadURL(targetUrl);
-      focusMainWindow();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(`Failed to route desktop deep link to app window: ${message}`);
-    }
-  }
-}
-
-function enqueueDeepLink(rawUrl: string): void {
-  pendingDeepLinks.push(rawUrl);
-  void processPendingDeepLinks();
-}
-
-function registerDeepLinkProtocolClient(): void {
-  if (process.defaultApp) {
-    const entrypoint = process.argv[1];
-    if (entrypoint) {
-      app.setAsDefaultProtocolClient(desktopAuthScheme, process.execPath, [
-        path.resolve(entrypoint)
-      ]);
-      return;
-    }
-  }
-
-  app.setAsDefaultProtocolClient(desktopAuthScheme);
-}
-
-function createMainWindow(nextRuntimeConfig: DesktopRuntimeConfig): BrowserWindow {
   const window = new BrowserWindow({
     width: 1366,
     height: 860,
@@ -116,7 +48,7 @@ function createMainWindow(nextRuntimeConfig: DesktopRuntimeConfig): BrowserWindo
   });
 
   window.webContents.on("will-navigate", (event, url) => {
-    if (isNavigationAllowed(url, nextRuntimeConfig.allowedOrigins)) {
+    if (isNavigationAllowed(url, runtimeConfig.allowedOrigins)) {
       return;
     }
 
@@ -124,12 +56,10 @@ function createMainWindow(nextRuntimeConfig: DesktopRuntimeConfig): BrowserWindo
     openExternalSafely(url);
   });
 
-  void window.loadURL(nextRuntimeConfig.startUrl);
+  void window.loadURL(runtimeConfig.startUrl);
 
   window.on("closed", () => {
-    if (mainWindow === window) {
-      mainWindow = null;
-    }
+    // no-op; BrowserWindow lifecycle is tracked by Electron internals
   });
 
   return window;
@@ -259,65 +189,23 @@ function registerIpcHandlers(): void {
   );
 }
 
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
-if (!hasSingleInstanceLock) {
-  app.quit();
-} else {
-  app.on("second-instance", (_event, argv) => {
-    const deepLink = extractDeepLinkFromArgv(argv, desktopAuthScheme);
-    if (deepLink) {
-      enqueueDeepLink(deepLink);
-    }
+void app
+  .whenReady()
+  .then(() => {
+    registerIpcHandlers();
+    createMainWindow();
 
-    focusMainWindow();
-  });
-
-  app.on("open-url", (event, rawUrl) => {
-    event.preventDefault();
-    enqueueDeepLink(rawUrl);
-  });
-
-  void app
-    .whenReady()
-    .then(() => {
-      registerDeepLinkProtocolClient();
-      registerIpcHandlers();
-
-      runtimeConfig = resolveDesktopRuntimeConfig({
-        isPackaged: app.isPackaged,
-        env: process.env,
-        resourcesPath: process.resourcesPath
-      });
-      mainWindow = createMainWindow(runtimeConfig);
-
-      const startupDeepLink = extractDeepLinkFromArgv(process.argv, desktopAuthScheme);
-      if (startupDeepLink) {
-        enqueueDeepLink(startupDeepLink);
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createMainWindow();
       }
-
-      app.on("activate", () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-          if (!runtimeConfig) {
-            runtimeConfig = resolveDesktopRuntimeConfig({
-              isPackaged: app.isPackaged,
-              env: process.env,
-              resourcesPath: process.resourcesPath
-            });
-          }
-
-          mainWindow = createMainWindow(runtimeConfig);
-        }
-
-        focusMainWindow();
-        void processPendingDeepLinks();
-      });
-    })
-    .catch((error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      dialog.showErrorBox("Desktop startup failed", message);
-      app.exit(1);
     });
-}
+  })
+  .catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    dialog.showErrorBox("Desktop startup failed", message);
+    app.exit(1);
+  });
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

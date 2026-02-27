@@ -56,7 +56,6 @@ describe("auth schema constraints", () => {
       truncate table
         auth_audit_events,
         auth_sessions,
-        auth_desktop_handoffs,
         auth_oidc_requests,
         invites,
         memberships,
@@ -276,51 +275,6 @@ describe("auth schema constraints", () => {
          )`
       )
     ).rejects.toThrow(/auth_oidc_requests_unique_state_hash/iu);
-  });
-
-  it("enforces unique desktop auth handoff token hash", async () => {
-    await client.query(
-      `insert into users (id, primary_email, display_name, created_at, updated_at)
-       values ('u_1', 'owner@acme.test', 'Owner', now(), now())`
-    );
-
-    await client.query(
-      `insert into auth_desktop_handoffs (
-         id,
-         handoff_token_hash,
-         user_id,
-         redirect_to,
-         expires_at,
-         created_at
-       ) values (
-         'handoff_1',
-         'handoff-hash-1',
-         'u_1',
-         '/chat',
-         now() + interval '2 minute',
-         now()
-       )`
-    );
-
-    await expect(
-      client.query(
-        `insert into auth_desktop_handoffs (
-           id,
-           handoff_token_hash,
-           user_id,
-           redirect_to,
-           expires_at,
-           created_at
-         ) values (
-           'handoff_2',
-           'handoff-hash-1',
-           'u_1',
-           '/chat',
-           now() + interval '2 minute',
-           now()
-         )`
-      )
-    ).rejects.toThrow(/auth_desktop_handoffs_unique_token_hash/iu);
   });
 
   it("enforces invite accepted_by_user_id foreign key", async () => {

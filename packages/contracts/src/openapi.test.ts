@@ -16,7 +16,6 @@ describe("buildOpenApiDocument", () => {
     expect(document.paths?.["/v1/ping"]).toBeTruthy();
     expect(document.paths?.["/v1/auth/entra/start"]).toBeTruthy();
     expect(document.paths?.["/v1/auth/entra/callback"]).toBeTruthy();
-    expect(document.paths?.["/v1/auth/desktop/complete"]).toBeTruthy();
     expect(document.paths?.["/v1/auth/me"]).toBeTruthy();
     expect(document.paths?.["/v1/auth/logout"]).toBeTruthy();
     expect(document.paths?.["/v1/tenants"]).toBeTruthy();
@@ -37,9 +36,6 @@ describe("buildOpenApiDocument", () => {
     expect(document.paths?.["/v1/auth/entra/start"]?.get?.operationId).toBe("startEntraLogin");
     expect(document.paths?.["/v1/auth/entra/callback"]?.get?.operationId).toBe(
       "handleEntraCallback"
-    );
-    expect(document.paths?.["/v1/auth/desktop/complete"]?.get?.operationId).toBe(
-      "completeDesktopLogin"
     );
     expect(document.paths?.["/v1/auth/me"]?.get?.operationId).toBe("getAuthMe");
     expect(document.paths?.["/v1/auth/logout"]?.post?.operationId).toBe("logout");

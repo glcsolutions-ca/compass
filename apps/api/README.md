@@ -15,7 +15,6 @@ Runtime migrations expect the canonical single baseline file `db/migrations/1772
 - `GET /v1/auth/entra/start`
 - `GET /v1/auth/entra/callback`
 - `GET /v1/auth/entra/admin-consent/start`
-- `GET /v1/auth/desktop/complete`
 - `GET /v1/auth/me`
 - `POST /v1/auth/logout`
 - `POST /v1/tenants`
@@ -43,7 +42,6 @@ Configuration is parsed in `src/config.ts`.
 | `ENTRA_TENANT_SEGMENT`          | `organizations`                          | Entra tenant segment (`organizations` for work/school accounts). |
 | `ENTRA_ALLOWED_TENANT_IDS`      | empty                                    | Optional comma-separated Entra tenant IDs allow-list.            |
 | `ENTRA_SCOPE`                   | `openid profile email`                   | OIDC scope set.                                                  |
-| `DESKTOP_AUTH_SCHEME`           | `ca.glsolutions.compass`                 | Deep-link URI scheme used for desktop auth callback handoff.     |
 | `AUTH_SESSION_TTL_SECONDS`      | `28800`                                  | Absolute session max age.                                        |
 | `AUTH_SESSION_IDLE_TTL_SECONDS` | `3600`                                   | Idle timeout; stale sessions are revoked.                        |
 | `AUTH_RATE_LIMIT_WINDOW_MS`     | `60000`                                  | Auth endpoint rate-limit rolling window.                         |

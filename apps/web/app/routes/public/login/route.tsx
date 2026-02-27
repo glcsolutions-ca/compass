@@ -13,30 +13,6 @@ export interface LoginLoaderData {
   showAdminConsentSuccess: boolean;
 }
 
-function isDesktopRuntime(): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  const desktopCandidate = (window as { compassDesktop?: unknown }).compassDesktop;
-  if (!desktopCandidate || typeof desktopCandidate !== "object") {
-    return false;
-  }
-
-  const runtime = desktopCandidate as { isDesktop?: () => boolean };
-  return typeof runtime.isDesktop === "function" ? runtime.isDesktop() : false;
-}
-
-function withDesktopClientHint(href: string, desktopRuntime: boolean): string {
-  if (!desktopRuntime) {
-    return href;
-  }
-
-  const parsed = new URL(href, "https://compass.local");
-  parsed.searchParams.set("client", "desktop");
-  return `${parsed.pathname}${parsed.search}`;
-}
-
 export const meta: MetaFunction = () => {
   return [
     { title: "Compass Login" },
@@ -78,9 +54,6 @@ export async function clientLoader({
 
 export default function LoginRoute() {
   const data = useLoaderData<LoginLoaderData>();
-  const desktopRuntime = isDesktopRuntime();
-  const signInHref = withDesktopClientHint(data.signInHref, desktopRuntime);
-  const adminConsentHref = withDesktopClientHint(data.adminConsentHref, desktopRuntime);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-4">
@@ -98,7 +71,7 @@ export default function LoginRoute() {
 
         <div className="mt-8">
           <Button asChild className="h-11 px-6" data-testid="sign-in-link" size="lg">
-            <a href={signInHref}>Sign in with Microsoft</a>
+            <a href={data.signInHref}>Sign in with Microsoft</a>
           </Button>
         </div>
 
@@ -124,7 +97,7 @@ export default function LoginRoute() {
               A Microsoft 365 admin must grant tenant consent before users can sign in.
             </p>
             <Button asChild className="mt-4" variant="outline">
-              <a data-testid="admin-consent-link" href={adminConsentHref}>
+              <a data-testid="admin-consent-link" href={data.adminConsentHref}>
                 Continue with admin consent
               </a>
             </Button>

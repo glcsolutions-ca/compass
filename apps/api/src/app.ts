@@ -62,14 +62,12 @@ const AgentThreadEventsQuerySchema = z.object({
 });
 
 const EntraStartQuerySchema = z.object({
-  returnTo: z.string().optional(),
-  client: z.enum(["browser", "desktop"]).optional()
+  returnTo: z.string().optional()
 });
 
 const EntraAdminConsentQuerySchema = z.object({
   tenantHint: z.string().optional(),
-  returnTo: z.string().optional(),
-  client: z.enum(["browser", "desktop"]).optional()
+  returnTo: z.string().optional()
 });
 
 const EntraCallbackQuerySchema = z.object({
@@ -80,10 +78,6 @@ const EntraCallbackQuerySchema = z.object({
   scope: z.string().optional(),
   error: z.string().optional(),
   error_description: z.string().optional()
-});
-
-const EntraDesktopCompleteQuerySchema = z.object({
-  handoff: z.string().min(1)
 });
 
 const DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS = 60_000;
@@ -490,7 +484,6 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
     try {
       const result = await authService.startEntraLogin({
         returnTo: query.returnTo,
-        client: query.client,
         userAgent: actor.userAgent,
         ip: actor.ip,
         now: now()
@@ -535,7 +528,6 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       const result = await authService.startAdminConsent({
         tenantHint: query.tenantHint,
         returnTo: query.returnTo,
-        client: query.client,
         now: now()
       });
       response.redirect(302, result.redirectUrl);
@@ -589,51 +581,6 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
 
       response.redirect(302, result.redirectTo);
     } catch (error) {
-      sendAuthError(request, response, error);
-    }
-  });
-
-  app.get("/v1/auth/desktop/complete", async (request, response) => {
-    if (!authService) {
-      response.status(503).json({ code: "AUTH_NOT_CONFIGURED", message: "Auth is not configured" });
-      return;
-    }
-
-    const query = parseOrReply(request.query, EntraDesktopCompleteQuerySchema, response);
-    if (!query) {
-      return;
-    }
-
-    const actorContext = actorContextFromRequest(request);
-    const rateResult = authRateLimiter.check({
-      key: `entra-desktop-complete:${actorContext.ip}`,
-      now: now()
-    });
-    if (!rateResult.allowed) {
-      response.setHeader("retry-after", String(rateResult.retryAfterSeconds));
-      response.status(429).json({
-        code: "RATE_LIMITED",
-        message: "Too many authentication requests"
-      });
-      return;
-    }
-
-    try {
-      const result = await authService.completeDesktopLogin({
-        handoffToken: query.handoff,
-        userAgent: actorContext.userAgent,
-        ip: actorContext.ip,
-        now: now()
-      });
-      response.setHeader("set-cookie", authService.createSessionCookie(result.sessionToken));
-      response.redirect(302, result.redirectTo);
-    } catch (error) {
-      const parsed = parseAuthError(error);
-      if (parsed.code === "DESKTOP_HANDOFF_INVALID") {
-        response.redirect(302, "/login?error=desktop_handoff_invalid");
-        return;
-      }
-
       sendAuthError(request, response, error);
     }
   });

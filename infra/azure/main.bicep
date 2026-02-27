@@ -75,6 +75,7 @@ param dynamicSessionsRuntimeEngine string = 'codex'
 param dynamicSessionsCodexAppServerCommand string = 'codex'
 param dynamicSessionsCodexAppServerArgs string = 'app-server'
 param dynamicSessionsCodexTurnTimeoutMs int = 120000
+param dynamicSessionsMaxSessionPoolSize int = 20
 param agentGatewayEnabled bool = false
 param agentCloudModeEnabled bool = false
 param agentLocalModeEnabledDesktop bool = false
@@ -323,6 +324,7 @@ module dynamicSessions './modules/sessionpool-dynamic-sessions.bicep' = {
     registryIdentityResourceId: acrPullIdentity.id
     sessionExecutorPrincipalId: dynamicSessionsExecutorIdentity.properties.principalId
     sessionExecutorRoleDefinitionId: sessionExecutorRoleDefinitionId
+    maxSessionPoolSize: dynamicSessionsMaxSessionPoolSize
     runtimeEngine: dynamicSessionsRuntimeEngine
     codexAppServerCommand: dynamicSessionsCodexAppServerCommand
     codexAppServerArgs: dynamicSessionsCodexAppServerArgs

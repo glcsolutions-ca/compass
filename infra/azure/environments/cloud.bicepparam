@@ -84,6 +84,7 @@ param dynamicSessionsRuntimeEngine = 'codex'
 param dynamicSessionsCodexAppServerCommand = 'codex'
 param dynamicSessionsCodexAppServerArgs = 'app-server'
 param dynamicSessionsCodexTurnTimeoutMs = 120000
+param dynamicSessionsMaxSessionPoolSize = 20
 param agentGatewayEnabled = false
 param agentCloudModeEnabled = false
 param agentLocalModeEnabledDesktop = false

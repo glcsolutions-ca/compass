@@ -15,6 +15,7 @@ param codexApiKeySecretName string = 'openai-api-key'
 param codexApiKeySecretValue string = ''
 param targetPort int = 8080
 param readySessionInstances int = 0
+param maxSessionPoolSize int = 20
 param maxConcurrentSessions int = 20
 param cooldownPeriodInSeconds int = 300
 param sessionNetworkStatus string = 'EgressEnabled'
@@ -86,6 +87,7 @@ resource sessionPool 'Microsoft.App/sessionPools@2025-07-01' = {
     scaleConfiguration: {
       maxConcurrentSessions: maxConcurrentSessions
       readySessionInstances: readySessionInstances
+      maxSessionPoolSize: maxSessionPoolSize
     }
     dynamicPoolConfiguration: {
       lifecycleConfiguration: {

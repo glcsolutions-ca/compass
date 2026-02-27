@@ -6,7 +6,7 @@
     "outDir": "dist-types",
     "baseUrl": ".",
     "paths": {
-      "@compass/contracts": ["../../packages/contracts"]
+      "@compass/contracts": ["../../packages/contracts/dist-types/index.d.ts"]
     },
     "module": "Node16",
     "moduleResolution": "Node16"

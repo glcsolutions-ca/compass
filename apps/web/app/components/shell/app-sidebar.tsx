@@ -118,37 +118,35 @@ function SidebarBrandControl() {
 
   if (state === "collapsed") {
     return (
-      <div className="-m-1 p-1">
-        <button
-          aria-label="Expand sidebar"
+      <button
+        aria-label="Expand sidebar"
+        className={cn(
+          "group/brand relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-primary/10 text-sidebar-primary",
+          "transition-colors duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        )}
+        onClick={toggleSidebar}
+        title="Expand sidebar"
+        type="button"
+      >
+        <Compass
           className={cn(
-            "group/brand relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-primary/10 text-sidebar-primary",
-            "transition-colors duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            "h-4 w-4 transition-[opacity,transform] duration-200 ease-out",
+            "opacity-100 scale-100",
+            "group-hover/brand:opacity-0 group-hover/brand:scale-90",
+            "group-focus-visible/brand:opacity-0 group-focus-visible/brand:scale-90"
           )}
-          onClick={toggleSidebar}
-          title="Expand sidebar"
-          type="button"
-        >
-          <Compass
-            className={cn(
-              "h-4 w-4 transition-[opacity,transform] duration-200 ease-out",
-              "opacity-100 scale-100",
-              "group-hover/brand:opacity-0 group-hover/brand:scale-90",
-              "group-focus-visible/brand:opacity-0 group-focus-visible/brand:scale-90"
-            )}
-          />
-          <PanelLeft
-            className={cn(
-              "absolute h-4 w-4 transition-[opacity,transform] duration-200 ease-out",
-              "opacity-0 scale-75 translate-x-0.5",
-              "group-hover/brand:translate-x-0 group-hover/brand:opacity-100 group-hover/brand:scale-100",
-              "group-focus-visible/brand:translate-x-0 group-focus-visible/brand:opacity-100 group-focus-visible/brand:scale-100"
-            )}
-          />
-          <span className="sr-only">Expand sidebar</span>
-        </button>
-      </div>
+        />
+        <PanelLeft
+          className={cn(
+            "absolute h-4 w-4 transition-[opacity,transform] duration-200 ease-out",
+            "opacity-0 scale-75 translate-x-0.5",
+            "group-hover/brand:translate-x-0 group-hover/brand:opacity-100 group-hover/brand:scale-100",
+            "group-focus-visible/brand:translate-x-0 group-focus-visible/brand:opacity-100 group-focus-visible/brand:scale-100"
+          )}
+        />
+        <span className="sr-only">Expand sidebar</span>
+      </button>
     );
   }
 
@@ -382,8 +380,8 @@ export function AppSidebar({ auth, activeTenantSlug, buildSettingsHref }: AppSid
 
   return (
     <Sidebar collapsible="icon" side="left" variant="sidebar">
-      <SidebarHeader className="px-3 pb-2 pt-3">
-        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+      <SidebarHeader className="px-3 pb-2 pt-3 group-data-[collapsible=icon]:px-2">
+        <div className="flex items-center gap-2">
           <SidebarBrandControl />
           <SidebarCollapseControl />
         </div>

@@ -114,7 +114,7 @@ export function SettingsModal({
 
         <Tabs
           className="flex h-full flex-col md:flex-row"
-          onValueChange={(value) => {
+          onValueChange={(value: string) => {
             if (value === "general" || value === "personalization") {
               requestSectionChange(value);
             }

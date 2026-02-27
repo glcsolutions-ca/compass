@@ -370,9 +370,20 @@ jobs:
         run: |
           set -euo pipefail
 
+          has_secret_value() {
+            local value="${1:-}"
+            if [ -z "$value" ]; then
+              return 1
+            fi
+            if [ -z "$(printf '%s' "$value" | tr -d '[:space:]')" ]; then
+              return 1
+            fi
+            return 0
+          }
+
           enabled="true"
           for required in CERT_P12_BASE64 CERT_PASSWORD APPLE_TEAM_ID APPLE_API_KEY_ID APPLE_API_ISSUER_ID APPLE_API_KEY_BASE64; do
-            if [ -z "${!required:-}" ]; then
+            if ! has_secret_value "${!required:-}"; then
               enabled="false"
               break
             fi
@@ -560,9 +571,20 @@ jobs:
         run: |
           set -euo pipefail
 
+          has_secret_value() {
+            local value="${1:-}"
+            if [ -z "$value" ]; then
+              return 1
+            fi
+            if [ -z "$(printf '%s' "$value" | tr -d '[:space:]')" ]; then
+              return 1
+            fi
+            return 0
+          }
+
           enabled="true"
           for required in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID TRUSTED_SIGNING_ENDPOINT TRUSTED_SIGNING_ACCOUNT_NAME TRUSTED_SIGNING_PROFILE_NAME; do
-            if [ -z "${!required:-}" ]; then
+            if ! has_secret_value "${!required:-}"; then
               enabled="false"
               break
             fi

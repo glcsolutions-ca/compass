@@ -429,11 +429,39 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
           APPLE_API_KEY_PATH: ${{ steps.signing_assets.outputs.api_key_path }}
-        run: pnpm --filter @compass/desktop make:mac
+        run: |
+          set -euo pipefail
+          log_path="$RUNNER_TEMP/make-mac-signed.log"
+
+          if pnpm --filter @compass/desktop make:mac 2>&1 | tee "$log_path"; then
+            exit 0
+          fi
+
+          if grep -q "hdiutil: detach failed - No such file or directory" "$log_path"; then
+            echo "Retrying macOS signed build after transient hdiutil detach race..."
+            pnpm --filter @compass/desktop make:mac
+            exit 0
+          fi
+
+          exit 1
 
       - name: Build unsigned macOS DMG
         if: ${{ steps.signing_mode.outputs.enabled != 'true' }}
-        run: pnpm --filter @compass/desktop make:mac
+        run: |
+          set -euo pipefail
+          log_path="$RUNNER_TEMP/make-mac-unsigned.log"
+
+          if pnpm --filter @compass/desktop make:mac 2>&1 | tee "$log_path"; then
+            exit 0
+          fi
+
+          if grep -q "hdiutil: detach failed - No such file or directory" "$log_path"; then
+            echo "Retrying macOS unsigned build after transient hdiutil detach race..."
+            pnpm --filter @compass/desktop make:mac
+            exit 0
+          fi
+
+          exit 1
 
       - name: Validate desktop runtime config contract
         run: pnpm --filter @compass/desktop smoke:artifact

@@ -5,14 +5,143 @@ import {
   requireEnv,
   run,
   runJson,
+  sleep,
   writeArtifact
 } from "./utils.mjs";
+
+const SESSION_EXECUTOR_ROLE_DEFINITION_GUID = "0fb8eba5-a2bb-4abe-b1c1-49dfad359bb0";
+const AUTHORIZATION_RETRY_ATTEMPTS = 6;
+const AUTHORIZATION_RETRY_DELAY_MS = 5_000;
 
 function addCheck({ checks, reasonCodes, id, pass, details, reasonCode }) {
   checks.push({ id, pass, details });
   if (!pass && reasonCode) {
     reasonCodes.push(reasonCode);
   }
+}
+
+function decodeJwtPayload(accessToken) {
+  const segments = String(accessToken || "").split(".");
+  if (segments.length < 2) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(Buffer.from(segments[1], "base64url").toString("utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function normalizeRoleDefinitionId(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+async function resolveCurrentPrincipalObjectId() {
+  const managementToken = await runJson("az", [
+    "account",
+    "get-access-token",
+    "--resource",
+    "https://management.azure.com",
+    "--output",
+    "json"
+  ]);
+
+  const accessToken = String(managementToken?.accessToken || "").trim();
+  const claims = decodeJwtPayload(accessToken);
+  return String(claims.oid || claims.object_id || "").trim();
+}
+
+async function listRoleAssignmentsAtPoolScope({ sessionPoolId, principalId }) {
+  const assignments = await runJson("az", [
+    "role",
+    "assignment",
+    "list",
+    "--scope",
+    sessionPoolId,
+    "--assignee-object-id",
+    principalId,
+    "--output",
+    "json"
+  ]);
+
+  return Array.isArray(assignments) ? assignments : [];
+}
+
+function getMatchingRoleAssignments(assignments, expectedRoleDefinitionId) {
+  const normalizedExpected = normalizeRoleDefinitionId(expectedRoleDefinitionId);
+  return assignments.filter((assignment) => {
+    const candidate = normalizeRoleDefinitionId(assignment?.roleDefinitionId);
+    return candidate === normalizedExpected;
+  });
+}
+
+async function ensureVerifierHasSessionExecutorRole({
+  subscriptionId,
+  sessionPoolId,
+  principalId
+}) {
+  const roleDefinitionId = `/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/${SESSION_EXECUTOR_ROLE_DEFINITION_GUID}`;
+  let created = false;
+
+  let assignments = await listRoleAssignmentsAtPoolScope({
+    sessionPoolId,
+    principalId
+  });
+  let matching = getMatchingRoleAssignments(assignments, roleDefinitionId);
+
+  if (matching.length === 0) {
+    try {
+      await run("az", [
+        "role",
+        "assignment",
+        "create",
+        "--scope",
+        sessionPoolId,
+        "--assignee-object-id",
+        principalId,
+        "--assignee-principal-type",
+        "ServicePrincipal",
+        "--role",
+        roleDefinitionId,
+        "--output",
+        "none"
+      ]);
+      created = true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/already exists/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  for (let attempt = 1; attempt <= AUTHORIZATION_RETRY_ATTEMPTS; attempt += 1) {
+    assignments = await listRoleAssignmentsAtPoolScope({
+      sessionPoolId,
+      principalId
+    });
+    matching = getMatchingRoleAssignments(assignments, roleDefinitionId);
+    if (matching.length > 0) {
+      return {
+        roleDefinitionId,
+        roleAssignmentCreated: created,
+        roleAssignmentCount: matching.length
+      };
+    }
+
+    if (attempt < AUTHORIZATION_RETRY_ATTEMPTS) {
+      await sleep(AUTHORIZATION_RETRY_DELAY_MS);
+    }
+  }
+
+  return {
+    roleDefinitionId,
+    roleAssignmentCreated: created,
+    roleAssignmentCount: 0
+  };
 }
 
 async function callRuntime(input) {
@@ -41,9 +170,26 @@ async function callRuntime(input) {
   };
 }
 
+async function callRuntimeWithAuthorizationRetry(input) {
+  let result = null;
+  for (let attempt = 1; attempt <= AUTHORIZATION_RETRY_ATTEMPTS; attempt += 1) {
+    result = await callRuntime(input);
+    if (result.status !== 401 && result.status !== 403) {
+      break;
+    }
+
+    if (attempt < AUTHORIZATION_RETRY_ATTEMPTS) {
+      await sleep(AUTHORIZATION_RETRY_DELAY_MS);
+    }
+  }
+
+  return result;
+}
+
 async function main() {
   const startedAt = Date.now();
   const headSha = getHeadSha();
+  const subscriptionId = requireEnv("AZURE_SUBSCRIPTION_ID");
   const resourceGroup = requireEnv("AZURE_RESOURCE_GROUP");
   const sessionPoolName = requireEnv("DYNAMIC_SESSIONS_POOL_NAME");
 
@@ -62,6 +208,12 @@ async function main() {
       sessionIsolation: null,
       runtimeThreadStickiness: null,
       runtimeThreadIsolation: null
+    },
+    authorization: {
+      verifierPrincipalId: "",
+      roleDefinitionId: "",
+      roleAssignmentCreated: false,
+      roleAssignmentCount: 0
     }
   };
 
@@ -99,6 +251,33 @@ async function main() {
       throw new Error("Dynamic Sessions pool management endpoint is missing or invalid");
     }
 
+    const verifierPrincipalId = await resolveCurrentPrincipalObjectId();
+    observed.authorization.verifierPrincipalId = verifierPrincipalId || "(unresolved)";
+    if (!verifierPrincipalId) {
+      throw new Error("Unable to resolve deployment principal object ID");
+    }
+
+    const verifierAuthorization = await ensureVerifierHasSessionExecutorRole({
+      subscriptionId,
+      sessionPoolId: String(sessionPool?.id || ""),
+      principalId: verifierPrincipalId
+    });
+    observed.authorization = {
+      verifierPrincipalId,
+      roleDefinitionId: verifierAuthorization.roleDefinitionId,
+      roleAssignmentCreated: verifierAuthorization.roleAssignmentCreated,
+      roleAssignmentCount: verifierAuthorization.roleAssignmentCount
+    };
+
+    addCheck({
+      checks,
+      reasonCodes,
+      id: "verifier-principal-has-session-executor-role",
+      pass: verifierAuthorization.roleAssignmentCount > 0,
+      details: `principalId=${verifierPrincipalId}, roleAssignmentCount=${verifierAuthorization.roleAssignmentCount}`,
+      reasonCode: "AGENT_RUNTIME_VERIFIER_AUTHORIZATION_FAILED"
+    });
+
     const tokenResult = await run("az", [
       "account",
       "get-access-token",
@@ -127,7 +306,7 @@ async function main() {
       `agent/session/bootstrap?identifier=${encodeURIComponent(identifierA)}`,
       baseUrl
     ).toString();
-    const bootstrapAFirstResult = await callRuntime({
+    const bootstrapAFirstResult = await callRuntimeWithAuthorizationRetry({
       url: bootstrapAFirstUrl,
       method: "POST",
       bearerToken,
@@ -152,7 +331,7 @@ async function main() {
       `agent/session/bootstrap?identifier=${encodeURIComponent(identifierA)}`,
       baseUrl
     ).toString();
-    const bootstrapASecondResult = await callRuntime({
+    const bootstrapASecondResult = await callRuntimeWithAuthorizationRetry({
       url: bootstrapASecondUrl,
       method: "POST",
       bearerToken,
@@ -167,7 +346,7 @@ async function main() {
       `agent/session/bootstrap?identifier=${encodeURIComponent(identifierB)}`,
       baseUrl
     ).toString();
-    const bootstrapBFirstResult = await callRuntime({
+    const bootstrapBFirstResult = await callRuntimeWithAuthorizationRetry({
       url: bootstrapBFirstUrl,
       method: "POST",
       bearerToken,
@@ -264,7 +443,7 @@ async function main() {
       `agent/turns/start?identifier=${encodeURIComponent(identifierA)}`,
       baseUrl
     ).toString();
-    const startTurnResult = await callRuntime({
+    const startTurnResult = await callRuntimeWithAuthorizationRetry({
       url: startTurnUrl,
       method: "POST",
       bearerToken,
@@ -302,7 +481,7 @@ async function main() {
       `agent/turns/${encodeURIComponent(turnId)}/interrupt?identifier=${encodeURIComponent(identifierA)}`,
       baseUrl
     ).toString();
-    const interruptTurnResult = await callRuntime({
+    const interruptTurnResult = await callRuntimeWithAuthorizationRetry({
       url: interruptTurnUrl,
       method: "POST",
       bearerToken,

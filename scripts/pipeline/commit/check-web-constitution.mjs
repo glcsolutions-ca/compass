@@ -277,13 +277,15 @@ function validateChatExperienceCutover(cwd, violations) {
     cwd,
     "apps/web/app/features/chat/presentation/chat-runtime-store.ts"
   );
+  const chatContextPath = path.join(cwd, "apps/web/app/features/chat/chat-context.ts");
 
   if (
     !existsSync(chatRoutePath) ||
     !existsSync(transportPath) ||
     !existsSync(chatCanvasPath) ||
     !existsSync(chatThreadRailPath) ||
-    !existsSync(runtimeStorePath)
+    !existsSync(runtimeStorePath) ||
+    !existsSync(chatContextPath)
   ) {
     return;
   }
@@ -293,6 +295,7 @@ function validateChatExperienceCutover(cwd, violations) {
   const chatCanvasSource = readFileSync(chatCanvasPath, "utf8");
   const chatThreadRailSource = readFileSync(chatThreadRailPath, "utf8");
   const runtimeStoreSource = readFileSync(runtimeStorePath, "utf8");
+  const chatContextSource = readFileSync(chatContextPath, "utf8");
 
   if (!chatRouteSource.includes("startAgentTransport")) {
     violations.push("chat route must use startAgentTransport() for live thread streaming.");
@@ -342,6 +345,12 @@ function validateChatExperienceCutover(cwd, violations) {
 
   if (!transportSource.includes("/v1/agent/threads/") || !transportSource.includes("/stream")) {
     violations.push("agent transport must target /v1/agent/threads/:threadId/stream.");
+  }
+
+  if (chatContextSource.includes('return "personal"')) {
+    violations.push(
+      "chat context resolution must not hardcode a personal tenant slug fallback. Resolve from /v1/auth/me memberships only."
+    );
   }
 }
 

@@ -22,7 +22,7 @@ Expected behavior:
 
 - `/` redirects to `/chat` for authenticated users and `/login` for unauthenticated users.
 - `/login` renders “Sign in with Microsoft” and redirects authenticated users to `/chat`.
-- `/chat` is available for any authenticated user, including users with zero workspace memberships.
+- `/chat` is available for any authenticated user because auth auto-provisions a personal workspace membership when needed.
 - `/workspaces` provides optional workspace management and invite flows.
 
 ## Auth API Contract
@@ -40,6 +40,7 @@ Behavior:
 - Start route generates `state`, `nonce`, and PKCE verifier/challenge and persists short-lived request state.
 - Callback route validates state, exchanges code, validates ID token, links/creates user identity, and issues session cookie.
 - Successful callback defaults to `/chat` when `returnTo` is absent or legacy tenant-scoped.
+- Successful login and `/v1/auth/me` reads enforce personal workspace auto-provisioning, ensuring at least one active membership.
 - Callback route enforces optional Entra tenant allow-listing (`ENTRA_ALLOWED_TENANT_IDS`).
 - Session cookie is `__Host-compass_session`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`.
 - Auth endpoints are rate limited per client IP.

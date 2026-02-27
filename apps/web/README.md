@@ -53,7 +53,9 @@ app/
 ## Runtime Behavior
 
 - `/login` shows Entra sign-in and admin-consent messaging.
-- Authenticated users always land in `/chat` (workspace membership is not required for chat access).
+- Authenticated users always land in `/chat`.
+- Chat remains workspace-backed internally; backend auth guarantees at least one active membership by auto-provisioning a personal workspace.
+- Chat thread creation resolves tenant slug from real memberships only (no hardcoded fallback slugs).
 - Authenticated routes render one persistent shell:
   - left navigation rail
   - top utility cluster (`New thread`, `Automations`, `Skills`)

@@ -1,9 +1,24 @@
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
-import { WebSocketServer, type WebSocket } from "ws";
+import { WebSocketServer } from "ws";
 import type { AuthService } from "./auth-service.js";
 import { readSessionTokenFromCookie } from "./auth-service.js";
 import type { AgentService, AgentEventRecord } from "./agent-service.js";
+
+interface AgentWebSocketConnection {
+  send(data: string): void;
+  on(event: "close", listener: () => void): void;
+  close(code?: number, reason?: string): void;
+}
+
+interface AgentWebSocketServer {
+  handleUpgrade(
+    request: IncomingMessage,
+    socket: Duplex,
+    head: Buffer,
+    callback: (socket: AgentWebSocketConnection) => void
+  ): void;
+}
 
 function readSessionCookieToken(request: IncomingMessage): string | null {
   const cookieHeader = request.headers.cookie;
@@ -71,7 +86,7 @@ export function attachAgentWebSocketGateway(input: {
   agentService: AgentService | null;
   now: () => Date;
 }): void {
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true }) as unknown as AgentWebSocketServer;
 
   input.server.on("upgrade", (request, socket, head) => {
     void (async () => {
@@ -113,7 +128,7 @@ export function attachAgentWebSocketGateway(input: {
         return;
       }
 
-      wss.handleUpgrade(request, socket, head, (ws: WebSocket) => {
+      wss.handleUpgrade(request, socket, head, (ws) => {
         void (async () => {
           try {
             const historical = await input.agentService!.listThreadEvents({

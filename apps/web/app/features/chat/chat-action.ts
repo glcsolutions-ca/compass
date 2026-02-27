@@ -171,8 +171,22 @@ export async function submitChatAction({
       return auth;
     }
 
+    let tenantSlug: string;
+    try {
+      tenantSlug = resolveThreadCreateTenantSlug(auth);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to resolve workspace context.";
+      return createErrorAction({
+        intent: "sendMessage",
+        executionMode,
+        prompt,
+        error: message
+      });
+    }
+
     const createThreadResult = await createAgentThread(request, {
-      tenantSlug: resolveThreadCreateTenantSlug(auth),
+      tenantSlug,
       executionMode,
       title: prompt.slice(0, 80)
     });

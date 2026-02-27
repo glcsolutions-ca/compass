@@ -29,12 +29,20 @@ describe("frontend route loaders", () => {
     expect(response.headers.get("Location")).toBe("/login");
   });
 
-  it("redirects root route to chat when authenticated without memberships", async () => {
+  it("redirects root route to chat when authenticated", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
           authenticated: true,
-          memberships: []
+          memberships: [
+            {
+              tenantId: "t_personal",
+              tenantSlug: "personal-user-1",
+              tenantName: "Personal Workspace",
+              role: "owner",
+              status: "active"
+            }
+          ]
         }),
         {
           status: 200,

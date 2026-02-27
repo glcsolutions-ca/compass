@@ -40,8 +40,10 @@ Define the non-negotiable implementation contract for `apps/web` so the frontend
 
 6. **Chat-first onboarding authority**
    - Authenticated users must land directly in `/chat`.
-   - Workspace membership must not be a prerequisite for chat access.
-   - Workspace management remains available at `/workspaces` as an optional collaboration flow.
+   - Chat remains workspace-backed internally through `tenantSlug` on agent-thread APIs.
+   - Backend auth contract must auto-provision a personal workspace membership for every authenticated user.
+   - Frontend chat context resolution must use real memberships from `/v1/auth/me` and must not use hardcoded slug fallbacks.
+   - Workspace management remains available at `/workspaces` for collaboration/admin flows.
    - Thread deep-linking must be first class via `/chat/:threadId`.
 
 7. **Persistent authenticated shell**

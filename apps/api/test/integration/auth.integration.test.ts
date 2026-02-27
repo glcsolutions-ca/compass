@@ -248,7 +248,12 @@ describe("API auth integration", () => {
     const meBeforeTenant = await request(app).get("/v1/auth/me").set("Cookie", ownerCookie);
     expect(meBeforeTenant.status).toBe(200);
     expect(meBeforeTenant.body.authenticated).toBe(true);
-    expect(meBeforeTenant.body.memberships).toEqual([]);
+    expect(meBeforeTenant.body.memberships).toHaveLength(1);
+    expect(meBeforeTenant.body.memberships[0]).toMatchObject({
+      role: "owner",
+      status: "active"
+    });
+    expect(String(meBeforeTenant.body.memberships[0].tenantSlug)).toMatch(/^personal-/u);
 
     const createTenant = await request(app)
       .post("/v1/tenants")
@@ -273,8 +278,12 @@ describe("API auth integration", () => {
 
     const meAfterTenant = await request(app).get("/v1/auth/me").set("Cookie", ownerCookie);
     expect(meAfterTenant.status).toBe(200);
-    expect(meAfterTenant.body.memberships).toHaveLength(1);
-    expect(meAfterTenant.body.memberships[0].tenantSlug).toBe("acme");
+    expect(meAfterTenant.body.memberships).toHaveLength(2);
+    expect(meAfterTenant.body.memberships).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tenantSlug: "acme", role: "owner", status: "active" })
+      ])
+    );
 
     const getTenant = await request(app).get("/v1/tenants/acme").set("Cookie", ownerCookie);
     expect(getTenant.status).toBe(200);

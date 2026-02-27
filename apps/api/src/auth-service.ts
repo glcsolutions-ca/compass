@@ -179,6 +179,32 @@ function resolvePrimaryEmail(input: { email: string | null; upn: string | null }
   return asValidEmailOrNull(input.email) ?? asValidEmailOrNull(input.upn);
 }
 
+function buildPersonalTenantSlug(userId: string): string {
+  const normalized = userId
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/gu, "-");
+  const slugSuffix = normalized.replace(/^-+|-+$/gu, "") || "user";
+  return `personal-${slugSuffix}`;
+}
+
+function buildPersonalTenantName(input: {
+  displayName: string | null;
+  primaryEmail: string | null;
+}): string {
+  const displayName = asStringOrNull(input.displayName);
+  if (displayName) {
+    return `${displayName} Personal Workspace`;
+  }
+
+  const email = asValidEmailOrNull(input.primaryEmail);
+  if (email) {
+    return `${email} Personal Workspace`;
+  }
+
+  return "Personal Workspace";
+}
+
 function parseOidcStateEncryptionKey(raw: string | undefined): Buffer | null {
   const value = asStringOrNull(raw);
   if (!value) {
@@ -791,7 +817,9 @@ export class AuthRepository {
         from memberships m
         join tenants t on t.id = m.tenant_id
         where m.user_id = $1
-        order by t.slug asc
+        order by
+          case when t.kind = 'personal' then 0 else 1 end asc,
+          t.slug asc
       `,
       [userId]
     );
@@ -803,6 +831,136 @@ export class AuthRepository {
       role: toMembershipRole(row.role),
       status: row.status
     }));
+  }
+
+  async ensurePersonalWorkspace(input: {
+    userId: string;
+    now: Date;
+    displayName: string | null;
+    primaryEmail: string | null;
+  }): Promise<{ tenantId: string; tenantSlug: string }> {
+    const client = await this.pool.connect();
+    const nowIso = input.now.toISOString();
+
+    try {
+      await client.query("begin");
+
+      const existing = await client.query<{ id: string; slug: string }>(
+        `
+          select id, slug
+          from tenants
+          where kind = 'personal'
+            and owner_user_id = $1
+          limit 1
+          for update
+        `,
+        [input.userId]
+      );
+
+      let tenantId = existing.rows[0]?.id ?? null;
+      let tenantSlug = existing.rows[0]?.slug ?? null;
+
+      if (!tenantId || !tenantSlug) {
+        const createdId = randomUUID();
+        const createdSlug = buildPersonalTenantSlug(input.userId);
+        const createdName = buildPersonalTenantName({
+          displayName: input.displayName,
+          primaryEmail: input.primaryEmail
+        });
+
+        try {
+          await client.query(
+            `
+              insert into tenants (
+                id,
+                slug,
+                name,
+                status,
+                kind,
+                owner_user_id,
+                created_at,
+                updated_at
+              ) values (
+                $1,
+                $2,
+                $3,
+                'active',
+                'personal',
+                $4,
+                $5::timestamptz,
+                $5::timestamptz
+              )
+            `,
+            [createdId, createdSlug, createdName, input.userId, nowIso]
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (
+            !message.includes("tenants_owner_user_personal_uidx") &&
+            !message.includes("tenants_unique_slug")
+          ) {
+            throw error;
+          }
+        }
+
+        const resolved = await client.query<{ id: string; slug: string }>(
+          `
+            select id, slug
+            from tenants
+            where kind = 'personal'
+              and owner_user_id = $1
+            limit 1
+            for update
+          `,
+          [input.userId]
+        );
+
+        const row = resolved.rows[0];
+        if (!row) {
+          throw new Error("Unable to resolve personal workspace");
+        }
+
+        tenantId = row.id;
+        tenantSlug = row.slug;
+      }
+
+      await client.query(
+        `
+          insert into memberships (
+            tenant_id,
+            user_id,
+            role,
+            status,
+            created_at,
+            updated_at
+          ) values (
+            $1,
+            $2,
+            'owner',
+            'active',
+            $3::timestamptz,
+            $3::timestamptz
+          )
+          on conflict (tenant_id, user_id)
+          do update set
+            role = excluded.role,
+            status = 'active',
+            updated_at = excluded.updated_at
+        `,
+        [tenantId, input.userId, nowIso]
+      );
+
+      await client.query("commit");
+      return {
+        tenantId,
+        tenantSlug
+      };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async createTenant(input: {
@@ -1521,6 +1679,12 @@ export class AuthService {
     }
 
     const user = await this.repository.findOrCreateUserForIdentity(claims);
+    await this.repository.ensurePersonalWorkspace({
+      userId: user.id,
+      now: input.now,
+      displayName: user.displayName,
+      primaryEmail: user.primaryEmail
+    });
 
     const sessionToken = randomToken(32);
     const sessionTokenHash = hashValue(sessionToken);
@@ -1568,7 +1732,14 @@ export class AuthService {
 
   async readAuthMe(input: { sessionToken: string | null; now: Date }): Promise<AuthMeResponse> {
     const context = await this.requireSession(input.sessionToken, input.now);
+    await this.repository.ensurePersonalWorkspace({
+      userId: context.userId,
+      now: input.now,
+      displayName: context.displayName,
+      primaryEmail: context.primaryEmail
+    });
     const memberships = await this.repository.listMemberships(context.userId);
+    const firstActiveMembership = memberships.find((membership) => membership.status === "active");
 
     return AuthMeResponseSchema.parse({
       authenticated: true,
@@ -1584,7 +1755,7 @@ export class AuthService {
         role: membership.role,
         status: membership.status
       })),
-      lastActiveTenantSlug: null
+      lastActiveTenantSlug: firstActiveMembership?.tenantSlug ?? null
     });
   }
 
@@ -1864,6 +2035,12 @@ export class AuthService {
       email,
       upn: email,
       name: displayName
+    });
+    await this.repository.ensurePersonalWorkspace({
+      userId: user.id,
+      now: input.now,
+      displayName: user.displayName,
+      primaryEmail: user.primaryEmail
     });
 
     const sessionToken = randomToken(32);

@@ -6,13 +6,13 @@ export function resolveThreadCreateTenantSlug(auth: AuthShellLoaderData): string
     return lastActive;
   }
 
-  const firstMembership = auth.memberships[0]?.tenantSlug?.trim();
-  if (firstMembership) {
-    return firstMembership;
+  const activeMembership = auth.memberships.find((membership) => membership.status === "active");
+  const activeTenantSlug = activeMembership?.tenantSlug?.trim();
+  if (activeTenantSlug) {
+    return activeTenantSlug;
   }
 
-  // Personal-first fallback until backend personal context identifiers are finalized.
-  return "personal";
+  throw new Error("Personal workspace membership is required but was not found in /v1/auth/me.");
 }
 
 export function readPersonalContextLabel(input: {

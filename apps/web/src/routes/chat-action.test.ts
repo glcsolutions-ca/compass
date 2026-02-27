@@ -57,8 +57,16 @@ describe("chat action", () => {
         primaryEmail: "user@example.com",
         displayName: "User"
       },
-      memberships: [],
-      lastActiveTenantSlug: null
+      memberships: [
+        {
+          tenantId: "tenant_personal",
+          tenantSlug: "personal-user-1",
+          tenantName: "User Personal Workspace",
+          role: "owner",
+          status: "active"
+        }
+      ],
+      lastActiveTenantSlug: "personal-user-1"
     });
 
     vi.mocked(createAgentThread).mockResolvedValue({
@@ -112,6 +120,11 @@ describe("chat action", () => {
     });
 
     expect(createAgentThread).toHaveBeenCalledTimes(1);
+    expect(createAgentThread).toHaveBeenCalledWith(expect.any(Request), {
+      tenantSlug: "personal-user-1",
+      executionMode: "cloud",
+      title: "hello"
+    });
     expect(startAgentTurn).toHaveBeenCalledWith(expect.any(Request), {
       threadId: "thread_1",
       text: "hello",
@@ -126,6 +139,43 @@ describe("chat action", () => {
       executionMode: "cloud",
       prompt: "hello",
       answer: "response"
+    });
+  });
+
+  it("fails closed when auth memberships are unexpectedly empty", async () => {
+    vi.mocked(loadAuthShellData).mockResolvedValue({
+      authenticated: true,
+      user: {
+        id: "user_1",
+        primaryEmail: "user@example.com",
+        displayName: "User"
+      },
+      memberships: [],
+      lastActiveTenantSlug: null
+    });
+
+    const formData = new FormData();
+    formData.set("intent", "sendMessage");
+    formData.set("prompt", "hello");
+
+    const result = await chatAction({
+      request: new Request("http://web.test/chat", {
+        method: "POST",
+        body: formData
+      }),
+      params: {}
+    });
+
+    expect(createAgentThread).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      intent: "sendMessage",
+      ok: false,
+      error: "Personal workspace membership is required but was not found in /v1/auth/me.",
+      threadId: null,
+      turnId: null,
+      executionMode: "cloud",
+      prompt: "hello",
+      answer: null
     });
   });
 

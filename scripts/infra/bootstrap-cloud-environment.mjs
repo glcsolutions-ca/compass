@@ -4,6 +4,9 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
+const keyVaultPurgeCommandTimeoutMs = 2 * 60 * 1000;
+const keyVaultPurgeWaitTimeoutMs = 10 * 60 * 1000;
+const keyVaultPurgePollIntervalMs = 5 * 1000;
 const roleNames = {
   contributor: "Contributor",
   userAccessAdministrator: "User Access Administrator",
@@ -19,10 +22,11 @@ function requireEnv(name) {
   return value;
 }
 
-async function az(args) {
+async function az(args, options = {}) {
   const { stdout } = await execFileAsync("az", args, {
     encoding: "utf8",
-    maxBuffer: 1024 * 1024 * 16
+    maxBuffer: 1024 * 1024 * 16,
+    ...options
   });
   return stdout.trim();
 }
@@ -39,6 +43,57 @@ function readStringParam(source, name) {
     throw new Error(`Could not resolve string parameter '${name}' in cloud.bicepparam`);
   }
   return match[1];
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function deletedKeyVaultExists(keyVaultName) {
+  const deleted = await azJson([
+    "keyvault",
+    "list-deleted",
+    "--query",
+    `[?name=='${keyVaultName}']`
+  ]);
+  return Array.isArray(deleted) && deleted.length > 0;
+}
+
+async function purgeDeletedKeyVault({ keyVaultName, location }) {
+  console.info(`Deleted Key Vault '${keyVaultName}' found; starting purge.`);
+  try {
+    await az(
+      ["keyvault", "purge", "--name", keyVaultName, "--location", location, "--output", "none"],
+      { timeout: keyVaultPurgeCommandTimeoutMs }
+    );
+  } catch (error) {
+    const message = String(error instanceof Error ? error.message : error);
+    if (
+      message.includes("DeletedVaultNotFound") ||
+      message.includes("VaultNotFound") ||
+      message.includes("was not found")
+    ) {
+      return;
+    }
+    if (message.includes("timed out")) {
+      console.info(`Key Vault purge command timed out; waiting for purge completion state.`);
+    } else {
+      throw error;
+    }
+  }
+
+  const deadline = Date.now() + keyVaultPurgeWaitTimeoutMs;
+  while (Date.now() < deadline) {
+    if (!(await deletedKeyVaultExists(keyVaultName))) {
+      console.info(`Deleted Key Vault '${keyVaultName}' purge completed.`);
+      return;
+    }
+    await sleep(keyVaultPurgePollIntervalMs);
+  }
+
+  throw new Error(
+    `Timed out waiting for deleted Key Vault '${keyVaultName}' purge completion after ${keyVaultPurgeWaitTimeoutMs}ms`
+  );
 }
 
 async function roleAssignmentExists({ assigneeObjectId, scope, roleDefinitionName }) {
@@ -168,24 +223,11 @@ async function ensureKeyVault({ resourceGroup, location, keyVaultName }) {
     ]);
     return { action: "exists", id: keyVault.id };
   } catch {
-    const deleted = await azJson([
-      "keyvault",
-      "list-deleted",
-      "--query",
-      `[?name=='${keyVaultName}']`
-    ]);
-
-    if (Array.isArray(deleted) && deleted.length > 0) {
-      await az([
-        "keyvault",
-        "purge",
-        "--name",
+    if (await deletedKeyVaultExists(keyVaultName)) {
+      await purgeDeletedKeyVault({
         keyVaultName,
-        "--location",
-        location,
-        "--output",
-        "none"
-      ]);
+        location
+      });
     }
 
     await az([

@@ -7,7 +7,12 @@ import {
 import { ThreadList } from "@assistant-ui/react-ui";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { SidebarGroup, SidebarGroupContent, SidebarGroupLabel } from "~/components/ui/sidebar";
+import {
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  useSidebar
+} from "~/components/ui/sidebar";
 import { buildThreadHref, buildNewThreadHref } from "~/features/chat/new-thread-routing";
 import {
   readChatThreadHistory,
@@ -55,6 +60,7 @@ export function ChatThreadRail({
   defaultWorkspaceSlug: string;
 }) {
   const navigate = useNavigate();
+  const { isMobile, state } = useSidebar();
   const [threads, setThreads] = useState<ChatThreadHistoryItem[]>([]);
 
   useEffect(() => {
@@ -94,6 +100,11 @@ export function ChatThreadRail({
   );
 
   const threadListRuntime = useExternalStoreRuntime(threadListStore);
+  const isDesktopIconCollapsed = !isMobile && state === "collapsed";
+
+  if (isDesktopIconCollapsed) {
+    return null;
+  }
 
   return (
     <SidebarGroup className="px-0 pt-0">

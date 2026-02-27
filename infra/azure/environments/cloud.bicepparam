@@ -54,8 +54,8 @@ param serviceBusProdNamespaceName = 'sb-compass-prod-cc-4514-02'
 param serviceBusQueueName = 'compass-events'
 param workerRunMode = 'loop'
 
-param apiCustomDomain = ''
-param webCustomDomain = ''
+param apiCustomDomain = 'api.compass.glcsolutions.ca'
+param webCustomDomain = 'compass.glcsolutions.ca'
 
 param apiLogLevel = 'warn'
 param authIssuer = 'https://login.microsoftonline.com/98dddcec-5421-457b-8cac-aa8d27fbafb6/v2.0'

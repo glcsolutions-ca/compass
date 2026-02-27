@@ -8,7 +8,16 @@ const REQUIRED_PATHS = [
   "apps/web/postcss.config.mjs",
   "apps/web/app/app.css",
   "apps/web/app/lib/theme/theme.ts",
+  "apps/web/app/features/chat/agent-types.ts",
+  "apps/web/app/features/chat/agent-client.ts",
+  "apps/web/app/features/chat/agent-event-store.ts",
+  "apps/web/app/features/chat/agent-event-normalizer.ts",
+  "apps/web/app/features/chat/agent-transport.ts",
   "apps/web/app/features/chat/new-thread-routing.ts",
+  "apps/web/app/features/chat/presentation/chat-canvas.tsx",
+  "apps/web/app/features/chat/presentation/chat-composer-footer.tsx",
+  "apps/web/app/features/chat/presentation/chat-inspect-drawer.tsx",
+  "apps/web/app/features/chat/presentation/chat-runtime-store.ts",
   "apps/web/app/features/settings/types.ts",
   "apps/web/app/features/settings/settings-modal-state.ts",
   "apps/web/app/components/ui/alert-dialog.tsx",
@@ -16,6 +25,7 @@ const REQUIRED_PATHS = [
   "apps/web/app/components/ui/tabs.tsx",
   "apps/web/app/components/ui/sidebar.tsx",
   "apps/web/app/components/shell/app-sidebar.tsx",
+  "apps/web/app/components/shell/chat-thread-rail.tsx",
   "apps/web/app/components/shell/settings-modal.tsx",
   "apps/web/app/components/shell/theme-controls.tsx",
   "apps/web/app/routes.ts",
@@ -126,6 +136,21 @@ function validateGlobalCss(cwd, violations) {
       "Global CSS must define token overrides for at least one data-theme selector in apps/web/app/app.css."
     );
   }
+
+  if (
+    !css.includes("--compass-chat-max-width") ||
+    !css.includes("--aui-thread-max-width: var(--compass-chat-max-width)")
+  ) {
+    violations.push(
+      "Global CSS must define a canonical centered chat width contract via --compass-chat-max-width and map --aui-thread-max-width to it."
+    );
+  }
+
+  if (!css.includes("scrollbar-gutter: stable both-edges")) {
+    violations.push(
+      "Global CSS must stabilize chat timeline centering with scrollbar-gutter: stable both-edges."
+    );
+  }
 }
 
 function validateRootThemeBootstrap(cwd, violations) {
@@ -232,18 +257,91 @@ function validateRouteMap(cwd, violations) {
   }
 
   const source = readFileSync(routesPath, "utf8");
-  const registersChatRoute =
-    source.includes('route("chat", "routes/app/chat/route.tsx")') ||
-    source.includes('route("chat/:threadId?", "routes/app/chat/route.tsx")');
-
-  if (!registersChatRoute) {
+  if (!source.includes('route("chat/:threadId?", "routes/app/chat/route.tsx")')) {
     violations.push(
-      'routes.ts must register chat via route("chat", ...) or route("chat/:threadId?", ...).'
+      'routes.ts must register optional-thread chat route via route("chat/:threadId?", "routes/app/chat/route.tsx").'
     );
   }
 
   if (source.includes('route("t/:tenantSlug/chat"')) {
     violations.push("routes.ts must not register legacy /t/:tenantSlug/chat route.");
+  }
+}
+
+function validateChatExperienceCutover(cwd, violations) {
+  const chatRoutePath = path.join(cwd, "apps/web/app/routes/app/chat/route.tsx");
+  const transportPath = path.join(cwd, "apps/web/app/features/chat/agent-transport.ts");
+  const chatCanvasPath = path.join(cwd, "apps/web/app/features/chat/presentation/chat-canvas.tsx");
+  const chatThreadRailPath = path.join(cwd, "apps/web/app/components/shell/chat-thread-rail.tsx");
+  const runtimeStorePath = path.join(
+    cwd,
+    "apps/web/app/features/chat/presentation/chat-runtime-store.ts"
+  );
+
+  if (
+    !existsSync(chatRoutePath) ||
+    !existsSync(transportPath) ||
+    !existsSync(chatCanvasPath) ||
+    !existsSync(chatThreadRailPath) ||
+    !existsSync(runtimeStorePath)
+  ) {
+    return;
+  }
+
+  const chatRouteSource = readFileSync(chatRoutePath, "utf8");
+  const transportSource = readFileSync(transportPath, "utf8");
+  const chatCanvasSource = readFileSync(chatCanvasPath, "utf8");
+  const chatThreadRailSource = readFileSync(chatThreadRailPath, "utf8");
+  const runtimeStoreSource = readFileSync(runtimeStorePath, "utf8");
+
+  if (!chatRouteSource.includes("startAgentTransport")) {
+    violations.push("chat route must use startAgentTransport() for live thread streaming.");
+  }
+
+  if (!chatRouteSource.includes("normalizeAgentEvents")) {
+    violations.push("chat route must normalize backend agent events before rendering timeline.");
+  }
+
+  if (!chatRouteSource.includes("ChatCanvas")) {
+    violations.push("chat route must delegate timeline/composer rendering to ChatCanvas.");
+  }
+
+  if (!chatRouteSource.includes('shellLayout: "immersive"')) {
+    violations.push("chat route handle must request immersive shell layout.");
+  }
+
+  if (chatRouteSource.includes("<header")) {
+    violations.push("chat route must not render top header chrome.");
+  }
+
+  if (chatRouteSource.includes("max-w-[1100px]") || chatRouteSource.includes("rounded-2xl")) {
+    violations.push("chat route must not render boxed card framing around the chat timeline.");
+  }
+
+  if (!chatCanvasSource.includes("Thread")) {
+    violations.push("chat canvas must render assistant-ui Thread primitive.");
+  }
+
+  if (!chatThreadRailSource.includes("ThreadList")) {
+    violations.push("chat thread rail must render assistant-ui ThreadList primitives.");
+  }
+
+  if (chatRouteSource.includes("TimelineMessage") || chatRouteSource.includes("ReactMarkdown")) {
+    violations.push("chat route must not render legacy custom message bubble implementations.");
+  }
+
+  if (chatRouteSource.includes("Chat transport is intentionally staged")) {
+    violations.push("chat route must not keep the staged placeholder response messaging.");
+  }
+
+  if (runtimeStoreSource.includes("__compass_event__:")) {
+    violations.push(
+      "chat runtime store must not encode event metadata into message text prefixes."
+    );
+  }
+
+  if (!transportSource.includes("/v1/agent/threads/") || !transportSource.includes("/stream")) {
+    violations.push("agent transport must target /v1/agent/threads/:threadId/stream.");
   }
 }
 
@@ -334,6 +432,7 @@ export function runWebConstitutionCheck({ cwd = process.cwd(), logger = console 
   validateRootThemeBootstrap(cwd, violations);
   validateSettingsCutover(cwd, violations);
   validateRouteMap(cwd, violations);
+  validateChatExperienceCutover(cwd, violations);
   validateComponentsConfig(cwd, violations);
   validateRouteFiles(cwd, violations);
 

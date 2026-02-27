@@ -18,3 +18,8 @@ export function buildNewThreadHref(options?: { threadToken?: string }): string {
   url.searchParams.set(NEW_THREAD_QUERY_PARAM, options?.threadToken ?? createThreadToken());
   return `${url.pathname}?${url.searchParams.toString()}`;
 }
+
+export function buildThreadHref(threadId: string): string {
+  const encoded = encodeURIComponent(threadId.trim());
+  return `/chat/${encoded}`;
+}

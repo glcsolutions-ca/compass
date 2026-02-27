@@ -11,8 +11,9 @@ import {
   SquarePen,
   Settings2
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Form, Link, useLocation } from "react-router";
+import { ChatThreadRail } from "~/components/shell/chat-thread-rail";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
 import {
@@ -334,7 +335,7 @@ function SidebarAccountMenu({
 
 export function AppSidebar({ auth, buildSettingsHref }: AppSidebarProps) {
   const location = useLocation();
-  const newThreadHref = buildNewThreadHref();
+  const newThreadHref = useMemo(() => buildNewThreadHref(), []);
 
   const utilityItems: UtilityNavItem[] = [
     {
@@ -362,7 +363,7 @@ export function AppSidebar({ auth, buildSettingsHref }: AppSidebarProps) {
       label: "Chat",
       to: "/chat",
       icon: MessageSquareText,
-      active: location.pathname === "/chat"
+      active: location.pathname === "/chat" || location.pathname.startsWith("/chat/")
     },
     {
       label: "Workspaces",
@@ -432,6 +433,8 @@ export function AppSidebar({ auth, buildSettingsHref }: AppSidebarProps) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <ChatThreadRail pathname={location.pathname} />
       </SidebarContent>
 
       <SidebarSeparator />

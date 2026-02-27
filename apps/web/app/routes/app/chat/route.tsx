@@ -1,289 +1,468 @@
+import { useExternalStoreRuntime, type AppendMessage } from "@assistant-ui/react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useFetcher, useLoaderData, useLocation, useNavigate } from "react-router";
 import type { MetaFunction } from "react-router";
-import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
-import { useEffect, useRef, useState } from "react";
-import { createApiClient } from "@compass/sdk";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { submitChatAction, type ChatActionData } from "~/features/chat/chat-action";
-import { loadChatData, type ChatLoaderData } from "~/features/chat/chat-loader";
 import type { ShellRouteHandle } from "~/features/auth/types";
+import { normalizeAgentEvents } from "~/features/chat/agent-event-normalizer";
+import { mergeAgentEvents } from "~/features/chat/agent-event-store";
+import { startAgentTransport } from "~/features/chat/agent-transport";
+import type {
+  AgentExecutionMode,
+  ChatTimelineItem,
+  ChatTransportState
+} from "~/features/chat/agent-types";
+import type { ChatActionData } from "~/features/chat/chat-action";
+import { submitChatAction } from "~/features/chat/chat-action";
+import { ChatCanvas } from "~/features/chat/presentation/chat-canvas";
+import {
+  buildChatInspectSearchParams,
+  ChatInspectDrawer,
+  parseChatInspectState
+} from "~/features/chat/presentation/chat-inspect-drawer";
+import {
+  buildAssistantStoreMessages,
+  convertAssistantStoreMessage,
+  type ChatInspectState,
+  type ChatSurfaceState
+} from "~/features/chat/presentation/chat-runtime-store";
+import type { ChatLoaderData } from "~/features/chat/chat-loader";
+import { loadChatData } from "~/features/chat/chat-loader";
+import { upsertChatThreadHistoryItem } from "~/features/chat/chat-thread-history";
+import { buildThreadHref } from "~/features/chat/new-thread-routing";
 
-export const meta: MetaFunction = () => {
-  return [{ title: "Compass Chat" }];
+interface TimelinePromptRecord {
+  id: string;
+  turnId: string | null;
+  text: string;
+  createdAt: string;
+}
+
+interface TransportSummary {
+  lifecycle: ChatTransportState["lifecycle"];
+  label: string;
+}
+
+function sortTimelineByCursorOrTime(
+  left: Pick<ChatTimelineItem, "cursor" | "createdAt">,
+  right: Pick<ChatTimelineItem, "cursor" | "createdAt">
+): number {
+  if (left.cursor !== null && right.cursor !== null) {
+    return left.cursor - right.cursor;
+  }
+
+  const leftTime = left.createdAt ? Date.parse(left.createdAt) : 0;
+  const rightTime = right.createdAt ? Date.parse(right.createdAt) : 0;
+  return leftTime - rightTime;
+}
+
+function readTransportSummary(state: ChatTransportState): TransportSummary {
+  if (state.lifecycle === "polling") {
+    return {
+      lifecycle: state.lifecycle,
+      label: "Polling"
+    };
+  }
+
+  if (state.lifecycle === "open") {
+    return {
+      lifecycle: state.lifecycle,
+      label: "Live"
+    };
+  }
+
+  if (state.lifecycle === "connecting") {
+    return {
+      lifecycle: state.lifecycle,
+      label: "Connecting"
+    };
+  }
+
+  if (state.lifecycle === "error") {
+    return {
+      lifecycle: state.lifecycle,
+      label: "Error"
+    };
+  }
+
+  return {
+    lifecycle: state.lifecycle,
+    label: "Idle"
+  };
+}
+
+function readSubmittingPromptValue(formData: FormData | undefined): string | null {
+  if (!formData) {
+    return null;
+  }
+
+  const prompt = formData.get("prompt");
+  if (typeof prompt !== "string") {
+    return null;
+  }
+
+  const normalized = prompt.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function readAppendMessagePrompt(message: AppendMessage): string | null {
+  const combined = message.content
+    .map((part) => {
+      if (part.type === "text" || part.type === "reasoning") {
+        return part.text;
+      }
+      return "";
+    })
+    .join("\n")
+    .trim();
+
+  return combined.length > 0 ? combined : null;
+}
+
+function isDesktopLocalModeAvailable(): boolean {
+  const desktopCandidate = (window as { compassDesktop?: unknown }).compassDesktop;
+  if (!desktopCandidate || typeof desktopCandidate !== "object") {
+    return false;
+  }
+
+  const runtime = desktopCandidate as { isDesktop?: () => boolean };
+  return typeof runtime.isDesktop === "function" ? runtime.isDesktop() : false;
+}
+
+export const meta: MetaFunction<typeof clientLoader> = ({ params }) => {
+  const threadId = params.threadId?.trim();
+  return [{ title: threadId ? `Compass Chat · ${threadId.slice(0, 8)}` : "Compass Chat" }];
 };
 
 export const handle: ShellRouteHandle = {
   requiresAuth: true,
-  navLabel: "Chat"
+  navLabel: "Chat",
+  shellLayout: "immersive"
 };
 
 export async function clientLoader({
-  request
+  request,
+  params
 }: {
   request: Request;
+  params: { threadId?: string };
 }): Promise<ChatLoaderData | Response> {
-  return loadChatData({ request });
+  return loadChatData({
+    request,
+    threadId: params.threadId
+  });
 }
 
 export async function clientAction({
-  request
+  request,
+  params
 }: {
   request: Request;
+  params: { threadId?: string };
 }): Promise<Response | ChatActionData> {
-  return submitChatAction({ request });
+  return submitChatAction({
+    request,
+    threadId: params.threadId
+  });
 }
 
 export default function ChatRoute() {
   const loaderData = useLoaderData<ChatLoaderData>();
-  const actionData = useActionData<ChatActionData>();
-  const navigation = useNavigation();
-  const isSubmittingPrompt = navigation.formData?.get("intent") === "sendMessage";
-  const effectiveThreadId = actionData?.threadId ?? loaderData.threadId;
-  const effectiveMode = actionData?.executionMode ?? loaderData.executionMode;
-  const [streamAnswer, setStreamAnswer] = useState("");
-  const [streamStatus, setStreamStatus] = useState<"idle" | "ws" | "polling">("idle");
-  const lastCursorRef = useRef(0);
-  const pollTimerRef = useRef<number | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const submitFetcher = useFetcher<ChatActionData>();
+  const modeFetcher = useFetcher<ChatActionData>();
+  const interruptFetcher = useFetcher<ChatActionData>();
+  const [executionMode, setExecutionMode] = useState<AgentExecutionMode>(loaderData.executionMode);
+  const [transportState, setTransportState] = useState<ChatTransportState>({
+    lifecycle: "idle",
+    cursor: loaderData.initialCursor,
+    reconnectCount: 0,
+    lastError: null
+  });
+  const [timelinePrompts, setTimelinePrompts] = useState<TimelinePromptRecord[]>([]);
+  const [eventState, setEventState] = useState(() =>
+    mergeAgentEvents([], loaderData.initialEvents)
+  );
+  const [localModeAvailable] = useState<boolean>(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return isDesktopLocalModeAvailable();
+  });
+
+  const activeThreadId = submitFetcher.data?.threadId ?? loaderData.threadId;
+  const transportSummary = readTransportSummary(transportState);
 
   useEffect(() => {
-    if (!effectiveThreadId) {
-      setStreamStatus("idle");
-      setStreamAnswer("");
-      lastCursorRef.current = 0;
+    setExecutionMode(loaderData.executionMode);
+  }, [loaderData.executionMode, loaderData.threadId]);
+
+  useEffect(() => {
+    setEventState(mergeAgentEvents([], loaderData.initialEvents));
+    setTransportState({
+      lifecycle: loaderData.threadId ? "connecting" : "idle",
+      cursor: loaderData.initialCursor,
+      reconnectCount: 0,
+      lastError: null
+    });
+  }, [loaderData.initialCursor, loaderData.initialEvents, loaderData.threadId]);
+
+  useEffect(() => {
+    if (!activeThreadId) {
       return;
     }
 
-    setStreamAnswer("");
-    let cancelled = false;
-    let ws: WebSocket | null = null;
-    const apiClient = createApiClient({
-      baseUrl: window.location.origin,
-      fetch: globalThis.fetch.bind(globalThis)
+    const handle = startAgentTransport({
+      threadId: activeThreadId,
+      initialCursor: loaderData.initialCursor,
+      onEvent: (event) => {
+        setEventState((current) => mergeAgentEvents(current.events, [event]));
+      },
+      onStateChange: setTransportState
     });
 
-    const applyEvent = (event: {
-      cursor?: unknown;
-      method?: unknown;
-      type?: unknown;
-      payload?: unknown;
-    }) => {
-      const cursorCandidate = Number(event.cursor);
-      if (Number.isInteger(cursorCandidate) && cursorCandidate > lastCursorRef.current) {
-        lastCursorRef.current = cursorCandidate;
-      }
-
-      const method = typeof event.method === "string" ? event.method : "";
-      const type = typeof event.type === "string" ? event.type : "";
-      if (method !== "item.delta" && type !== "item.delta") {
-        return;
-      }
-
-      const payload = event.payload as { text?: unknown } | undefined;
-      const text = typeof payload?.text === "string" ? payload.text : "";
-      if (!text) {
-        return;
-      }
-
-      setStreamAnswer((previous) => previous + text);
+    return () => {
+      handle.stop();
     };
+  }, [activeThreadId, loaderData.initialCursor]);
 
-    const clearPollTimer = () => {
-      if (pollTimerRef.current !== null) {
-        window.clearTimeout(pollTimerRef.current);
-        pollTimerRef.current = null;
-      }
-    };
-
-    const pollEvents = async () => {
-      if (cancelled) {
-        return;
-      }
-
-      try {
-        const result = await apiClient.GET("/v1/agent/threads/{threadId}/events", {
-          params: {
-            path: {
-              threadId: effectiveThreadId
-            },
-            query: {
-              cursor: lastCursorRef.current,
-              limit: 200
-            }
-          },
-          credentials: "include"
-        });
-
-        const body =
-          (result.data as
-            | { events?: Array<{ cursor?: unknown; method?: unknown; payload?: unknown }> }
-            | undefined) ?? null;
-        if (!body) {
-          throw new Error("events poll failed");
-        }
-
-        for (const event of body.events || []) {
-          applyEvent({
-            cursor: event.cursor,
-            method: event.method,
-            type: event.method,
-            payload: event.payload
-          });
-        }
-      } catch {
-        // retry loop continues
-      } finally {
-        if (!cancelled) {
-          pollTimerRef.current = window.setTimeout(() => {
-            void pollEvents();
-          }, 1500);
-        }
-      }
-    };
-
-    const startPolling = () => {
-      if (cancelled) {
-        return;
-      }
-
-      setStreamStatus("polling");
-      clearPollTimer();
-      void pollEvents();
-    };
-
-    const wsUrl = new URL(
-      `/v1/agent/threads/${encodeURIComponent(effectiveThreadId)}/stream`,
-      window.location.origin
-    );
-    wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
-    wsUrl.searchParams.set("cursor", String(lastCursorRef.current));
-
-    try {
-      ws = new WebSocket(wsUrl.toString());
-      setStreamStatus("ws");
-
-      ws.onmessage = (message) => {
-        if (cancelled) {
-          return;
-        }
-
-        const payload = (() => {
-          try {
-            return JSON.parse(String(message.data)) as {
-              cursor?: unknown;
-              method?: unknown;
-              type?: unknown;
-              payload?: unknown;
-            };
-          } catch {
-            return null;
-          }
-        })();
-
-        if (!payload) {
-          return;
-        }
-
-        applyEvent(payload);
-      };
-
-      ws.onerror = () => {
-        startPolling();
-      };
-
-      ws.onclose = () => {
-        startPolling();
-      };
-    } catch {
-      startPolling();
+  useEffect(() => {
+    const actionResult = submitFetcher.data;
+    if (!actionResult || actionResult.intent !== "sendMessage" || !actionResult.ok) {
+      return;
     }
 
-    return () => {
-      cancelled = true;
-      clearPollTimer();
-      if (ws) {
-        ws.close();
-      }
-    };
-  }, [effectiveThreadId]);
+    if (actionResult.threadId && actionResult.threadId !== loaderData.threadId) {
+      void navigate(buildThreadHref(actionResult.threadId), { replace: true });
+    }
 
-  const answerText = actionData?.answer ?? streamAnswer;
+    const promptText = actionResult.prompt;
+    if (promptText) {
+      setTimelinePrompts((current) => {
+        const alreadyExists = current.some(
+          (record) => record.turnId === actionResult.turnId && record.text === promptText
+        );
+        if (alreadyExists) {
+          return current;
+        }
+
+        return [
+          ...current,
+          {
+            id: `prompt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+            turnId: actionResult.turnId,
+            text: promptText,
+            createdAt: new Date().toISOString()
+          }
+        ];
+      });
+    }
+
+    if (actionResult.threadId) {
+      const title =
+        actionResult.prompt?.slice(0, 80) || `Thread ${actionResult.threadId.slice(0, 8)}`;
+      upsertChatThreadHistoryItem({
+        threadId: actionResult.threadId,
+        title,
+        executionMode: actionResult.executionMode,
+        status: "inProgress"
+      });
+    }
+  }, [loaderData.threadId, navigate, submitFetcher.data]);
+
+  const timeline = useMemo(() => {
+    const normalized = normalizeAgentEvents(eventState.events);
+    const userTurnsFromEvents = new Set(
+      normalized
+        .filter((item) => item.kind === "message" && item.role === "user")
+        .map((item) => item.turnId)
+        .filter((turnId): turnId is string => typeof turnId === "string" && turnId.length > 0)
+    );
+
+    const promptFallbackItems: ChatTimelineItem[] = timelinePrompts
+      .filter((record) => !record.turnId || !userTurnsFromEvents.has(record.turnId))
+      .map((record) => ({
+        id: record.id,
+        kind: "message",
+        role: "user",
+        text: record.text,
+        turnId: record.turnId,
+        cursor: null,
+        streaming: false,
+        createdAt: record.createdAt
+      }));
+
+    return [...promptFallbackItems, ...normalized].sort(sortTimelineByCursorOrTime);
+  }, [eventState.events, timelinePrompts]);
+
+  const activeTurnId = useMemo(() => {
+    const turnStatus = new Map<string, "active" | "completed" | "interrupted" | "error">();
+    for (const event of eventState.events) {
+      if (!event.turnId) {
+        continue;
+      }
+
+      if (event.method === "turn.started") {
+        turnStatus.set(event.turnId, "active");
+      } else if (event.method === "turn.completed") {
+        turnStatus.set(event.turnId, "completed");
+      } else if (event.method === "error") {
+        turnStatus.set(event.turnId, "error");
+      } else if (event.method.includes("interrupt")) {
+        turnStatus.set(event.turnId, "interrupted");
+      }
+    }
+
+    const activeTurns = [...turnStatus.entries()].filter((entry) => entry[1] === "active");
+    return activeTurns.length > 0 ? (activeTurns[activeTurns.length - 1]?.[0] ?? null) : null;
+  }, [eventState.events]);
+
+  const submittingPromptValue = useMemo(
+    () => readSubmittingPromptValue(submitFetcher.formData),
+    [submitFetcher.formData]
+  );
+
+  const assistantMessages = useMemo(
+    () =>
+      buildAssistantStoreMessages({
+        timeline,
+        pendingPrompt: submitFetcher.state !== "idle" ? submittingPromptValue : null
+      }),
+    [submitFetcher.state, submittingPromptValue, timeline]
+  );
+
+  const handleAssistantSend = useCallback(
+    async (message: AppendMessage): Promise<void> => {
+      if (submitFetcher.state !== "idle") {
+        return;
+      }
+
+      const prompt = readAppendMessagePrompt(message);
+      if (!prompt) {
+        return;
+      }
+
+      const formData = new FormData();
+      formData.set("intent", "sendMessage");
+      formData.set("threadId", activeThreadId ?? "");
+      formData.set("executionMode", executionMode);
+      formData.set("prompt", prompt);
+      void submitFetcher.submit(formData, { method: "post" });
+    },
+    [activeThreadId, executionMode, submitFetcher]
+  );
+
+  const handleAssistantCancel = useCallback(async (): Promise<void> => {
+    if (interruptFetcher.state !== "idle") {
+      return;
+    }
+
+    if (!activeThreadId || !activeTurnId) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("intent", "interruptTurn");
+    formData.set("threadId", activeThreadId);
+    formData.set("turnId", activeTurnId);
+    void interruptFetcher.submit(formData, { method: "post" });
+  }, [activeThreadId, activeTurnId, interruptFetcher]);
+
+  const assistantStore = useMemo(
+    () => ({
+      isRunning: activeTurnId !== null || submitFetcher.state !== "idle",
+      messages: assistantMessages,
+      convertMessage: convertAssistantStoreMessage,
+      onNew: handleAssistantSend,
+      onCancel: handleAssistantCancel
+    }),
+    [
+      activeTurnId,
+      assistantMessages,
+      handleAssistantCancel,
+      handleAssistantSend,
+      submitFetcher.state
+    ]
+  );
+
+  const assistantRuntime = useExternalStoreRuntime(assistantStore);
+
+  const handleModeChange = (nextMode: AgentExecutionMode) => {
+    setExecutionMode(nextMode);
+    if (!activeThreadId) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("intent", "switchMode");
+    formData.set("threadId", activeThreadId);
+    formData.set("executionMode", nextMode);
+    void modeFetcher.submit(formData, { method: "post" });
+  };
+
+  const inspectState = useMemo(
+    () => parseChatInspectState(new URLSearchParams(location.search)),
+    [location.search]
+  );
+
+  const updateInspectState = useCallback(
+    (nextState: ChatInspectState, options?: { replace?: boolean }) => {
+      const nextSearchParams = buildChatInspectSearchParams(
+        new URLSearchParams(location.search),
+        nextState
+      );
+      const nextSearch = nextSearchParams.toString();
+      void navigate(
+        {
+          pathname: location.pathname,
+          search: nextSearch.length > 0 ? `?${nextSearch}` : "",
+          hash: location.hash
+        },
+        {
+          replace: options?.replace ?? false
+        }
+      );
+    },
+    [location.hash, location.pathname, location.search, navigate]
+  );
+
+  const actionError =
+    submitFetcher.data?.error ?? modeFetcher.data?.error ?? interruptFetcher.data?.error ?? null;
+  const surfaceState: ChatSurfaceState = {
+    transportLifecycle: transportSummary.lifecycle,
+    transportLabel: transportSummary.label,
+    actionError,
+    transportError: transportState.lastError
+  };
 
   return (
-    <section
-      className="mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-4xl flex-col"
-      data-testid="chat-page"
-    >
-      <header className="mb-8 grid gap-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-          {loaderData.contextLabel}
-        </p>
-        <h1 className="text-4xl font-medium tracking-tight">What&apos;s on the agenda today?</h1>
-        {effectiveThreadId ? (
-          <div className="inline-flex w-fit rounded-full border border-border/70 bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-            Thread {effectiveThreadId.slice(0, 8)} · {effectiveMode}
-          </div>
-        ) : null}
-      </header>
-
-      <div className="flex-1">
-        {actionData?.prompt ? (
-          <div className="grid gap-4">
-            <article className="ml-auto max-w-[80%] rounded-2xl border border-border bg-card px-4 py-3">
-              <p className="text-sm">{actionData.prompt}</p>
-            </article>
-            <article className="max-w-[80%] rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-              {answerText}
-            </article>
-          </div>
-        ) : (
-          <div className="grid place-items-center py-12 text-center text-sm text-muted-foreground">
-            <p>
-              Start a conversation in your <strong>personal context</strong>
-              {effectiveThreadId ? " in this thread." : "."}
-            </p>
-          </div>
-        )}
+    <section className="flex h-full min-h-0 w-full flex-col">
+      <div className="flex min-h-0 flex-1">
+        <ChatCanvas
+          executionMode={executionMode}
+          localModeAvailable={localModeAvailable}
+          onExecutionModeChange={handleModeChange}
+          onInspectEvent={(cursor, tab) => {
+            updateInspectState(
+              {
+                cursor,
+                tab
+              },
+              { replace: false }
+            );
+          }}
+          runtime={assistantRuntime}
+          surfaceState={surfaceState}
+          switchingMode={modeFetcher.state !== "idle"}
+        />
       </div>
 
-      <Form
-        className="mx-auto mt-6 w-full max-w-3xl rounded-3xl border border-border bg-card/90 p-4 shadow-sm"
-        method="post"
-      >
-        <input name="intent" type="hidden" value="sendMessage" />
-        <input name="tenantSlug" type="hidden" value={loaderData.tenantSlug ?? ""} />
-        <input name="threadId" type="hidden" value={effectiveThreadId ?? ""} />
-        <div className="flex items-center gap-3">
-          <label className="sr-only" htmlFor="executionMode">
-            Execution mode
-          </label>
-          <select
-            className="h-11 rounded-xl border border-border bg-background px-3 text-sm"
-            defaultValue={effectiveMode}
-            id="executionMode"
-            name="executionMode"
-          >
-            <option value="cloud">Cloud</option>
-            <option value="local">Local</option>
-          </select>
-          <Input
-            autoComplete="off"
-            className="h-11 border-0 bg-transparent text-base focus-visible:ring-0"
-            name="prompt"
-            placeholder="Ask anything"
-          />
-          <Button className="h-11 px-5" type="submit">
-            {isSubmittingPrompt ? "Sending..." : "Send"}
-          </Button>
-        </div>
-        {actionData?.error ? (
-          <p className="mt-2 text-sm text-destructive">{actionData.error}</p>
-        ) : null}
-        {!actionData?.error && effectiveThreadId ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Stream transport: {streamStatus === "polling" ? "polling fallback" : streamStatus}
-          </p>
-        ) : null}
-      </Form>
+      <ChatInspectDrawer
+        events={eventState.events}
+        inspectState={inspectState}
+        onInspectStateChange={updateInspectState}
+      />
     </section>
   );
 }

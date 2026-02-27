@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { clientLoader as rootRedirectLoader } from "~/routes/root-redirect/route";
 import { clientLoader as loginLoader } from "~/routes/public/login/route";
 import { clientLoader as workspacesLoader } from "~/routes/app/workspaces/route";
-import { clientLoader as chatLoader } from "~/routes/app/chat/route";
+import { clientLoader as chatLoader, handle as chatHandle } from "~/routes/app/chat/route";
 import {
   handle as automationsHandle,
   meta as automationsMeta
@@ -117,7 +117,8 @@ describe("frontend route loaders", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 401 }));
 
     const response = await chatLoader({
-      request: new Request("http://web.test/chat")
+      request: new Request("http://web.test/chat"),
+      params: {}
     });
 
     expect(response).toBeInstanceOf(Response);
@@ -133,6 +134,14 @@ describe("frontend route loaders", () => {
     expect(skillsHandle).toMatchObject({
       requiresAuth: true,
       navLabel: "Skills"
+    });
+  });
+
+  it("uses immersive chat shell layout for chat route", () => {
+    expect(chatHandle).toMatchObject({
+      requiresAuth: true,
+      navLabel: "Chat",
+      shellLayout: "immersive"
     });
   });
 

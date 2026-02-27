@@ -46,7 +46,8 @@ app/
 - `GET /login` -> login route
 - `GET /automations` -> authenticated automations placeholder
 - `GET /skills` -> authenticated skills placeholder
-- `GET /chat` -> authenticated personal chat shell route
+- `GET /chat` -> authenticated personal chat landing route
+- `GET /chat/:threadId` -> authenticated thread deep-link route
 - `GET /workspaces` -> authenticated workspace directory
 
 ## Runtime Behavior
@@ -56,10 +57,19 @@ app/
 - Authenticated routes render one persistent shell:
   - left navigation rail
   - top utility cluster (`New thread`, `Automations`, `Skills`)
+  - thread history rail for deep-linking back into recent chats
   - center content canvas
   - sidebar footer profile launcher with `Settings` + `Personalization` + `Help` + `Log out`
 - Sidebar navigation keeps `Workspaces` as a management entrypoint without in-rail workspace rows.
 - `New thread` creates a fresh thread context via `?thread=<opaque-id>` on `/chat`.
+- Chat UI uses timeline-first layout with assistant-ui primitives:
+  - immersive full-screen timeline canvas (no route-level chat header chrome)
+  - centered assistant-ui timeline/composer surface with one canonical balanced width token (`~58rem` max via responsive clamp)
+  - bottom-docked compact composer footer mode selector aligned to the same width contract as welcome/messages/event cards
+  - runtime and approval events render inline as inspectable timeline cards
+  - deep execution inspection opens in a right drawer (`Activity | Terminal | Files | Diff | Raw`)
+  - inspect drawer state is URL-backed via `?inspect=<cursor>&inspectTab=<tab>`
+- Live updates stream through websocket (`/v1/agent/threads/:threadId/stream`) with `/events` polling fallback.
 - `Automations` and `Skills` currently ship as polished authenticated placeholder pages.
 - Settings modal state is URL-backed with query params:
   - `?modal=settings&section=general`

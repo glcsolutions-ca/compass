@@ -1,4 +1,5 @@
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
+import "@assistant-ui/react-ui/styles/index.css";
 import "./app.css";
 import { createThemeBootstrapScript } from "~/lib/theme/theme";
 

@@ -1,48 +1,32 @@
-import type { AuthShellLoaderData, ChatContextMode } from "~/features/auth/types";
+import { redirect } from "react-router";
+import type { ChatContextMode } from "~/features/auth/types";
 import { loadAuthShellData } from "~/features/auth/shell-loader";
-import { getAgentThread } from "~/lib/api/compass-client";
+import {
+  resolveThreadCreateTenantSlug,
+  readPersonalContextLabel
+} from "~/features/chat/chat-context";
+import { getAgentThread, listAgentThreadEvents } from "~/features/chat/agent-client";
+import type { AgentEvent, AgentExecutionMode, AgentThread } from "~/features/chat/agent-types";
+import { buildReturnTo } from "~/lib/auth/auth-session";
 
 export interface ChatLoaderData {
   contextMode: ChatContextMode;
   contextLabel: string;
-  tenantSlug: string | null;
   threadId: string | null;
-  executionMode: "cloud" | "local";
-}
-
-function readPersonalContextLabel(input: {
-  user: {
-    displayName: string | null;
-    primaryEmail: string | null;
-  } | null;
-}): string {
-  const displayName = input.user?.displayName?.trim();
-  if (displayName) {
-    return `${displayName} (Personal)`;
-  }
-
-  const email = input.user?.primaryEmail?.trim();
-  if (email) {
-    return `${email} (Personal)`;
-  }
-
-  return "Personal";
-}
-
-function readDefaultTenantSlug(auth: AuthShellLoaderData): string | null {
-  const lastActive = auth.lastActiveTenantSlug?.trim();
-  if (lastActive) {
-    return lastActive;
-  }
-
-  const activeMembership = auth.memberships.find((membership) => membership.status === "active");
-  return activeMembership?.tenantSlug ?? null;
+  requestedThreadSeed: string | null;
+  thread: AgentThread | null;
+  initialEvents: AgentEvent[];
+  initialCursor: number;
+  executionMode: AgentExecutionMode;
+  createThreadTenantSlug: string;
 }
 
 export async function loadChatData({
-  request
+  request,
+  threadId
 }: {
   request: Request;
+  threadId: string | undefined;
 }): Promise<ChatLoaderData | Response> {
   const auth = await loadAuthShellData({ request });
   if (auth instanceof Response) {
@@ -50,22 +34,60 @@ export async function loadChatData({
   }
 
   const url = new URL(request.url);
-  const threadCandidate = url.searchParams.get("thread");
-  const threadId = threadCandidate && threadCandidate.trim().length > 0 ? threadCandidate : null;
-  let executionMode: "cloud" | "local" = "cloud";
+  const requestedThreadSeedCandidate = url.searchParams.get("thread");
+  const requestedThreadSeed =
+    requestedThreadSeedCandidate && requestedThreadSeedCandidate.trim().length > 0
+      ? requestedThreadSeedCandidate
+      : null;
 
-  if (threadId) {
-    const threadResult = await getAgentThread(request, threadId);
-    if (threadResult.status === 200 && threadResult.thread) {
-      executionMode = threadResult.thread.executionMode;
+  const normalizedThreadId = threadId?.trim() || null;
+  let resolvedThread: AgentThread | null = null;
+  let initialEvents: AgentEvent[] = [];
+  let initialCursor = 0;
+  let executionMode: AgentExecutionMode = "cloud";
+
+  if (normalizedThreadId) {
+    const threadResult = await getAgentThread(request, normalizedThreadId);
+    if (threadResult.status === 401) {
+      return redirect(`/login?returnTo=${encodeURIComponent(buildReturnTo(request))}`);
+    }
+
+    if (threadResult.status === 403 || threadResult.status === 404) {
+      return redirect("/chat");
+    }
+
+    if (!threadResult.data) {
+      throw new Error(threadResult.message || "Unable to load chat thread.");
+    }
+
+    resolvedThread = threadResult.data;
+    executionMode = resolvedThread.executionMode;
+
+    const eventsResult = await listAgentThreadEvents(request, {
+      threadId: resolvedThread.threadId,
+      cursor: 0,
+      limit: 300
+    });
+
+    if (eventsResult.status === 401) {
+      return redirect(`/login?returnTo=${encodeURIComponent(buildReturnTo(request))}`);
+    }
+
+    if (eventsResult.data) {
+      initialEvents = eventsResult.data.events;
+      initialCursor = eventsResult.data.nextCursor;
     }
   }
 
   return {
     contextMode: "personal",
     contextLabel: readPersonalContextLabel({ user: auth.user }),
-    tenantSlug: readDefaultTenantSlug(auth),
-    threadId,
-    executionMode
+    threadId: normalizedThreadId,
+    requestedThreadSeed,
+    thread: resolvedThread,
+    initialEvents,
+    initialCursor,
+    executionMode,
+    createThreadTenantSlug: resolveThreadCreateTenantSlug(auth)
   };
 }

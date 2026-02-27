@@ -24,6 +24,7 @@ Define the non-negotiable implementation contract for `apps/web` so the frontend
 
 3. **Component primitives policy**
    - Use shadcn + Radix primitives as the base layer.
+   - Chat timeline/composer/thread-list surfaces must prefer assistant-ui primitives (`Thread`, `ComposerPrimitive`, `ThreadList`) layered with shadcn tokens.
    - Do not introduce bespoke base primitives (`Button`, `Input`, `Dialog`, `Dropdown`, etc.).
    - Do not mix additional component frameworks.
 
@@ -41,6 +42,7 @@ Define the non-negotiable implementation contract for `apps/web` so the frontend
    - Authenticated users must land directly in `/chat`.
    - Workspace membership must not be a prerequisite for chat access.
    - Workspace management remains available at `/workspaces` as an optional collaboration flow.
+   - Thread deep-linking must be first class via `/chat/:threadId`.
 
 7. **Persistent authenticated shell**
    - Authenticated routes render a single shared shell layout.
@@ -50,18 +52,29 @@ Define the non-negotiable implementation contract for `apps/web` so the frontend
    - Profile launcher is action-only (`Personalization`, `Settings`, `Help`, `Log out`) with no workspace rows.
    - Theme controls live in `Settings > General`, not directly in the profile dropdown.
    - Settings modal state is URL-backed via `?modal=settings&section=general|personalization`.
+   - Sidebar exposes recent thread history for quick deep-link navigation.
 
-8. **Route-entrypoints + feature modules**
+8. **Agent chat runtime contract**
+   - Chat UI must consume the agent-thread contract (`/v1/agent/threads*`) through `app/features/chat`.
+   - Live transport must use websocket stream (`/v1/agent/threads/:threadId/stream`) with `/events` reconciliation fallback.
+   - Chat surface must be immersive and full-screen with no route-level header/card framing.
+   - Timeline, welcome state, runtime event cards, and composer must share one centered canonical width contract.
+   - Chat timeline rendering must normalize agent events and fail-open for unknown methods.
+   - Execution/runtime signals are timeline-first and inline; deep event details open in a right inspect drawer.
+   - Composer remains docked at the bottom of the timeline as the primary interaction control.
+   - Inspect drawer URL state is query-backed via `inspect` and `inspectTab`.
+
+9. **Route-entrypoints + feature modules**
    - Route entrypoints live in `app/routes/**` with one `route.tsx` per route folder.
    - Domain logic lives in `app/features/**`.
    - Shared UI lives in `app/components/**` and utilities in `app/lib/**`.
 
-9. **Boundary hygiene**
-   - Route modules must not import from other route modules.
-   - Route modules must not use parent-relative imports.
-   - Route modules may import from `~/features/**`, `~/components/**`, and `~/lib/**`.
+10. **Boundary hygiene**
+    - Route modules must not import from other route modules.
+    - Route modules must not use parent-relative imports.
+    - Route modules may import from `~/features/**`, `~/components/**`, and `~/lib/**`.
 
-10. **Fail-closed enforcement**
+11. **Fail-closed enforcement**
     - Constitution drift must fail the quick gate via `ci:web-constitution-policy`.
 
 ## Canonical Structure
@@ -105,6 +118,7 @@ apps/web/app/
 - `/skills` -> authenticated skills placeholder
 - `/workspaces` -> authenticated workspace management
 - `/chat` -> authenticated personal chat
+- `/chat/:threadId` -> authenticated chat thread deep-link
 
 ## Runtime Constraints
 

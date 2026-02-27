@@ -1,259 +1,218 @@
-import { logoutAndRedirect } from "~/lib/auth/auth-session";
+import type { AgentExecutionMode } from "~/features/chat/agent-types";
+import { loadAuthShellData } from "~/features/auth/shell-loader";
 import {
-  appendAgentEventsBatch,
   createAgentThread,
-  getAgentThread,
+  interruptAgentTurn,
   startAgentTurn,
   switchAgentThreadMode
-} from "~/lib/api/compass-client";
+} from "~/features/chat/agent-client";
+import { resolveThreadCreateTenantSlug } from "~/features/chat/chat-context";
 import {
   ChatExecutionModeSchema,
   ChatIntentSchema,
   ChatPromptSchema,
-  ChatThreadIdSchema
+  ChatThreadIdSchema,
+  ChatTurnIdSchema
 } from "~/features/chat/chat-schema";
-
-interface DesktopAgentApi {
-  isDesktop(): true;
-  localAuthStart(input: { mode: "chatgpt" | "apiKey"; apiKey?: string }): Promise<{
-    authenticated: boolean;
-    authUrl?: string | null;
-  }>;
-  localAuthStatus(): Promise<{ authenticated: boolean; authUrl?: string | null }>;
-  localTurnStart(input: { threadId: string; text: string; turnId?: string }): Promise<{
-    turnId: string;
-    outputText: string;
-  }>;
-}
-
-function readDesktopAgentApi(): DesktopAgentApi | null {
-  const globalWindow = (globalThis as { window?: { compassDesktop?: unknown } }).window;
-  const candidate = globalWindow?.compassDesktop;
-  if (!candidate || typeof candidate !== "object") {
-    return null;
-  }
-
-  const api = candidate as Partial<DesktopAgentApi>;
-  if (
-    typeof api.isDesktop !== "function" ||
-    typeof api.localAuthStatus !== "function" ||
-    typeof api.localAuthStart !== "function" ||
-    typeof api.localTurnStart !== "function"
-  ) {
-    return null;
-  }
-
-  return api as DesktopAgentApi;
-}
-
-function readTenantSlugFromFormData(formData: FormData): string | null {
-  const value = formData.get("tenantSlug");
-  if (typeof value !== "string") {
-    return null;
-  }
-  const slug = value.trim();
-  return slug.length > 0 ? slug : null;
-}
+import { logoutAndRedirect } from "~/lib/auth/auth-session";
 
 export interface ChatActionData {
+  intent: "sendMessage" | "interruptTurn" | "switchMode" | "logout";
+  ok: boolean;
   error: string | null;
+  threadId: string | null;
+  turnId: string | null;
+  executionMode: AgentExecutionMode;
   prompt: string | null;
   answer: string | null;
-  threadId: string | null;
-  executionMode: "cloud" | "local";
+}
+
+function createErrorAction(input: {
+  intent: ChatActionData["intent"];
+  error: string;
+  executionMode?: AgentExecutionMode;
+  threadId?: string | null;
+  turnId?: string | null;
+  prompt?: string | null;
+}): ChatActionData {
+  return {
+    intent: input.intent,
+    ok: false,
+    error: input.error,
+    threadId: input.threadId ?? null,
+    turnId: input.turnId ?? null,
+    executionMode: input.executionMode ?? "cloud",
+    prompt: input.prompt ?? null,
+    answer: null
+  };
 }
 
 export async function submitChatAction({
-  request
+  request,
+  threadId
 }: {
   request: Request;
+  threadId: string | undefined;
 }): Promise<Response | ChatActionData> {
   const formData = await request.formData();
-  const intentParse = ChatIntentSchema.safeParse(formData.get("intent"));
-
-  if (!intentParse.success) {
-    return {
-      error: "Invalid chat action intent.",
-      prompt: null,
-      answer: null,
-      threadId: null,
-      executionMode: "cloud"
-    } satisfies ChatActionData;
+  const intentResult = ChatIntentSchema.safeParse(formData.get("intent"));
+  if (!intentResult.success) {
+    return createErrorAction({
+      intent: "sendMessage",
+      error: "Invalid chat action intent."
+    });
   }
 
-  if (intentParse.data === "logout") {
+  const intent = intentResult.data;
+  if (intent === "logout") {
     return logoutAndRedirect(request);
+  }
+
+  const requestedExecutionMode = ChatExecutionModeSchema.safeParse(formData.get("executionMode"));
+  const executionMode = requestedExecutionMode.success ? requestedExecutionMode.data : "cloud";
+  const formThreadId = ChatThreadIdSchema.safeParse(formData.get("threadId"));
+  const targetThreadId = formThreadId.success
+    ? (formThreadId.data ?? threadId ?? null)
+    : (threadId ?? null);
+
+  if (intent === "switchMode") {
+    if (!targetThreadId) {
+      return createErrorAction({
+        intent,
+        executionMode,
+        error: "Select a thread before switching execution mode."
+      });
+    }
+
+    const modeSwitchResult = await switchAgentThreadMode(request, {
+      threadId: targetThreadId,
+      executionMode
+    });
+
+    if (!modeSwitchResult.data || modeSwitchResult.status >= 400) {
+      return createErrorAction({
+        intent,
+        executionMode,
+        threadId: targetThreadId,
+        error: modeSwitchResult.message || "Unable to switch execution mode."
+      });
+    }
+
+    return {
+      intent,
+      ok: true,
+      error: null,
+      threadId: modeSwitchResult.data.threadId,
+      turnId: null,
+      executionMode: modeSwitchResult.data.executionMode,
+      prompt: null,
+      answer: null
+    };
+  }
+
+  if (intent === "interruptTurn") {
+    const turnIdResult = ChatTurnIdSchema.safeParse(formData.get("turnId"));
+    const targetTurnId = turnIdResult.success ? (turnIdResult.data ?? null) : null;
+
+    if (!targetThreadId || !targetTurnId) {
+      return createErrorAction({
+        intent,
+        executionMode,
+        threadId: targetThreadId,
+        error: "No active turn to interrupt."
+      });
+    }
+
+    const interruptResult = await interruptAgentTurn(request, {
+      threadId: targetThreadId,
+      turnId: targetTurnId
+    });
+
+    if (!interruptResult.data || interruptResult.status >= 400) {
+      return createErrorAction({
+        intent,
+        executionMode,
+        threadId: targetThreadId,
+        turnId: targetTurnId,
+        error: interruptResult.message || "Unable to interrupt the running turn."
+      });
+    }
+
+    return {
+      intent,
+      ok: true,
+      error: null,
+      threadId: interruptResult.data.threadId,
+      turnId: interruptResult.data.turnId,
+      executionMode: interruptResult.data.executionMode,
+      prompt: null,
+      answer: null
+    };
   }
 
   const parsedPrompt = ChatPromptSchema.safeParse({
     prompt: formData.get("prompt")
   });
-
   if (!parsedPrompt.success) {
-    return {
-      error: parsedPrompt.error.issues[0]?.message ?? "Prompt is required.",
-      prompt: null,
-      answer: null,
-      threadId: null,
-      executionMode: "cloud"
-    } satisfies ChatActionData;
+    return createErrorAction({
+      intent: "sendMessage",
+      executionMode,
+      threadId: targetThreadId,
+      error: parsedPrompt.error.issues[0]?.message ?? "Prompt is required."
+    });
   }
 
   const prompt = parsedPrompt.data.prompt;
-  const executionMode = ChatExecutionModeSchema.parse(formData.get("executionMode") ?? "cloud");
-  const existingThreadId = ChatThreadIdSchema.safeParse(formData.get("threadId")).success
-    ? (ChatThreadIdSchema.parse(formData.get("threadId")) ?? null)
-    : null;
+  let resolvedThreadId = targetThreadId;
 
-  const tenantSlug = readTenantSlugFromFormData(formData);
-  if (!tenantSlug) {
-    return {
-      error: "Unable to resolve workspace for this chat action.",
-      prompt,
-      answer: null,
-      threadId: null,
-      executionMode
-    } satisfies ChatActionData;
-  }
-
-  let threadId = existingThreadId;
-
-  if (!threadId) {
-    const created = await createAgentThread(request, {
-      tenantSlug,
-      executionMode
-    });
-
-    if (created.status !== 201 || !created.thread) {
-      return {
-        error: "Unable to create a chat thread.",
-        prompt,
-        answer: null,
-        threadId: null,
-        executionMode
-      } satisfies ChatActionData;
+  if (!resolvedThreadId) {
+    const auth = await loadAuthShellData({ request });
+    if (auth instanceof Response) {
+      return auth;
     }
 
-    threadId = created.thread.threadId;
-  } else {
-    const current = await getAgentThread(request, threadId);
-    if (current.status === 404) {
-      const recreated = await createAgentThread(request, {
-        tenantSlug,
-        executionMode
-      });
+    const createThreadResult = await createAgentThread(request, {
+      tenantSlug: resolveThreadCreateTenantSlug(auth),
+      executionMode,
+      title: prompt.slice(0, 80)
+    });
 
-      if (recreated.status !== 201 || !recreated.thread) {
-        return {
-          error: "Unable to recover thread state.",
-          prompt,
-          answer: null,
-          threadId: null,
-          executionMode
-        } satisfies ChatActionData;
-      }
-
-      threadId = recreated.thread.threadId;
-    } else if (current.status === 200 && current.thread?.executionMode !== executionMode) {
-      await switchAgentThreadMode(request, {
-        threadId,
-        executionMode
+    if (!createThreadResult.data || createThreadResult.status >= 400) {
+      return createErrorAction({
+        intent: "sendMessage",
+        executionMode,
+        prompt,
+        error: createThreadResult.message || "Unable to create a new chat thread."
       });
     }
+
+    resolvedThreadId = createThreadResult.data.threadId;
   }
 
-  if (executionMode === "local") {
-    const desktopApi = readDesktopAgentApi();
-    if (!desktopApi) {
-      return {
-        error: "Local mode is only available in the desktop app.",
-        prompt,
-        answer: null,
-        threadId,
-        executionMode
-      } satisfies ChatActionData;
-    }
-
-    const authStatus = await desktopApi.localAuthStatus();
-    if (!authStatus.authenticated) {
-      const login = await desktopApi.localAuthStart({ mode: "chatgpt" });
-      if (!login.authenticated) {
-        return {
-          error: login.authUrl
-            ? "Complete desktop ChatGPT login in your browser, then send the message again."
-            : "Local runtime login is required before sending messages.",
-          prompt,
-          answer: null,
-          threadId,
-          executionMode
-        } satisfies ChatActionData;
-      }
-    }
-
-    const localTurn = await desktopApi.localTurnStart({
-      threadId,
-      text: prompt
-    });
-
-    await appendAgentEventsBatch(request, {
-      threadId,
-      events: [
-        {
-          turnId: localTurn.turnId,
-          method: "turn.started",
-          payload: {
-            executionMode: "local",
-            executionHost: "desktop_local"
-          }
-        },
-        {
-          turnId: localTurn.turnId,
-          method: "item.delta",
-          payload: {
-            role: "assistant",
-            text: localTurn.outputText
-          }
-        },
-        {
-          turnId: localTurn.turnId,
-          method: "turn.completed",
-          payload: {
-            status: "completed"
-          }
-        }
-      ]
-    });
-
-    return {
-      error: null,
-      prompt,
-      answer: localTurn.outputText,
-      threadId,
-      executionMode
-    } satisfies ChatActionData;
-  }
-
-  const turnResult = await startAgentTurn(request, {
-    threadId,
+  const startTurnResult = await startAgentTurn(request, {
+    threadId: resolvedThreadId,
     text: prompt,
-    executionMode: "cloud"
+    executionMode
   });
 
-  if (turnResult.status !== 200 || !turnResult.turn) {
-    return {
-      error: "Unable to process your message in cloud mode.",
+  if (!startTurnResult.data || startTurnResult.status >= 400) {
+    return createErrorAction({
+      intent: "sendMessage",
+      executionMode,
+      threadId: resolvedThreadId,
       prompt,
-      answer: null,
-      threadId,
-      executionMode
-    } satisfies ChatActionData;
+      error: startTurnResult.message || "Unable to submit this prompt."
+    });
   }
 
   return {
+    intent: "sendMessage",
+    ok: true,
     error: null,
+    threadId: startTurnResult.data.threadId,
+    turnId: startTurnResult.data.turnId,
+    executionMode: startTurnResult.data.executionMode,
     prompt,
-    answer: turnResult.turn.outputText ?? "",
-    threadId,
-    executionMode
-  } satisfies ChatActionData;
+    answer: startTurnResult.data.outputText
+  };
 }

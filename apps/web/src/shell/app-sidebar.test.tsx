@@ -51,6 +51,7 @@ describe("app sidebar", () => {
 
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
     vi.restoreAllMocks();
   });
 

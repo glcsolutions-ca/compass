@@ -1,14 +1,15 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { useLocation, useMatches, useNavigate } from "react-router";
 import { AppSidebar } from "~/components/shell/app-sidebar";
 import { SettingsModal } from "~/components/shell/settings-modal";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "~/components/ui/sidebar";
-import type { AuthShellLoaderData } from "~/features/auth/types";
+import type { AuthShellLoaderData, ShellRouteHandle } from "~/features/auth/types";
 import {
   buildSettingsModalUrl,
   parseSettingsModalState
 } from "~/features/settings/settings-modal-state";
 import type { SettingsSection } from "~/features/settings/types";
+import { cn } from "~/lib/utils/cn";
 
 const SIDEBAR_OPEN_STORAGE_KEY = "compass-sidebar-open";
 
@@ -39,9 +40,20 @@ function persistSidebarOpenState(open: boolean): void {
 
 export function AppShell({ auth, children }: { auth: AuthShellLoaderData; children: ReactNode }) {
   const location = useLocation();
+  const matches = useMatches();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => resolveInitialSidebarOpen());
   const settingsModal = useMemo(() => parseSettingsModalState(location), [location]);
+  const shellLayout = useMemo<NonNullable<ShellRouteHandle["shellLayout"]>>(() => {
+    for (let index = matches.length - 1; index >= 0; index -= 1) {
+      const candidate = (matches[index]?.handle as ShellRouteHandle | undefined)?.shellLayout;
+      if (candidate === "immersive" || candidate === "default") {
+        return candidate;
+      }
+    }
+
+    return "default";
+  }, [matches]);
 
   const openSettingsSection = (section: SettingsSection) => {
     void navigate(buildSettingsModalUrl(location, { open: true, section }));
@@ -74,12 +86,27 @@ export function AppShell({ auth, children }: { auth: AuthShellLoaderData; childr
         auth={auth}
         buildSettingsHref={(section) => buildSettingsModalUrl(location, { open: true, section })}
       />
-      <SidebarInset className="shell-surface min-h-screen">
+      <SidebarInset
+        className={cn(
+          "min-h-screen",
+          shellLayout === "immersive" ? "bg-background" : "shell-surface"
+        )}
+      >
         <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-border/70 bg-background/80 px-3 backdrop-blur md:hidden">
           <SidebarTrigger aria-label="Open navigation" className="h-8 w-8" />
           <span className="text-sm font-medium tracking-tight text-foreground">Compass</span>
         </header>
-        <main className="relative flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+        <main
+          data-testid="app-main"
+          className={cn(
+            "relative flex-1",
+            shellLayout === "immersive"
+              ? "flex min-h-0 overflow-hidden"
+              : "px-4 py-6 md:px-8 md:py-8"
+          )}
+        >
+          {children}
+        </main>
         <SettingsModal
           auth={auth}
           onOpenChange={(open) => {

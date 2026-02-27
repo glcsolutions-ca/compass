@@ -26,4 +26,5 @@ export type ChatContextMode = "personal";
 export interface ShellRouteHandle {
   requiresAuth?: boolean;
   navLabel?: string;
+  shellLayout?: "default" | "immersive";
 }

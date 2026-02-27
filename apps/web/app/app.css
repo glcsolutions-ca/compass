@@ -41,6 +41,30 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* assistant-ui tokens map onto existing shadcn semantic tokens */
+    --aui-background: var(--background);
+    --aui-foreground: var(--foreground);
+    --aui-card: var(--card);
+    --aui-card-foreground: var(--card-foreground);
+    --aui-popover: var(--popover);
+    --aui-popover-foreground: var(--popover-foreground);
+    --aui-primary: var(--primary);
+    --aui-primary-foreground: var(--primary-foreground);
+    --aui-secondary: var(--secondary);
+    --aui-secondary-foreground: var(--secondary-foreground);
+    --aui-muted: var(--muted);
+    --aui-muted-foreground: var(--muted-foreground);
+    --aui-accent: var(--accent);
+    --aui-accent-foreground: var(--accent-foreground);
+    --aui-destructive: var(--destructive);
+    --aui-destructive-foreground: var(--destructive-foreground);
+    --aui-border: var(--border);
+    --aui-input: var(--input);
+    --aui-ring: var(--ring);
+    --aui-radius: var(--radius);
+    --compass-chat-max-width: clamp(48rem, 70vw, 58rem);
+    --aui-thread-max-width: var(--compass-chat-max-width);
   }
 
   :root.dark,
@@ -126,12 +150,52 @@
   }
 }
 
+/* Keep assistant-ui overrides outside Tailwind layers to avoid JIT pruning. */
+.aui-thread-root {
+  @apply flex h-full min-h-0 w-full flex-col bg-transparent;
+}
+
+.aui-thread-viewport {
+  @apply w-full px-4 pt-6 md:px-6;
+  align-items: center;
+  scrollbar-gutter: stable both-edges;
+}
+
+.aui-thread-viewport-footer {
+  @apply w-full pb-4;
+  margin-inline: auto;
+}
+
+.aui-thread-followup-suggestions {
+  @apply mt-2;
+}
+
+.aui-composer-root {
+  @apply rounded-2xl border border-border/80 bg-background/95 shadow-sm backdrop-blur;
+}
+
+.aui-composer-input {
+  @apply text-sm leading-relaxed;
+}
+
+.aui-thread-list-root {
+  @apply flex flex-col gap-1;
+}
+
+.aui-thread-list-item {
+  @apply rounded-md;
+}
+
+.aui-thread-list-item-trigger {
+  @apply rounded-md px-2 py-1.5 text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
+}
+
+.aui-thread-list-item-trigger[data-active="true"] {
+  @apply bg-sidebar-accent text-sidebar-accent-foreground;
+}
+
 @layer utilities {
   .shell-surface {
-    background-image: radial-gradient(
-      circle at top right,
-      hsl(var(--background)),
-      hsl(var(--muted))
-    );
+    background-image: linear-gradient(to bottom, hsl(var(--background)), hsl(var(--background)));
   }
 }

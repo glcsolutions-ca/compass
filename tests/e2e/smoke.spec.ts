@@ -6,6 +6,7 @@ const CHAT_LAYOUT_WIDTHS = [1280, 1440, 1728] as const;
 const CHAT_LAYOUT_TARGET_DELTA_PX = 4;
 const CHAT_LAYOUT_MIN_WIDTH_PX = 832;
 const CHAT_LAYOUT_MAX_WIDTH_PX = 932;
+type SmokeChatSendMode = "required" | "disabled" | "auto";
 
 function readErrorCode(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -200,12 +201,25 @@ function parseRequiredFlowIds() {
     .filter((value) => value.length > 0);
 }
 
+function parseSmokeChatSendMode(rawValue: string | undefined): SmokeChatSendMode {
+  const normalized = rawValue?.trim().toLowerCase();
+  if (normalized === "true" || normalized === "required") {
+    return "required";
+  }
+
+  if (normalized === "false" || normalized === "disabled") {
+    return "disabled";
+  }
+
+  return "auto";
+}
+
 async function runFlow(
   page: Page,
   flowId: string,
   baseUrl: string,
   requireAuthGateway: boolean,
-  smokeChatSend: boolean,
+  smokeChatSendMode: SmokeChatSendMode,
   smokeChatLayout: boolean,
   outputDir: string,
   flowAssertions: Array<{
@@ -220,7 +234,7 @@ async function runFlow(
     createdAt: string;
   }>
 ) {
-  const requiresChatSurface = smokeChatSend || smokeChatLayout;
+  const requiresChatSurface = smokeChatSendMode !== "disabled" || smokeChatLayout;
 
   if (!requiresChatSurface) {
     const headingText = (await page.locator("h1").first().textContent())?.trim() ?? "";
@@ -264,16 +278,31 @@ async function runFlow(
 
       const composerInput = page.getByPlaceholder("Ask Compass anything...").last();
       const sendButton = page.getByLabel("Send prompt").last();
-      const composerVisible = await composerInput.isVisible().catch(() => false);
-      const sendVisible = await sendButton.isVisible().catch(() => false);
+      let composerVisible = await composerInput.isVisible().catch(() => false);
+      let sendVisible = await sendButton.isVisible().catch(() => false);
+
+      if ((!composerVisible || !sendVisible) && smokeChatSendMode !== "disabled") {
+        const signInLink = page.getByTestId("sign-in-link").first();
+        const signInVisible = await signInLink.isVisible().catch(() => false);
+        if (signInVisible) {
+          await signInLink.click();
+          await page.waitForLoadState("networkidle");
+          composerVisible = await composerInput.isVisible().catch(() => false);
+          sendVisible = await sendButton.isVisible().catch(() => false);
+        }
+      }
+
+      const chatSurfaceAvailable = composerVisible && sendVisible;
+      const requireChatSurface = smokeChatLayout || smokeChatSendMode === "required";
 
       flowAssertions.push({
         id: `${flowId}:chat-composer-visible`,
         description: `[${flowId}] Chat composer is visible`,
-        pass: composerVisible && sendVisible
+        pass: requireChatSurface ? chatSurfaceAvailable : true,
+        details: `available=${chatSurfaceAvailable.toString()}, required=${requireChatSurface.toString()}`
       });
 
-      if (smokeChatLayout && composerVisible) {
+      if (smokeChatLayout && chatSurfaceAvailable) {
         await captureChatLayoutBaselines({
           page,
           baseUrl,
@@ -285,14 +314,15 @@ async function runFlow(
         });
       }
 
-      if (smokeChatSend && composerVisible && sendVisible) {
+      const shouldSendSmoke = smokeChatSendMode !== "disabled" && chatSurfaceAvailable;
+      if (shouldSendSmoke) {
         await page.goto(`${baseUrl}/chat`, { waitUntil: "networkidle" });
         await composerInput.fill("Smoke test prompt");
         await sendButton.click();
         await page.waitForTimeout(1200);
       }
 
-      if (smokeChatLayout && composerVisible) {
+      if (smokeChatLayout && chatSurfaceAvailable) {
         await captureChatLayoutBaselines({
           page,
           baseUrl,
@@ -305,12 +335,22 @@ async function runFlow(
       }
 
       const lookupErrors = pageErrors.filter((message) => message.includes("tapClientLookup"));
-      if (smokeChatSend) {
+      if (shouldSendSmoke) {
         flowAssertions.push({
           id: `${flowId}:chat-no-runtime-index-errors`,
           description: `[${flowId}] Chat send interaction does not trigger runtime index errors`,
           pass: lookupErrors.length === 0,
           details: lookupErrors.length > 0 ? lookupErrors.join(" | ") : undefined
+        });
+      }
+
+      if (!chatSurfaceAvailable && smokeChatSendMode === "auto" && !smokeChatLayout) {
+        const signInLink = page.getByTestId("sign-in-link").first();
+        const signInVisible = await signInLink.isVisible().catch(() => false);
+        flowAssertions.push({
+          id: `${flowId}:chat-auto-mode-sign-in-visible`,
+          description: `[${flowId}] Auto chat smoke mode falls back to visible sign-in launcher when composer is unavailable`,
+          pass: signInVisible
         });
       }
     } finally {
@@ -379,7 +419,7 @@ test("compass smoke flow", async ({ page }) => {
   const baseUrl = process.env.WEB_BASE_URL ?? "http://127.0.0.1:3000";
   const expectedEntrypoint = process.env.EXPECTED_ENTRYPOINT ?? "/";
   const requireAuthGateway = process.env.REQUIRE_AUTH_GATEWAY?.trim().toLowerCase() === "true";
-  const smokeChatSend = process.env.SMOKE_CHAT_SEND?.trim().toLowerCase() === "true";
+  const smokeChatSendMode = parseSmokeChatSendMode(process.env.SMOKE_CHAT_SEND);
   const smokeChatLayout = process.env.SMOKE_CHAT_LAYOUT?.trim().toLowerCase() === "true";
   const flowIds = parseRequiredFlowIds();
 
@@ -427,7 +467,7 @@ test("compass smoke flow", async ({ page }) => {
         flowId,
         baseUrl,
         requireAuthGateway,
-        smokeChatSend,
+        smokeChatSendMode,
         smokeChatLayout,
         outputDir,
         flowAssertions,

@@ -24,7 +24,9 @@ function createWebSocketUrl(threadId: string, cursor: number): string {
 }
 
 export function startAgentTransport(options: AgentTransportOptions): AgentTransportHandle {
-  const seenCursors = new Set<number>();
+  const seenCursors: number[] = [];
+  const seenCursorSet = new Set<number>();
+  const maxSeenCursorHistory = 1024;
   let reconnectCount = 0;
   let cursor = Math.max(0, options.initialCursor ?? 0);
   let lifecycle: ChatTransportState["lifecycle"] = "idle";
@@ -43,11 +45,19 @@ export function startAgentTransport(options: AgentTransportOptions): AgentTransp
   };
 
   const applyEvent = (event: AgentEvent) => {
-    if (seenCursors.has(event.cursor)) {
+    if (seenCursorSet.has(event.cursor)) {
       return;
     }
 
-    seenCursors.add(event.cursor);
+    seenCursorSet.add(event.cursor);
+    seenCursors.push(event.cursor);
+    if (seenCursors.length > maxSeenCursorHistory) {
+      const staleCursor = seenCursors.shift();
+      if (staleCursor !== undefined) {
+        seenCursorSet.delete(staleCursor);
+      }
+    }
+
     cursor = Math.max(cursor, event.cursor);
     options.onEvent(event);
     emitState();

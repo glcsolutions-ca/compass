@@ -1,6 +1,5 @@
 {
   "extends": "./tsconfig.json",
-  "references": [{ "path": "../../packages/contracts/tsconfig.ref.json" }],
   "compilerOptions": {
     "rootDir": "src",
     "declaration": true,

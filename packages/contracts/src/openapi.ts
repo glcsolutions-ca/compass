@@ -9,13 +9,13 @@ import {
   AuthMeResponseSchema,
   HealthResponseSchema,
   PingResponseSchema,
-  TenantCreateRequestSchema,
-  TenantCreateResponseSchema,
-  TenantInviteAcceptResponseSchema,
-  TenantInviteCreateRequestSchema,
-  TenantInviteCreateResponseSchema,
-  TenantMembersResponseSchema,
-  TenantReadResponseSchema
+  WorkspaceCreateRequestSchema,
+  WorkspaceCreateResponseSchema,
+  WorkspaceInviteAcceptResponseSchema,
+  WorkspaceInviteCreateRequestSchema,
+  WorkspaceInviteCreateResponseSchema,
+  WorkspaceMembersResponseSchema,
+  WorkspaceReadResponseSchema
 } from "./schemas.js";
 import {
   AgentEventsBatchRequestSchema,
@@ -50,13 +50,13 @@ export function buildOpenApiDocument(): Record<string, unknown> {
   registry.register("PingResponse", PingResponseSchema);
   registry.register("ApiError", ApiErrorSchema);
   registry.register("AuthMeResponse", AuthMeResponseSchema);
-  registry.register("TenantCreateRequest", TenantCreateRequestSchema);
-  registry.register("TenantCreateResponse", TenantCreateResponseSchema);
-  registry.register("TenantReadResponse", TenantReadResponseSchema);
-  registry.register("TenantMembersResponse", TenantMembersResponseSchema);
-  registry.register("TenantInviteCreateRequest", TenantInviteCreateRequestSchema);
-  registry.register("TenantInviteCreateResponse", TenantInviteCreateResponseSchema);
-  registry.register("TenantInviteAcceptResponse", TenantInviteAcceptResponseSchema);
+  registry.register("WorkspaceCreateRequest", WorkspaceCreateRequestSchema);
+  registry.register("WorkspaceCreateResponse", WorkspaceCreateResponseSchema);
+  registry.register("WorkspaceReadResponse", WorkspaceReadResponseSchema);
+  registry.register("WorkspaceMembersResponse", WorkspaceMembersResponseSchema);
+  registry.register("WorkspaceInviteCreateRequest", WorkspaceInviteCreateRequestSchema);
+  registry.register("WorkspaceInviteCreateResponse", WorkspaceInviteCreateResponseSchema);
+  registry.register("WorkspaceInviteAcceptResponse", WorkspaceInviteAcceptResponseSchema);
   registry.register("AgentThreadCreateRequest", AgentThreadCreateRequestSchema);
   registry.register("AgentThreadCreateResponse", AgentThreadCreateResponseSchema);
   registry.register("AgentThreadReadResponse", AgentThreadReadResponseSchema);
@@ -233,7 +233,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
     method: "get",
     path: "/v1/auth/me",
     operationId: "getAuthMe",
-    summary: "Return current authenticated user and memberships",
+    summary: "Return current authenticated user with organizations and workspaces",
     tags: ["Auth"],
     security: [{ sessionCookieAuth: [] }],
     responses: {
@@ -272,26 +272,26 @@ export function buildOpenApiDocument(): Record<string, unknown> {
 
   registry.registerPath({
     method: "post",
-    path: "/v1/tenants",
-    operationId: "createTenant",
-    summary: "Create a tenant and owner membership",
-    tags: ["Tenants"],
+    path: "/v1/workspaces",
+    operationId: "createWorkspace",
+    summary: "Create a workspace",
+    tags: ["Workspaces"],
     security: [{ sessionCookieAuth: [] }],
     request: {
       body: {
         content: {
           "application/json": {
-            schema: TenantCreateRequestSchema
+            schema: WorkspaceCreateRequestSchema
           }
         }
       }
     },
     responses: {
       201: {
-        description: "Tenant created",
+        description: "Workspace created",
         content: {
           "application/json": {
-            schema: TenantCreateResponseSchema
+            schema: WorkspaceCreateResponseSchema
           }
         }
       },
@@ -316,22 +316,22 @@ export function buildOpenApiDocument(): Record<string, unknown> {
 
   registry.registerPath({
     method: "get",
-    path: "/v1/tenants/{tenantSlug}",
-    operationId: "getTenant",
-    summary: "Read tenant metadata",
-    tags: ["Tenants"],
+    path: "/v1/workspaces/{workspaceSlug}",
+    operationId: "getWorkspace",
+    summary: "Read workspace metadata",
+    tags: ["Workspaces"],
     security: [{ sessionCookieAuth: [] }],
     request: {
       params: z.object({
-        tenantSlug: z.string().min(1)
+        workspaceSlug: z.string().min(1)
       })
     },
     responses: {
       200: {
-        description: "Tenant details",
+        description: "Workspace details",
         content: {
           "application/json": {
-            schema: TenantReadResponseSchema
+            schema: WorkspaceReadResponseSchema
           }
         }
       },
@@ -352,7 +352,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         }
       },
       404: {
-        description: "Tenant not found",
+        description: "Workspace not found",
         content: {
           "application/json": {
             schema: ApiErrorSchema
@@ -364,22 +364,22 @@ export function buildOpenApiDocument(): Record<string, unknown> {
 
   registry.registerPath({
     method: "get",
-    path: "/v1/tenants/{tenantSlug}/members",
-    operationId: "listTenantMembers",
-    summary: "List tenant members",
-    tags: ["Tenants"],
+    path: "/v1/workspaces/{workspaceSlug}/members",
+    operationId: "listWorkspaceMembers",
+    summary: "List workspace members",
+    tags: ["Workspaces"],
     security: [{ sessionCookieAuth: [] }],
     request: {
       params: z.object({
-        tenantSlug: z.string().min(1)
+        workspaceSlug: z.string().min(1)
       })
     },
     responses: {
       200: {
-        description: "Tenant members",
+        description: "Workspace members",
         content: {
           "application/json": {
-            schema: TenantMembersResponseSchema
+            schema: WorkspaceMembersResponseSchema
           }
         }
       },
@@ -400,7 +400,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         }
       },
       404: {
-        description: "Tenant not found",
+        description: "Workspace not found",
         content: {
           "application/json": {
             schema: ApiErrorSchema
@@ -412,19 +412,19 @@ export function buildOpenApiDocument(): Record<string, unknown> {
 
   registry.registerPath({
     method: "post",
-    path: "/v1/tenants/{tenantSlug}/invites",
-    operationId: "createTenantInvite",
-    summary: "Create tenant invite",
-    tags: ["Tenants"],
+    path: "/v1/workspaces/{workspaceSlug}/invites",
+    operationId: "createWorkspaceInvite",
+    summary: "Create workspace invite",
+    tags: ["Workspaces"],
     security: [{ sessionCookieAuth: [] }],
     request: {
       params: z.object({
-        tenantSlug: z.string().min(1)
+        workspaceSlug: z.string().min(1)
       }),
       body: {
         content: {
           "application/json": {
-            schema: TenantInviteCreateRequestSchema
+            schema: WorkspaceInviteCreateRequestSchema
           }
         }
       }
@@ -434,7 +434,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         description: "Invite created",
         content: {
           "application/json": {
-            schema: TenantInviteCreateResponseSchema
+            schema: WorkspaceInviteCreateResponseSchema
           }
         }
       },
@@ -455,7 +455,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         }
       },
       404: {
-        description: "Tenant not found",
+        description: "Workspace not found",
         content: {
           "application/json": {
             schema: ApiErrorSchema
@@ -467,14 +467,14 @@ export function buildOpenApiDocument(): Record<string, unknown> {
 
   registry.registerPath({
     method: "post",
-    path: "/v1/tenants/{tenantSlug}/invites/{token}/accept",
-    operationId: "acceptTenantInvite",
-    summary: "Accept tenant invite",
-    tags: ["Tenants"],
+    path: "/v1/workspaces/{workspaceSlug}/invites/{token}/accept",
+    operationId: "acceptWorkspaceInvite",
+    summary: "Accept workspace invite",
+    tags: ["Workspaces"],
     security: [{ sessionCookieAuth: [] }],
     request: {
       params: z.object({
-        tenantSlug: z.string().min(1),
+        workspaceSlug: z.string().min(1),
         token: z.string().min(1)
       })
     },
@@ -483,7 +483,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         description: "Invite accepted",
         content: {
           "application/json": {
-            schema: TenantInviteAcceptResponseSchema
+            schema: WorkspaceInviteAcceptResponseSchema
           }
         }
       },
@@ -972,13 +972,13 @@ export function buildOpenApiDocument(): Record<string, unknown> {
     info: {
       title: "Compass API",
       version: API_VERSION,
-      description: "Compass API baseline with Entra-first multi-tenant auth"
+      description: "Compass API baseline with Entra-first organization/workspace auth"
     },
     servers: [{ url: "http://localhost:3001" }],
     tags: [
       { name: "System", description: "Platform system endpoints" },
       { name: "Auth", description: "Authentication and session endpoints" },
-      { name: "Tenants", description: "Tenant membership and invite endpoints" },
+      { name: "Workspaces", description: "Workspace membership and invite endpoints" },
       { name: "Agent", description: "Agent thread and turn orchestration endpoints" }
     ]
   }) as unknown as Record<string, unknown>;

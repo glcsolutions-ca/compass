@@ -48,12 +48,12 @@ export async function getAuthMe(request: Request) {
   return normalizeResult(result as RawClientResult);
 }
 
-export async function getTenant(request: Request, tenantSlug: string) {
+export async function getWorkspace(request: Request, workspaceSlug: string) {
   const client = createCompassClient(request);
-  const result = await client.GET("/v1/tenants/{tenantSlug}", {
+  const result = await client.GET("/v1/workspaces/{workspaceSlug}", {
     params: {
       path: {
-        tenantSlug
+        workspaceSlug
       }
     },
     credentials: "include"
@@ -62,9 +62,9 @@ export async function getTenant(request: Request, tenantSlug: string) {
   return normalizeResult(result as RawClientResult);
 }
 
-export async function createTenant(request: Request, payload: { slug: string; name: string }) {
+export async function createWorkspace(request: Request, payload: { slug: string; name: string }) {
   const client = createCompassClient(request);
-  const result = await client.POST("/v1/tenants", {
+  const result = await client.POST("/v1/workspaces", {
     body: payload,
     credentials: "include"
   });
@@ -72,15 +72,15 @@ export async function createTenant(request: Request, payload: { slug: string; na
   return normalizeResult(result as RawClientResult);
 }
 
-export async function acceptTenantInvite(
+export async function acceptWorkspaceInvite(
   request: Request,
-  payload: { tenantSlug: string; inviteToken: string }
+  payload: { workspaceSlug: string; inviteToken: string }
 ) {
   const client = createCompassClient(request);
-  const result = await client.POST("/v1/tenants/{tenantSlug}/invites/{token}/accept", {
+  const result = await client.POST("/v1/workspaces/{workspaceSlug}/invites/{token}/accept", {
     params: {
       path: {
-        tenantSlug: payload.tenantSlug,
+        workspaceSlug: payload.workspaceSlug,
         token: payload.inviteToken
       }
     },

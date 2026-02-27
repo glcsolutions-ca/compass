@@ -1,18 +1,23 @@
 import type { AuthShellLoaderData } from "~/features/auth/types";
 
-export function resolveThreadCreateTenantSlug(auth: AuthShellLoaderData): string {
-  const lastActive = auth.lastActiveTenantSlug?.trim();
-  if (lastActive) {
-    return lastActive;
+export function resolveThreadCreateWorkspaceSlug(auth: AuthShellLoaderData): string {
+  const personal = auth.personalWorkspaceSlug?.trim();
+  if (personal) {
+    return personal;
   }
 
-  const activeMembership = auth.memberships.find((membership) => membership.status === "active");
-  const activeTenantSlug = activeMembership?.tenantSlug?.trim();
-  if (activeTenantSlug) {
-    return activeTenantSlug;
+  const active = auth.activeWorkspaceSlug?.trim();
+  if (active) {
+    return active;
   }
 
-  throw new Error("Personal workspace membership is required but was not found in /v1/auth/me.");
+  const firstActiveWorkspace = auth.workspaces.find((workspace) => workspace.status === "active");
+  const slug = firstActiveWorkspace?.slug?.trim();
+  if (slug) {
+    return slug;
+  }
+
+  throw new Error("Workspace membership is required but was not found in /v1/auth/me.");
 }
 
 export function readPersonalContextLabel(input: {

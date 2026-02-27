@@ -1,11 +1,23 @@
 import { z } from "zod";
 import type { AuthShellLoaderData } from "~/features/auth/types";
 
-const MembershipSchema = z.object({
-  tenantId: z.string().min(1),
-  tenantSlug: z.string().min(1),
-  tenantName: z.string().min(1),
-  role: z.enum(["owner", "admin", "member", "viewer"]),
+const OrganizationMembershipSchema = z.object({
+  organizationId: z.string().min(1),
+  organizationSlug: z.string().min(1),
+  organizationName: z.string().min(1),
+  role: z.enum(["owner", "admin", "member"]),
+  status: z.enum(["active", "invited", "disabled"])
+});
+
+const WorkspaceSchema = z.object({
+  id: z.string().min(1),
+  organizationId: z.string().min(1),
+  organizationSlug: z.string().min(1),
+  organizationName: z.string().min(1),
+  slug: z.string().min(1),
+  name: z.string().min(1),
+  isPersonal: z.boolean(),
+  role: z.enum(["admin", "member"]),
   status: z.enum(["active", "invited", "disabled"])
 });
 
@@ -19,8 +31,10 @@ const AuthMeSchema = z.object({
     })
     .nullable()
     .optional(),
-  memberships: z.array(MembershipSchema),
-  lastActiveTenantSlug: z.string().nullable().optional()
+  organizations: z.array(OrganizationMembershipSchema),
+  workspaces: z.array(WorkspaceSchema),
+  activeWorkspaceSlug: z.string().nullable().optional(),
+  personalWorkspaceSlug: z.string().nullable().optional()
 });
 
 export function parseAuthShellData(payload: unknown): AuthShellLoaderData | null {
@@ -40,15 +54,25 @@ export function parseAuthShellData(payload: unknown): AuthShellLoaderData | null
           displayName: user.displayName ?? null
         }
       : null,
-    memberships: parsed.data.memberships,
-    lastActiveTenantSlug: parsed.data.lastActiveTenantSlug ?? null
+    organizations: parsed.data.organizations,
+    workspaces: parsed.data.workspaces,
+    activeWorkspaceSlug: parsed.data.activeWorkspaceSlug ?? null,
+    personalWorkspaceSlug: parsed.data.personalWorkspaceSlug ?? null
   };
 }
 
 export function resolveAuthenticatedLandingPath(data: {
-  memberships: AuthShellLoaderData["memberships"];
-  lastActiveTenantSlug: string | null;
+  workspaces: AuthShellLoaderData["workspaces"];
+  personalWorkspaceSlug: string | null;
+  activeWorkspaceSlug: string | null;
 }): string {
-  void data;
-  return "/chat";
+  const preferred =
+    data.personalWorkspaceSlug?.trim() ||
+    data.activeWorkspaceSlug?.trim() ||
+    data.workspaces[0]?.slug;
+  if (!preferred) {
+    return "/workspaces";
+  }
+
+  return `/w/${encodeURIComponent(preferred)}/chat`;
 }

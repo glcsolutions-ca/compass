@@ -83,17 +83,17 @@ export default function WorkspacesRoute() {
         </div>
       ) : null}
 
-      {auth.memberships.length > 0 ? (
+      {auth.workspaces.length > 0 ? (
         <ul
           className="grid gap-2 rounded-xl border border-border bg-card/80 p-4"
           data-testid="workspace-list"
         >
-          {auth.memberships.map((membership) => (
-            <li key={membership.tenantId}>
+          {auth.workspaces.map((workspace) => (
+            <li key={workspace.id}>
               <div className="flex items-center justify-between rounded-md border border-transparent px-3 py-2 text-sm">
-                <span>{membership.tenantName}</span>
+                <span>{workspace.name}</span>
                 <span className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
-                  {membership.role}
+                  {workspace.role}
                 </span>
               </div>
             </li>
@@ -150,12 +150,12 @@ export default function WorkspacesRoute() {
           <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Accept Invite
           </h2>
-          <label className="grid gap-1 text-sm" htmlFor="invite-tenant-slug">
-            Tenant slug
+          <label className="grid gap-1 text-sm" htmlFor="invite-workspace-slug">
+            Workspace slug
             <Input
               autoComplete="off"
-              id="invite-tenant-slug"
-              name="tenantSlug"
+              id="invite-workspace-slug"
+              name="workspaceSlug"
               placeholder="acme"
               required
             />

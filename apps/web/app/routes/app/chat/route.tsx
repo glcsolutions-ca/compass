@@ -144,10 +144,11 @@ export async function clientLoader({
   params
 }: {
   request: Request;
-  params: { threadId?: string };
+  params: { workspaceSlug?: string; threadId?: string };
 }): Promise<ChatLoaderData | Response> {
   return loadChatData({
     request,
+    workspaceSlug: params.workspaceSlug,
     threadId: params.threadId
   });
 }
@@ -157,10 +158,11 @@ export async function clientAction({
   params
 }: {
   request: Request;
-  params: { threadId?: string };
+  params: { workspaceSlug?: string; threadId?: string };
 }): Promise<Response | ChatActionData> {
   return submitChatAction({
     request,
+    workspaceSlug: params.workspaceSlug,
     threadId: params.threadId
   });
 }
@@ -234,7 +236,9 @@ export default function ChatRoute() {
     }
 
     if (actionResult.threadId && actionResult.threadId !== loaderData.threadId) {
-      void navigate(buildThreadHref(actionResult.threadId), { replace: true });
+      void navigate(buildThreadHref(loaderData.workspaceSlug, actionResult.threadId), {
+        replace: true
+      });
     }
 
     const promptText = actionResult.prompt;
@@ -264,6 +268,7 @@ export default function ChatRoute() {
         actionResult.prompt?.slice(0, 80) || `Thread ${actionResult.threadId.slice(0, 8)}`;
       upsertChatThreadHistoryItem({
         threadId: actionResult.threadId,
+        workspaceSlug: loaderData.workspaceSlug,
         title,
         executionMode: actionResult.executionMode,
         status: "inProgress"

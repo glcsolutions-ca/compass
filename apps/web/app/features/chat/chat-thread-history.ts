@@ -5,6 +5,7 @@ const CHAT_THREAD_HISTORY_LIMIT = 40;
 
 export interface ChatThreadHistoryItem {
   threadId: string;
+  workspaceSlug: string;
   title: string;
   executionMode: AgentExecutionMode;
   status: AgentThreadStatus;
@@ -22,6 +23,7 @@ function normalizeItem(candidate: unknown): ChatThreadHistoryItem | null {
 
   const raw = candidate as Record<string, unknown>;
   const threadId = typeof raw.threadId === "string" ? raw.threadId.trim() : "";
+  const workspaceSlug = typeof raw.workspaceSlug === "string" ? raw.workspaceSlug.trim() : "";
   const title = typeof raw.title === "string" ? raw.title.trim() : "";
   const executionMode = raw.executionMode === "local" ? "local" : "cloud";
   const status =
@@ -34,12 +36,13 @@ function normalizeItem(candidate: unknown): ChatThreadHistoryItem | null {
       : "idle";
   const updatedAt = typeof raw.updatedAt === "string" ? raw.updatedAt.trim() : "";
 
-  if (!threadId || !title || !updatedAt) {
+  if (!threadId || !workspaceSlug || !title || !updatedAt) {
     return null;
   }
 
   return {
     threadId,
+    workspaceSlug,
     title,
     executionMode,
     status,
@@ -105,6 +108,7 @@ export function upsertChatThreadHistoryItem(
   const next: ChatThreadHistoryItem[] = [
     {
       threadId: item.threadId,
+      workspaceSlug: item.workspaceSlug,
       title: item.title,
       executionMode: item.executionMode,
       status: item.status,

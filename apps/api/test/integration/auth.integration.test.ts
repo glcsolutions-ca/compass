@@ -190,7 +190,7 @@ describe("API auth integration", () => {
   const repository = new AuthRepository(databaseUrl);
 
   beforeAll(async () => {
-    await repository.listMemberships("non-existent-user");
+    await repository.listWorkspaceMemberships("non-existent-user");
   });
 
   afterAll(async () => {
@@ -248,15 +248,15 @@ describe("API auth integration", () => {
     const meBeforeTenant = await request(app).get("/v1/auth/me").set("Cookie", ownerCookie);
     expect(meBeforeTenant.status).toBe(200);
     expect(meBeforeTenant.body.authenticated).toBe(true);
-    expect(meBeforeTenant.body.memberships).toHaveLength(1);
-    expect(meBeforeTenant.body.memberships[0]).toMatchObject({
-      role: "owner",
+    expect(meBeforeTenant.body.workspaces).toHaveLength(1);
+    expect(meBeforeTenant.body.workspaces[0]).toMatchObject({
+      role: "admin",
       status: "active"
     });
-    expect(String(meBeforeTenant.body.memberships[0].tenantSlug)).toMatch(/^personal-/u);
+    expect(String(meBeforeTenant.body.workspaces[0].slug)).toMatch(/^personal-/u);
 
     const createTenant = await request(app)
-      .post("/v1/tenants")
+      .post("/v1/workspaces")
       .set("Cookie", ownerCookie)
       .set("origin", SAME_ORIGIN)
       .send({
@@ -265,38 +265,38 @@ describe("API auth integration", () => {
       });
     expect(createTenant.status).toBe(201);
     expect(createTenant.body).toMatchObject({
-      tenant: {
+      workspace: {
         slug: "acme",
         name: "Acme Corp",
         status: "active"
       },
       membership: {
-        role: "owner",
+        role: "admin",
         status: "active"
       }
     });
 
     const meAfterTenant = await request(app).get("/v1/auth/me").set("Cookie", ownerCookie);
     expect(meAfterTenant.status).toBe(200);
-    expect(meAfterTenant.body.memberships).toHaveLength(2);
-    expect(meAfterTenant.body.memberships).toEqual(
+    expect(meAfterTenant.body.workspaces).toHaveLength(2);
+    expect(meAfterTenant.body.workspaces).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ tenantSlug: "acme", role: "owner", status: "active" })
+        expect.objectContaining({ slug: "acme", role: "admin", status: "active" })
       ])
     );
 
-    const getTenant = await request(app).get("/v1/tenants/acme").set("Cookie", ownerCookie);
+    const getTenant = await request(app).get("/v1/workspaces/acme").set("Cookie", ownerCookie);
     expect(getTenant.status).toBe(200);
-    expect(getTenant.body.tenant.slug).toBe("acme");
+    expect(getTenant.body.workspace.slug).toBe("acme");
 
     const listMembersBefore = await request(app)
-      .get("/v1/tenants/acme/members")
+      .get("/v1/workspaces/acme/members")
       .set("Cookie", ownerCookie);
     expect(listMembersBefore.status).toBe(200);
     expect(listMembersBefore.body.members).toHaveLength(1);
 
     const createInvite = await request(app)
-      .post("/v1/tenants/acme/invites")
+      .post("/v1/workspaces/acme/invites")
       .set("Cookie", ownerCookie)
       .set("origin", SAME_ORIGIN)
       .send({
@@ -321,20 +321,20 @@ describe("API auth integration", () => {
     const memberCookie = extractCookie(callbackMember.headers["set-cookie"]);
 
     const acceptInvite = await request(app)
-      .post(`/v1/tenants/acme/invites/${encodeURIComponent(inviteToken)}/accept`)
+      .post(`/v1/workspaces/acme/invites/${encodeURIComponent(inviteToken)}/accept`)
       .set("Cookie", memberCookie)
       .set("origin", SAME_ORIGIN);
 
     expect(acceptInvite.status).toBe(200);
     expect(acceptInvite.body).toMatchObject({
       joined: true,
-      tenantSlug: "acme",
+      workspaceSlug: "acme",
       role: "member",
       status: "active"
     });
 
     const listMembersAfter = await request(app)
-      .get("/v1/tenants/acme/members")
+      .get("/v1/workspaces/acme/members")
       .set("Cookie", ownerCookie);
     expect(listMembersAfter.status).toBe(200);
     expect(listMembersAfter.body.members).toHaveLength(2);
@@ -565,7 +565,7 @@ describe("API auth integration", () => {
 
     const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
 
-    const response = await request(app).get("/v1/tenants/acme");
+    const response = await request(app).get("/v1/workspaces/acme");
 
     expect(response.status).toBe(401);
     expect(response.body.code).toBe("UNAUTHORIZED");
@@ -606,7 +606,7 @@ describe("API auth integration", () => {
     const ownerCookie = extractCookie(ownerCallback.headers["set-cookie"]);
 
     const createTenant = await request(app)
-      .post("/v1/tenants")
+      .post("/v1/workspaces")
       .set("Cookie", ownerCookie)
       .set("origin", SAME_ORIGIN)
       .send({
@@ -625,7 +625,7 @@ describe("API auth integration", () => {
     const memberCookie = extractCookie(memberCallback.headers["set-cookie"]);
 
     const invite = await request(app)
-      .post("/v1/tenants/acme/invites")
+      .post("/v1/workspaces/acme/invites")
       .set("Cookie", ownerCookie)
       .set("origin", SAME_ORIGIN)
       .send({
@@ -635,18 +635,18 @@ describe("API auth integration", () => {
     const inviteToken = extractInviteToken(invite.body);
 
     const accept = await request(app)
-      .post(`/v1/tenants/acme/invites/${encodeURIComponent(inviteToken)}/accept`)
+      .post(`/v1/workspaces/acme/invites/${encodeURIComponent(inviteToken)}/accept`)
       .set("Cookie", memberCookie)
       .set("origin", SAME_ORIGIN);
     expect(accept.status).toBe(200);
 
     const forbiddenInvite = await request(app)
-      .post("/v1/tenants/acme/invites")
+      .post("/v1/workspaces/acme/invites")
       .set("Cookie", memberCookie)
       .set("origin", SAME_ORIGIN)
       .send({
         email: "other@acme.test",
-        role: "viewer"
+        role: "member"
       });
 
     expect(forbiddenInvite.status).toBe(403);
@@ -782,7 +782,7 @@ describe("API auth integration", () => {
     const cookie = extractCookie(firstCallback.headers["set-cookie"]);
 
     const createFirstTenant = await request(app)
-      .post("/v1/tenants")
+      .post("/v1/workspaces")
       .set("Cookie", cookie)
       .set("origin", SAME_ORIGIN)
       .send({ slug: "acme", name: "Acme Corp" });
@@ -799,7 +799,7 @@ describe("API auth integration", () => {
     expect(secondCallback.headers.location).toBe("/chat");
 
     const createSecondTenant = await request(app)
-      .post("/v1/tenants")
+      .post("/v1/workspaces")
       .set("Cookie", cookie)
       .set("origin", SAME_ORIGIN)
       .send({ slug: "globex", name: "Globex Corp" });
@@ -887,7 +887,7 @@ describe("API auth integration", () => {
     const cookie = extractCookie(initialCallback.headers["set-cookie"]);
 
     const createTenant = await request(app)
-      .post("/v1/tenants")
+      .post("/v1/workspaces")
       .set("Cookie", cookie)
       .set("origin", SAME_ORIGIN)
       .send({ slug: "acme", name: "Acme Corp" });
@@ -950,14 +950,14 @@ describe("API auth integration", () => {
     const ownerCookie = extractCookie(ownerCallback.headers["set-cookie"]);
 
     const createTenant = await request(app)
-      .post("/v1/tenants")
+      .post("/v1/workspaces")
       .set("Cookie", ownerCookie)
       .set("origin", SAME_ORIGIN)
       .send({ slug: "acme", name: "Acme Corp" });
     expect(createTenant.status).toBe(201);
 
     const createInvite = await request(app)
-      .post("/v1/tenants/acme/invites")
+      .post("/v1/workspaces/acme/invites")
       .set("Cookie", ownerCookie)
       .set("origin", SAME_ORIGIN)
       .send({ email: "member@acme.test", role: "member" });
@@ -974,7 +974,7 @@ describe("API auth integration", () => {
     const memberCookie = extractCookie(memberCallback.headers["set-cookie"]);
 
     const acceptInvite = await request(app)
-      .post(`/v1/tenants/acme/invites/${encodeURIComponent(inviteToken)}/accept`)
+      .post(`/v1/workspaces/acme/invites/${encodeURIComponent(inviteToken)}/accept`)
       .set("Cookie", memberCookie)
       .set("origin", SAME_ORIGIN);
     expect(acceptInvite.status).toBe(200);
@@ -989,8 +989,8 @@ describe("API auth integration", () => {
 
     expect(eventTypes).toContain("auth.login.success");
     expect(eventTypes).toContain("auth.login.failure");
-    expect(eventTypes).toContain("tenant.invite.create");
-    expect(eventTypes).toContain("tenant.invite.accept");
+    expect(eventTypes).toContain("workspace.invite.create");
+    expect(eventTypes).toContain("workspace.invite.accept");
   });
 
   it("enforces strict single-use invite acceptance semantics", async () => {
@@ -1031,14 +1031,14 @@ describe("API auth integration", () => {
     const ownerCookie = extractCookie(ownerCallback.headers["set-cookie"]);
 
     const createTenant = await request(app)
-      .post("/v1/tenants")
+      .post("/v1/workspaces")
       .set("Cookie", ownerCookie)
       .set("origin", SAME_ORIGIN)
       .send({ slug: "acme", name: "Acme Corp" });
     expect(createTenant.status).toBe(201);
 
     const invite = await request(app)
-      .post("/v1/tenants/acme/invites")
+      .post("/v1/workspaces/acme/invites")
       .set("Cookie", ownerCookie)
       .set("origin", SAME_ORIGIN)
       .send({ email: "member@acme.test", role: "member" });
@@ -1055,13 +1055,13 @@ describe("API auth integration", () => {
     const memberOneCookie = extractCookie(memberOneCallback.headers["set-cookie"]);
 
     const firstAccept = await request(app)
-      .post(`/v1/tenants/acme/invites/${encodeURIComponent(inviteToken)}/accept`)
+      .post(`/v1/workspaces/acme/invites/${encodeURIComponent(inviteToken)}/accept`)
       .set("Cookie", memberOneCookie)
       .set("origin", SAME_ORIGIN);
     expect(firstAccept.status).toBe(200);
 
     const sameUserReplay = await request(app)
-      .post(`/v1/tenants/acme/invites/${encodeURIComponent(inviteToken)}/accept`)
+      .post(`/v1/workspaces/acme/invites/${encodeURIComponent(inviteToken)}/accept`)
       .set("Cookie", memberOneCookie)
       .set("origin", SAME_ORIGIN);
     expect(sameUserReplay.status).toBe(200);
@@ -1077,7 +1077,7 @@ describe("API auth integration", () => {
     const memberTwoCookie = extractCookie(memberTwoCallback.headers["set-cookie"]);
 
     const crossUserReplay = await request(app)
-      .post(`/v1/tenants/acme/invites/${encodeURIComponent(inviteToken)}/accept`)
+      .post(`/v1/workspaces/acme/invites/${encodeURIComponent(inviteToken)}/accept`)
       .set("Cookie", memberTwoCookie)
       .set("origin", SAME_ORIGIN);
     expect(crossUserReplay.status).toBe(409);

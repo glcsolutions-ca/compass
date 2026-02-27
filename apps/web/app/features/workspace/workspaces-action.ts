@@ -1,5 +1,9 @@
 import { redirect } from "react-router";
-import { acceptTenantInvite, createTenant, readApiErrorMessage } from "~/lib/api/compass-client";
+import {
+  acceptWorkspaceInvite,
+  createWorkspace,
+  readApiErrorMessage
+} from "~/lib/api/compass-client";
 import { buildReturnTo, logoutAndRedirect } from "~/lib/auth/auth-session";
 import {
   AcceptInviteSchema,
@@ -54,7 +58,7 @@ export async function submitWorkspacesAction({
       } satisfies WorkspacesActionData;
     }
 
-    const result = await createTenant(request, parsed.data);
+    const result = await createWorkspace(request, parsed.data);
 
     if (result.status === 401) {
       return unauthorizedToLogin(request);
@@ -67,17 +71,17 @@ export async function submitWorkspacesAction({
       } satisfies WorkspacesActionData;
     }
 
-    const payload = result.data as { tenant?: { slug?: unknown } };
-    const tenantSlug =
-      typeof payload.tenant?.slug === "string" && payload.tenant.slug.trim().length > 0
-        ? payload.tenant.slug.trim()
+    const payload = result.data as { workspace?: { slug?: unknown } };
+    const workspaceSlug =
+      typeof payload.workspace?.slug === "string" && payload.workspace.slug.trim().length > 0
+        ? payload.workspace.slug.trim()
         : parsed.data.slug;
 
-    return redirect(`/workspaces?notice=created&workspace=${encodeURIComponent(tenantSlug)}`);
+    return redirect(`/workspaces?notice=created&workspace=${encodeURIComponent(workspaceSlug)}`);
   }
 
   const parsed = AcceptInviteSchema.safeParse({
-    tenantSlug: formData.get("tenantSlug"),
+    workspaceSlug: formData.get("workspaceSlug"),
     inviteToken: formData.get("inviteToken")
   });
 
@@ -88,7 +92,7 @@ export async function submitWorkspacesAction({
     } satisfies WorkspacesActionData;
   }
 
-  const result = await acceptTenantInvite(request, parsed.data);
+  const result = await acceptWorkspaceInvite(request, parsed.data);
 
   if (result.status === 401) {
     return unauthorizedToLogin(request);
@@ -101,11 +105,11 @@ export async function submitWorkspacesAction({
     } satisfies WorkspacesActionData;
   }
 
-  const payload = result.data as { tenantSlug?: unknown };
-  const tenantSlug =
-    typeof payload.tenantSlug === "string" && payload.tenantSlug.trim().length > 0
-      ? payload.tenantSlug.trim()
-      : parsed.data.tenantSlug;
+  const payload = result.data as { workspaceSlug?: unknown };
+  const workspaceSlug =
+    typeof payload.workspaceSlug === "string" && payload.workspaceSlug.trim().length > 0
+      ? payload.workspaceSlug.trim()
+      : parsed.data.workspaceSlug;
 
-  return redirect(`/workspaces?notice=joined&workspace=${encodeURIComponent(tenantSlug)}`);
+  return redirect(`/workspaces?notice=joined&workspace=${encodeURIComponent(workspaceSlug)}`);
 }

@@ -96,7 +96,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Return current authenticated user and memberships */
+        /** Return current authenticated user with organizations and workspaces */
         get: operations["getAuthMe"];
         put?: never;
         post?: never;
@@ -123,7 +123,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/tenants": {
+    "/v1/workspaces": {
         parameters: {
             query?: never;
             header?: never;
@@ -132,23 +132,23 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create a tenant and owner membership */
-        post: operations["createTenant"];
+        /** Create a workspace */
+        post: operations["createWorkspace"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/tenants/{tenantSlug}": {
+    "/v1/workspaces/{workspaceSlug}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Read tenant metadata */
-        get: operations["getTenant"];
+        /** Read workspace metadata */
+        get: operations["getWorkspace"];
         put?: never;
         post?: never;
         delete?: never;
@@ -157,15 +157,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/tenants/{tenantSlug}/members": {
+    "/v1/workspaces/{workspaceSlug}/members": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List tenant members */
-        get: operations["listTenantMembers"];
+        /** List workspace members */
+        get: operations["listWorkspaceMembers"];
         put?: never;
         post?: never;
         delete?: never;
@@ -174,7 +174,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/tenants/{tenantSlug}/invites": {
+    "/v1/workspaces/{workspaceSlug}/invites": {
         parameters: {
             query?: never;
             header?: never;
@@ -183,15 +183,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create tenant invite */
-        post: operations["createTenantInvite"];
+        /** Create workspace invite */
+        post: operations["createWorkspaceInvite"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/tenants/{tenantSlug}/invites/{token}/accept": {
+    "/v1/workspaces/{workspaceSlug}/invites/{token}/accept": {
         parameters: {
             query?: never;
             header?: never;
@@ -200,8 +200,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Accept tenant invite */
-        post: operations["acceptTenantInvite"];
+        /** Accept workspace invite */
+        post: operations["acceptWorkspaceInvite"];
         delete?: never;
         options?: never;
         head?: never;
@@ -372,80 +372,100 @@ export interface components {
                 primaryEmail?: string | null;
                 displayName?: string | null;
             } | null;
-            memberships: {
-                tenantId: string;
-                tenantSlug: string;
-                tenantName: string;
+            organizations: {
+                organizationId: string;
+                organizationSlug: string;
+                organizationName: string;
                 /** @enum {string} */
-                role: "owner" | "admin" | "member" | "viewer";
+                role: "owner" | "admin" | "member";
                 /** @enum {string} */
                 status: "active" | "invited" | "disabled";
             }[];
-            lastActiveTenantSlug?: string | null;
+            workspaces: {
+                id: string;
+                organizationId: string;
+                organizationSlug: string;
+                organizationName: string;
+                slug: string;
+                name: string;
+                isPersonal: boolean;
+                /** @enum {string} */
+                role: "admin" | "member";
+                /** @enum {string} */
+                status: "active" | "invited" | "disabled";
+            }[];
+            activeWorkspaceSlug?: string | null;
+            personalWorkspaceSlug?: string | null;
         };
-        TenantCreateRequest: {
+        WorkspaceCreateRequest: {
             slug: string;
             name: string;
         };
-        TenantCreateResponse: {
-            tenant: {
+        WorkspaceCreateResponse: {
+            workspace: {
                 id: string;
+                organizationId: string;
                 slug: string;
                 name: string;
+                isPersonal: boolean;
                 /** @enum {string} */
                 status: "active" | "disabled";
             };
             membership: {
                 /** @enum {string} */
-                role: "owner" | "admin" | "member" | "viewer";
+                role: "admin" | "member";
                 /** @enum {string} */
                 status: "active" | "invited" | "disabled";
             };
         };
-        TenantReadResponse: {
-            tenant: {
+        WorkspaceReadResponse: {
+            workspace: {
                 id: string;
+                organizationId: string;
+                organizationSlug: string;
+                organizationName: string;
                 slug: string;
                 name: string;
+                isPersonal: boolean;
                 /** @enum {string} */
                 status: "active" | "disabled";
             };
         };
-        TenantMembersResponse: {
+        WorkspaceMembersResponse: {
             members: {
                 userId: string;
                 /** Format: email */
                 primaryEmail?: string | null;
                 displayName?: string | null;
                 /** @enum {string} */
-                role: "owner" | "admin" | "member" | "viewer";
+                role: "admin" | "member";
                 /** @enum {string} */
                 status: "active" | "invited" | "disabled";
             }[];
         };
-        TenantInviteCreateRequest: {
+        WorkspaceInviteCreateRequest: {
             /** Format: email */
             email: string;
             /** @enum {string} */
-            role: "admin" | "member" | "viewer";
+            role: "admin" | "member";
             expiresInDays?: number;
         };
-        TenantInviteCreateResponse: {
+        WorkspaceInviteCreateResponse: {
             inviteId: string;
             /** Format: date-time */
             expiresAt: string;
             token: string;
         };
-        TenantInviteAcceptResponse: {
+        WorkspaceInviteAcceptResponse: {
             joined: boolean;
-            tenantSlug: string;
+            workspaceSlug: string;
             /** @enum {string} */
-            role: "owner" | "admin" | "member" | "viewer";
+            role: "admin" | "member";
             /** @enum {string} */
             status: "active" | "invited" | "disabled";
         };
         AgentThreadCreateRequest: {
-            tenantSlug: string;
+            workspaceSlug: string;
             /**
              * @default cloud
              * @enum {string}
@@ -458,8 +478,8 @@ export interface components {
         AgentThreadCreateResponse: {
             thread: {
                 threadId: string;
-                tenantId: string;
-                tenantSlug: string;
+                workspaceId: string;
+                workspaceSlug: string;
                 /** @enum {string} */
                 executionMode: "cloud" | "local";
                 /** @enum {string} */
@@ -479,8 +499,8 @@ export interface components {
         AgentThreadReadResponse: {
             thread: {
                 threadId: string;
-                tenantId: string;
-                tenantSlug: string;
+                workspaceId: string;
+                workspaceSlug: string;
                 /** @enum {string} */
                 executionMode: "cloud" | "local";
                 /** @enum {string} */
@@ -506,8 +526,8 @@ export interface components {
         AgentThreadModePatchResponse: {
             thread: {
                 threadId: string;
-                tenantId: string;
-                tenantSlug: string;
+                workspaceId: string;
+                workspaceSlug: string;
                 /** @enum {string} */
                 executionMode: "cloud" | "local";
                 /** @enum {string} */
@@ -829,16 +849,30 @@ export interface operations {
                             primaryEmail?: string | null;
                             displayName?: string | null;
                         } | null;
-                        memberships: {
-                            tenantId: string;
-                            tenantSlug: string;
-                            tenantName: string;
+                        organizations: {
+                            organizationId: string;
+                            organizationSlug: string;
+                            organizationName: string;
                             /** @enum {string} */
-                            role: "owner" | "admin" | "member" | "viewer";
+                            role: "owner" | "admin" | "member";
                             /** @enum {string} */
                             status: "active" | "invited" | "disabled";
                         }[];
-                        lastActiveTenantSlug?: string | null;
+                        workspaces: {
+                            id: string;
+                            organizationId: string;
+                            organizationSlug: string;
+                            organizationName: string;
+                            slug: string;
+                            name: string;
+                            isPersonal: boolean;
+                            /** @enum {string} */
+                            role: "admin" | "member";
+                            /** @enum {string} */
+                            status: "active" | "invited" | "disabled";
+                        }[];
+                        activeWorkspaceSlug?: string | null;
+                        personalWorkspaceSlug?: string | null;
                     };
                 };
             };
@@ -874,7 +908,7 @@ export interface operations {
             };
         };
     };
-    createTenant: {
+    createWorkspace: {
         parameters: {
             query?: never;
             header?: never;
@@ -890,23 +924,25 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Tenant created */
+            /** @description Workspace created */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        tenant: {
+                        workspace: {
                             id: string;
+                            organizationId: string;
                             slug: string;
                             name: string;
+                            isPersonal: boolean;
                             /** @enum {string} */
                             status: "active" | "disabled";
                         };
                         membership: {
                             /** @enum {string} */
-                            role: "owner" | "admin" | "member" | "viewer";
+                            role: "admin" | "member";
                             /** @enum {string} */
                             status: "active" | "invited" | "disabled";
                         };
@@ -939,28 +975,32 @@ export interface operations {
             };
         };
     };
-    getTenant: {
+    getWorkspace: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                tenantSlug: string;
+                workspaceSlug: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Tenant details */
+            /** @description Workspace details */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        tenant: {
+                        workspace: {
                             id: string;
+                            organizationId: string;
+                            organizationSlug: string;
+                            organizationName: string;
                             slug: string;
                             name: string;
+                            isPersonal: boolean;
                             /** @enum {string} */
                             status: "active" | "disabled";
                         };
@@ -991,7 +1031,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Tenant not found */
+            /** @description Workspace not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1005,18 +1045,18 @@ export interface operations {
             };
         };
     };
-    listTenantMembers: {
+    listWorkspaceMembers: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                tenantSlug: string;
+                workspaceSlug: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Tenant members */
+            /** @description Workspace members */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1029,7 +1069,7 @@ export interface operations {
                             primaryEmail?: string | null;
                             displayName?: string | null;
                             /** @enum {string} */
-                            role: "owner" | "admin" | "member" | "viewer";
+                            role: "admin" | "member";
                             /** @enum {string} */
                             status: "active" | "invited" | "disabled";
                         }[];
@@ -1060,7 +1100,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Tenant not found */
+            /** @description Workspace not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1074,12 +1114,12 @@ export interface operations {
             };
         };
     };
-    createTenantInvite: {
+    createWorkspaceInvite: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                tenantSlug: string;
+                workspaceSlug: string;
             };
             cookie?: never;
         };
@@ -1089,7 +1129,7 @@ export interface operations {
                     /** Format: email */
                     email: string;
                     /** @enum {string} */
-                    role: "admin" | "member" | "viewer";
+                    role: "admin" | "member";
                     expiresInDays?: number;
                 };
             };
@@ -1133,7 +1173,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Tenant not found */
+            /** @description Workspace not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1147,12 +1187,12 @@ export interface operations {
             };
         };
     };
-    acceptTenantInvite: {
+    acceptWorkspaceInvite: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                tenantSlug: string;
+                workspaceSlug: string;
                 token: string;
             };
             cookie?: never;
@@ -1167,9 +1207,9 @@ export interface operations {
                 content: {
                     "application/json": {
                         joined: boolean;
-                        tenantSlug: string;
+                        workspaceSlug: string;
                         /** @enum {string} */
-                        role: "owner" | "admin" | "member" | "viewer";
+                        role: "admin" | "member";
                         /** @enum {string} */
                         status: "active" | "invited" | "disabled";
                     };
@@ -1235,7 +1275,7 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": {
-                    tenantSlug: string;
+                    workspaceSlug: string;
                     /**
                      * @default cloud
                      * @enum {string}
@@ -1257,8 +1297,8 @@ export interface operations {
                     "application/json": {
                         thread: {
                             threadId: string;
-                            tenantId: string;
-                            tenantSlug: string;
+                            workspaceId: string;
+                            workspaceSlug: string;
                             /** @enum {string} */
                             executionMode: "cloud" | "local";
                             /** @enum {string} */
@@ -1335,8 +1375,8 @@ export interface operations {
                     "application/json": {
                         thread: {
                             threadId: string;
-                            tenantId: string;
-                            tenantSlug: string;
+                            workspaceId: string;
+                            workspaceSlug: string;
                             /** @enum {string} */
                             executionMode: "cloud" | "local";
                             /** @enum {string} */
@@ -1422,8 +1462,8 @@ export interface operations {
                     "application/json": {
                         thread: {
                             threadId: string;
-                            tenantId: string;
-                            tenantSlug: string;
+                            workspaceId: string;
+                            workspaceSlug: string;
                             /** @enum {string} */
                             executionMode: "cloud" | "local";
                             /** @enum {string} */

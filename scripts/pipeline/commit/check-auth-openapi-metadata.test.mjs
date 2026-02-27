@@ -27,18 +27,20 @@ describe("openapi auth metadata contract", () => {
     expect(document?.paths?.["/v1/auth/logout"]?.post?.security).toEqual([
       { sessionCookieAuth: [] }
     ]);
-    expect(document?.paths?.["/v1/tenants"]?.post?.security).toEqual([{ sessionCookieAuth: [] }]);
-    expect(document?.paths?.["/v1/tenants/{tenantSlug}"]?.get?.security).toEqual([
+    expect(document?.paths?.["/v1/workspaces"]?.post?.security).toEqual([
       { sessionCookieAuth: [] }
     ]);
-    expect(document?.paths?.["/v1/tenants/{tenantSlug}/members"]?.get?.security).toEqual([
+    expect(document?.paths?.["/v1/workspaces/{workspaceSlug}"]?.get?.security).toEqual([
       { sessionCookieAuth: [] }
     ]);
-    expect(document?.paths?.["/v1/tenants/{tenantSlug}/invites"]?.post?.security).toEqual([
+    expect(document?.paths?.["/v1/workspaces/{workspaceSlug}/members"]?.get?.security).toEqual([
+      { sessionCookieAuth: [] }
+    ]);
+    expect(document?.paths?.["/v1/workspaces/{workspaceSlug}/invites"]?.post?.security).toEqual([
       { sessionCookieAuth: [] }
     ]);
     expect(
-      document?.paths?.["/v1/tenants/{tenantSlug}/invites/{token}/accept"]?.post?.security
+      document?.paths?.["/v1/workspaces/{workspaceSlug}/invites/{token}/accept"]?.post?.security
     ).toEqual([{ sessionCookieAuth: [] }]);
   });
 });

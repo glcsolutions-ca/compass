@@ -34,12 +34,25 @@ describe("frontend route loaders", () => {
       new Response(
         JSON.stringify({
           authenticated: true,
-          memberships: [
+          organizations: [
             {
-              tenantId: "t_personal",
-              tenantSlug: "personal-user-1",
-              tenantName: "Personal Workspace",
+              organizationId: "org_personal",
+              organizationSlug: "personal-user-1-org",
+              organizationName: "Personal Organization",
               role: "owner",
+              status: "active"
+            }
+          ],
+          workspaces: [
+            {
+              id: "ws_personal",
+              organizationId: "org_personal",
+              organizationSlug: "personal-user-1-org",
+              organizationName: "Personal Organization",
+              slug: "personal-user-1",
+              name: "Personal Workspace",
+              isPersonal: true,
+              role: "admin",
               status: "active"
             }
           ]
@@ -60,7 +73,7 @@ describe("frontend route loaders", () => {
       throw new Error("Expected redirect response");
     }
     expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toBe("/chat");
+    expect(response.headers.get("Location")).toBe("/w/personal-user-1/chat");
   });
 
   it("builds login route links when unauthenticated", async () => {
@@ -83,12 +96,25 @@ describe("frontend route loaders", () => {
       new Response(
         JSON.stringify({
           authenticated: true,
-          memberships: [
+          organizations: [
             {
-              tenantId: "t_1",
-              tenantSlug: "acme",
-              tenantName: "Acme",
+              organizationId: "org_1",
+              organizationSlug: "acme-org",
+              organizationName: "Acme Org",
               role: "owner",
+              status: "active"
+            }
+          ],
+          workspaces: [
+            {
+              id: "ws_1",
+              organizationId: "org_1",
+              organizationSlug: "acme-org",
+              organizationName: "Acme Org",
+              slug: "acme",
+              name: "Acme",
+              isPersonal: false,
+              role: "admin",
               status: "active"
             }
           ]
@@ -106,7 +132,7 @@ describe("frontend route loaders", () => {
 
     expect(response).toBeInstanceOf(Response);
     expect((response as Response).status).toBe(302);
-    expect((response as Response).headers.get("Location")).toBe("/chat");
+    expect((response as Response).headers.get("Location")).toBe("/w/acme/chat");
   });
 
   it("reads workspaces error from query", async () => {

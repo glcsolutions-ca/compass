@@ -18,11 +18,11 @@ describe("buildOpenApiDocument", () => {
     expect(document.paths?.["/v1/auth/entra/callback"]).toBeTruthy();
     expect(document.paths?.["/v1/auth/me"]).toBeTruthy();
     expect(document.paths?.["/v1/auth/logout"]).toBeTruthy();
-    expect(document.paths?.["/v1/tenants"]).toBeTruthy();
-    expect(document.paths?.["/v1/tenants/{tenantSlug}"]).toBeTruthy();
-    expect(document.paths?.["/v1/tenants/{tenantSlug}/members"]).toBeTruthy();
-    expect(document.paths?.["/v1/tenants/{tenantSlug}/invites"]).toBeTruthy();
-    expect(document.paths?.["/v1/tenants/{tenantSlug}/invites/{token}/accept"]).toBeTruthy();
+    expect(document.paths?.["/v1/workspaces"]).toBeTruthy();
+    expect(document.paths?.["/v1/workspaces/{workspaceSlug}"]).toBeTruthy();
+    expect(document.paths?.["/v1/workspaces/{workspaceSlug}/members"]).toBeTruthy();
+    expect(document.paths?.["/v1/workspaces/{workspaceSlug}/invites"]).toBeTruthy();
+    expect(document.paths?.["/v1/workspaces/{workspaceSlug}/invites/{token}/accept"]).toBeTruthy();
     expect(document.paths?.["/v1/agent/threads"]).toBeTruthy();
     expect(document.paths?.["/v1/agent/threads/{threadId}"]).toBeTruthy();
     expect(document.paths?.["/v1/agent/threads/{threadId}/mode"]).toBeTruthy();
@@ -39,17 +39,19 @@ describe("buildOpenApiDocument", () => {
     );
     expect(document.paths?.["/v1/auth/me"]?.get?.operationId).toBe("getAuthMe");
     expect(document.paths?.["/v1/auth/logout"]?.post?.operationId).toBe("logout");
-    expect(document.paths?.["/v1/tenants"]?.post?.operationId).toBe("createTenant");
-    expect(document.paths?.["/v1/tenants/{tenantSlug}"]?.get?.operationId).toBe("getTenant");
-    expect(document.paths?.["/v1/tenants/{tenantSlug}/members"]?.get?.operationId).toBe(
-      "listTenantMembers"
+    expect(document.paths?.["/v1/workspaces"]?.post?.operationId).toBe("createWorkspace");
+    expect(document.paths?.["/v1/workspaces/{workspaceSlug}"]?.get?.operationId).toBe(
+      "getWorkspace"
     );
-    expect(document.paths?.["/v1/tenants/{tenantSlug}/invites"]?.post?.operationId).toBe(
-      "createTenantInvite"
+    expect(document.paths?.["/v1/workspaces/{workspaceSlug}/members"]?.get?.operationId).toBe(
+      "listWorkspaceMembers"
+    );
+    expect(document.paths?.["/v1/workspaces/{workspaceSlug}/invites"]?.post?.operationId).toBe(
+      "createWorkspaceInvite"
     );
     expect(
-      document.paths?.["/v1/tenants/{tenantSlug}/invites/{token}/accept"]?.post?.operationId
-    ).toBe("acceptTenantInvite");
+      document.paths?.["/v1/workspaces/{workspaceSlug}/invites/{token}/accept"]?.post?.operationId
+    ).toBe("acceptWorkspaceInvite");
     expect(document.paths?.["/v1/agent/threads"]?.post?.operationId).toBe("createAgentThread");
     expect(document.paths?.["/v1/agent/threads/{threadId}"]?.get?.operationId).toBe(
       "getAgentThread"
@@ -67,7 +69,7 @@ describe("buildOpenApiDocument", () => {
     );
 
     const inviteAcceptResponses = (
-      document.paths?.["/v1/tenants/{tenantSlug}/invites/{token}/accept"] as {
+      document.paths?.["/v1/workspaces/{workspaceSlug}/invites/{token}/accept"] as {
         post?: { responses?: Record<string, unknown> };
       }
     )?.post?.responses;

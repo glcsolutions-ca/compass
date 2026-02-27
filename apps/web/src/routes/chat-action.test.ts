@@ -34,7 +34,7 @@ describe("chat action", () => {
         method: "POST",
         body: formData
       }),
-      params: {}
+      params: { workspaceSlug: "personal-user-1" }
     });
 
     expect(result).toEqual({
@@ -57,24 +57,38 @@ describe("chat action", () => {
         primaryEmail: "user@example.com",
         displayName: "User"
       },
-      memberships: [
+      organizations: [
         {
-          tenantId: "tenant_personal",
-          tenantSlug: "personal-user-1",
-          tenantName: "User Personal Workspace",
-          role: "owner",
+          organizationId: "org_personal",
+          organizationSlug: "personal-org",
+          organizationName: "Personal Organization",
+          role: "member",
           status: "active"
         }
       ],
-      lastActiveTenantSlug: "personal-user-1"
+      workspaces: [
+        {
+          id: "ws_personal",
+          organizationId: "org_personal",
+          organizationSlug: "personal-org",
+          organizationName: "Personal Organization",
+          slug: "personal-user-1",
+          name: "User Personal Workspace",
+          isPersonal: true,
+          role: "admin",
+          status: "active"
+        }
+      ],
+      activeWorkspaceSlug: "personal-user-1",
+      personalWorkspaceSlug: "personal-user-1"
     });
 
     vi.mocked(createAgentThread).mockResolvedValue({
       status: 201,
       data: {
         threadId: "thread_1",
-        tenantId: null,
-        tenantSlug: "personal",
+        workspaceId: "ws_personal",
+        workspaceSlug: "personal-user-1",
         executionMode: "cloud",
         executionHost: "dynamic_sessions",
         status: "idle",
@@ -116,12 +130,12 @@ describe("chat action", () => {
         method: "POST",
         body: formData
       }),
-      params: {}
+      params: { workspaceSlug: "personal-user-1" }
     });
 
     expect(createAgentThread).toHaveBeenCalledTimes(1);
     expect(createAgentThread).toHaveBeenCalledWith(expect.any(Request), {
-      tenantSlug: "personal-user-1",
+      workspaceSlug: "personal-user-1",
       executionMode: "cloud",
       title: "hello"
     });
@@ -142,7 +156,7 @@ describe("chat action", () => {
     });
   });
 
-  it("fails closed when auth memberships are unexpectedly empty", async () => {
+  it("fails closed when auth workspaces are unexpectedly empty", async () => {
     vi.mocked(loadAuthShellData).mockResolvedValue({
       authenticated: true,
       user: {
@@ -150,8 +164,10 @@ describe("chat action", () => {
         primaryEmail: "user@example.com",
         displayName: "User"
       },
-      memberships: [],
-      lastActiveTenantSlug: null
+      organizations: [],
+      workspaces: [],
+      activeWorkspaceSlug: null,
+      personalWorkspaceSlug: null
     });
 
     const formData = new FormData();
@@ -170,7 +186,7 @@ describe("chat action", () => {
     expect(result).toEqual({
       intent: "sendMessage",
       ok: false,
-      error: "Personal workspace membership is required but was not found in /v1/auth/me.",
+      error: "Workspace membership is required but was not found in /v1/auth/me.",
       threadId: null,
       turnId: null,
       executionMode: "cloud",
@@ -205,11 +221,12 @@ describe("chat action", () => {
     formData.set("turnId", "turn_1");
 
     const result = await chatAction({
-      request: new Request("http://web.test/chat/thread_1", {
+      request: new Request("http://web.test/w/personal-user-1/chat/thread_1", {
         method: "POST",
         body: formData
       }),
       params: {
+        workspaceSlug: "personal-user-1",
         threadId: "thread_1"
       }
     });
@@ -232,8 +249,8 @@ describe("chat action", () => {
       status: 200,
       data: {
         threadId: "thread_1",
-        tenantId: null,
-        tenantSlug: "personal",
+        workspaceId: "ws_personal",
+        workspaceSlug: "personal-user-1",
         executionMode: "local",
         executionHost: "desktop_local",
         status: "idle",
@@ -253,11 +270,12 @@ describe("chat action", () => {
     formData.set("executionMode", "local");
 
     const result = await chatAction({
-      request: new Request("http://web.test/chat/thread_1", {
+      request: new Request("http://web.test/w/personal-user-1/chat/thread_1", {
         method: "POST",
         body: formData
       }),
       params: {
+        workspaceSlug: "personal-user-1",
         threadId: "thread_1"
       }
     });

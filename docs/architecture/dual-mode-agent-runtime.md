@@ -11,7 +11,7 @@ This phase provides thin end-to-end behavior in both modes and keeps product API
 
 ## Canonical Terms
 
-1. `agent thread`: tenant-scoped conversation identity.
+1. `agent thread`: workspace-scoped conversation identity.
 2. `execution_mode`: `cloud | local`.
 3. `execution_host`: `dynamic_sessions | desktop_local`.
 4. `turn event`: immutable runtime event persisted in `agent_events`.
@@ -23,7 +23,7 @@ This phase provides thin end-to-end behavior in both modes and keeps product API
 2. `agent_threads` stores current execution mode/host and optional `cloud_session_identifier`.
 3. `agent_turns` stores per-turn execution snapshots and runtime metadata.
 4. `agent_events` is the shared event timeline for cloud and local turns.
-5. Tenant membership remains the authorization boundary in all read/write paths.
+5. Workspace membership remains the authorization boundary in all read/write paths.
 
 ## Cloud Flow (API-Brokered)
 
@@ -93,7 +93,7 @@ Rules:
 2. Browser clients never receive raw session identifier policy logic.
 3. Local credentials are stored only through Electron `safeStorage` (OS-backed encryption) in main process.
 4. Renderer never talks directly to local runtime process; preload IPC is the only bridge.
-5. Tenant authorization is enforced for HTTP routes and websocket stream subscriptions.
+5. Workspace authorization is enforced for HTTP routes and websocket stream subscriptions.
 
 ## Feature Flags
 
@@ -114,4 +114,4 @@ Rules:
 
 1. Full Codex App Server protocol mapping over stdio.
 2. Rich multi-item streaming payload rendering in web UI.
-3. Production mode default policy and tenant-level rollout controls.
+3. Production mode default policy and workspace-level rollout controls.

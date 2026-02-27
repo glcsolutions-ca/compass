@@ -16,7 +16,17 @@ import {
 import { buildAssistantThreadListItems } from "~/features/chat/presentation/chat-runtime-store";
 
 function readActiveThreadId(pathname: string): string | null {
-  const match = /^\/chat\/([^/]+)$/u.exec(pathname);
+  const match = /^\/w\/[^/]+\/chat\/([^/]+)$/u.exec(pathname);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  const decoded = decodeURIComponent(match[1]).trim();
+  return decoded.length > 0 ? decoded : null;
+}
+
+function readWorkspaceSlug(pathname: string): string | null {
+  const match = /^\/w\/([^/]+)\/chat(?:\/|$)/u.exec(pathname);
   if (!match?.[1]) {
     return null;
   }
@@ -37,7 +47,13 @@ function SidebarThreadListItem() {
   );
 }
 
-export function ChatThreadRail({ pathname }: { pathname: string }) {
+export function ChatThreadRail({
+  pathname,
+  defaultWorkspaceSlug
+}: {
+  pathname: string;
+  defaultWorkspaceSlug: string;
+}) {
   const navigate = useNavigate();
   const [threads, setThreads] = useState<ChatThreadHistoryItem[]>([]);
 
@@ -47,6 +63,7 @@ export function ChatThreadRail({ pathname }: { pathname: string }) {
 
   const visibleThreads = useMemo(() => threads.slice(0, 12), [threads]);
   const activeThreadId = readActiveThreadId(pathname);
+  const activeWorkspaceSlug = readWorkspaceSlug(pathname) ?? defaultWorkspaceSlug;
   const threadListItems = useMemo(
     () => buildAssistantThreadListItems(visibleThreads),
     [visibleThreads]
@@ -62,15 +79,18 @@ export function ChatThreadRail({ pathname }: { pathname: string }) {
           threadId: activeThreadId ?? threadListItems[0]?.id ?? undefined,
           threads: threadListItems,
           onSwitchToNewThread: async () => {
-            void navigate(buildNewThreadHref());
+            void navigate(buildNewThreadHref({ workspaceSlug: activeWorkspaceSlug }));
           },
           onSwitchToThread: async (threadId: string) => {
-            void navigate(buildThreadHref(threadId));
+            const targetWorkspaceSlug =
+              visibleThreads.find((thread) => thread.threadId === threadId)?.workspaceSlug ||
+              activeWorkspaceSlug;
+            void navigate(buildThreadHref(targetWorkspaceSlug, threadId));
           }
         }
       }
     }),
-    [activeThreadId, navigate, threadListItems]
+    [activeThreadId, activeWorkspaceSlug, navigate, threadListItems, visibleThreads]
   );
 
   const threadListRuntime = useExternalStoreRuntime(threadListStore);

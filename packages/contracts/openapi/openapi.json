@@ -3,7 +3,7 @@
   "info": {
     "title": "Compass API",
     "version": "v1",
-    "description": "Compass API baseline with Entra-first multi-tenant auth"
+    "description": "Compass API baseline with Entra-first organization/workspace auth"
   },
   "servers": [
     {
@@ -20,8 +20,8 @@
       "description": "Authentication and session endpoints"
     },
     {
-      "name": "Tenants",
-      "description": "Tenant membership and invite endpoints"
+      "name": "Workspaces",
+      "description": "Workspace membership and invite endpoints"
     },
     {
       "name": "Agent",
@@ -130,20 +130,20 @@
               "id"
             ]
           },
-          "memberships": {
+          "organizations": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "tenantId": {
+                "organizationId": {
                   "type": "string",
                   "minLength": 1
                 },
-                "tenantSlug": {
+                "organizationSlug": {
                   "type": "string",
                   "minLength": 1
                 },
-                "tenantName": {
+                "organizationName": {
                   "type": "string",
                   "minLength": 1
                 },
@@ -152,8 +152,7 @@
                   "enum": [
                     "owner",
                     "admin",
-                    "member",
-                    "viewer"
+                    "member"
                   ]
                 },
                 "status": {
@@ -166,15 +165,83 @@
                 }
               },
               "required": [
-                "tenantId",
-                "tenantSlug",
-                "tenantName",
+                "organizationId",
+                "organizationSlug",
+                "organizationName",
                 "role",
                 "status"
               ]
             }
           },
-          "lastActiveTenantSlug": {
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "organizationId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "organizationSlug": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "organizationName": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "slug": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "isPersonal": {
+                  "type": "boolean"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "admin",
+                    "member"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "invited",
+                    "disabled"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "organizationId",
+                "organizationSlug",
+                "organizationName",
+                "slug",
+                "name",
+                "isPersonal",
+                "role",
+                "status"
+              ]
+            }
+          },
+          "activeWorkspaceSlug": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "personalWorkspaceSlug": {
             "type": [
               "string",
               "null"
@@ -184,10 +251,11 @@
         },
         "required": [
           "authenticated",
-          "memberships"
+          "organizations",
+          "workspaces"
         ]
       },
-      "TenantCreateRequest": {
+      "WorkspaceCreateRequest": {
         "type": "object",
         "properties": {
           "slug": {
@@ -207,13 +275,17 @@
           "name"
         ]
       },
-      "TenantCreateResponse": {
+      "WorkspaceCreateResponse": {
         "type": "object",
         "properties": {
-          "tenant": {
+          "workspace": {
             "type": "object",
             "properties": {
               "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "organizationId": {
                 "type": "string",
                 "minLength": 1
               },
@@ -225,6 +297,9 @@
                 "type": "string",
                 "minLength": 1
               },
+              "isPersonal": {
+                "type": "boolean"
+              },
               "status": {
                 "type": "string",
                 "enum": [
@@ -235,8 +310,10 @@
             },
             "required": [
               "id",
+              "organizationId",
               "slug",
               "name",
+              "isPersonal",
               "status"
             ]
           },
@@ -246,10 +323,8 @@
               "role": {
                 "type": "string",
                 "enum": [
-                  "owner",
                   "admin",
-                  "member",
-                  "viewer"
+                  "member"
                 ]
               },
               "status": {
@@ -268,17 +343,29 @@
           }
         },
         "required": [
-          "tenant",
+          "workspace",
           "membership"
         ]
       },
-      "TenantReadResponse": {
+      "WorkspaceReadResponse": {
         "type": "object",
         "properties": {
-          "tenant": {
+          "workspace": {
             "type": "object",
             "properties": {
               "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "organizationId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "organizationSlug": {
+                "type": "string",
+                "minLength": 1
+              },
+              "organizationName": {
                 "type": "string",
                 "minLength": 1
               },
@@ -290,6 +377,9 @@
                 "type": "string",
                 "minLength": 1
               },
+              "isPersonal": {
+                "type": "boolean"
+              },
               "status": {
                 "type": "string",
                 "enum": [
@@ -300,17 +390,21 @@
             },
             "required": [
               "id",
+              "organizationId",
+              "organizationSlug",
+              "organizationName",
               "slug",
               "name",
+              "isPersonal",
               "status"
             ]
           }
         },
         "required": [
-          "tenant"
+          "workspace"
         ]
       },
-      "TenantMembersResponse": {
+      "WorkspaceMembersResponse": {
         "type": "object",
         "properties": {
           "members": {
@@ -339,10 +433,8 @@
                 "role": {
                   "type": "string",
                   "enum": [
-                    "owner",
                     "admin",
-                    "member",
-                    "viewer"
+                    "member"
                   ]
                 },
                 "status": {
@@ -366,7 +458,7 @@
           "members"
         ]
       },
-      "TenantInviteCreateRequest": {
+      "WorkspaceInviteCreateRequest": {
         "type": "object",
         "properties": {
           "email": {
@@ -377,8 +469,7 @@
             "type": "string",
             "enum": [
               "admin",
-              "member",
-              "viewer"
+              "member"
             ]
           },
           "expiresInDays": {
@@ -392,7 +483,7 @@
           "role"
         ]
       },
-      "TenantInviteCreateResponse": {
+      "WorkspaceInviteCreateResponse": {
         "type": "object",
         "properties": {
           "inviteId": {
@@ -414,23 +505,21 @@
           "token"
         ]
       },
-      "TenantInviteAcceptResponse": {
+      "WorkspaceInviteAcceptResponse": {
         "type": "object",
         "properties": {
           "joined": {
             "type": "boolean"
           },
-          "tenantSlug": {
+          "workspaceSlug": {
             "type": "string",
             "minLength": 1
           },
           "role": {
             "type": "string",
             "enum": [
-              "owner",
               "admin",
-              "member",
-              "viewer"
+              "member"
             ]
           },
           "status": {
@@ -444,7 +533,7 @@
         },
         "required": [
           "joined",
-          "tenantSlug",
+          "workspaceSlug",
           "role",
           "status"
         ]
@@ -452,7 +541,7 @@
       "AgentThreadCreateRequest": {
         "type": "object",
         "properties": {
-          "tenantSlug": {
+          "workspaceSlug": {
             "type": "string",
             "minLength": 1
           },
@@ -478,7 +567,7 @@
           }
         },
         "required": [
-          "tenantSlug"
+          "workspaceSlug"
         ]
       },
       "AgentThreadCreateResponse": {
@@ -491,11 +580,11 @@
                 "type": "string",
                 "minLength": 1
               },
-              "tenantId": {
+              "workspaceId": {
                 "type": "string",
                 "minLength": 1
               },
-              "tenantSlug": {
+              "workspaceSlug": {
                 "type": "string",
                 "minLength": 1
               },
@@ -555,8 +644,8 @@
             },
             "required": [
               "threadId",
-              "tenantId",
-              "tenantSlug",
+              "workspaceId",
+              "workspaceSlug",
               "executionMode",
               "executionHost",
               "status",
@@ -579,11 +668,11 @@
                 "type": "string",
                 "minLength": 1
               },
-              "tenantId": {
+              "workspaceId": {
                 "type": "string",
                 "minLength": 1
               },
-              "tenantSlug": {
+              "workspaceSlug": {
                 "type": "string",
                 "minLength": 1
               },
@@ -643,8 +732,8 @@
             },
             "required": [
               "threadId",
-              "tenantId",
-              "tenantSlug",
+              "workspaceId",
+              "workspaceSlug",
               "executionMode",
               "executionHost",
               "status",
@@ -689,11 +778,11 @@
                 "type": "string",
                 "minLength": 1
               },
-              "tenantId": {
+              "workspaceId": {
                 "type": "string",
                 "minLength": 1
               },
-              "tenantSlug": {
+              "workspaceSlug": {
                 "type": "string",
                 "minLength": 1
               },
@@ -753,8 +842,8 @@
             },
             "required": [
               "threadId",
-              "tenantId",
-              "tenantSlug",
+              "workspaceId",
+              "workspaceSlug",
               "executionMode",
               "executionHost",
               "status",
@@ -1415,7 +1504,7 @@
     "/v1/auth/me": {
       "get": {
         "operationId": "getAuthMe",
-        "summary": "Return current authenticated user and memberships",
+        "summary": "Return current authenticated user with organizations and workspaces",
         "tags": [
           "Auth"
         ],
@@ -1464,20 +1553,20 @@
                         "id"
                       ]
                     },
-                    "memberships": {
+                    "organizations": {
                       "type": "array",
                       "items": {
                         "type": "object",
                         "properties": {
-                          "tenantId": {
+                          "organizationId": {
                             "type": "string",
                             "minLength": 1
                           },
-                          "tenantSlug": {
+                          "organizationSlug": {
                             "type": "string",
                             "minLength": 1
                           },
-                          "tenantName": {
+                          "organizationName": {
                             "type": "string",
                             "minLength": 1
                           },
@@ -1486,8 +1575,7 @@
                             "enum": [
                               "owner",
                               "admin",
-                              "member",
-                              "viewer"
+                              "member"
                             ]
                           },
                           "status": {
@@ -1500,15 +1588,83 @@
                           }
                         },
                         "required": [
-                          "tenantId",
-                          "tenantSlug",
-                          "tenantName",
+                          "organizationId",
+                          "organizationSlug",
+                          "organizationName",
                           "role",
                           "status"
                         ]
                       }
                     },
-                    "lastActiveTenantSlug": {
+                    "workspaces": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "organizationId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "organizationSlug": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "organizationName": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "slug": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "isPersonal": {
+                            "type": "boolean"
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "admin",
+                              "member"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "invited",
+                              "disabled"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "organizationSlug",
+                          "organizationName",
+                          "slug",
+                          "name",
+                          "isPersonal",
+                          "role",
+                          "status"
+                        ]
+                      }
+                    },
+                    "activeWorkspaceSlug": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "minLength": 1
+                    },
+                    "personalWorkspaceSlug": {
                       "type": [
                         "string",
                         "null"
@@ -1518,7 +1674,8 @@
                   },
                   "required": [
                     "authenticated",
-                    "memberships"
+                    "organizations",
+                    "workspaces"
                   ]
                 }
               }
@@ -1570,12 +1727,12 @@
         }
       }
     },
-    "/v1/tenants": {
+    "/v1/workspaces": {
       "post": {
-        "operationId": "createTenant",
-        "summary": "Create a tenant and owner membership",
+        "operationId": "createWorkspace",
+        "summary": "Create a workspace",
         "tags": [
-          "Tenants"
+          "Workspaces"
         ],
         "security": [
           {
@@ -1610,16 +1767,20 @@
         },
         "responses": {
           "201": {
-            "description": "Tenant created",
+            "description": "Workspace created",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "tenant": {
+                    "workspace": {
                       "type": "object",
                       "properties": {
                         "id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "organizationId": {
                           "type": "string",
                           "minLength": 1
                         },
@@ -1631,6 +1792,9 @@
                           "type": "string",
                           "minLength": 1
                         },
+                        "isPersonal": {
+                          "type": "boolean"
+                        },
                         "status": {
                           "type": "string",
                           "enum": [
@@ -1641,8 +1805,10 @@
                       },
                       "required": [
                         "id",
+                        "organizationId",
                         "slug",
                         "name",
+                        "isPersonal",
                         "status"
                       ]
                     },
@@ -1652,10 +1818,8 @@
                         "role": {
                           "type": "string",
                           "enum": [
-                            "owner",
                             "admin",
-                            "member",
-                            "viewer"
+                            "member"
                           ]
                         },
                         "status": {
@@ -1674,7 +1838,7 @@
                     }
                   },
                   "required": [
-                    "tenant",
+                    "workspace",
                     "membership"
                   ]
                 }
@@ -1732,12 +1896,12 @@
         }
       }
     },
-    "/v1/tenants/{tenantSlug}": {
+    "/v1/workspaces/{workspaceSlug}": {
       "get": {
-        "operationId": "getTenant",
-        "summary": "Read tenant metadata",
+        "operationId": "getWorkspace",
+        "summary": "Read workspace metadata",
         "tags": [
-          "Tenants"
+          "Workspaces"
         ],
         "security": [
           {
@@ -1751,22 +1915,34 @@
               "minLength": 1
             },
             "required": true,
-            "name": "tenantSlug",
+            "name": "workspaceSlug",
             "in": "path"
           }
         ],
         "responses": {
           "200": {
-            "description": "Tenant details",
+            "description": "Workspace details",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "tenant": {
+                    "workspace": {
                       "type": "object",
                       "properties": {
                         "id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "organizationId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "organizationSlug": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "organizationName": {
                           "type": "string",
                           "minLength": 1
                         },
@@ -1778,6 +1954,9 @@
                           "type": "string",
                           "minLength": 1
                         },
+                        "isPersonal": {
+                          "type": "boolean"
+                        },
                         "status": {
                           "type": "string",
                           "enum": [
@@ -1788,14 +1967,18 @@
                       },
                       "required": [
                         "id",
+                        "organizationId",
+                        "organizationSlug",
+                        "organizationName",
                         "slug",
                         "name",
+                        "isPersonal",
                         "status"
                       ]
                     }
                   },
                   "required": [
-                    "tenant"
+                    "workspace"
                   ]
                 }
               }
@@ -1850,7 +2033,7 @@
             }
           },
           "404": {
-            "description": "Tenant not found",
+            "description": "Workspace not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -1876,12 +2059,12 @@
         }
       }
     },
-    "/v1/tenants/{tenantSlug}/members": {
+    "/v1/workspaces/{workspaceSlug}/members": {
       "get": {
-        "operationId": "listTenantMembers",
-        "summary": "List tenant members",
+        "operationId": "listWorkspaceMembers",
+        "summary": "List workspace members",
         "tags": [
-          "Tenants"
+          "Workspaces"
         ],
         "security": [
           {
@@ -1895,13 +2078,13 @@
               "minLength": 1
             },
             "required": true,
-            "name": "tenantSlug",
+            "name": "workspaceSlug",
             "in": "path"
           }
         ],
         "responses": {
           "200": {
-            "description": "Tenant members",
+            "description": "Workspace members",
             "content": {
               "application/json": {
                 "schema": {
@@ -1933,10 +2116,8 @@
                           "role": {
                             "type": "string",
                             "enum": [
-                              "owner",
                               "admin",
-                              "member",
-                              "viewer"
+                              "member"
                             ]
                           },
                           "status": {
@@ -2012,7 +2193,7 @@
             }
           },
           "404": {
-            "description": "Tenant not found",
+            "description": "Workspace not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -2038,12 +2219,12 @@
         }
       }
     },
-    "/v1/tenants/{tenantSlug}/invites": {
+    "/v1/workspaces/{workspaceSlug}/invites": {
       "post": {
-        "operationId": "createTenantInvite",
-        "summary": "Create tenant invite",
+        "operationId": "createWorkspaceInvite",
+        "summary": "Create workspace invite",
         "tags": [
-          "Tenants"
+          "Workspaces"
         ],
         "security": [
           {
@@ -2057,7 +2238,7 @@
               "minLength": 1
             },
             "required": true,
-            "name": "tenantSlug",
+            "name": "workspaceSlug",
             "in": "path"
           }
         ],
@@ -2075,8 +2256,7 @@
                     "type": "string",
                     "enum": [
                       "admin",
-                      "member",
-                      "viewer"
+                      "member"
                     ]
                   },
                   "expiresInDays": {
@@ -2172,7 +2352,7 @@
             }
           },
           "404": {
-            "description": "Tenant not found",
+            "description": "Workspace not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -2198,12 +2378,12 @@
         }
       }
     },
-    "/v1/tenants/{tenantSlug}/invites/{token}/accept": {
+    "/v1/workspaces/{workspaceSlug}/invites/{token}/accept": {
       "post": {
-        "operationId": "acceptTenantInvite",
-        "summary": "Accept tenant invite",
+        "operationId": "acceptWorkspaceInvite",
+        "summary": "Accept workspace invite",
         "tags": [
-          "Tenants"
+          "Workspaces"
         ],
         "security": [
           {
@@ -2217,7 +2397,7 @@
               "minLength": 1
             },
             "required": true,
-            "name": "tenantSlug",
+            "name": "workspaceSlug",
             "in": "path"
           },
           {
@@ -2241,17 +2421,15 @@
                     "joined": {
                       "type": "boolean"
                     },
-                    "tenantSlug": {
+                    "workspaceSlug": {
                       "type": "string",
                       "minLength": 1
                     },
                     "role": {
                       "type": "string",
                       "enum": [
-                        "owner",
                         "admin",
-                        "member",
-                        "viewer"
+                        "member"
                       ]
                     },
                     "status": {
@@ -2265,7 +2443,7 @@
                   },
                   "required": [
                     "joined",
-                    "tenantSlug",
+                    "workspaceSlug",
                     "role",
                     "status"
                   ]
@@ -2390,7 +2568,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "tenantSlug": {
+                  "workspaceSlug": {
                     "type": "string",
                     "minLength": 1
                   },
@@ -2416,7 +2594,7 @@
                   }
                 },
                 "required": [
-                  "tenantSlug"
+                  "workspaceSlug"
                 ]
               }
             }
@@ -2437,11 +2615,11 @@
                           "type": "string",
                           "minLength": 1
                         },
-                        "tenantId": {
+                        "workspaceId": {
                           "type": "string",
                           "minLength": 1
                         },
-                        "tenantSlug": {
+                        "workspaceSlug": {
                           "type": "string",
                           "minLength": 1
                         },
@@ -2501,8 +2679,8 @@
                       },
                       "required": [
                         "threadId",
-                        "tenantId",
-                        "tenantSlug",
+                        "workspaceId",
+                        "workspaceSlug",
                         "executionMode",
                         "executionHost",
                         "status",
@@ -2631,11 +2809,11 @@
                           "type": "string",
                           "minLength": 1
                         },
-                        "tenantId": {
+                        "workspaceId": {
                           "type": "string",
                           "minLength": 1
                         },
-                        "tenantSlug": {
+                        "workspaceSlug": {
                           "type": "string",
                           "minLength": 1
                         },
@@ -2695,8 +2873,8 @@
                       },
                       "required": [
                         "threadId",
-                        "tenantId",
-                        "tenantSlug",
+                        "workspaceId",
+                        "workspaceSlug",
                         "executionMode",
                         "executionHost",
                         "status",
@@ -2853,11 +3031,11 @@
                           "type": "string",
                           "minLength": 1
                         },
-                        "tenantId": {
+                        "workspaceId": {
                           "type": "string",
                           "minLength": 1
                         },
-                        "tenantSlug": {
+                        "workspaceSlug": {
                           "type": "string",
                           "minLength": 1
                         },
@@ -2917,8 +3095,8 @@
                       },
                       "required": [
                         "threadId",
-                        "tenantId",
-                        "tenantSlug",
+                        "workspaceId",
+                        "workspaceSlug",
                         "executionMode",
                         "executionHost",
                         "status",

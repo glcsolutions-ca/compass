@@ -4,8 +4,8 @@ export type AgentThreadStatus = "idle" | "inProgress" | "completed" | "interrupt
 
 export interface AgentThread {
   threadId: string;
-  tenantId: string | null;
-  tenantSlug: string | null;
+  workspaceId: string | null;
+  workspaceSlug: string | null;
   executionMode: AgentExecutionMode;
   executionHost: AgentExecutionHost;
   status: AgentThreadStatus;

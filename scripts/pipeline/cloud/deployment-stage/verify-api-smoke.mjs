@@ -150,7 +150,7 @@ async function main() {
         ...(apiSmokeSessionCookie ? { cookie: apiSmokeSessionCookie } : {})
       },
       body: JSON.stringify({
-        tenantSlug: "smoke",
+        workspaceSlug: "smoke",
         executionMode: "cloud"
       })
     });

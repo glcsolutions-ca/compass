@@ -40,11 +40,12 @@ Define the non-negotiable implementation contract for `apps/web` so the frontend
 
 6. **Chat-first onboarding authority**
    - Authenticated users must land directly in `/chat`.
-   - Chat remains workspace-backed internally through `tenantSlug` on agent-thread APIs.
+   - `/chat` must be a redirector that resolves to `/w/:workspaceSlug/chat`.
+   - Chat remains workspace-backed internally through `workspaceSlug` on agent-thread APIs.
    - Backend auth contract must auto-provision a personal workspace membership for every authenticated user.
-   - Frontend chat context resolution must use real memberships from `/v1/auth/me` and must not use hardcoded slug fallbacks.
+   - Frontend chat context resolution must use real workspace memberships from `/v1/auth/me` and must not use hardcoded slug fallbacks.
    - Workspace management remains available at `/workspaces` for collaboration/admin flows.
-   - Thread deep-linking must be first class via `/chat/:threadId`.
+   - Thread deep-linking must be first class via `/w/:workspaceSlug/chat/:threadId`.
 
 7. **Persistent authenticated shell**
    - Authenticated routes render a single shared shell layout.
@@ -108,6 +109,7 @@ apps/web/app/
     app/layout/route.tsx
     app/automations/route.tsx
     app/skills/route.tsx
+    app/chat-redirect/route.tsx
     app/workspaces/route.tsx
     app/chat/route.tsx
 ```
@@ -119,8 +121,9 @@ apps/web/app/
 - `/automations` -> authenticated automations placeholder
 - `/skills` -> authenticated skills placeholder
 - `/workspaces` -> authenticated workspace management
-- `/chat` -> authenticated personal chat
-- `/chat/:threadId` -> authenticated chat thread deep-link
+- `/chat` -> authenticated redirect to active workspace chat
+- `/w/:workspaceSlug/chat` -> authenticated workspace chat
+- `/w/:workspaceSlug/chat/:threadId` -> authenticated workspace thread deep-link
 
 ## Runtime Constraints
 

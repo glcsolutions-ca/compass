@@ -335,7 +335,22 @@ function SidebarAccountMenu({
 
 export function AppSidebar({ auth, buildSettingsHref }: AppSidebarProps) {
   const location = useLocation();
-  const newThreadHref = useMemo(() => buildNewThreadHref(), []);
+  const workspaces = auth.workspaces ?? [];
+  const defaultWorkspaceSlug = useMemo(() => {
+    return (
+      auth.personalWorkspaceSlug?.trim() ||
+      auth.activeWorkspaceSlug?.trim() ||
+      workspaces.find((workspace) => workspace.status === "active")?.slug ||
+      ""
+    );
+  }, [auth.activeWorkspaceSlug, auth.personalWorkspaceSlug, workspaces]);
+  const newThreadHref = useMemo(() => {
+    if (!defaultWorkspaceSlug) {
+      return "/chat";
+    }
+
+    return buildNewThreadHref({ workspaceSlug: defaultWorkspaceSlug });
+  }, [defaultWorkspaceSlug]);
 
   const utilityItems: UtilityNavItem[] = [
     {
@@ -361,9 +376,12 @@ export function AppSidebar({ auth, buildSettingsHref }: AppSidebarProps) {
   const primaryItems: PrimaryNavItem[] = [
     {
       label: "Chat",
-      to: "/chat",
+      to: defaultWorkspaceSlug ? `/w/${encodeURIComponent(defaultWorkspaceSlug)}/chat` : "/chat",
       icon: MessageSquareText,
-      active: location.pathname === "/chat" || location.pathname.startsWith("/chat/")
+      active:
+        location.pathname === "/chat" ||
+        location.pathname.startsWith("/chat/") ||
+        /^\/w\/[^/]+\/chat(?:\/|$)/u.test(location.pathname)
     },
     {
       label: "Workspaces",
@@ -434,7 +452,45 @@ export function AppSidebar({ auth, buildSettingsHref }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <ChatThreadRail pathname={location.pathname} />
+        <SidebarGroup className="px-0 pt-0">
+          <SidebarGroupLabel className="px-3 text-[10px] uppercase tracking-[0.14em] text-sidebar-foreground/60">
+            Workspaces
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {workspaces
+                .filter((workspace) => workspace.status === "active")
+                .map((workspace) => {
+                  const href = `/w/${encodeURIComponent(workspace.slug)}/chat`;
+                  const active =
+                    location.pathname === href ||
+                    location.pathname.startsWith(`${href}/`) ||
+                    (location.pathname === "/chat" && workspace.slug === defaultWorkspaceSlug);
+
+                  return (
+                    <SidebarMenuItem key={workspace.id}>
+                      <SidebarMenuButton asChild isActive={active} tooltip={workspace.name}>
+                        <Link
+                          aria-current={active ? "page" : undefined}
+                          aria-label={workspace.name}
+                          to={href}
+                        >
+                          <span>{workspace.name}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {defaultWorkspaceSlug ? (
+          <ChatThreadRail
+            defaultWorkspaceSlug={defaultWorkspaceSlug}
+            pathname={location.pathname}
+          />
+        ) : null}
       </SidebarContent>
 
       <SidebarSeparator />

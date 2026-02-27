@@ -6,7 +6,7 @@ import {
   startAgentTurn,
   switchAgentThreadMode
 } from "~/features/chat/agent-client";
-import { resolveThreadCreateTenantSlug } from "~/features/chat/chat-context";
+import { resolveThreadCreateWorkspaceSlug } from "~/features/chat/chat-context";
 import {
   ChatExecutionModeSchema,
   ChatIntentSchema,
@@ -49,9 +49,11 @@ function createErrorAction(input: {
 
 export async function submitChatAction({
   request,
+  workspaceSlug,
   threadId
 }: {
   request: Request;
+  workspaceSlug: string | undefined;
   threadId: string | undefined;
 }): Promise<Response | ChatActionData> {
   const formData = await request.formData();
@@ -171,9 +173,9 @@ export async function submitChatAction({
       return auth;
     }
 
-    let tenantSlug: string;
+    let resolvedWorkspaceSlug: string;
     try {
-      tenantSlug = resolveThreadCreateTenantSlug(auth);
+      resolvedWorkspaceSlug = workspaceSlug?.trim() || resolveThreadCreateWorkspaceSlug(auth);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unable to resolve workspace context.";
@@ -186,7 +188,7 @@ export async function submitChatAction({
     }
 
     const createThreadResult = await createAgentThread(request, {
-      tenantSlug,
+      workspaceSlug: resolvedWorkspaceSlug,
       executionMode,
       title: prompt.slice(0, 80)
     });

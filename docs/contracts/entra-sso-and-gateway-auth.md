@@ -5,7 +5,7 @@ This document records the v1 Entra-only auth contract for Compass API and web en
 ## Scope
 
 - API auth endpoints in `apps/api`
-- Tenant membership and invite endpoints in `apps/api`
+- Organization/workspace membership and invite endpoints in `apps/api`
 - Web front-door and workspace routes in `apps/web`
 - OpenAPI + SDK contract generation in `packages/contracts` and `packages/sdk`
 
@@ -16,13 +16,16 @@ Routes:
 - `GET /`
 - `GET /login`
 - `GET /chat`
+- `GET /w/:workspaceSlug/chat`
+- `GET /w/:workspaceSlug/chat/:threadId`
 - `GET /workspaces`
 
 Expected behavior:
 
 - `/` redirects to `/chat` for authenticated users and `/login` for unauthenticated users.
 - `/login` renders “Sign in with Microsoft” and redirects authenticated users to `/chat`.
-- `/chat` is available for any authenticated user because auth auto-provisions a personal workspace membership when needed.
+- `/chat` resolves to `/w/:workspaceSlug/chat` (personal-first by default).
+- `/w/:workspaceSlug/chat` is available for authenticated users with active workspace membership.
 - `/workspaces` provides optional workspace management and invite flows.
 
 ## Auth API Contract
@@ -46,21 +49,21 @@ Behavior:
 - Auth endpoints are rate limited per client IP.
 - Cookie-authenticated state-changing endpoints enforce same-origin CSRF checks using `Origin`/`Referer`.
 
-## Tenant and Invite API Contract
+## Workspace and Invite API Contract
 
 Routes:
 
-- `POST /v1/tenants`
-- `GET /v1/tenants/:tenantSlug`
-- `GET /v1/tenants/:tenantSlug/members`
-- `POST /v1/tenants/:tenantSlug/invites`
-- `POST /v1/tenants/:tenantSlug/invites/:token/accept`
+- `POST /v1/workspaces`
+- `GET /v1/workspaces/:workspaceSlug`
+- `GET /v1/workspaces/:workspaceSlug/members`
+- `POST /v1/workspaces/:workspaceSlug/invites`
+- `POST /v1/workspaces/:workspaceSlug/invites/:token/accept`
 
 Behavior:
 
-- Tenant context comes from URL slug only.
+- Workspace context comes from URL slug only.
 - Membership checks are server-side and default deny.
-- Invite creation is restricted to `owner`/`admin` roles.
+- Invite creation is restricted to workspace `admin` role.
 - Invite acceptance validates token, expiry, and authenticated email match.
 
 ## OpenAPI Metadata Contract
@@ -69,7 +72,7 @@ Behavior:
 
 - all routes listed above
 - `sessionCookieAuth` security scheme (cookie `__Host-compass_session`)
-- operation-level security for protected routes (`/v1/auth/me`, `/v1/auth/logout`, `/v1/tenants/**`)
+- operation-level security for protected routes (`/v1/auth/me`, `/v1/auth/logout`, `/v1/workspaces/**`)
 
 Validation command:
 

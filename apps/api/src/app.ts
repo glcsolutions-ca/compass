@@ -6,8 +6,8 @@ import {
   AgentThreadCreateRequestSchema,
   AgentThreadModePatchRequestSchema,
   AgentTurnStartRequestSchema,
-  TenantCreateRequestSchema,
-  TenantInviteCreateRequestSchema,
+  WorkspaceCreateRequestSchema,
+  WorkspaceInviteCreateRequestSchema,
   buildOpenApiDocument
 } from "@compass/contracts";
 import { z } from "zod";
@@ -38,12 +38,12 @@ interface ApiAppOptions {
   authRateLimitMaxEntries?: number;
 }
 
-const TenantSlugParamsSchema = z.object({
-  tenantSlug: z.string().min(1)
+const WorkspaceSlugParamsSchema = z.object({
+  workspaceSlug: z.string().min(1)
 });
 
 const InviteTokenParamsSchema = z.object({
-  tenantSlug: z.string().min(1),
+  workspaceSlug: z.string().min(1),
   token: z.string().min(1)
 });
 
@@ -622,19 +622,19 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
     }
   });
 
-  app.post("/v1/tenants", async (request, response) => {
+  app.post("/v1/workspaces", async (request, response) => {
     if (!authService) {
       response.status(503).json({ code: "AUTH_NOT_CONFIGURED", message: "Auth is not configured" });
       return;
     }
 
-    const body = parseOrReply(request.body, TenantCreateRequestSchema, response);
+    const body = parseOrReply(request.body, WorkspaceCreateRequestSchema, response);
     if (!body) {
       return;
     }
 
     try {
-      const result = await authService.createTenant({
+      const result = await authService.createWorkspace({
         sessionToken: currentSessionToken(request),
         request: body,
         now: now()
@@ -646,21 +646,21 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
     }
   });
 
-  app.get("/v1/tenants/:tenantSlug", async (request, response) => {
+  app.get("/v1/workspaces/:workspaceSlug", async (request, response) => {
     if (!authService) {
       response.status(503).json({ code: "AUTH_NOT_CONFIGURED", message: "Auth is not configured" });
       return;
     }
 
-    const params = parseOrReply(request.params, TenantSlugParamsSchema, response);
+    const params = parseOrReply(request.params, WorkspaceSlugParamsSchema, response);
     if (!params) {
       return;
     }
 
     try {
-      const result = await authService.readTenant({
+      const result = await authService.readWorkspace({
         sessionToken: currentSessionToken(request),
-        tenantSlug: params.tenantSlug,
+        workspaceSlug: params.workspaceSlug,
         now: now()
       });
       response.status(200).json(result);
@@ -669,21 +669,21 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
     }
   });
 
-  app.get("/v1/tenants/:tenantSlug/members", async (request, response) => {
+  app.get("/v1/workspaces/:workspaceSlug/members", async (request, response) => {
     if (!authService) {
       response.status(503).json({ code: "AUTH_NOT_CONFIGURED", message: "Auth is not configured" });
       return;
     }
 
-    const params = parseOrReply(request.params, TenantSlugParamsSchema, response);
+    const params = parseOrReply(request.params, WorkspaceSlugParamsSchema, response);
     if (!params) {
       return;
     }
 
     try {
-      const result = await authService.listTenantMembers({
+      const result = await authService.listWorkspaceMembers({
         sessionToken: currentSessionToken(request),
-        tenantSlug: params.tenantSlug,
+        workspaceSlug: params.workspaceSlug,
         now: now()
       });
       response.status(200).json(result);
@@ -692,26 +692,26 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
     }
   });
 
-  app.post("/v1/tenants/:tenantSlug/invites", async (request, response) => {
+  app.post("/v1/workspaces/:workspaceSlug/invites", async (request, response) => {
     if (!authService) {
       response.status(503).json({ code: "AUTH_NOT_CONFIGURED", message: "Auth is not configured" });
       return;
     }
 
-    const params = parseOrReply(request.params, TenantSlugParamsSchema, response);
+    const params = parseOrReply(request.params, WorkspaceSlugParamsSchema, response);
     if (!params) {
       return;
     }
 
-    const body = parseOrReply(request.body, TenantInviteCreateRequestSchema, response);
+    const body = parseOrReply(request.body, WorkspaceInviteCreateRequestSchema, response);
     if (!body) {
       return;
     }
 
     try {
-      const result = await authService.createTenantInvite({
+      const result = await authService.createWorkspaceInvite({
         sessionToken: currentSessionToken(request),
-        tenantSlug: params.tenantSlug,
+        workspaceSlug: params.workspaceSlug,
         request: body,
         now: now()
       });
@@ -721,7 +721,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
     }
   });
 
-  app.post("/v1/tenants/:tenantSlug/invites/:token/accept", async (request, response) => {
+  app.post("/v1/workspaces/:workspaceSlug/invites/:token/accept", async (request, response) => {
     if (!authService) {
       response.status(503).json({ code: "AUTH_NOT_CONFIGURED", message: "Auth is not configured" });
       return;
@@ -733,9 +733,9 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
     }
 
     try {
-      const result = await authService.acceptTenantInvite({
+      const result = await authService.acceptWorkspaceInvite({
         sessionToken: currentSessionToken(request),
-        tenantSlug: params.tenantSlug,
+        workspaceSlug: params.workspaceSlug,
         inviteToken: params.token,
         now: now()
       });
@@ -816,7 +816,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
     try {
       const thread = await agentService.createThread({
         userId: actor.userId,
-        tenantSlug: body.tenantSlug,
+        workspaceSlug: body.workspaceSlug,
         executionMode: body.executionMode ?? "cloud",
         executionHost: body.executionHost,
         title: body.title,

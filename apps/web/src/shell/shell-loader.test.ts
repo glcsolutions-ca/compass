@@ -28,16 +28,30 @@ describe("shell loader", () => {
             primaryEmail: "user@example.com",
             displayName: "User Example"
           },
-          memberships: [
+          organizations: [
             {
-              tenantId: "t_1",
-              tenantSlug: "acme",
-              tenantName: "Acme",
+              organizationId: "org_1",
+              organizationSlug: "acme-org",
+              organizationName: "Acme Org",
               role: "owner",
               status: "active"
             }
           ],
-          lastActiveTenantSlug: "acme"
+          workspaces: [
+            {
+              id: "ws_personal",
+              organizationId: "org_1",
+              organizationSlug: "acme-org",
+              organizationName: "Acme Org",
+              slug: "personal-user-1",
+              name: "Personal Workspace",
+              isPersonal: true,
+              role: "admin",
+              status: "active"
+            }
+          ],
+          activeWorkspaceSlug: "personal-user-1",
+          personalWorkspaceSlug: "personal-user-1"
         }),
         {
           status: 200,
@@ -57,16 +71,30 @@ describe("shell loader", () => {
         primaryEmail: "user@example.com",
         displayName: "User Example"
       },
-      memberships: [
+      organizations: [
         {
-          tenantId: "t_1",
-          tenantSlug: "acme",
-          tenantName: "Acme",
+          organizationId: "org_1",
+          organizationSlug: "acme-org",
+          organizationName: "Acme Org",
           role: "owner",
           status: "active"
         }
       ],
-      lastActiveTenantSlug: "acme"
+      workspaces: [
+        {
+          id: "ws_personal",
+          organizationId: "org_1",
+          organizationSlug: "acme-org",
+          organizationName: "Acme Org",
+          slug: "personal-user-1",
+          name: "Personal Workspace",
+          isPersonal: true,
+          role: "admin",
+          status: "active"
+        }
+      ],
+      activeWorkspaceSlug: "personal-user-1",
+      personalWorkspaceSlug: "personal-user-1"
     });
   });
 

@@ -12,8 +12,8 @@ export const AgentThreadStatusSchema = z.enum([
 
 export const AgentThreadSchema = z.object({
   threadId: z.string().min(1),
-  tenantId: z.string().min(1),
-  tenantSlug: z.string().min(1),
+  workspaceId: z.string().min(1),
+  workspaceSlug: z.string().min(1),
   executionMode: AgentExecutionModeSchema,
   executionHost: AgentExecutionHostSchema,
   status: AgentThreadStatusSchema,
@@ -25,7 +25,7 @@ export const AgentThreadSchema = z.object({
 });
 
 export const AgentThreadCreateRequestSchema = z.object({
-  tenantSlug: z.string().min(1),
+  workspaceSlug: z.string().min(1),
   executionMode: AgentExecutionModeSchema.default("cloud"),
   executionHost: AgentExecutionHostSchema.optional(),
   title: z.string().trim().min(1).max(200).optional()

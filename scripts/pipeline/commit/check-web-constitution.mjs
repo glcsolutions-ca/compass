@@ -34,6 +34,7 @@ const REQUIRED_PATHS = [
   "apps/web/app/routes/app/layout/route.tsx",
   "apps/web/app/routes/app/automations/route.tsx",
   "apps/web/app/routes/app/skills/route.tsx",
+  "apps/web/app/routes/app/chat-redirect/route.tsx",
   "apps/web/app/routes/app/workspaces/route.tsx",
   "apps/web/app/routes/app/chat/route.tsx"
 ];
@@ -257,9 +258,15 @@ function validateRouteMap(cwd, violations) {
   }
 
   const source = readFileSync(routesPath, "utf8");
-  if (!source.includes('route("chat/:threadId?", "routes/app/chat/route.tsx")')) {
+  if (!source.includes('route("chat", "routes/app/chat-redirect/route.tsx")')) {
     violations.push(
-      'routes.ts must register optional-thread chat route via route("chat/:threadId?", "routes/app/chat/route.tsx").'
+      'routes.ts must register /chat redirect route via route("chat", "routes/app/chat-redirect/route.tsx").'
+    );
+  }
+
+  if (!source.includes('route("w/:workspaceSlug/chat/:threadId?", "routes/app/chat/route.tsx")')) {
+    violations.push(
+      'routes.ts must register workspace-scoped chat route via route("w/:workspaceSlug/chat/:threadId?", "routes/app/chat/route.tsx").'
     );
   }
 
@@ -349,7 +356,7 @@ function validateChatExperienceCutover(cwd, violations) {
 
   if (chatContextSource.includes('return "personal"')) {
     violations.push(
-      "chat context resolution must not hardcode a personal tenant slug fallback. Resolve from /v1/auth/me memberships only."
+      "chat context resolution must not hardcode a personal workspace slug fallback. Resolve from /v1/auth/me workspaces only."
     );
   }
 }

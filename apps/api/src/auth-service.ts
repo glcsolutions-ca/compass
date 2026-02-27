@@ -4,13 +4,13 @@ import { Pool } from "pg";
 import { z } from "zod";
 import {
   AuthMeResponseSchema,
-  MembershipRoleSchema,
-  TenantCreateRequestSchema,
-  TenantInviteCreateRequestSchema,
+  OrganizationMembershipRoleSchema,
+  WorkspaceCreateRequestSchema,
+  WorkspaceInviteCreateRequestSchema,
   type AuthMeResponse,
-  type MembershipRole,
-  type TenantCreateRequest,
-  type TenantInviteCreateRequest
+  type OrganizationMembershipRole,
+  type WorkspaceCreateRequest,
+  type WorkspaceInviteCreateRequest
 } from "@compass/contracts";
 
 export const SESSION_COOKIE_NAME = "__Host-compass_session";
@@ -86,18 +86,34 @@ interface UserRecord {
   displayName: string | null;
 }
 
-interface MembershipRecord {
-  tenantId: string;
-  tenantSlug: string;
-  tenantName: string;
-  role: MembershipRole;
+interface OrganizationMembershipRecord {
+  organizationId: string;
+  organizationSlug: string;
+  organizationName: string;
+  role: OrganizationMembershipRole;
   status: "active" | "invited" | "disabled";
 }
 
-interface TenantRecord {
+interface WorkspaceMembershipRecord {
+  workspaceId: string;
+  workspaceSlug: string;
+  workspaceName: string;
+  organizationId: string;
+  organizationSlug: string;
+  organizationName: string;
+  isPersonal: boolean;
+  role: "admin" | "member";
+  status: "active" | "invited" | "disabled";
+}
+
+interface WorkspaceRecord {
   id: string;
+  organizationId: string;
+  organizationSlug: string;
+  organizationName: string;
   slug: string;
   name: string;
+  isPersonal: boolean;
   status: "active" | "disabled";
 }
 
@@ -120,20 +136,25 @@ interface OidcRequestRecord {
 
 interface InviteRecord {
   id: string;
-  tenantId: string;
-  tenantSlug: string;
+  workspaceId: string;
+  workspaceSlug: string;
+  organizationId: string;
   emailNormalized: string;
-  role: MembershipRole;
+  role: "admin" | "member";
   expiresAt: string;
   acceptedAt: string | null;
   acceptedByUserId: string | null;
 }
 
-interface TenantMembershipCheck {
-  tenantId: string;
-  tenantSlug: string;
-  tenantName: string;
-  membershipRole: MembershipRole;
+interface WorkspaceMembershipCheck {
+  workspaceId: string;
+  workspaceSlug: string;
+  workspaceName: string;
+  organizationId: string;
+  organizationSlug: string;
+  organizationName: string;
+  isPersonal: boolean;
+  membershipRole: "admin" | "member";
   membershipStatus: "active" | "invited" | "disabled";
 }
 
@@ -302,7 +323,7 @@ function sanitizeReturnTo(returnTo: string | undefined): string | null {
 }
 
 function normalizePostLoginReturnTo(returnTo: string): string {
-  if (/^\/t\/[a-z0-9-]+(?:\/|$)/u.test(returnTo)) {
+  if (/^\/(?:t|w)\/[a-z0-9-]+(?:\/|$)/u.test(returnTo)) {
     return "/chat";
   }
 
@@ -343,13 +364,17 @@ function extractClientIp(forwardedFor: string | undefined, fallback: string | un
   return forwarded || asStringOrNull(fallback) || "unknown";
 }
 
-function toMembershipRole(value: unknown): MembershipRole {
-  const parsed = MembershipRoleSchema.safeParse(value);
+function toOrganizationRole(value: unknown): OrganizationMembershipRole {
+  const parsed = OrganizationMembershipRoleSchema.safeParse(value);
   if (!parsed.success) {
-    throw new Error(`Unexpected membership role '${String(value)}'`);
+    throw new Error(`Unexpected organization role '${String(value)}'`);
   }
 
   return parsed.data;
+}
+
+function toWorkspaceRole(value: unknown): "admin" | "member" {
+  return value === "admin" ? "admin" : "member";
 }
 
 export class EntraOidcClient implements OidcClient {
@@ -516,6 +541,11 @@ export class AuthRepository {
         auth_audit_events,
         auth_sessions,
         auth_oidc_requests,
+        workspace_invites,
+        workspace_memberships,
+        workspaces,
+        organization_memberships,
+        organizations,
         invites,
         memberships,
         identities,
@@ -799,36 +829,83 @@ export class AuthRepository {
     );
   }
 
-  async listMemberships(userId: string): Promise<MembershipRecord[]> {
+  async listOrganizationMemberships(userId: string): Promise<OrganizationMembershipRecord[]> {
     const result = await this.pool.query<{
-      tenant_id: string;
-      tenant_slug: string;
-      tenant_name: string;
+      organization_id: string;
+      organization_slug: string;
+      organization_name: string;
       role: string;
       status: "active" | "invited" | "disabled";
     }>(
       `
         select
-          m.tenant_id,
-          t.slug as tenant_slug,
-          t.name as tenant_name,
-          m.role,
-          m.status
-        from memberships m
-        join tenants t on t.id = m.tenant_id
-        where m.user_id = $1
+          om.organization_id,
+          o.slug as organization_slug,
+          o.name as organization_name,
+          om.role,
+          om.status
+        from organization_memberships om
+        join organizations o on o.id = om.organization_id
+        where om.user_id = $1
         order by
-          case when t.kind = 'personal' then 0 else 1 end asc,
-          t.slug asc
+          case when o.kind = 'personal' then 0 else 1 end asc,
+          o.slug asc
       `,
       [userId]
     );
 
     return result.rows.map((row) => ({
-      tenantId: row.tenant_id,
-      tenantSlug: row.tenant_slug,
-      tenantName: row.tenant_name,
-      role: toMembershipRole(row.role),
+      organizationId: row.organization_id,
+      organizationSlug: row.organization_slug,
+      organizationName: row.organization_name,
+      role: toOrganizationRole(row.role),
+      status: row.status
+    }));
+  }
+
+  async listWorkspaceMemberships(userId: string): Promise<WorkspaceMembershipRecord[]> {
+    const result = await this.pool.query<{
+      workspace_id: string;
+      workspace_slug: string;
+      workspace_name: string;
+      organization_id: string;
+      organization_slug: string;
+      organization_name: string;
+      is_personal: boolean;
+      role: string;
+      status: "active" | "invited" | "disabled";
+    }>(
+      `
+        select
+          wm.workspace_id,
+          w.slug as workspace_slug,
+          w.name as workspace_name,
+          w.organization_id,
+          o.slug as organization_slug,
+          o.name as organization_name,
+          w.is_personal,
+          wm.role,
+          wm.status
+        from workspace_memberships wm
+        join workspaces w on w.id = wm.workspace_id
+        join organizations o on o.id = w.organization_id
+        where wm.user_id = $1
+        order by
+          case when w.is_personal then 0 else 1 end asc,
+          w.slug asc
+      `,
+      [userId]
+    );
+
+    return result.rows.map((row) => ({
+      workspaceId: row.workspace_id,
+      workspaceSlug: row.workspace_slug,
+      workspaceName: row.workspace_name,
+      organizationId: row.organization_id,
+      organizationSlug: row.organization_slug,
+      organizationName: row.organization_name,
+      isPersonal: row.is_personal,
+      role: toWorkspaceRole(row.role),
       status: row.status
     }));
   }
@@ -838,29 +915,46 @@ export class AuthRepository {
     now: Date;
     displayName: string | null;
     primaryEmail: string | null;
-  }): Promise<{ tenantId: string; tenantSlug: string }> {
+  }): Promise<{
+    organizationId: string;
+    organizationSlug: string;
+    workspaceId: string;
+    workspaceSlug: string;
+  }> {
     const client = await this.pool.connect();
     const nowIso = input.now.toISOString();
 
     try {
       await client.query("begin");
 
-      const existing = await client.query<{ id: string; slug: string }>(
+      const existing = await client.query<{
+        organization_id: string;
+        organization_slug: string;
+        workspace_id: string;
+        workspace_slug: string;
+      }>(
         `
-          select id, slug
-          from tenants
-          where kind = 'personal'
-            and owner_user_id = $1
+          select
+            o.id as organization_id,
+            o.slug as organization_slug,
+            w.id as workspace_id,
+            w.slug as workspace_slug
+          from organizations o
+          join workspaces w on w.organization_id = o.id and w.is_personal = true
+          where o.kind = 'personal'
+            and o.owner_user_id = $1
           limit 1
-          for update
+          for update of o, w
         `,
         [input.userId]
       );
 
-      let tenantId = existing.rows[0]?.id ?? null;
-      let tenantSlug = existing.rows[0]?.slug ?? null;
+      let organizationId = existing.rows[0]?.organization_id ?? null;
+      let organizationSlug = existing.rows[0]?.organization_slug ?? null;
+      let workspaceId = existing.rows[0]?.workspace_id ?? null;
+      let workspaceSlug = existing.rows[0]?.workspace_slug ?? null;
 
-      if (!tenantId || !tenantSlug) {
+      if (!organizationId || !organizationSlug || !workspaceId || !workspaceSlug) {
         const createdId = randomUUID();
         const createdSlug = buildPersonalTenantSlug(input.userId);
         const createdName = buildPersonalTenantName({
@@ -871,7 +965,7 @@ export class AuthRepository {
         try {
           await client.query(
             `
-              insert into tenants (
+              insert into organizations (
                 id,
                 slug,
                 name,
@@ -896,17 +990,17 @@ export class AuthRepository {
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           if (
-            !message.includes("tenants_owner_user_personal_uidx") &&
-            !message.includes("tenants_unique_slug")
+            !message.includes("organizations_owner_user_personal_uidx") &&
+            !message.includes("organizations_unique_slug")
           ) {
             throw error;
           }
         }
 
-        const resolved = await client.query<{ id: string; slug: string }>(
+        const resolvedOrganization = await client.query<{ id: string; slug: string; name: string }>(
           `
-            select id, slug
-            from tenants
+            select id, slug, name
+            from organizations
             where kind = 'personal'
               and owner_user_id = $1
             limit 1
@@ -915,19 +1009,74 @@ export class AuthRepository {
           [input.userId]
         );
 
-        const row = resolved.rows[0];
-        if (!row) {
+        const organizationRow = resolvedOrganization.rows[0];
+        if (!organizationRow) {
+          throw new Error("Unable to resolve personal organization");
+        }
+
+        organizationId = organizationRow.id;
+        organizationSlug = organizationRow.slug;
+
+        try {
+          await client.query(
+            `
+              insert into workspaces (
+                id,
+                organization_id,
+                slug,
+                name,
+                status,
+                is_personal,
+                created_at,
+                updated_at
+              ) values (
+                $1,
+                $2,
+                $3,
+                $4,
+                'active',
+                true,
+                $5::timestamptz,
+                $5::timestamptz
+              )
+            `,
+            [organizationId, organizationId, organizationSlug, createdName, nowIso]
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (
+            !message.includes("workspaces_unique_slug") &&
+            !message.includes("workspaces_organization_personal_uidx")
+          ) {
+            throw error;
+          }
+        }
+
+        const resolvedWorkspace = await client.query<{ id: string; slug: string }>(
+          `
+            select id, slug
+            from workspaces
+            where organization_id = $1
+              and is_personal = true
+            limit 1
+            for update
+          `,
+          [organizationId]
+        );
+
+        const workspaceRow = resolvedWorkspace.rows[0];
+        if (!workspaceRow) {
           throw new Error("Unable to resolve personal workspace");
         }
 
-        tenantId = row.id;
-        tenantSlug = row.slug;
+        workspaceId = workspaceRow.id;
+        workspaceSlug = workspaceRow.slug;
       }
 
       await client.query(
         `
-          insert into memberships (
-            tenant_id,
+          insert into organization_memberships (
+            organization_id,
             user_id,
             role,
             status,
@@ -941,19 +1090,47 @@ export class AuthRepository {
             $3::timestamptz,
             $3::timestamptz
           )
-          on conflict (tenant_id, user_id)
+          on conflict (organization_id, user_id)
           do update set
             role = excluded.role,
             status = 'active',
             updated_at = excluded.updated_at
         `,
-        [tenantId, input.userId, nowIso]
+        [organizationId, input.userId, nowIso]
+      );
+
+      await client.query(
+        `
+          insert into workspace_memberships (
+            workspace_id,
+            user_id,
+            role,
+            status,
+            created_at,
+            updated_at
+          ) values (
+            $1,
+            $2,
+            'admin',
+            'active',
+            $3::timestamptz,
+            $3::timestamptz
+          )
+          on conflict (workspace_id, user_id)
+          do update set
+            role = excluded.role,
+            status = 'active',
+            updated_at = excluded.updated_at
+        `,
+        [workspaceId, input.userId, nowIso]
       );
 
       await client.query("commit");
       return {
-        tenantId,
-        tenantSlug
+        organizationId,
+        organizationSlug,
+        workspaceId,
+        workspaceSlug
       };
     } catch (error) {
       await client.query("rollback");
@@ -963,53 +1140,85 @@ export class AuthRepository {
     }
   }
 
-  async createTenant(input: {
+  async createWorkspace(input: {
     userId: string;
-    request: TenantCreateRequest;
+    request: WorkspaceCreateRequest;
     now: Date;
-  }): Promise<{ tenant: TenantRecord; membership: MembershipRecord }> {
+  }): Promise<{
+    workspace: WorkspaceRecord;
+    membership: { role: "admin" | "member"; status: "active" | "invited" | "disabled" };
+  }> {
     const client = await this.pool.connect();
+    const nowIso = input.now.toISOString();
 
     try {
       await client.query("begin");
-      const tenantId = randomUUID();
 
+      const homeOrganization = await client.query<{ id: string; slug: string; name: string }>(
+        `
+          select o.id, o.slug, o.name
+          from organizations o
+          join organization_memberships om on om.organization_id = o.id
+          where om.user_id = $1
+            and om.status = 'active'
+            and o.kind = 'personal'
+          order by o.slug asc
+          limit 1
+          for update
+        `,
+        [input.userId]
+      );
+
+      const organization = homeOrganization.rows[0];
+      if (!organization) {
+        throw new Error("Personal organization not found for workspace creation");
+      }
+
+      const workspaceId = randomUUID();
       await client.query(
         `
-          insert into tenants (id, slug, name, status, created_at, updated_at)
-          values ($1, $2, $3, 'active', $4::timestamptz, $4::timestamptz)
+          insert into workspaces (
+            id,
+            organization_id,
+            slug,
+            name,
+            status,
+            is_personal,
+            created_at,
+            updated_at
+          ) values ($1, $2, $3, $4, 'active', false, $5::timestamptz, $5::timestamptz)
         `,
-        [tenantId, input.request.slug, input.request.name, input.now.toISOString()]
+        [workspaceId, organization.id, input.request.slug, input.request.name, nowIso]
       );
 
       await client.query(
         `
-          insert into memberships (
-            tenant_id,
+          insert into workspace_memberships (
+            workspace_id,
             user_id,
             role,
             status,
             created_at,
             updated_at
-          ) values ($1, $2, 'owner', 'active', $3::timestamptz, $3::timestamptz)
+          ) values ($1, $2, 'admin', 'active', $3::timestamptz, $3::timestamptz)
         `,
-        [tenantId, input.userId, input.now.toISOString()]
+        [workspaceId, input.userId, nowIso]
       );
 
       await client.query("commit");
-
       return {
-        tenant: {
-          id: tenantId,
+        workspace: {
+          id: workspaceId,
+          organizationId: organization.id,
+          organizationSlug: organization.slug,
+          organizationName: organization.name,
           slug: input.request.slug,
           name: input.request.name,
+          isPersonal: false,
           status: "active"
         },
         membership: {
-          tenantId,
-          tenantSlug: input.request.slug,
-          tenantName: input.request.name,
-          role: "owner",
+          role: "admin",
           status: "active"
         }
       };
@@ -1021,29 +1230,46 @@ export class AuthRepository {
     }
   }
 
-  async requireTenantMembership(input: {
-    tenantSlug: string;
+  async requireWorkspaceMembership(input: {
+    workspaceSlug: string;
     userId: string;
-  }): Promise<TenantMembershipCheck | null> {
+  }): Promise<WorkspaceMembershipCheck | null> {
     const result = await this.pool.query<{
-      tenant_id: string;
-      tenant_slug: string;
-      tenant_name: string;
+      workspace_id: string;
+      workspace_slug: string;
+      workspace_name: string;
+      organization_id: string;
+      organization_slug: string;
+      organization_name: string;
+      is_personal: boolean;
       membership_role: string;
       membership_status: "active" | "invited" | "disabled";
+      organization_role: string;
+      organization_status: "active" | "invited" | "disabled";
     }>(
       `
         select
-          t.id as tenant_id,
-          t.slug as tenant_slug,
-          t.name as tenant_name,
-          m.role as membership_role,
-          m.status as membership_status
-        from tenants t
-        join memberships m on m.tenant_id = t.id
-        where t.slug = $1 and m.user_id = $2
+          w.id as workspace_id,
+          w.slug as workspace_slug,
+          w.name as workspace_name,
+          o.id as organization_id,
+          o.slug as organization_slug,
+          o.name as organization_name,
+          w.is_personal,
+          wm.role as membership_role,
+          wm.status as membership_status,
+          om.role as organization_role,
+          om.status as organization_status
+        from workspaces w
+        join organizations o on o.id = w.organization_id
+        join workspace_memberships wm on wm.workspace_id = w.id
+        join organization_memberships om
+          on om.organization_id = o.id
+         and om.user_id = wm.user_id
+        where w.slug = $1
+          and wm.user_id = $2
       `,
-      [input.tenantSlug, input.userId]
+      [input.workspaceSlug, input.userId]
     );
 
     const row = result.rows.at(0);
@@ -1051,26 +1277,50 @@ export class AuthRepository {
       return null;
     }
 
+    if (row.organization_status !== "active") {
+      return null;
+    }
+
     return {
-      tenantId: row.tenant_id,
-      tenantSlug: row.tenant_slug,
-      tenantName: row.tenant_name,
-      membershipRole: toMembershipRole(row.membership_role),
+      workspaceId: row.workspace_id,
+      workspaceSlug: row.workspace_slug,
+      workspaceName: row.workspace_name,
+      organizationId: row.organization_id,
+      organizationSlug: row.organization_slug,
+      organizationName: row.organization_name,
+      isPersonal: row.is_personal,
+      membershipRole:
+        row.membership_role === "admin" || row.organization_role === "owner"
+          ? "admin"
+          : toWorkspaceRole(row.membership_role),
       membershipStatus: row.membership_status
     };
   }
 
-  async findTenantBySlug(slug: string): Promise<TenantRecord | null> {
+  async findWorkspaceBySlug(slug: string): Promise<WorkspaceRecord | null> {
     const result = await this.pool.query<{
       id: string;
+      organization_id: string;
+      organization_slug: string;
+      organization_name: string;
       slug: string;
       name: string;
+      is_personal: boolean;
       status: "active" | "disabled";
     }>(
       `
-        select id, slug, name, status
-        from tenants
-        where slug = $1
+        select
+          w.id,
+          w.organization_id,
+          o.slug as organization_slug,
+          o.name as organization_name,
+          w.slug,
+          w.name,
+          w.is_personal,
+          w.status
+        from workspaces w
+        join organizations o on o.id = w.organization_id
+        where w.slug = $1
       `,
       [slug]
     );
@@ -1082,18 +1332,22 @@ export class AuthRepository {
 
     return {
       id: row.id,
+      organizationId: row.organization_id,
+      organizationSlug: row.organization_slug,
+      organizationName: row.organization_name,
       slug: row.slug,
       name: row.name,
+      isPersonal: row.is_personal,
       status: row.status
     };
   }
 
-  async listTenantMembers(tenantId: string): Promise<
+  async listWorkspaceMembers(workspaceId: string): Promise<
     Array<{
       userId: string;
       primaryEmail: string | null;
       displayName: string | null;
-      role: MembershipRole;
+      role: "admin" | "member";
       status: "active" | "invited" | "disabled";
     }>
   > {
@@ -1106,32 +1360,32 @@ export class AuthRepository {
     }>(
       `
         select
-          m.user_id,
+          wm.user_id,
           u.primary_email,
           u.display_name,
-          m.role,
-          m.status
-        from memberships m
-        join users u on u.id = m.user_id
-        where m.tenant_id = $1
+          wm.role,
+          wm.status
+        from workspace_memberships wm
+        join users u on u.id = wm.user_id
+        where wm.workspace_id = $1
         order by u.primary_email asc nulls last, u.id asc
       `,
-      [tenantId]
+      [workspaceId]
     );
 
     return result.rows.map((row) => ({
       userId: row.user_id,
       primaryEmail: asValidEmailOrNull(row.primary_email),
       displayName: row.display_name,
-      role: toMembershipRole(row.role),
+      role: toWorkspaceRole(row.role),
       status: row.status
     }));
   }
 
-  async createInvite(input: {
-    tenantId: string;
+  async createWorkspaceInvite(input: {
+    workspaceId: string;
     emailNormalized: string;
-    role: Exclude<MembershipRole, "owner">;
+    role: "admin" | "member";
     tokenHash: string;
     invitedByUserId: string;
     expiresAt: Date;
@@ -1140,9 +1394,9 @@ export class AuthRepository {
 
     await this.pool.query(
       `
-        insert into invites (
+        insert into workspace_invites (
           id,
-          tenant_id,
+          workspace_id,
           email_normalized,
           role,
           token_hash,
@@ -1162,7 +1416,7 @@ export class AuthRepository {
       `,
       [
         inviteId,
-        input.tenantId,
+        input.workspaceId,
         input.emailNormalized,
         input.role,
         input.tokenHash,
@@ -1177,14 +1431,15 @@ export class AuthRepository {
     };
   }
 
-  async findInviteByToken(input: {
-    tenantSlug: string;
+  async findWorkspaceInviteByToken(input: {
+    workspaceSlug: string;
     tokenHash: string;
   }): Promise<InviteRecord | null> {
     const result = await this.pool.query<{
       id: string;
-      tenant_id: string;
-      tenant_slug: string;
+      workspace_id: string;
+      workspace_slug: string;
+      organization_id: string;
       email_normalized: string;
       role: string;
       expires_at: string;
@@ -1193,20 +1448,21 @@ export class AuthRepository {
     }>(
       `
         select
-          i.id,
-          i.tenant_id,
-          t.slug as tenant_slug,
-          i.email_normalized,
-          i.role,
-          i.expires_at,
-          i.accepted_at,
-          i.accepted_by_user_id
-        from invites i
-        join tenants t on t.id = i.tenant_id
-        where t.slug = $1
-          and i.token_hash = $2
+          wi.id,
+          wi.workspace_id,
+          w.slug as workspace_slug,
+          w.organization_id,
+          wi.email_normalized,
+          wi.role,
+          wi.expires_at,
+          wi.accepted_at,
+          wi.accepted_by_user_id
+        from workspace_invites wi
+        join workspaces w on w.id = wi.workspace_id
+        where w.slug = $1
+          and wi.token_hash = $2
       `,
-      [input.tenantSlug, input.tokenHash]
+      [input.workspaceSlug, input.tokenHash]
     );
 
     const row = result.rows.at(0);
@@ -1216,21 +1472,23 @@ export class AuthRepository {
 
     return {
       id: row.id,
-      tenantId: row.tenant_id,
-      tenantSlug: row.tenant_slug,
+      workspaceId: row.workspace_id,
+      workspaceSlug: row.workspace_slug,
+      organizationId: row.organization_id,
       emailNormalized: row.email_normalized,
-      role: toMembershipRole(row.role),
+      role: toWorkspaceRole(row.role),
       expiresAt: row.expires_at,
       acceptedAt: row.accepted_at,
       acceptedByUserId: row.accepted_by_user_id
     };
   }
 
-  async markInviteAcceptedAndUpsertMembership(input: {
+  async markWorkspaceInviteAcceptedAndUpsertMembership(input: {
     inviteId: string;
-    tenantId: string;
+    workspaceId: string;
+    organizationId: string;
     userId: string;
-    role: MembershipRole;
+    role: "admin" | "member";
     now: Date;
   }): Promise<"accepted_now" | "already_accepted_same_user" | "already_accepted_different_user"> {
     const client = await this.pool.connect();
@@ -1240,7 +1498,7 @@ export class AuthRepository {
 
       const acceptance = await client.query<{ accepted_by_user_id: string | null }>(
         `
-          update invites
+          update workspace_invites
           set accepted_at = $2::timestamptz,
               accepted_by_user_id = $3
           where id = $1
@@ -1258,7 +1516,7 @@ export class AuthRepository {
         const existing = await client.query<{ accepted_by_user_id: string | null }>(
           `
             select accepted_by_user_id
-            from invites
+            from workspace_invites
             where id = $1
             for update
           `,
@@ -1280,21 +1538,39 @@ export class AuthRepository {
       if (outcome !== "already_accepted_different_user") {
         await client.query(
           `
-            insert into memberships (
-              tenant_id,
+            insert into organization_memberships (
+              organization_id,
+              user_id,
+              role,
+              status,
+              created_at,
+              updated_at
+            ) values ($1, $2, 'member', 'active', $3::timestamptz, $3::timestamptz)
+            on conflict (organization_id, user_id)
+            do update set
+              status = 'active',
+              updated_at = excluded.updated_at
+          `,
+          [input.organizationId, input.userId, input.now.toISOString()]
+        );
+
+        await client.query(
+          `
+            insert into workspace_memberships (
+              workspace_id,
               user_id,
               role,
               status,
               created_at,
               updated_at
             ) values ($1, $2, $3, 'active', $4::timestamptz, $4::timestamptz)
-            on conflict (tenant_id, user_id)
+            on conflict (workspace_id, user_id)
             do update set
               role = excluded.role,
               status = 'active',
               updated_at = excluded.updated_at
           `,
-          [input.tenantId, input.userId, input.role, input.now.toISOString()]
+          [input.workspaceId, input.userId, input.role, input.now.toISOString()]
         );
       }
 
@@ -1715,14 +1991,14 @@ export class AuthService {
       now: input.now
     });
 
-    const memberships = await this.repository.listMemberships(user.id);
+    const workspaces = await this.repository.listWorkspaceMemberships(user.id);
     const normalizedReturnTo = oidcRequest.returnTo
       ? normalizePostLoginReturnTo(oidcRequest.returnTo)
       : null;
     const redirectTo =
-      normalizedReturnTo && this.canVisitReturnTo(normalizedReturnTo, memberships)
+      normalizedReturnTo && this.canVisitReturnTo(normalizedReturnTo, workspaces)
         ? normalizedReturnTo
-        : this.pickPostLoginRoute(memberships);
+        : this.pickPostLoginRoute(workspaces);
 
     return {
       redirectTo,
@@ -1738,8 +2014,12 @@ export class AuthService {
       displayName: context.displayName,
       primaryEmail: context.primaryEmail
     });
-    const memberships = await this.repository.listMemberships(context.userId);
-    const firstActiveMembership = memberships.find((membership) => membership.status === "active");
+    const organizations = await this.repository.listOrganizationMemberships(context.userId);
+    const workspaces = await this.repository.listWorkspaceMemberships(context.userId);
+    const firstActiveWorkspace = workspaces.find((workspace) => workspace.status === "active");
+    const personalWorkspace = workspaces.find(
+      (workspace) => workspace.status === "active" && workspace.isPersonal
+    );
 
     return AuthMeResponseSchema.parse({
       authenticated: true,
@@ -1748,14 +2028,26 @@ export class AuthService {
         primaryEmail: context.primaryEmail,
         displayName: context.displayName
       },
-      memberships: memberships.map((membership) => ({
-        tenantId: membership.tenantId,
-        tenantSlug: membership.tenantSlug,
-        tenantName: membership.tenantName,
+      organizations: organizations.map((membership) => ({
+        organizationId: membership.organizationId,
+        organizationSlug: membership.organizationSlug,
+        organizationName: membership.organizationName,
         role: membership.role,
         status: membership.status
       })),
-      lastActiveTenantSlug: firstActiveMembership?.tenantSlug ?? null
+      workspaces: workspaces.map((workspace) => ({
+        id: workspace.workspaceId,
+        organizationId: workspace.organizationId,
+        organizationSlug: workspace.organizationSlug,
+        organizationName: workspace.organizationName,
+        slug: workspace.workspaceSlug,
+        name: workspace.workspaceName,
+        isPersonal: workspace.isPersonal,
+        role: workspace.role,
+        status: workspace.status
+      })),
+      activeWorkspaceSlug: firstActiveWorkspace?.workspaceSlug ?? null,
+      personalWorkspaceSlug: personalWorkspace?.workspaceSlug ?? null
     });
   }
 
@@ -1767,122 +2059,121 @@ export class AuthService {
     await this.repository.revokeSessionByTokenHash(hashValue(input.sessionToken), input.now);
   }
 
-  async createTenant(input: {
+  async createWorkspace(input: {
     sessionToken: string | null;
     now: Date;
-    request: TenantCreateRequest;
+    request: WorkspaceCreateRequest;
   }): Promise<{
-    tenant: TenantRecord;
-    membership: { role: MembershipRole; status: "active" | "invited" | "disabled" };
+    workspace: WorkspaceRecord;
+    membership: { role: "admin" | "member"; status: "active" | "invited" | "disabled" };
   }> {
     const context = await this.requireSession(input.sessionToken, input.now);
-    const request = TenantCreateRequestSchema.parse(input.request);
+    const request = WorkspaceCreateRequestSchema.parse(input.request);
 
     try {
-      const created = await this.repository.createTenant({
+      const created = await this.repository.createWorkspace({
         userId: context.userId,
         request,
         now: input.now
       });
 
       await this.repository.insertAuditEvent({
-        eventType: "tenant.create",
+        eventType: "workspace.create",
         actorUserId: context.userId,
-        tenantId: created.tenant.id,
+        tenantId: created.workspace.organizationId,
         metadata: {
-          tenantSlug: created.tenant.slug
+          workspaceSlug: created.workspace.slug,
+          organizationSlug: created.workspace.organizationSlug
         },
         now: input.now
       });
 
-      return {
-        tenant: created.tenant,
-        membership: {
-          role: created.membership.role,
-          status: created.membership.status
-        }
-      };
+      return created;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("tenants_unique_slug")) {
-        throw new ApiError(409, "TENANT_SLUG_CONFLICT", "Tenant slug already exists");
+      if (message.includes("workspaces_unique_slug")) {
+        throw new ApiError(409, "WORKSPACE_SLUG_CONFLICT", "Workspace slug already exists");
       }
       throw error;
     }
   }
 
-  async readTenant(input: {
+  async readWorkspace(input: {
     sessionToken: string | null;
-    tenantSlug: string;
+    workspaceSlug: string;
     now: Date;
-  }): Promise<{ tenant: TenantRecord }> {
+  }): Promise<{ workspace: WorkspaceRecord }> {
     const context = await this.requireSession(input.sessionToken, input.now);
 
-    const membership = await this.repository.requireTenantMembership({
-      tenantSlug: input.tenantSlug,
+    const membership = await this.repository.requireWorkspaceMembership({
+      workspaceSlug: input.workspaceSlug,
       userId: context.userId
     });
 
     if (!membership || membership.membershipStatus !== "active") {
-      throw new ApiError(403, "TENANT_FORBIDDEN", "You are not a member of this tenant");
+      throw new ApiError(403, "WORKSPACE_FORBIDDEN", "You are not a member of this workspace");
     }
 
-    const tenant = await this.repository.findTenantBySlug(input.tenantSlug);
-    if (!tenant) {
-      throw new ApiError(404, "TENANT_NOT_FOUND", "Tenant not found");
+    const workspace = await this.repository.findWorkspaceBySlug(input.workspaceSlug);
+    if (!workspace) {
+      throw new ApiError(404, "WORKSPACE_NOT_FOUND", "Workspace not found");
     }
 
-    return { tenant };
+    return { workspace };
   }
 
-  async listTenantMembers(input: {
+  async listWorkspaceMembers(input: {
     sessionToken: string | null;
-    tenantSlug: string;
+    workspaceSlug: string;
     now: Date;
   }): Promise<{
     members: Array<{
       userId: string;
       primaryEmail: string | null;
       displayName: string | null;
-      role: MembershipRole;
+      role: "admin" | "member";
       status: "active" | "invited" | "disabled";
     }>;
   }> {
     const context = await this.requireSession(input.sessionToken, input.now);
 
-    const membership = await this.repository.requireTenantMembership({
-      tenantSlug: input.tenantSlug,
+    const membership = await this.repository.requireWorkspaceMembership({
+      workspaceSlug: input.workspaceSlug,
       userId: context.userId
     });
 
     if (!membership || membership.membershipStatus !== "active") {
-      throw new ApiError(403, "TENANT_FORBIDDEN", "You are not a member of this tenant");
+      throw new ApiError(403, "WORKSPACE_FORBIDDEN", "You are not a member of this workspace");
     }
 
-    const members = await this.repository.listTenantMembers(membership.tenantId);
+    const members = await this.repository.listWorkspaceMembers(membership.workspaceId);
     return { members };
   }
 
-  async createTenantInvite(input: {
+  async createWorkspaceInvite(input: {
     sessionToken: string | null;
-    tenantSlug: string;
+    workspaceSlug: string;
     now: Date;
-    request: TenantInviteCreateRequest;
+    request: WorkspaceInviteCreateRequest;
   }): Promise<{ inviteId: string; expiresAt: string; token: string }> {
     const context = await this.requireSession(input.sessionToken, input.now);
-    const request = TenantInviteCreateRequestSchema.parse(input.request);
+    const request = WorkspaceInviteCreateRequestSchema.parse(input.request);
 
-    const membership = await this.repository.requireTenantMembership({
-      tenantSlug: input.tenantSlug,
+    const membership = await this.repository.requireWorkspaceMembership({
+      workspaceSlug: input.workspaceSlug,
       userId: context.userId
     });
 
     if (!membership || membership.membershipStatus !== "active") {
-      throw new ApiError(403, "TENANT_FORBIDDEN", "You are not a member of this tenant");
+      throw new ApiError(403, "WORKSPACE_FORBIDDEN", "You are not a member of this workspace");
     }
 
-    if (!(membership.membershipRole === "owner" || membership.membershipRole === "admin")) {
-      throw new ApiError(403, "INVITE_FORBIDDEN", "Only owner/admin can invite users");
+    if (membership.isPersonal) {
+      throw new ApiError(403, "INVITE_FORBIDDEN", "Personal workspaces cannot be shared directly");
+    }
+
+    if (membership.membershipRole !== "admin") {
+      throw new ApiError(403, "INVITE_FORBIDDEN", "Only workspace admins can invite users");
     }
 
     const token = randomToken(24);
@@ -1890,8 +2181,8 @@ export class AuthService {
     const expiresInDays = request.expiresInDays ?? 7;
     const expiresAt = nowPlusSeconds(input.now, expiresInDays * 24 * 60 * 60);
 
-    const created = await this.repository.createInvite({
-      tenantId: membership.tenantId,
+    const created = await this.repository.createWorkspaceInvite({
+      workspaceId: membership.workspaceId,
       emailNormalized: normalizeEmail(request.email),
       role: request.role,
       tokenHash,
@@ -1900,13 +2191,14 @@ export class AuthService {
     });
 
     await this.repository.insertAuditEvent({
-      eventType: "tenant.invite.create",
+      eventType: "workspace.invite.create",
       actorUserId: context.userId,
-      tenantId: membership.tenantId,
+      tenantId: membership.organizationId,
       metadata: {
         inviteId: created.inviteId,
         role: request.role,
-        email: normalizeEmail(request.email)
+        email: normalizeEmail(request.email),
+        workspaceSlug: membership.workspaceSlug
       },
       now: input.now
     });
@@ -1918,20 +2210,20 @@ export class AuthService {
     };
   }
 
-  async acceptTenantInvite(input: {
+  async acceptWorkspaceInvite(input: {
     sessionToken: string | null;
-    tenantSlug: string;
+    workspaceSlug: string;
     inviteToken: string;
     now: Date;
   }): Promise<{
     joined: boolean;
-    tenantSlug: string;
-    role: MembershipRole;
+    workspaceSlug: string;
+    role: "admin" | "member";
     status: "active" | "invited" | "disabled";
   }> {
     const context = await this.requireSession(input.sessionToken, input.now);
-    const invite = await this.repository.findInviteByToken({
-      tenantSlug: input.tenantSlug,
+    const invite = await this.repository.findWorkspaceInviteByToken({
+      workspaceSlug: input.workspaceSlug,
       tokenHash: hashValue(input.inviteToken)
     });
 
@@ -1956,9 +2248,10 @@ export class AuthService {
       }
     }
 
-    const acceptResult = await this.repository.markInviteAcceptedAndUpsertMembership({
+    const acceptResult = await this.repository.markWorkspaceInviteAcceptedAndUpsertMembership({
       inviteId: invite.id,
-      tenantId: invite.tenantId,
+      workspaceId: invite.workspaceId,
+      organizationId: invite.organizationId,
       userId: context.userId,
       role: invite.role,
       now: input.now
@@ -1973,19 +2266,19 @@ export class AuthService {
     }
 
     await this.repository.insertAuditEvent({
-      eventType: "tenant.invite.accept",
+      eventType: "workspace.invite.accept",
       actorUserId: context.userId,
-      tenantId: invite.tenantId,
+      tenantId: invite.organizationId,
       metadata: {
         inviteId: invite.id,
-        tenantSlug: invite.tenantSlug
+        workspaceSlug: invite.workspaceSlug
       },
       now: input.now
     });
 
     return {
       joined: true,
-      tenantSlug: invite.tenantSlug,
+      workspaceSlug: invite.workspaceSlug,
       role: invite.role,
       status: "active"
     };
@@ -2000,16 +2293,16 @@ export class AuthService {
     return `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
   }
 
-  pickPostLoginRoute(_memberships: MembershipRecord[]): string {
+  pickPostLoginRoute(_workspaces: WorkspaceMembershipRecord[]): string {
     return "/chat";
   }
 
-  private canVisitReturnTo(returnTo: string, _memberships: MembershipRecord[]): boolean {
+  private canVisitReturnTo(returnTo: string, _workspaces: WorkspaceMembershipRecord[]): boolean {
     if (returnTo === "/" || returnTo === "/login") {
       return false;
     }
 
-    const match = returnTo.match(/^\/t\/([a-z0-9-]+)(?:\/|$)/u);
+    const match = returnTo.match(/^\/w\/([a-z0-9-]+)(?:\/|$)/u);
     if (!match) {
       return true;
     }
@@ -2069,13 +2362,13 @@ export class AuthService {
       now: input.now
     });
 
-    const memberships = await this.repository.listMemberships(user.id);
+    const workspaces = await this.repository.listWorkspaceMemberships(user.id);
     const returnTo = sanitizeReturnTo(input.returnTo);
     const normalizedReturnTo = returnTo ? normalizePostLoginReturnTo(returnTo) : null;
     const redirectTo =
-      normalizedReturnTo && this.canVisitReturnTo(normalizedReturnTo, memberships)
+      normalizedReturnTo && this.canVisitReturnTo(normalizedReturnTo, workspaces)
         ? normalizedReturnTo
-        : this.pickPostLoginRoute(memberships);
+        : this.pickPostLoginRoute(workspaces);
 
     return {
       redirectTo,

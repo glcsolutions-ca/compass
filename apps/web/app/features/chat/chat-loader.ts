@@ -1,10 +1,7 @@
 import { redirect } from "react-router";
 import type { ChatContextMode } from "~/features/auth/types";
 import { loadAuthShellData } from "~/features/auth/shell-loader";
-import {
-  resolveThreadCreateTenantSlug,
-  readPersonalContextLabel
-} from "~/features/chat/chat-context";
+import { readPersonalContextLabel } from "~/features/chat/chat-context";
 import { getAgentThread, listAgentThreadEvents } from "~/features/chat/agent-client";
 import type { AgentEvent, AgentExecutionMode, AgentThread } from "~/features/chat/agent-types";
 import { buildReturnTo } from "~/lib/auth/auth-session";
@@ -12,25 +9,48 @@ import { buildReturnTo } from "~/lib/auth/auth-session";
 export interface ChatLoaderData {
   contextMode: ChatContextMode;
   contextLabel: string;
+  workspaceSlug: string;
   threadId: string | null;
   requestedThreadSeed: string | null;
   thread: AgentThread | null;
   initialEvents: AgentEvent[];
   initialCursor: number;
   executionMode: AgentExecutionMode;
-  createThreadTenantSlug: string;
 }
 
 export async function loadChatData({
   request,
+  workspaceSlug,
   threadId
 }: {
   request: Request;
+  workspaceSlug: string | undefined;
   threadId: string | undefined;
 }): Promise<ChatLoaderData | Response> {
   const auth = await loadAuthShellData({ request });
   if (auth instanceof Response) {
     return auth;
+  }
+
+  const normalizedWorkspaceSlug = workspaceSlug?.trim() || null;
+  if (!normalizedWorkspaceSlug) {
+    return redirect("/chat");
+  }
+
+  const hasWorkspaceAccess = auth.workspaces.some(
+    (workspace) => workspace.status === "active" && workspace.slug === normalizedWorkspaceSlug
+  );
+  if (!hasWorkspaceAccess) {
+    const fallbackWorkspace =
+      auth.personalWorkspaceSlug?.trim() ||
+      auth.activeWorkspaceSlug?.trim() ||
+      auth.workspaces.find((workspace) => workspace.status === "active")?.slug ||
+      null;
+    if (!fallbackWorkspace) {
+      return redirect("/workspaces");
+    }
+
+    return redirect(`/w/${encodeURIComponent(fallbackWorkspace)}/chat`);
   }
 
   const url = new URL(request.url);
@@ -53,11 +73,20 @@ export async function loadChatData({
     }
 
     if (threadResult.status === 403 || threadResult.status === 404) {
-      return redirect("/chat");
+      return redirect(`/w/${encodeURIComponent(normalizedWorkspaceSlug)}/chat`);
     }
 
     if (!threadResult.data) {
       throw new Error(threadResult.message || "Unable to load chat thread.");
+    }
+
+    if (
+      threadResult.data.workspaceSlug &&
+      threadResult.data.workspaceSlug !== normalizedWorkspaceSlug
+    ) {
+      return redirect(
+        `/w/${encodeURIComponent(threadResult.data.workspaceSlug)}/chat/${encodeURIComponent(normalizedThreadId)}`
+      );
     }
 
     resolvedThread = threadResult.data;
@@ -82,12 +111,12 @@ export async function loadChatData({
   return {
     contextMode: "personal",
     contextLabel: readPersonalContextLabel({ user: auth.user }),
+    workspaceSlug: normalizedWorkspaceSlug,
     threadId: normalizedThreadId,
     requestedThreadSeed,
     thread: resolvedThread,
     initialEvents,
     initialCursor,
-    executionMode,
-    createThreadTenantSlug: resolveThreadCreateTenantSlug(auth)
+    executionMode
   };
 }

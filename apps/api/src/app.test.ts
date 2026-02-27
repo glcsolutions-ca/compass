@@ -234,7 +234,7 @@ describe("API app", () => {
 
     const response = await request(app)
       .post("/v1/agent/threads")
-      .send({ tenantSlug: "acme", executionMode: "cloud" });
+      .send({ workspaceSlug: "acme", executionMode: "cloud" });
 
     expect(response.status).toBe(503);
     expect(response.body).toEqual({
@@ -254,8 +254,8 @@ describe("API app", () => {
     const createThread = vi.fn(async () => {
       return {
         threadId: "thread-1",
-        tenantId: "tenant-1",
-        tenantSlug: "acme",
+        workspaceId: "workspace-1",
+        workspaceSlug: "acme",
         executionMode: "cloud",
         executionHost: "dynamic_sessions",
         status: "idle",
@@ -278,7 +278,7 @@ describe("API app", () => {
     });
 
     const response = await request(app).post("/v1/agent/threads").send({
-      tenantSlug: "acme",
+      workspaceSlug: "acme",
       executionMode: "cloud"
     });
 

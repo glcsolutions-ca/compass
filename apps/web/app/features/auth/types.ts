@@ -1,8 +1,20 @@
+export interface OrganizationMembership {
+  organizationId: string;
+  organizationSlug: string;
+  organizationName: string;
+  role: "owner" | "admin" | "member";
+  status: "active" | "invited" | "disabled";
+}
+
 export interface WorkspaceMembership {
-  tenantId: string;
-  tenantSlug: string;
-  tenantName: string;
-  role: "owner" | "admin" | "member" | "viewer";
+  id: string;
+  organizationId: string;
+  organizationSlug: string;
+  organizationName: string;
+  slug: string;
+  name: string;
+  isPersonal: boolean;
+  role: "admin" | "member";
   status: "active" | "invited" | "disabled";
 }
 
@@ -17,8 +29,10 @@ export interface AuthShellLoaderData {
     primaryEmail: string | null;
     displayName: string | null;
   } | null;
-  memberships: WorkspaceMembership[];
-  lastActiveTenantSlug: string | null;
+  organizations: OrganizationMembership[];
+  workspaces: WorkspaceMembership[];
+  activeWorkspaceSlug: string | null;
+  personalWorkspaceSlug: string | null;
 }
 
 export type ChatContextMode = "personal";

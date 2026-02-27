@@ -40,7 +40,7 @@ function resolveIntegrationDatabaseUrl(repoRootPath: string): string {
 
 const databaseUrl = resolveIntegrationDatabaseUrl(repoRoot);
 
-describe("auth schema constraints", () => {
+describe("organization/workspace auth schema constraints", () => {
   const client = new Client({ connectionString: databaseUrl });
 
   beforeAll(async () => {
@@ -57,98 +57,96 @@ describe("auth schema constraints", () => {
         auth_audit_events,
         auth_sessions,
         auth_oidc_requests,
-        invites,
-        memberships,
+        workspace_invites,
+        workspace_memberships,
+        workspaces,
+        organization_memberships,
         identities,
         users,
-        tenants
+        organizations
       restart identity cascade
     `);
   });
 
-  it("enforces unique tenant slug", async () => {
+  it("enforces unique organization slug", async () => {
     await client.query(
-      `insert into tenants (id, slug, name, status, created_at, updated_at)
-       values ('t_1', 'acme', 'Acme', 'active', now(), now())`
+      `insert into organizations (id, slug, name, status, kind, owner_user_id, created_at, updated_at)
+       values ('org_1', 'acme', 'Acme', 'active', 'shared', null, now(), now())`
     );
 
     await expect(
       client.query(
-        `insert into tenants (id, slug, name, status, created_at, updated_at)
-         values ('t_2', 'acme', 'Acme Duplicate', 'active', now(), now())`
+        `insert into organizations (id, slug, name, status, kind, owner_user_id, created_at, updated_at)
+         values ('org_2', 'acme', 'Acme Duplicate', 'active', 'shared', null, now(), now())`
       )
-    ).rejects.toThrow(/tenants_unique_slug/iu);
+    ).rejects.toThrow(/organizations_unique_slug/iu);
   });
 
-  it("enforces unique Entra identity subject", async () => {
+  it("enforces one personal organization per owner user", async () => {
     await client.query(
       `insert into users (id, primary_email, display_name, created_at, updated_at)
        values ('u_1', 'owner@acme.test', 'Owner', now(), now())`
     );
-    await client.query(
-      `insert into users (id, primary_email, display_name, created_at, updated_at)
-       values ('u_2', 'owner2@acme.test', 'Owner 2', now(), now())`
-    );
 
     await client.query(
-      `insert into identities (
-          id,
-          user_id,
-          provider,
-          entra_tid,
-          entra_oid,
-          iss,
-          email,
-          upn,
-          created_at,
-          updated_at
-        ) values (
-          'i_1',
-          'u_1',
-          'entra',
-          '11111111-1111-1111-1111-111111111111',
-          'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-          'https://login.microsoftonline.com/11111111-1111-1111-1111-111111111111/v2.0',
-          'owner@acme.test',
-          'owner@acme.test',
-          now(),
-          now()
-        )`
+      `insert into organizations (id, slug, name, status, kind, owner_user_id, created_at, updated_at)
+       values ('org_personal_1', 'personal-owner', 'Owner Personal', 'active', 'personal', 'u_1', now(), now())`
     );
 
     await expect(
       client.query(
-        `insert into identities (
-            id,
-            user_id,
-            provider,
-            entra_tid,
-            entra_oid,
-            iss,
-            email,
-            upn,
-            created_at,
-            updated_at
-          ) values (
-            'i_2',
-            'u_2',
-            'entra',
-            '11111111-1111-1111-1111-111111111111',
-            'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-            'https://login.microsoftonline.com/11111111-1111-1111-1111-111111111111/v2.0',
-            'owner2@acme.test',
-            'owner2@acme.test',
-            now(),
-            now()
-          )`
+        `insert into organizations (id, slug, name, status, kind, owner_user_id, created_at, updated_at)
+         values ('org_personal_2', 'personal-owner-2', 'Owner Personal 2', 'active', 'personal', 'u_1', now(), now())`
       )
-    ).rejects.toThrow(/identities_unique_entra_subject/iu);
+    ).rejects.toThrow(/organizations_owner_user_personal_uidx/iu);
   });
 
-  it("enforces unique user membership per tenant", async () => {
+  it("enforces unique workspace slug", async () => {
     await client.query(
-      `insert into tenants (id, slug, name, status, created_at, updated_at)
-       values ('t_1', 'acme', 'Acme', 'active', now(), now())`
+      `insert into organizations (id, slug, name, status, kind, owner_user_id, created_at, updated_at)
+       values ('org_1', 'acme', 'Acme', 'active', 'shared', null, now(), now())`
+    );
+    await client.query(
+      `insert into organizations (id, slug, name, status, kind, owner_user_id, created_at, updated_at)
+       values ('org_2', 'globex', 'Globex', 'active', 'shared', null, now(), now())`
+    );
+
+    await client.query(
+      `insert into workspaces (id, organization_id, slug, name, status, is_personal, created_at, updated_at)
+       values ('ws_1', 'org_1', 'engineering', 'Engineering', 'active', false, now(), now())`
+    );
+
+    await expect(
+      client.query(
+        `insert into workspaces (id, organization_id, slug, name, status, is_personal, created_at, updated_at)
+         values ('ws_2', 'org_2', 'engineering', 'Engineering Duplicate', 'active', false, now(), now())`
+      )
+    ).rejects.toThrow(/workspaces_unique_slug/iu);
+  });
+
+  it("enforces one personal workspace per organization", async () => {
+    await client.query(
+      `insert into organizations (id, slug, name, status, kind, owner_user_id, created_at, updated_at)
+       values ('org_1', 'acme', 'Acme', 'active', 'shared', null, now(), now())`
+    );
+
+    await client.query(
+      `insert into workspaces (id, organization_id, slug, name, status, is_personal, created_at, updated_at)
+       values ('ws_personal_1', 'org_1', 'acme-personal', 'Personal', 'active', true, now(), now())`
+    );
+
+    await expect(
+      client.query(
+        `insert into workspaces (id, organization_id, slug, name, status, is_personal, created_at, updated_at)
+         values ('ws_personal_2', 'org_1', 'acme-personal-2', 'Personal 2', 'active', true, now(), now())`
+      )
+    ).rejects.toThrow(/workspaces_organization_personal_uidx/iu);
+  });
+
+  it("enforces unique organization membership for user+organization", async () => {
+    await client.query(
+      `insert into organizations (id, slug, name, status, kind, owner_user_id, created_at, updated_at)
+       values ('org_1', 'acme', 'Acme', 'active', 'shared', null, now(), now())`
     );
     await client.query(
       `insert into users (id, primary_email, display_name, created_at, updated_at)
@@ -156,28 +154,43 @@ describe("auth schema constraints", () => {
     );
 
     await client.query(
-      `insert into memberships (
-         tenant_id,
-         user_id,
-         role,
-         status,
-         created_at,
-         updated_at
-       ) values ('t_1', 'u_1', 'owner', 'active', now(), now())`
+      `insert into organization_memberships (organization_id, user_id, role, status, created_at, updated_at)
+       values ('org_1', 'u_1', 'owner', 'active', now(), now())`
     );
 
     await expect(
       client.query(
-        `insert into memberships (
-           tenant_id,
-           user_id,
-           role,
-           status,
-           created_at,
-           updated_at
-         ) values ('t_1', 'u_1', 'admin', 'active', now(), now())`
+        `insert into organization_memberships (organization_id, user_id, role, status, created_at, updated_at)
+         values ('org_1', 'u_1', 'admin', 'active', now(), now())`
       )
-    ).rejects.toThrow(/memberships_pk/iu);
+    ).rejects.toThrow(/organization_memberships_pk/iu);
+  });
+
+  it("enforces unique workspace membership for user+workspace", async () => {
+    await client.query(
+      `insert into organizations (id, slug, name, status, kind, owner_user_id, created_at, updated_at)
+       values ('org_1', 'acme', 'Acme', 'active', 'shared', null, now(), now())`
+    );
+    await client.query(
+      `insert into users (id, primary_email, display_name, created_at, updated_at)
+       values ('u_1', 'owner@acme.test', 'Owner', now(), now())`
+    );
+    await client.query(
+      `insert into workspaces (id, organization_id, slug, name, status, is_personal, created_at, updated_at)
+       values ('ws_1', 'org_1', 'acme-main', 'Main', 'active', false, now(), now())`
+    );
+
+    await client.query(
+      `insert into workspace_memberships (workspace_id, user_id, role, status, created_at, updated_at)
+       values ('ws_1', 'u_1', 'admin', 'active', now(), now())`
+    );
+
+    await expect(
+      client.query(
+        `insert into workspace_memberships (workspace_id, user_id, role, status, created_at, updated_at)
+         values ('ws_1', 'u_1', 'member', 'active', now(), now())`
+      )
+    ).rejects.toThrow(/workspace_memberships_pk/iu);
   });
 
   it("stores and enforces unique session token hash", async () => {
@@ -275,126 +288,5 @@ describe("auth schema constraints", () => {
          )`
       )
     ).rejects.toThrow(/auth_oidc_requests_unique_state_hash/iu);
-  });
-
-  it("enforces invite accepted_by_user_id foreign key", async () => {
-    await client.query(
-      `insert into users (id, primary_email, display_name, created_at, updated_at)
-       values ('u_1', 'owner@acme.test', 'Owner', now(), now())`
-    );
-    await client.query(
-      `insert into tenants (id, slug, name, status, created_at, updated_at)
-       values ('t_1', 'acme', 'Acme', 'active', now(), now())`
-    );
-
-    await expect(
-      client.query(
-        `insert into invites (
-           id,
-           tenant_id,
-           email_normalized,
-           role,
-           token_hash,
-           invited_by_user_id,
-           expires_at,
-           accepted_at,
-           accepted_by_user_id,
-           created_at
-         ) values (
-           'inv_1',
-           't_1',
-           'member@acme.test',
-           'member',
-           'token-hash-1',
-           'u_1',
-           now() + interval '7 day',
-           now(),
-           'u_missing',
-           now()
-         )`
-      )
-    ).rejects.toThrow(/invites_accepted_by_user_id_fkey/iu);
-  });
-
-  it("enforces invite acceptance consistency when accepted_at is set", async () => {
-    await client.query(
-      `insert into users (id, primary_email, display_name, created_at, updated_at)
-       values ('u_1', 'owner@acme.test', 'Owner', now(), now())`
-    );
-    await client.query(
-      `insert into tenants (id, slug, name, status, created_at, updated_at)
-       values ('t_1', 'acme', 'Acme', 'active', now(), now())`
-    );
-
-    await expect(
-      client.query(
-        `insert into invites (
-           id,
-           tenant_id,
-           email_normalized,
-           role,
-           token_hash,
-           invited_by_user_id,
-           expires_at,
-           accepted_at,
-           accepted_by_user_id,
-           created_at
-         ) values (
-           'inv_accepted_missing_user',
-           't_1',
-           'member@acme.test',
-           'member',
-           'token-hash-accepted-missing-user',
-           'u_1',
-           now() + interval '7 day',
-           now(),
-           null,
-           now()
-         )`
-      )
-    ).rejects.toThrow(/invites_acceptance_consistency_check/iu);
-  });
-
-  it("enforces invite acceptance consistency when accepted_by_user_id is set", async () => {
-    await client.query(
-      `insert into users (id, primary_email, display_name, created_at, updated_at)
-       values ('u_1', 'owner@acme.test', 'Owner', now(), now())`
-    );
-    await client.query(
-      `insert into users (id, primary_email, display_name, created_at, updated_at)
-       values ('u_2', 'member@acme.test', 'Member', now(), now())`
-    );
-    await client.query(
-      `insert into tenants (id, slug, name, status, created_at, updated_at)
-       values ('t_1', 'acme', 'Acme', 'active', now(), now())`
-    );
-
-    await expect(
-      client.query(
-        `insert into invites (
-           id,
-           tenant_id,
-           email_normalized,
-           role,
-           token_hash,
-           invited_by_user_id,
-           expires_at,
-           accepted_at,
-           accepted_by_user_id,
-           created_at
-         ) values (
-           'inv_user_missing_accepted_at',
-           't_1',
-           'member@acme.test',
-           'member',
-           'token-hash-user-missing-accepted-at',
-           'u_1',
-           now() + interval '7 day',
-           null,
-           'u_2',
-           now()
-         )`
-      )
-    ).rejects.toThrow(/invites_acceptance_consistency_check/iu);
   });
 });

@@ -11,8 +11,8 @@ import { ApiError } from "./auth-service.js";
 
 export interface AgentThreadRecord {
   threadId: string;
-  tenantId: string;
-  tenantSlug: string;
+  workspaceId: string;
+  workspaceSlug: string;
   executionMode: AgentExecutionMode;
   executionHost: AgentExecutionHost;
   status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
@@ -47,7 +47,7 @@ export interface AgentEventRecord {
 
 interface AgentServiceThreadAccess {
   thread: AgentThreadRecord;
-  tenantId: string;
+  workspaceId: string;
 }
 
 interface CloudBootstrapResult {
@@ -459,8 +459,8 @@ function mapThreadRow(row: Record<string, unknown>): AgentThreadRecord {
 
   return {
     threadId: readRecordString(row, "thread_id"),
-    tenantId: readRecordString(row, "tenant_id"),
-    tenantSlug: readRecordString(row, "tenant_slug"),
+    workspaceId: readRecordString(row, "workspace_id"),
+    workspaceSlug: readRecordString(row, "workspace_slug"),
     executionMode: parseExecutionMode(executionModeValue),
     executionHost: parseExecutionHost(executionHostValue),
     status: statusValue as AgentThreadRecord["status"],
@@ -522,7 +522,7 @@ function toThreadEventName(threadId: string): string {
 export interface AgentService {
   createThread(input: {
     userId: string;
-    tenantSlug: string;
+    workspaceSlug: string;
     executionMode: AgentExecutionMode;
     executionHost?: AgentExecutionHost;
     title?: string;
@@ -579,15 +579,15 @@ class PostgresAgentService implements AgentService {
 
   async createThread(input: {
     userId: string;
-    tenantSlug: string;
+    workspaceSlug: string;
     executionMode: AgentExecutionMode;
     executionHost?: AgentExecutionHost;
     title?: string;
     now: Date;
   }): Promise<AgentThreadRecord> {
-    const tenant = await this.requireTenantMembership({
+    const workspace = await this.requireWorkspaceMembership({
       userId: input.userId,
-      tenantSlug: input.tenantSlug
+      workspaceSlug: input.workspaceSlug
     });
 
     const threadId = randomUUID();
@@ -599,8 +599,8 @@ class PostgresAgentService implements AgentService {
       await this.cloudExecutionDriver.bootstrapSession({
         thread: {
           threadId,
-          tenantId: tenant.tenantId,
-          tenantSlug: tenant.tenantSlug,
+          workspaceId: workspace.workspaceId,
+          workspaceSlug: workspace.workspaceSlug,
           executionMode,
           executionHost,
           status: "idle",
@@ -622,7 +622,7 @@ class PostgresAgentService implements AgentService {
           metadata,
           created_at,
           updated_at,
-          tenant_id,
+          workspace_id,
           execution_mode,
           execution_host,
           cloud_session_identifier
@@ -630,7 +630,7 @@ class PostgresAgentService implements AgentService {
         values ($1, $2, 'idle', '{}'::jsonb, $3, $3, $4, $5, $6, $7)
         returning
           thread_id,
-          tenant_id,
+          workspace_id,
           execution_mode,
           execution_host,
           cloud_session_identifier,
@@ -639,17 +639,17 @@ class PostgresAgentService implements AgentService {
           created_at,
           updated_at,
           mode_switched_at,
-          $8::text as tenant_slug
+          $8::text as workspace_slug
       `,
       [
         threadId,
         input.title?.trim() || null,
         input.now.toISOString(),
-        tenant.tenantId,
+        workspace.workspaceId,
         executionMode,
         executionHost,
         cloudSessionIdentifier,
-        tenant.tenantSlug
+        workspace.workspaceSlug
       ]
     );
 
@@ -732,7 +732,7 @@ class PostgresAgentService implements AgentService {
           where thread_id = $1
           returning
             thread_id,
-            tenant_id,
+            workspace_id,
             execution_mode,
             execution_host,
             cloud_session_identifier,
@@ -741,7 +741,7 @@ class PostgresAgentService implements AgentService {
             created_at,
             updated_at,
             mode_switched_at,
-            $6::text as tenant_slug
+            $6::text as workspace_slug
         `,
         [
           input.threadId,
@@ -749,7 +749,7 @@ class PostgresAgentService implements AgentService {
           executionHost,
           input.now.toISOString(),
           `thr-${input.threadId}`,
-          access.thread.tenantSlug
+          access.thread.workspaceSlug
         ]
       );
 
@@ -1324,30 +1324,30 @@ class PostgresAgentService implements AgentService {
     return mapEventRow(result.rows[0] as Record<string, unknown>);
   }
 
-  private async requireTenantMembership(
-    input: { userId: string; tenantSlug: string },
+  private async requireWorkspaceMembership(
+    input: { userId: string; workspaceSlug: string },
     client?: PoolClient
-  ): Promise<{ tenantId: string; tenantSlug: string }> {
+  ): Promise<{ workspaceId: string; workspaceSlug: string }> {
     const executor = client ?? this.pool;
     const membership = await executor.query(
       `
-        select t.id as tenant_id, t.slug as tenant_slug
-        from tenants t
-        inner join memberships m on m.tenant_id = t.id
-        where t.slug = $1 and m.user_id = $2 and m.status = 'active'
+        select w.id as workspace_id, w.slug as workspace_slug
+        from workspaces w
+        inner join workspace_memberships wm on wm.workspace_id = w.id
+        where w.slug = $1 and wm.user_id = $2 and wm.status = 'active'
         limit 1
       `,
-      [input.tenantSlug, input.userId]
+      [input.workspaceSlug, input.userId]
     );
 
     if ((membership.rowCount ?? 0) < 1) {
-      throw new ApiError(403, "TENANT_FORBIDDEN", "You are not a member of this tenant");
+      throw new ApiError(403, "WORKSPACE_FORBIDDEN", "You are not a member of this workspace");
     }
 
     const membershipRow = membership.rows[0] as Record<string, unknown>;
     return {
-      tenantId: readRecordString(membershipRow, "tenant_id"),
-      tenantSlug: readRecordString(membershipRow, "tenant_slug")
+      workspaceId: readRecordString(membershipRow, "workspace_id"),
+      workspaceSlug: readRecordString(membershipRow, "workspace_slug")
     };
   }
 
@@ -1362,8 +1362,8 @@ class PostgresAgentService implements AgentService {
       `
         select
           at.thread_id,
-          at.tenant_id,
-          t.slug as tenant_slug,
+          at.workspace_id,
+          w.slug as workspace_slug,
           at.execution_mode,
           at.execution_host,
           at.cloud_session_identifier,
@@ -1373,7 +1373,7 @@ class PostgresAgentService implements AgentService {
           at.updated_at,
           at.mode_switched_at
         from agent_threads at
-        inner join tenants t on t.id = at.tenant_id
+        inner join workspaces w on w.id = at.workspace_id
         where at.thread_id = $1
         ${lockThread ? "for update" : ""}
       `,
@@ -1389,20 +1389,20 @@ class PostgresAgentService implements AgentService {
     const membership = await executor.query(
       `
         select 1
-        from memberships
-        where tenant_id = $1 and user_id = $2 and status = 'active'
+        from workspace_memberships
+        where workspace_id = $1 and user_id = $2 and status = 'active'
         limit 1
       `,
-      [thread.tenantId, input.userId]
+      [thread.workspaceId, input.userId]
     );
 
     if ((membership.rowCount ?? 0) < 1) {
-      throw new ApiError(403, "TENANT_FORBIDDEN", "You are not a member of this tenant");
+      throw new ApiError(403, "WORKSPACE_FORBIDDEN", "You are not a member of this workspace");
     }
 
     return {
       thread,
-      tenantId: thread.tenantId
+      workspaceId: thread.workspaceId
     };
   }
 }

@@ -3,7 +3,7 @@
 ## Purpose
 
 `apps/api` is the Express 5 backend service for Compass system and auth endpoints.
-It serves health/ping plus Entra-first auth and tenant membership APIs, and publishes OpenAPI from `@compass/contracts`.
+It serves health/ping plus Entra-first auth and organization/workspace APIs, and publishes OpenAPI from `@compass/contracts`.
 
 Runtime migrations expect the canonical single baseline file `db/migrations/1772083000000_initial_schema.mjs`.
 
@@ -17,11 +17,11 @@ Runtime migrations expect the canonical single baseline file `db/migrations/1772
 - `GET /v1/auth/entra/admin-consent/start`
 - `GET /v1/auth/me`
 - `POST /v1/auth/logout`
-- `POST /v1/tenants`
-- `GET /v1/tenants/:tenantSlug`
-- `GET /v1/tenants/:tenantSlug/members`
-- `POST /v1/tenants/:tenantSlug/invites`
-- `POST /v1/tenants/:tenantSlug/invites/:token/accept`
+- `POST /v1/workspaces`
+- `GET /v1/workspaces/:workspaceSlug`
+- `GET /v1/workspaces/:workspaceSlug/members`
+- `POST /v1/workspaces/:workspaceSlug/invites`
+- `POST /v1/workspaces/:workspaceSlug/invites/:token/accept`
 
 ## Config Env Table
 
@@ -32,7 +32,7 @@ Configuration is parsed in `src/config.ts`.
 | `API_HOST`                      | `0.0.0.0`                                | Listening host (trimmed).                                        |
 | `API_PORT`                      | `3001`                                   | Listening port; decimal integer `1-65535`.                       |
 | `LOG_LEVEL`                     | `info`                                   | Log level string (trimmed, normalized).                          |
-| `DATABASE_URL`                  | unset                                    | Required for auth/tenant persistence routes.                     |
+| `DATABASE_URL`                  | unset                                    | Required for auth/workspace persistence routes.                  |
 | `WEB_BASE_URL`                  | `http://localhost:3000`                  | Public web origin used for OIDC redirect defaults.               |
 | `ENTRA_LOGIN_ENABLED`           | `false`                                  | Set `true` to enable Entra login routes.                         |
 | `ENTRA_CLIENT_ID`               | unset                                    | Entra multi-tenant application client id.                        |
@@ -52,7 +52,7 @@ Local template: `apps/api/.env.example`.
 ## Contract and OpenAPI Notes
 
 - `buildApiApp` generates OpenAPI via `buildOpenApiDocument()` from `@compass/contracts`.
-- `GET /openapi.json` should include `/health`, `/v1/ping`, auth, and tenant path operations.
+- `GET /openapi.json` should include `/health`, `/v1/ping`, auth, and workspace path operations.
 - Unknown routes return JSON `404` with `{ code, message }`.
 - Malformed JSON request bodies return JSON `400` with `{ code, message }`.
 - Auth entry endpoints are rate limited per client IP (`429 RATE_LIMITED`).

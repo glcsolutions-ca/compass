@@ -36,6 +36,7 @@ app/
     app/layout/route.tsx
     app/automations/route.tsx
     app/skills/route.tsx
+    app/chat-redirect/route.tsx
     app/workspaces/route.tsx
     app/chat/route.tsx
 ```
@@ -46,24 +47,25 @@ app/
 - `GET /login` -> login route
 - `GET /automations` -> authenticated automations placeholder
 - `GET /skills` -> authenticated skills placeholder
-- `GET /chat` -> authenticated personal chat landing route
-- `GET /chat/:threadId` -> authenticated thread deep-link route
+- `GET /chat` -> authenticated redirect to active workspace chat route
+- `GET /w/:workspaceSlug/chat` -> authenticated workspace chat landing route
+- `GET /w/:workspaceSlug/chat/:threadId` -> authenticated workspace thread deep-link route
 - `GET /workspaces` -> authenticated workspace directory
 
 ## Runtime Behavior
 
 - `/login` shows Entra sign-in and admin-consent messaging.
-- Authenticated users always land in `/chat`.
-- Chat remains workspace-backed internally; backend auth guarantees at least one active membership by auto-provisioning a personal workspace.
-- Chat thread creation resolves tenant slug from real memberships only (no hardcoded fallback slugs).
+- Authenticated users always land in `/chat`, which immediately redirects to `/w/:workspaceSlug/chat`.
+- Chat remains workspace-backed internally; backend auth guarantees at least one active workspace membership by auto-provisioning a personal workspace.
+- Chat thread creation resolves workspace slug from real memberships only (no hardcoded fallback slugs).
 - Authenticated routes render one persistent shell:
   - left navigation rail
   - top utility cluster (`New thread`, `Automations`, `Skills`)
-  - thread history rail for deep-linking back into recent chats
+  - workspace list + thread history rail for deep-linking back into recent chats
   - center content canvas
   - sidebar footer profile launcher with `Settings` + `Personalization` + `Help` + `Log out`
-- Sidebar navigation keeps `Workspaces` as a management entrypoint without in-rail workspace rows.
-- `New thread` creates a fresh thread context via `?thread=<opaque-id>` on `/chat`.
+- Sidebar navigation keeps `Workspaces` as a management entrypoint and shows active workspace rows for quick switching.
+- `New thread` creates a fresh thread context via `?thread=<opaque-id>` on `/w/:workspaceSlug/chat`.
 - Chat UI uses timeline-first layout with assistant-ui primitives:
   - immersive full-screen timeline canvas (no route-level chat header chrome)
   - centered assistant-ui timeline/composer surface with one canonical balanced width token (`~58rem` max via responsive clamp)

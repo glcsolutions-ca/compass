@@ -89,8 +89,8 @@ function parseAgentThreadPayload(data: unknown): AgentThread | null {
 
   return {
     threadId,
-    tenantId: readString((rawThread as { tenantId?: unknown }).tenantId),
-    tenantSlug: readString((rawThread as { tenantSlug?: unknown }).tenantSlug),
+    workspaceId: readString((rawThread as { workspaceId?: unknown }).workspaceId),
+    workspaceSlug: readString((rawThread as { workspaceSlug?: unknown }).workspaceSlug),
     executionMode: normalizeExecutionMode((rawThread as { executionMode?: unknown }).executionMode),
     executionHost: normalizeExecutionHost((rawThread as { executionHost?: unknown }).executionHost),
     status: normalizeThreadStatus((rawThread as { status?: unknown }).status),
@@ -215,7 +215,7 @@ function createBrowserClient(baseUrl: string): UntypedApiClient {
 export async function createAgentThread(
   request: Request,
   payload: {
-    tenantSlug: string;
+    workspaceSlug: string;
     executionMode: AgentExecutionMode;
     title?: string;
   }
@@ -224,7 +224,7 @@ export async function createAgentThread(
   const result = await client.POST("/v1/agent/threads", {
     credentials: "include",
     body: {
-      tenantSlug: payload.tenantSlug,
+      workspaceSlug: payload.workspaceSlug,
       executionMode: payload.executionMode,
       title: payload.title
     }

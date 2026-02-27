@@ -10,7 +10,7 @@ export const CreateWorkspaceSchema = z.object({
 });
 
 export const AcceptInviteSchema = z.object({
-  tenantSlug: z.string().trim().min(1, "Tenant slug is required."),
+  workspaceSlug: z.string().trim().min(1, "Workspace slug is required."),
   inviteToken: z.string().trim().min(1, "Invite token is required.")
 });
 

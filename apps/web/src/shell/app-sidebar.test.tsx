@@ -12,23 +12,41 @@ const AUTH_FIXTURE: AuthShellLoaderData = {
     displayName: "Test User",
     primaryEmail: "user@example.com"
   },
-  memberships: [
+  organizations: [
     {
-      tenantId: "t_1",
-      tenantSlug: "acme",
-      tenantName: "Acme",
+      organizationId: "org_1",
+      organizationSlug: "acme-org",
+      organizationName: "Acme Org",
       role: "owner",
+      status: "active"
+    }
+  ],
+  workspaces: [
+    {
+      id: "ws_personal",
+      organizationId: "org_1",
+      organizationSlug: "acme-org",
+      organizationName: "Acme Org",
+      slug: "personal-user-1",
+      name: "Personal Workspace",
+      isPersonal: true,
+      role: "admin",
       status: "active"
     },
     {
-      tenantId: "t_2",
-      tenantSlug: "globex",
-      tenantName: "Globex",
+      id: "ws_team",
+      organizationId: "org_1",
+      organizationSlug: "acme-org",
+      organizationName: "Acme Org",
+      slug: "globex",
+      name: "Globex",
+      isPersonal: false,
       role: "member",
       status: "active"
     }
   ],
-  lastActiveTenantSlug: "globex"
+  activeWorkspaceSlug: "globex",
+  personalWorkspaceSlug: "personal-user-1"
 };
 
 describe("app sidebar", () => {
@@ -71,7 +89,7 @@ describe("app sidebar", () => {
     const automationsLink = screen.getByRole("link", { name: "Automations" });
     const skillsLink = screen.getByRole("link", { name: "Skills" });
 
-    expect(newThreadLink.getAttribute("href")).toContain("/chat?thread=");
+    expect(newThreadLink.getAttribute("href")).toContain("/w/personal-user-1/chat?thread=");
     expect(automationsLink.getAttribute("href")).toBe("/automations");
     expect(skillsLink.getAttribute("href")).toBe("/skills");
 
@@ -109,15 +127,16 @@ describe("app sidebar", () => {
     expect(skillsIndex).toBeGreaterThan(automationsIndex);
   });
 
-  it("does not render workspace rows when user has no memberships", () => {
+  it("does not render workspace rows when user has no active workspaces", () => {
     render(
       <MemoryRouter initialEntries={["/workspaces"]}>
         <SidebarProvider>
           <AppSidebar
             auth={{
               ...AUTH_FIXTURE,
-              memberships: [],
-              lastActiveTenantSlug: null
+              workspaces: [],
+              activeWorkspaceSlug: null,
+              personalWorkspaceSlug: null
             }}
             buildSettingsHref={(section) => `/workspaces?modal=settings&section=${section}`}
           />
@@ -149,7 +168,7 @@ describe("app sidebar", () => {
     expect(chatLink.getAttribute("aria-label")).toBe("Chat");
 
     const utilityNewThread = scoped.getByRole("link", { name: "New thread" });
-    expect(utilityNewThread.getAttribute("href")).toContain("/chat?thread=");
+    expect(utilityNewThread.getAttribute("href")).toContain("/w/personal-user-1/chat?thread=");
     expect(scoped.getByRole("link", { name: "Automations" })).toBeTruthy();
     expect(scoped.getByRole("link", { name: "Skills" })).toBeTruthy();
 

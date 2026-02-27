@@ -338,6 +338,7 @@ output containerAppsEnvironmentName string = containerEnvironment.outputs.enviro
 output containerAppsEnvironmentId string = containerEnvironment.outputs.environmentId
 output containerAppsDefaultDomain string = containerEnvironment.outputs.defaultDomain
 output apiBaseUrlOutput string = apiBaseUrl
+output webBaseUrlOutput string = webBaseUrl
 output acrId string = acr.outputs.registryId
 output acrNameOutput string = acr.outputs.registryNameOutput
 output acrLoginServer string = acr.outputs.loginServer

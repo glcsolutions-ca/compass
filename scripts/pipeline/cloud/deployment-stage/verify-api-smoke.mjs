@@ -4,6 +4,7 @@ const targetBaseUrl = requireEnv("TARGET_API_BASE_URL").replace(/\/$/, "");
 const verifyShaHeader = process.env.VERIFY_SHA_HEADER?.trim() === "true";
 const expectedSha = process.env.EXPECTED_SHA?.trim() || getHeadSha();
 const apiSmokeSessionCookie = process.env.API_SMOKE_SESSION_COOKIE?.trim();
+const expectedEntraRedirectUri = process.env.EXPECTED_ENTRA_REDIRECT_URI?.trim();
 
 async function request(path, init) {
   const requestedAt = new Date().toISOString();
@@ -132,6 +133,14 @@ async function main() {
         authStartAbsoluteUrl?.toString() ??
         (authStartLocation || "location header is missing or malformed")
     });
+    if (expectedEntraRedirectUri) {
+      const actualEntraRedirectUri = authStartAbsoluteUrl?.searchParams.get("redirect_uri") ?? null;
+      assertions.push({
+        id: "auth-start-redirect-uri",
+        pass: actualEntraRedirectUri === expectedEntraRedirectUri,
+        details: `expected=${expectedEntraRedirectUri}, actual=${actualEntraRedirectUri ?? "missing"}`
+      });
+    }
 
     if (verifyShaHeader) {
       const headerSha = health.headers.get("x-release-sha") ?? openapi.headers.get("x-release-sha");
@@ -166,6 +175,7 @@ async function main() {
     reasonCode,
     reason,
     targetBaseUrl,
+    expectedEntraRedirectUri: expectedEntraRedirectUri || null,
     elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
     responses: {
       health: responsePreview(health),

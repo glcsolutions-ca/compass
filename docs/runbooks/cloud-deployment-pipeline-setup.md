@@ -41,6 +41,46 @@ Secrets required in `KEY_VAULT_NAME`:
 - `auth-oidc-state-encryption-key`
 - `oauth-token-signing-secret`
 
+## Secret Rotation Hygiene
+
+Rotate Entra secret and publish to Key Vault:
+
+```bash
+APP_ID="0f3ba6d0-5415-441a-b8af-357699d364d1"
+KEY_VAULT_NAME="<kv-name>"
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+
+CLIENT_SECRET="$(az ad app credential reset \
+  --id "$APP_ID" \
+  --append \
+  --display-name "compass-prod-$STAMP" \
+  --years 1 \
+  --query password -o tsv)"
+
+az keyvault secret set \
+  --vault-name "$KEY_VAULT_NAME" \
+  --name "entra-client-secret" \
+  --value "$CLIENT_SECRET" \
+  --output none
+```
+
+Review credential inventory and remove stale credentials:
+
+```bash
+az ad app credential list --id "$APP_ID" -o table
+az ad app credential delete --id "$APP_ID" --key-id "<old-key-id>"
+```
+
+Confirm Key Vault versioning is active:
+
+```bash
+az keyvault secret list-versions \
+  --vault-name "$KEY_VAULT_NAME" \
+  --name "entra-client-secret" \
+  --query "[].{version:id,updated:attributes.updated,enabled:attributes.enabled}" \
+  -o table
+```
+
 ## Scratch Recreate Procedure
 
 Use this to recreate from zero (no data preservation).

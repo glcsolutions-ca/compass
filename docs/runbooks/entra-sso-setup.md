@@ -1,6 +1,14 @@
-# Entra SSO Setup Runbook
+# Entra SSO Setup Runbook (KeyVault-First)
 
-Configure enterprise sign-in for `apps/web` and `apps/api` (front-door login and OIDC callback handling).
+Configure and operate Entra login for the single cloud environment.
+
+## Fundamental Goal
+
+Keep one source of truth per concern:
+
+- Entra app registration controls redirect URIs and OAuth credentials.
+- Azure Key Vault stores runtime secrets (`entra-client-secret` and related auth secrets).
+- Cloud pipeline on `main` deploys and verifies runtime behavior.
 
 ## Scope
 
@@ -13,140 +21,136 @@ Configure enterprise sign-in for `apps/web` and `apps/api` (front-door login and
 
 ## Prerequisites
 
-- Identity bootstrap already completed (`docs/runbooks/cloud-deployment-pipeline-setup.md`).
-- Ability to update:
-  - `infra/identity/env/prod.tfvars` (localhost-only redirect defaults)
-  - GitHub environment variables/secrets (`acceptance` and `production`)
+- Custom domains are live and TLS-bound:
+  - `compass.glcsolutions.ca` (web)
+  - `api.compass.glcsolutions.ca` (api)
+- Cloud infra contract in repo:
+  - [`infra/azure/environments/cloud.bicepparam`](../../infra/azure/environments/cloud.bicepparam)
+- Key Vault exists and is reachable by runtime identity.
 
-## 1. Configure Entra App Registration
+## 1. Configure Entra Redirect URIs
 
-1. Keep only localhost callback URLs in [`prod.tfvars`](../../infra/identity/env/prod.tfvars) `web_redirect_uris`.
-2. Set `ACA_WEB_CUSTOM_DOMAIN=<web-host>` in GitHub environment variables (`acceptance` and `production`).
-3. Apply identity Terraform (see [`infra/identity/README.md`](../../infra/identity/README.md)); the module merges localhost defaults with `https://<ACA_WEB_CUSTOM_DOMAIN>/v1/auth/entra/callback` and enforces `signInAudience=AzureADMultipleOrgs` for the web app registration.
-4. Capture the web client id:
+Set redirect URIs to custom-domain callback plus localhost dev callbacks only.
 
 ```bash
-terraform -chdir=infra/identity output -raw web_application_client_id
+APP_ID="0f3ba6d0-5415-441a-b8af-357699d364d1"
+
+az ad app update \
+  --id "$APP_ID" \
+  --web-redirect-uris \
+    "https://compass.glcsolutions.ca/v1/auth/entra/callback" \
+    "http://localhost:3000/v1/auth/entra/callback" \
+    "http://127.0.0.1:3000/v1/auth/entra/callback"
 ```
 
-5. Create/update a client secret for that app registration (store value immediately; Entra only shows it once):
+Verify:
 
 ```bash
-WEB_APP_CLIENT_ID="<terraform output web_application_client_id>"
-az ad app credential reset \
-  --id "$WEB_APP_CLIENT_ID" \
-  --display-name "compass-web-sso" \
+az ad app show --id "$APP_ID" --query "web.redirectUris" -o tsv
+```
+
+Do not keep internal ACA host callbacks once custom-domain auth is stable.
+
+## 2. Rotate Entra Client Secret and Store in Key Vault
+
+Create a fresh credential and immediately write it to Key Vault `entra-client-secret`.
+
+```bash
+APP_ID="0f3ba6d0-5415-441a-b8af-357699d364d1"
+KEY_VAULT_NAME="<kv-name>"
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+
+CLIENT_SECRET="$(az ad app credential reset \
+  --id "$APP_ID" \
   --append \
+  --display-name "compass-prod-$STAMP" \
   --years 1 \
-  --query password -o tsv
+  --query password -o tsv)"
+
+az keyvault secret set \
+  --vault-name "$KEY_VAULT_NAME" \
+  --name "entra-client-secret" \
+  --value "$CLIENT_SECRET" \
+  --output none
 ```
 
-## 2. Configure GitHub Environment Inputs
-
-Set these in both `acceptance` and `production`.
-
-### Variables
-
-- `ENTRA_LOGIN_ENABLED=true`
-- `ENTRA_CLIENT_ID=<web app client id>`
-- `ACA_WEB_CUSTOM_DOMAIN=<web-host>`
-- `ENTRA_ALLOWED_TENANT_IDS=<tenant-guid>[,<tenant-guid>...]`
-- `AUTH_DEV_FALLBACK_ENABLED=false`
-
-### Secrets
-
-- `ENTRA_CLIENT_SECRET=<web app client secret>`
-- `WEB_SESSION_SECRET=<32+ char random secret>`
-- `AUTH_OIDC_STATE_ENCRYPTION_KEY=<32-byte base64url key>`
-
-Generate a strong session secret if needed:
+Prune stale app credentials (keep only the newest production credential and any approved local-dev credential):
 
 ```bash
-openssl rand -base64 48
+az ad app credential list --id "$APP_ID" -o table
+# delete by keyId when credential is no longer needed
+az ad app credential delete --id "$APP_ID" --key-id "<old-key-id>"
 ```
 
-Generate `AUTH_OIDC_STATE_ENCRYPTION_KEY` (32 bytes, base64url):
+## 3. Seed and Validate Key Vault Secret Contract
+
+Required secrets:
+
+- `postgres-admin-password`
+- `web-session-secret`
+- `entra-client-secret`
+- `auth-oidc-state-encryption-key`
+- `oauth-token-signing-secret`
+
+Seed/update:
 
 ```bash
-openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
+export KEY_VAULT_NAME="<kv-name>"
+# optionally set ENTRA_CLIENT_SECRET and other vars before running
+node scripts/infra/seed-keyvault-secrets.mjs
 ```
 
-### Environment Parity Checklist (Required)
-
-Before deployment, verify these values are present in **both** GitHub environments (`acceptance` and
-`production`):
-
-- Variables: `ENTRA_LOGIN_ENABLED`, `ENTRA_CLIENT_ID`, `ACA_WEB_CUSTOM_DOMAIN`,
-  `ENTRA_ALLOWED_TENANT_IDS`, `AUTH_DEV_FALLBACK_ENABLED`
-- Secrets: `ENTRA_CLIENT_SECRET`, `WEB_SESSION_SECRET`, `AUTH_OIDC_STATE_ENCRYPTION_KEY`
-
-Quick checks:
+Validate contract:
 
 ```bash
-gh variable list -e acceptance
-gh variable list -e production
-gh secret list -e acceptance
-gh secret list -e production
+node scripts/pipeline/cloud/deployment-stage/validate-keyvault-secrets.mjs
 ```
 
-## 3. Deploy Configuration
+## 4. Deploy Through `main` Pipeline
 
-Run normal pipeline convergence (`deploy-infra` path). The web and API container apps must be updated with Entra settings:
+Push changes to `main` and use `cloud-deployment-pipeline.yml` as the only deploy path.
 
-- Web app:
-  - `WEB_SESSION_SECRET`
-  - `WEB_BASE_URL` (derived by infra from `ACA_WEB_CUSTOM_DOMAIN`)
-- API app:
-  - `ENTRA_LOGIN_ENABLED`
-  - `ENTRA_CLIENT_ID`
-  - `ENTRA_CLIENT_SECRET` (secret ref)
-  - `AUTH_OIDC_STATE_ENCRYPTION_KEY` (secret ref)
-  - `WEB_BASE_URL`
-  - `ENTRA_ALLOWED_TENANT_IDS`
-  - `AUTH_DEV_FALLBACK_ENABLED`
+The pipeline now resolves production URLs from Bicep deployment outputs, not internal ACA FQDNs:
 
-## 4. Verify Runtime Behavior
+- `apiBaseUrlOutput`
+- `webBaseUrlOutput`
 
-1. Check API container app env:
+Smoke checks fail closed if Entra authorize redirect does not carry:
+
+- `redirect_uri=https://compass.glcsolutions.ca/v1/auth/entra/callback`
+
+## 5. Verify Runtime Behavior
+
+Check API health:
 
 ```bash
-az containerapp show \
-  --resource-group "$AZURE_RESOURCE_GROUP" \
-  --name "$ACA_API_APP_NAME" \
-  --query "properties.template.containers[0].env[].name" \
-  -o tsv
+curl -i "https://api.compass.glcsolutions.ca/health"
 ```
 
-2. Browser checks:
-   - Open `https://<web-host>/login`: should show "Sign in with Microsoft".
-   - Open `https://<web-host>/`: should render the same login front-door experience.
+Check auth start redirect URI:
+
+```bash
+curl -sSI "https://compass.glcsolutions.ca/v1/auth/entra/start?returnTo=%2F" | grep -i '^location:'
+```
+
+The `location` URL must include:
+
+`redirect_uri=https%3A%2F%2Fcompass.glcsolutions.ca%2Fv1%2Fauth%2Fentra%2Fcallback`
 
 ## Troubleshooting
 
-- `Microsoft Entra Login Disabled`:
-  - `ENTRA_LOGIN_ENABLED` is not `true` in deployed env.
-  - Infra deployment has not converged with latest env/secrets.
-- `ENTRA_CONFIG_REQUIRED` from `/v1/auth/entra/start`:
-  - Missing `ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET`, or `AUTH_OIDC_STATE_ENCRYPTION_KEY`.
-  - Infra deployment has not converged `WEB_BASE_URL` and auth secrets.
-- `production-blackbox-verify` fails `auth-start-*` assertions:
-  - Verify Entra app client id in env matches runtime (`ENTRA_CLIENT_ID`).
-  - Verify authorize redirect includes
-    `.../organizations/oauth2/v2.0/authorize` and callback
-    `https://<web-host>/v1/auth/entra/callback`.
 - `AADSTS50011` (redirect URI mismatch):
-  - Ensure Entra web redirect URIs include `https://<web-host>/v1/auth/entra/callback` (not `/api/auth/entra/callback`).
-  - Re-apply `infra/identity` after updating `ACA_WEB_CUSTOM_DOMAIN` and `infra/identity/env/prod.tfvars`.
-- `INTERNAL_SERVER_ERROR` with `relation "auth_oidc_requests" does not exist`:
-  - Runtime is ahead of DB schema; ensure all committed migrations have run in the migration job.
-- `MIGRATION_EXECUTION_FAILED` with `Not run migration ... is preceding already run migration ...`:
-  - Migration history is out of sync with the deployed image. For clean-slate environments, delete/recreate the `compass` database and redeploy.
-- Login returns `tenant_not_allowed`:
-  - Add the tenant GUID to `ENTRA_ALLOWED_TENANT_IDS`.
+  - Entra app redirect list is missing or incorrect for `https://compass.glcsolutions.ca/v1/auth/entra/callback`.
+  - Update redirect URIs and retry.
+- `/v1/auth/entra/start` returns internal ACA callback host:
+  - API runtime `WEB_BASE_URL` is wrong.
+  - Re-run cloud deploy from `main` and confirm IaC params keep custom domains set.
+- `ENTRA_CONFIG_REQUIRED`:
+  - Missing Key Vault secret(s) or runtime cannot read them.
+  - Validate secret contract and Key Vault RBAC (`Key Vault Secrets User`) for runtime identity.
 
 ## References
 
-- [`apps/web/README.md`](../../apps/web/README.md)
 - [`infra/azure/README.md`](../../infra/azure/README.md)
-- [`infra/identity/README.md`](../../infra/identity/README.md)
 - [`docs/runbooks/cloud-deployment-pipeline-setup.md`](./cloud-deployment-pipeline-setup.md)
+- [`infra/identity/README.md`](../../infra/identity/README.md)

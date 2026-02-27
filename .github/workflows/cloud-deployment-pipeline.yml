@@ -459,8 +459,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          api_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_API_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
-          web_prod_url="https://$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_WEB_APP_NAME" --query 'properties.configuration.ingress.fqdn' --output tsv)"
+          deployment_json=".artifacts/infra/$HEAD_SHA/deployment.json"
+          api_prod_url="$(jq -er '.properties.outputs.apiBaseUrlOutput.value' "$deployment_json")"
+          web_prod_url="$(jq -er '.properties.outputs.webBaseUrlOutput.value' "$deployment_json")"
 
           echo "api_prod_url=$api_prod_url" >> "$GITHUB_OUTPUT"
           echo "web_prod_url=$web_prod_url" >> "$GITHUB_OUTPUT"
@@ -486,6 +487,7 @@ jobs:
     env:
       HEAD_SHA: ${{ needs.deploy_cloud.outputs.head_sha }}
       TARGET_API_BASE_URL: ${{ needs.deploy_cloud.outputs.api_prod_url }}
+      EXPECTED_ENTRA_REDIRECT_URI: ${{ needs.deploy_cloud.outputs.web_prod_url }}/v1/auth/entra/callback
     steps:
       - name: Checkout
         uses: actions/checkout@v4

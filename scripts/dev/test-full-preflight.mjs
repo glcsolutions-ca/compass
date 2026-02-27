@@ -2,7 +2,6 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { Client } from "pg";
-import { withCcsGuardrail } from "../pipeline/shared/ccs-contract.mjs";
 
 function normalizeValue(value) {
   if (typeof value !== "string") {
@@ -169,36 +168,17 @@ export async function runTestFullPreflight({
 }
 
 async function main() {
-  await withCcsGuardrail({
-    guardrailId: "test.full-preflight",
-    command: "pnpm test:full",
-    passCode: "FULL000",
-    passRef: "docs/agents/workflow-playbook.md#standard-agent-loop",
-    run: async () => {
-      await runTestFullPreflight();
-      return { status: "pass", code: "FULL000" };
-    },
-    mapError: (error) => {
-      if (error instanceof PreflightError) {
-        printPreflightError(error);
-        return {
-          code: error.code,
-          why: error.details.join(" ").replace(/^- /u, ""),
-          fix: "Start local Postgres and rerun full test gate.",
-          doCommands: error.guidance,
-          ref: "docs/agents/workflow-playbook.md#standard-agent-loop"
-        };
-      }
-
-      return {
-        code: "CCS_UNEXPECTED_ERROR",
-        why: error instanceof Error ? error.message : String(error),
-        fix: "Resolve preflight runtime errors before running full gate.",
-        doCommands: ["pnpm test:full"],
-        ref: "docs/ccs.md#output-format"
-      };
+  try {
+    await runTestFullPreflight();
+  } catch (error) {
+    if (error instanceof PreflightError) {
+      printPreflightError(error);
+      process.exitCode = 1;
+      return;
     }
-  });
+
+    throw error;
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

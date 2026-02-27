@@ -1,7 +1,6 @@
 import { execFile } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { createCcsError, withCcsGuardrail } from "../shared/ccs-contract.mjs";
 
 const execFileAsync = promisify(execFile);
 const PRETTIER_FORMAT_FAILURE_CODE = 1;
@@ -81,37 +80,16 @@ export async function runFormatCheck({ execFileFn = execFileAsync, logger = cons
 }
 
 export async function main({ logger = console } = {}) {
-  await withCcsGuardrail({
-    guardrailId: "format.check",
-    command: "pnpm format:check",
-    passCode: "FMT000",
-    passRef: "docs/ccs.md#output-format",
-    logger,
-    run: async () => {
-      const result = await runFormatCheck({ logger });
-      if (result.status === "fail") {
-        throw createCcsError({
-          code: "FMT001",
-          why: "Formatting violations detected.",
-          fix: "Ensure all tracked files are Prettier-compliant.",
-          doCommands: ["pnpm exec lint-staged", "pnpm format", "pnpm test:quick"],
-          ref: "docs/agents/workflow-playbook.md#standard-agent-loop"
-        });
-      }
-
-      return { status: "pass", code: "FMT000" };
-    },
-    mapError: (error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        code: "CCS_UNEXPECTED_ERROR",
-        why: message,
-        fix: "Run format check with a valid local workspace and retry.",
-        doCommands: ["pnpm format:check"],
-        ref: "docs/ccs.md#output-format"
-      };
+  try {
+    const result = await runFormatCheck({ logger });
+    if (result.status === "fail") {
+      process.exitCode = 1;
     }
-  });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(message);
+    process.exitCode = 1;
+  }
 }
 
 const isDirectExecution =

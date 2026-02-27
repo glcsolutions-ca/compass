@@ -2,7 +2,6 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
-import { withCcsGuardrail } from "../shared/ccs-contract.mjs";
 import {
   appendGithubOutput,
   execGit,
@@ -332,25 +331,10 @@ async function main() {
     recovery_result_path: artifactPath,
     revert_commit_sha: revertCommitSha || ""
   });
-
-  return { status: "pass", code: "AUTO_RECOVER_HANDLED" };
 }
 
 const invokedAsScript = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (invokedAsScript) {
-  void withCcsGuardrail({
-    guardrailId: "main.auto-recover",
-    command: "node scripts/pipeline/commit/auto-recover-main.mjs",
-    passCode: "AUTO_RECOVER_HANDLED",
-    passRef: "docs/commit-stage-policy.md#mainline-red-recovery",
-    run: main,
-    mapError: (error) => ({
-      code: "CCS_UNEXPECTED_ERROR",
-      why: error instanceof Error ? error.message : String(error),
-      fix: "Resolve main auto-recovery runtime errors.",
-      doCommands: ["node scripts/pipeline/commit/auto-recover-main.mjs"],
-      ref: "docs/commit-stage-policy.md#mainline-red-recovery"
-    })
-  });
+  void main();
 }

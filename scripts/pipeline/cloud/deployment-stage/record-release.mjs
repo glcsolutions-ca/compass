@@ -1,5 +1,4 @@
 import { appendGithubOutput, getHeadSha, requireEnv } from "./utils.mjs";
-import { withCcsGuardrail } from "../../shared/ccs-contract.mjs";
 
 const apiVersion = "2022-11-28";
 const token = requireEnv("GITHUB_TOKEN");
@@ -96,20 +95,6 @@ async function main() {
   });
 
   console.info(`Recorded successful production deployment ${deploymentId} for ${headSha}`);
-  return { status: "pass", code: "RECORD_RELEASE_PASS" };
 }
 
-void withCcsGuardrail({
-  guardrailId: "deployment.release-record",
-  command: "node scripts/pipeline/cloud/deployment-stage/record-release.mjs",
-  passCode: "RECORD_RELEASE_PASS",
-  passRef: "docs/ccs.md#output-format",
-  run: main,
-  mapError: (error) => ({
-    code: "RECORD_RELEASE_FAIL",
-    why: error instanceof Error ? error.message : String(error),
-    fix: "Resolve GitHub deployment record creation errors.",
-    doCommands: ["node scripts/pipeline/cloud/deployment-stage/record-release.mjs"],
-    ref: "docs/ccs.md#output-format"
-  })
-});
+void main();

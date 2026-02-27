@@ -1,7 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { createCcsError, withCcsGuardrail } from "../shared/ccs-contract.mjs";
 
 const REQUIRED_PATHS = [
   "apps/web/components.json",
@@ -470,34 +469,15 @@ export function runWebConstitutionCheck({ cwd = process.cwd(), logger = console 
 }
 
 export async function main({ logger = console } = {}) {
-  await withCcsGuardrail({
-    guardrailId: "web.constitution-policy",
-    command: "pnpm ci:web-constitution-policy",
-    passCode: "WEB000",
-    passRef: "docs/architecture/frontend-constitution.md",
-    logger,
-    run: async () => {
-      const result = runWebConstitutionCheck({ logger });
-      if (result.status === "fail") {
-        throw createCcsError({
-          code: "WEB001",
-          why: `Frontend constitution violations detected (${result.violations.length}).`,
-          fix: "Align frontend structure and boundaries with the constitution.",
-          doCommands: ["pnpm ci:web-constitution-policy", "pnpm test:quick"],
-          ref: "docs/architecture/frontend-constitution.md"
-        });
-      }
-
-      return { status: "pass", code: "WEB000" };
-    },
-    mapError: (error) => ({
-      code: "CCS_UNEXPECTED_ERROR",
-      why: error instanceof Error ? error.message : String(error),
-      fix: "Resolve web constitution guardrail runtime errors.",
-      doCommands: ["pnpm ci:web-constitution-policy"],
-      ref: "docs/ccs.md#output-format"
-    })
-  });
+  try {
+    const result = runWebConstitutionCheck({ logger });
+    if (result.status === "fail") {
+      process.exitCode = 1;
+    }
+  } catch (error) {
+    logger.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
 }
 
 const isDirectExecution =

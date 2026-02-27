@@ -60,22 +60,22 @@ Guardrails must emit a single, stable header and a minimal set of fields.
 
 - Exit code: `0`
 - Output (example):
-  - `CCS:PASS <guardrail_id> CODE:<reason_code>`
+  - `CCS:PASS <guardrail_id>`
 
 ### FAIL
 
 - Exit code: non-zero
 - Output must include:
-  - `CCS:FAIL <guardrail_id> CODE:<reason_code>`
+  - `CCS:FAIL <guardrail_id>`
   - `WHY:` one-line cause (what violated the contract)
   - `FIX:` one-line intent (what must be true)
   - `DO:` exact commands to run (copy/paste ready)
-  - `REF:` pointer to docs in-repo
+  - `REF:` optional pointer to docs in-repo
 
 Example:
 
 ```text
-CCS:FAIL trunk.green CODE:TRUNK001
+CCS:FAIL trunk.green
 WHY: main is behind origin/main (non-fast-forward risk)
 FIX: rebase onto origin/main before making changes
 DO:
@@ -85,19 +85,6 @@ git pull --rebase origin main
 <FAST_CHECK_CMD>
 REF: docs/ccs.md#trunk
 ```
-
----
-
-## Canonical implementation
-
-- Shared helper API: `scripts/pipeline/shared/ccs-contract.mjs`
-- Registry of enforced guardrails: `.github/policy/ccs-guardrails.json`
-- Contract compliance tests: `scripts/pipeline/commit/ccs-contract-compliance.test.mjs`
-
-Artifact payloads may include additive CCS metadata:
-
-- `guardrailId`
-- `ccsVersion: "1"`
 
 ---
 

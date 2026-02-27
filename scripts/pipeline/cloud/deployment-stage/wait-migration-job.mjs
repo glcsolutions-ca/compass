@@ -7,7 +7,6 @@ import {
   sleep,
   writeDeployArtifact
 } from "./utils.mjs";
-import { withCcsGuardrail } from "../../shared/ccs-contract.mjs";
 
 const resourceGroup = requireEnv("AZURE_RESOURCE_GROUP");
 const jobName = requireEnv("ACA_MIGRATE_JOB_NAME");
@@ -213,7 +212,7 @@ async function main() {
       });
 
       console.info(`Migration execution ${executionName} succeeded (${status})`);
-      return { status: "pass", code: "MIGRATION_WAIT_PASS" };
+      return;
     }
 
     if (["failed", "failure", "cancelled", "canceled", "error"].includes(status)) {
@@ -247,21 +246,4 @@ async function main() {
   });
 }
 
-void withCcsGuardrail({
-  guardrailId: "deployment.migration-wait",
-  command: "node scripts/pipeline/cloud/deployment-stage/wait-migration-job.mjs",
-  passCode: "MIGRATION_WAIT_PASS",
-  passRef: "docs/runbooks/migration-safety.md",
-  run: main,
-  mapError: (error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    const matchedCode = message.match(/failed:\s([A-Z0-9_]+)\s\(/u)?.[1] ?? "CCS_UNEXPECTED_ERROR";
-    return {
-      code: matchedCode,
-      why: message,
-      fix: "Ensure migration job reaches a successful terminal state.",
-      doCommands: ["node scripts/pipeline/cloud/deployment-stage/wait-migration-job.mjs"],
-      ref: "docs/runbooks/migration-safety.md"
-    };
-  }
-});
+void main();

@@ -2,7 +2,6 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { createCcsError, withCcsGuardrail } from "../shared/ccs-contract.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -189,30 +188,10 @@ async function main() {
     }
     console.error("");
     console.error("Fix terminology violations and rerun: pnpm ci:terminology-policy");
-    throw createCcsError({
-      code: "TERM001",
-      why: `Terminology policy violations detected (${violations.length}).`,
-      fix: "Replace legacy terms with canonical terminology.",
-      doCommands: ["pnpm ci:terminology-policy", "pnpm test:quick"],
-      ref: "docs/ccs.md#output-format"
-    });
+    process.exit(1);
   }
 
   console.info(`Farley terminology policy passed for ${scanFiles.length} files.`);
-  return { status: "pass", code: "TERM000" };
 }
 
-void withCcsGuardrail({
-  guardrailId: "terminology.policy",
-  command: "pnpm ci:terminology-policy",
-  passCode: "TERM000",
-  passRef: "docs/ccs.md#output-format",
-  run: main,
-  mapError: (error) => ({
-    code: "CCS_UNEXPECTED_ERROR",
-    why: error instanceof Error ? error.message : String(error),
-    fix: "Resolve terminology policy runtime errors and rerun the guardrail.",
-    doCommands: ["pnpm ci:terminology-policy"],
-    ref: "docs/ccs.md#output-format"
-  })
-});
+void main();

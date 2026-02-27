@@ -4,35 +4,29 @@
 
 - Cause: docs-critical paths changed without required doc updates.
 - Where it appears: `determine-scope` job in `commit-stage.yml` and `integration-gate.yml`.
-- Primary action: run the failing guardrail and execute the printed `DO:` commands exactly.
-- Deep diagnostics: inspect `.artifacts/docs-drift/<sha>/result.json`.
+- Fix: update required docs (`docs/commit-stage-policy.md`, `.github/workflows/README.md`, or mapped policy targets).
 
 ## `commit-stage` Failure
 
 - Cause: required fast checks failed, docs-drift blocked, or commit-stage SLO was enforced and missed.
-- Primary action: run the failing guardrail and execute the printed `DO:` commands exactly.
-- Deep diagnostics: inspect `.artifacts/commit-stage/<sha>/result.json`.
+- Fix: inspect `.artifacts/commit-stage/<sha>/result.json`, fix forward on `main`, and push a corrective commit.
 
 ## `integration-gate` Failure
 
 - Cause: integration checks failed (`build-compile`, `migration-safety`, `runtime-contract-smoke`, or `minimal-integration-smoke`).
-- Primary action: run the failing guardrail and execute the printed `DO:` commands exactly.
-- Deep diagnostics: inspect `.artifacts/integration-gate/<sha>/result.json`.
+- Fix: inspect `.artifacts/integration-gate/<sha>/result.json`, fix forward on `main`, and push a corrective commit.
 
 ## `automated-acceptance-test-gate` Failure
 
 - Cause: required acceptance checks failed for current release candidate scope, release candidate contract failed, or identity config contract failed.
-- Primary action: run the failing guardrail and execute the printed `DO:` commands exactly.
-- Deep diagnostics: inspect `.artifacts/automated-acceptance-test-gate/<sha>/result.json`.
+- Fix: inspect `.artifacts/automated-acceptance-test-gate/<sha>/result.json`, fix forward, and re-run delivery.
 
 ## `deployment-stage` Failure
 
 - Cause: deployment-stage mutation or post-deployment verification gate failed for an accepted release candidate.
-- Primary action: run the failing guardrail and execute the printed `DO:` commands exactly.
-- Deep diagnostics: inspect `.artifacts/deployment-stage/<sha>/result.json` and `.artifacts/release/<sha>/decision.json`.
+- Fix: inspect `.artifacts/deployment-stage/<sha>/result.json` and `.artifacts/release/<sha>/decision.json`, then fix forward or run `cloud-deployment-pipeline-replay.yml` with `release_candidate_sha`.
 
 ## `codex-review-trusted` Failure
 
 - Cause: trusted review workflow failed to fetch PR diff data or review output validation failed.
-- Primary action: run the failing guardrail and execute the printed `DO:` commands exactly.
-- Note: this workflow is non-blocking; use it for supplemental feedback.
+- Fix: rerun `codex-review-trusted.yml` manually when you want supplemental feedback; it is non-blocking.

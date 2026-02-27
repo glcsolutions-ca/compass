@@ -2,7 +2,6 @@ import { execFile } from "node:child_process";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { createCcsError, withCcsGuardrail } from "../shared/ccs-contract.mjs";
 import { loadPipelinePolicy, matchesAnyPattern } from "../shared/pipeline-utils.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -179,44 +178,23 @@ export async function runHighRiskMainlinePolicyCheck({
 }
 
 export async function main() {
-  await withCcsGuardrail({
-    guardrailId: "high-risk.mainline-policy",
-    command: "pnpm ci:high-risk-mainline-policy",
-    passRef: "tests/policy/README.md#troubleshooting",
-    run: async () => {
-      const result = await runHighRiskMainlinePolicyCheck();
+  const result = await runHighRiskMainlinePolicyCheck();
 
-      if (result.status === "fail") {
-        console.error(result.message);
-        throw createCcsError({
-          code: result.reasonCode,
-          why: `High-risk staged files were detected on ${result.branch || "main"}.`,
-          fix: "Route this change through a PR with CODEOWNER review.",
-          doCommands: [
-            "git switch -c <type>/<scope>-<summary>",
-            'git commit -m "<type>(<scope>): <summary>"',
-            "git push -u origin <branch>",
-            "gh pr create --fill"
-          ],
-          ref: "tests/policy/README.md#troubleshooting"
-        });
-      }
+  if (result.status === "fail") {
+    console.error(result.message);
+    process.exit(1);
+  }
 
-      return { status: "pass", code: result.reasonCode };
-    },
-    mapError: (error) => ({
-      code: "CCS_UNEXPECTED_ERROR",
-      why: error instanceof Error ? error.message : String(error),
-      fix: "Resolve high-risk policy runtime errors and rerun the guardrail.",
-      doCommands: ["pnpm ci:high-risk-mainline-policy"],
-      ref: "docs/ccs.md#output-format"
-    })
-  });
+  console.info(`High-risk mainline policy passed (${result.reasonCode}).`);
 }
 
 const isDirectExecution =
   typeof process.argv[1] === "string" && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isDirectExecution) {
-  void main();
+  void main().catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(message);
+    process.exit(1);
+  });
 }

@@ -1,5 +1,4 @@
 import path from "node:path";
-import { withCcsGuardrail } from "../shared/ccs-contract.mjs";
 import {
   appendGithubOutput,
   appendGithubStepSummary,
@@ -40,8 +39,6 @@ async function main() {
 
   const payload = {
     schemaVersion: "1",
-    ccsVersion: "1",
-    guardrailId: "scope.resolve",
     generatedAt: new Date().toISOString(),
     policyPath,
     baseSha,
@@ -105,20 +102,6 @@ async function main() {
   console.info(
     `Scope resolved: changeClass=${changeClass}, runtime=${scope.runtime}, desktop=${scope.desktop}, infra=${scope.infra}, identity=${scope.identity}, deploymentPipelineConfigChanged=${deploymentPipelineConfigChanged}`
   );
-  return { status: "pass", code: "SCOPE000" };
 }
 
-void withCcsGuardrail({
-  guardrailId: "scope.resolve",
-  command: "node scripts/pipeline/commit/resolve-scope.mjs",
-  passCode: "SCOPE000",
-  passRef: "docs/commit-stage-policy.md#objective",
-  run: main,
-  mapError: (error) => ({
-    code: "SCOPE001",
-    why: error instanceof Error ? error.message : String(error),
-    fix: "Resolve scope resolution input/runtime issues.",
-    doCommands: ["node scripts/pipeline/commit/resolve-scope.mjs"],
-    ref: "docs/commit-stage-policy.md#objective"
-  })
-});
+void main();

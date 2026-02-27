@@ -8,7 +8,6 @@ import {
   sleep,
   writeArtifact
 } from "./utils.mjs";
-import { withCcsGuardrail } from "../../shared/ccs-contract.mjs";
 
 const SESSION_EXECUTOR_ROLE_DEFINITION_GUID = "0fb8eba5-a2bb-4abe-b1c1-49dfad359bb0";
 const AUTHORIZATION_RETRY_ATTEMPTS = 6;
@@ -559,23 +558,6 @@ async function main() {
       `Agent runtime compatibility verification failed (${reasonCodes.join(", ") || "UNKNOWN"})`
     );
   }
-
-  return { status: "pass", code: "AGENT_RUNTIME_COMPATIBILITY_PASS" };
 }
 
-void withCcsGuardrail({
-  guardrailId: "deployment.agent-runtime-compatibility",
-  command: "node scripts/pipeline/cloud/deployment-stage/verify-agent-runtime-compatibility.mjs",
-  passCode: "AGENT_RUNTIME_COMPATIBILITY_PASS",
-  passRef: "docs/ccs.md#output-format",
-  run: main,
-  mapError: (error) => ({
-    code: "AGENT_RUNTIME_COMPATIBILITY_RUNTIME_ERROR",
-    why: error instanceof Error ? error.message : String(error),
-    fix: "Resolve runtime compatibility verification failures.",
-    doCommands: [
-      "node scripts/pipeline/cloud/deployment-stage/verify-agent-runtime-compatibility.mjs"
-    ],
-    ref: "docs/ccs.md#output-format"
-  })
-});
+void main();

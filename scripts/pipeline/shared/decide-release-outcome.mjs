@@ -1,5 +1,4 @@
 import path from "node:path";
-import { createCcsError, withCcsGuardrail } from "./ccs-contract.mjs";
 import { evaluateReleaseOutcome } from "./decide-release-outcome-lib.mjs";
 import { appendGithubOutput, requireEnv, writeJsonFile } from "./pipeline-utils.mjs";
 
@@ -24,8 +23,6 @@ async function main() {
 
   await writeJsonFile(artifactPath, {
     schemaVersion: "1",
-    ccsVersion: "1",
-    guardrailId: "release.decision",
     generatedAt: new Date().toISOString(),
     headSha,
     releaseCandidateSha,
@@ -51,33 +48,9 @@ async function main() {
   });
 
   if (!result.releasable) {
-    throw createCcsError({
-      code: "RELEASE_DECISION_NO",
-      why: "Release decision evaluated to NO.",
-      fix: "All upstream gates must be YES for release promotion.",
-      doCommands: [
-        `cat ${artifactPath}`,
-        'gh run view "$GITHUB_RUN_ID" --log',
-        "fix forward and rerun the pipeline"
-      ],
-      ref: "docs/agents/troubleshooting.md#deployment-stage-failure"
-    });
+    console.error("Release decision is NO");
+    process.exit(1);
   }
-
-  return { status: "pass", code: "RELEASE_DECISION_YES" };
 }
 
-void withCcsGuardrail({
-  guardrailId: "release.decision",
-  command: "node scripts/pipeline/shared/decide-release-outcome.mjs",
-  passCode: "RELEASE_DECISION_YES",
-  passRef: "docs/agents/troubleshooting.md#deployment-stage-failure",
-  run: main,
-  mapError: (error) => ({
-    code: "CCS_UNEXPECTED_ERROR",
-    why: error instanceof Error ? error.message : String(error),
-    fix: "Resolve release decision runtime errors.",
-    doCommands: ["node scripts/pipeline/shared/decide-release-outcome.mjs"],
-    ref: "docs/ccs.md#output-format"
-  })
-});
+void main();

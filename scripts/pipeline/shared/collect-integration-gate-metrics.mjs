@@ -1,5 +1,4 @@
 import path from "node:path";
-import { withCcsGuardrail } from "./ccs-contract.mjs";
 import {
   appendGithubStepSummary,
   loadPipelinePolicy,
@@ -363,21 +362,6 @@ async function main() {
       `- integration-gate pass rate: ${formatRate(payload.throughputWindow.passRateByStage["integration-gate"]?.passRate ?? null)}`
     ].join("\n")
   );
-
-  return { status: "pass", code: "INTEGRATION_TIMING000" };
 }
 
-void withCcsGuardrail({
-  guardrailId: "timing.integration-gate",
-  command: "node scripts/pipeline/shared/collect-integration-gate-metrics.mjs",
-  passCode: "INTEGRATION_TIMING000",
-  passRef: "docs/commit-stage-policy.md#integration-gate-throughput-telemetry",
-  run: main,
-  mapError: (error) => ({
-    code: "INTEGRATION_TIMING001",
-    why: error instanceof Error ? error.message : String(error),
-    fix: "Resolve integration gate throughput collection errors.",
-    doCommands: ["node scripts/pipeline/shared/collect-integration-gate-metrics.mjs"],
-    ref: "docs/commit-stage-policy.md#integration-gate-throughput-telemetry"
-  })
-});
+void main();

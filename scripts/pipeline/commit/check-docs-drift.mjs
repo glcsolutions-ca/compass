@@ -1,5 +1,4 @@
 import path from "node:path";
-import { createCcsError, withCcsGuardrail } from "../shared/ccs-contract.mjs";
 import {
   appendGithubOutput,
   evaluateDocsDrift,
@@ -52,8 +51,6 @@ async function main() {
   const resultPath = path.join(".artifacts", "docs-drift", testedSha, "result.json");
   const payload = {
     schemaVersion: "1",
-    ccsVersion: "1",
-    guardrailId: "docs.drift",
     generatedAt: new Date().toISOString(),
     headSha,
     testedSha,
@@ -81,13 +78,7 @@ async function main() {
         `Expected docs target globs: ${drift.expectedDocTargets.join(", ")}`
       ].join("\n")
     );
-    throw createCcsError({
-      code: "DOCS_DRIFT_BLOCKING_DOC_TARGET_MISSING",
-      why: "Docs-critical paths changed without required docs target updates.",
-      fix: "Update docs targets to match docs-critical changes.",
-      doCommands: ["pnpm ci:docs-drift", "pnpm test:quick"],
-      ref: "docs/commit-stage-policy.md#docs-drift"
-    });
+    process.exit(1);
   }
 
   if (drift.reasonCodes.length > 0) {
@@ -103,23 +94,6 @@ async function main() {
   }
 
   console.info(`Docs drift passed (${resultPath})`);
-  return {
-    status: "pass",
-    code: drift.reasonCodes.length > 0 ? drift.reasonCodes[0] : "DOCS_DRIFT_PASS"
-  };
 }
 
-void withCcsGuardrail({
-  guardrailId: "docs.drift",
-  command: "pnpm ci:docs-drift",
-  passCode: "DOCS_DRIFT_PASS",
-  passRef: "docs/commit-stage-policy.md#docs-drift",
-  run: main,
-  mapError: (error) => ({
-    code: "CCS_UNEXPECTED_ERROR",
-    why: error instanceof Error ? error.message : String(error),
-    fix: "Resolve docs-drift runtime input/configuration errors.",
-    doCommands: ["pnpm ci:docs-drift"],
-    ref: "docs/ccs.md#output-format"
-  })
-});
+void main();

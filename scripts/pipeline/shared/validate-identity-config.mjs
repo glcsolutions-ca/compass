@@ -1,6 +1,5 @@
 import path from "node:path";
 import { appendGithubOutput, writeJsonFile } from "./pipeline-utils.mjs";
-import { createCcsError, withCcsGuardrail } from "./ccs-contract.mjs";
 
 function parseRequiredEnvNames(raw) {
   if (!raw || raw.trim().length === 0) {
@@ -120,8 +119,6 @@ async function main() {
 
   const payload = {
     schemaVersion: "1",
-    ccsVersion: "1",
-    guardrailId: "identity.config-validate",
     generatedAt: new Date().toISOString(),
     headSha,
     mode,
@@ -149,34 +146,10 @@ async function main() {
     for (const reason of reasons) {
       console.error(`- [${reason.code}] ${reason.message}`);
     }
-    throw createCcsError({
-      code: reasons[0]?.code ?? "IDENTITY_CONFIG_FAIL",
-      why: `Identity config contract failed (${reasons.length} reason(s)).`,
-      fix: "Provide all required identity configuration values and valid formats.",
-      doCommands: [
-        `cat ${artifactPath}`,
-        "verify required identity env vars and rerun validation",
-        "rerun identity config validation step"
-      ],
-      ref: "docs/agents/troubleshooting.md#automated-acceptance-test-gate-failure"
-    });
+    process.exit(1);
   }
 
   console.info(`identity config contract passed (${artifactPath})`);
-  return { status: "pass", code: "IDENTITY_CONFIG_PASS" };
 }
 
-void withCcsGuardrail({
-  guardrailId: "identity.config-validate",
-  command: "node scripts/pipeline/shared/validate-identity-config.mjs",
-  passCode: "IDENTITY_CONFIG_PASS",
-  passRef: "docs/agents/troubleshooting.md#automated-acceptance-test-gate-failure",
-  run: main,
-  mapError: (error) => ({
-    code: "CCS_UNEXPECTED_ERROR",
-    why: error instanceof Error ? error.message : String(error),
-    fix: "Resolve identity config validation runtime errors.",
-    doCommands: ["node scripts/pipeline/shared/validate-identity-config.mjs"],
-    ref: "docs/ccs.md#output-format"
-  })
-});
+void main();

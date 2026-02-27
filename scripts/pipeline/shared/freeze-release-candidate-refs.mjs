@@ -1,7 +1,6 @@
 import { appendGithubOutput, requireEnv } from "./pipeline-utils.mjs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { withCcsGuardrail } from "./ccs-contract.mjs";
 
 const execFileAsync = promisify(execFile);
 const COMMAND_MAX_BUFFER = 1024 * 1024 * 50;
@@ -146,7 +145,7 @@ async function main() {
 
   if (mode === "resolve-current-runtime-refs") {
     await freezeCurrentRuntimeRefs();
-    return { status: "pass", code: "FREEZE_REFS000" };
+    return;
   }
 
   throw new Error(
@@ -154,17 +153,4 @@ async function main() {
   );
 }
 
-void withCcsGuardrail({
-  guardrailId: "release-candidate.freeze-refs",
-  command: "node scripts/pipeline/shared/freeze-release-candidate-refs.mjs",
-  passCode: "FREEZE_REFS000",
-  passRef: "docs/ccs.md#output-format",
-  run: main,
-  mapError: (error) => ({
-    code: "FREEZE_REFS001",
-    why: error instanceof Error ? error.message : String(error),
-    fix: "Resolve release-candidate ref freeze errors.",
-    doCommands: ["node scripts/pipeline/shared/freeze-release-candidate-refs.mjs"],
-    ref: "docs/ccs.md#output-format"
-  })
-});
+void main();

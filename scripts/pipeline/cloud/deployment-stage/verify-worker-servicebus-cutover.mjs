@@ -1,7 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { requireEnv } from "../../shared/pipeline-utils.mjs";
-import { withCcsGuardrail } from "../../shared/ccs-contract.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -199,22 +198,9 @@ async function main() {
   );
 
   console.info("Worker Service Bus cutover verification passed.");
-  return { status: "pass", code: "WORKER_SERVICEBUS_CUTOVER_PASS" };
 }
 
-void withCcsGuardrail({
-  guardrailId: "deployment.worker-servicebus-cutover",
-  command: "node scripts/pipeline/cloud/deployment-stage/verify-worker-servicebus-cutover.mjs",
-  passCode: "WORKER_SERVICEBUS_CUTOVER_PASS",
-  passRef: "docs/ccs.md#output-format",
-  run: main,
-  mapError: (error) => ({
-    code: "WORKER_SERVICEBUS_CUTOVER_FAIL",
-    why: error instanceof Error ? error.message : String(error),
-    fix: "Restore worker Service Bus managed identity cutover contract.",
-    doCommands: [
-      "node scripts/pipeline/cloud/deployment-stage/verify-worker-servicebus-cutover.mjs"
-    ],
-    ref: "docs/ccs.md#output-format"
-  })
+void main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
 });

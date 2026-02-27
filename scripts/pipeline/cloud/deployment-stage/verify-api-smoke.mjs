@@ -1,5 +1,4 @@
 import { appendGithubOutput, getHeadSha, requireEnv, writeDeployArtifact } from "./utils.mjs";
-import { withCcsGuardrail } from "../../shared/ccs-contract.mjs";
 
 const targetBaseUrl = requireEnv("TARGET_API_BASE_URL").replace(/\/$/, "");
 const verifyShaHeader = process.env.VERIFY_SHA_HEADER?.trim() === "true";
@@ -227,27 +226,6 @@ async function main() {
       `API smoke verification failed for ${targetBaseUrl}: ${reasonCode || "API_SMOKE_ASSERTION_FAILED"}`
     );
   }
-
-  return { status: "pass", code: "API_SMOKE_PASS" };
 }
 
-void withCcsGuardrail({
-  guardrailId: "deployment.api-smoke",
-  command: "node scripts/pipeline/cloud/deployment-stage/verify-api-smoke.mjs",
-  passCode: "API_SMOKE_PASS",
-  passRef: "docs/agents/troubleshooting.md#deployment-stage-failure",
-  run: main,
-  mapError: (error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    const code = message.includes("API_SMOKE_RUNTIME_ERROR")
-      ? "API_SMOKE_RUNTIME_ERROR"
-      : "API_SMOKE_ASSERTION_FAILED";
-    return {
-      code,
-      why: message,
-      fix: "Restore API production smoke checks to pass.",
-      doCommands: ["node scripts/pipeline/cloud/deployment-stage/verify-api-smoke.mjs"],
-      ref: "docs/agents/troubleshooting.md#deployment-stage-failure"
-    };
-  }
-});
+void main();

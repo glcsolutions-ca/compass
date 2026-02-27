@@ -8,18 +8,28 @@ const PORT_RANGE_START = 41_000;
 const PORT_RANGE_END = 60_999;
 const PORT_STRIDE = 10;
 
-const PORT_KEYS = ["WEB_PORT", "API_PORT", "POSTGRES_PORT"];
+const PORT_KEYS = ["WEB_PORT", "API_PORT", "POSTGRES_PORT", "SESSION_RUNTIME_PORT"];
 const PORT_OFFSETS = {
   WEB_PORT: 0,
   API_PORT: 1,
-  POSTGRES_PORT: 2
+  POSTGRES_PORT: 2,
+  SESSION_RUNTIME_PORT: 3
 };
 
 const MANAGED_ENV_FILES = [
   {
     envPath: "apps/api/.env",
     examplePath: "apps/api/.env.example",
-    requiredKeys: ["API_PORT", "AUTH_MODE"]
+    requiredKeys: [
+      "API_PORT",
+      "AUTH_MODE",
+      "AGENT_GATEWAY_ENABLED",
+      "AGENT_RUNTIME_PROVIDER",
+      "AGENT_RUNTIME_ENDPOINT",
+      "AGENT_CLOUD_MODE_ENABLED",
+      "AGENT_MODE_SWITCH_ENABLED",
+      "AGENT_LOCAL_MODE_ENABLED_DESKTOP"
+    ]
   },
   {
     envPath: "apps/web/.env",
@@ -30,8 +40,24 @@ const MANAGED_ENV_FILES = [
     envPath: "db/postgres/.env",
     examplePath: "db/postgres/.env.example",
     requiredKeys: ["COMPOSE_PROJECT_NAME", "POSTGRES_PORT", "DATABASE_URL"]
+  },
+  {
+    envPath: "apps/codex-session-runtime/.env",
+    examplePath: "apps/codex-session-runtime/.env.example",
+    requiredKeys: [
+      "HOST",
+      "PORT",
+      "SESSION_RUNTIME_ENGINE",
+      "CODEX_APP_SERVER_COMMAND",
+      "CODEX_APP_SERVER_ARGS"
+    ]
   }
 ];
+
+const FORCE_SYNC_REQUIRED_KEYS_BY_PATH = {
+  "apps/api/.env": ["AGENT_RUNTIME_ENDPOINT"],
+  "apps/codex-session-runtime/.env": ["PORT"]
+};
 
 function normalizeValue(value) {
   if (typeof value !== "string") {
@@ -181,7 +207,8 @@ function getPortTupleForSlot(slot) {
   return {
     WEB_PORT: base + PORT_OFFSETS.WEB_PORT,
     API_PORT: base + PORT_OFFSETS.API_PORT,
-    POSTGRES_PORT: base + PORT_OFFSETS.POSTGRES_PORT
+    POSTGRES_PORT: base + PORT_OFFSETS.POSTGRES_PORT,
+    SESSION_RUNTIME_PORT: base + PORT_OFFSETS.SESSION_RUNTIME_PORT
   };
 }
 
@@ -202,7 +229,12 @@ async function isPortAvailable(port) {
   });
 }
 
-async function findGeneratedPortTuple({ rootDir, unresolvedPortKeys, isPortAvailableFn }) {
+async function findGeneratedPortTuple({
+  rootDir,
+  unresolvedPortKeys,
+  reservedPorts = new Set(),
+  isPortAvailableFn
+}) {
   if (unresolvedPortKeys.length === 0) {
     return {};
   }
@@ -216,7 +248,7 @@ async function findGeneratedPortTuple({ rootDir, unresolvedPortKeys, isPortAvail
 
     let allAvailable = true;
     for (const key of unresolvedPortKeys) {
-      if (!(await isPortAvailableFn(tuple[key]))) {
+      if (reservedPorts.has(tuple[key]) || !(await isPortAvailableFn(tuple[key]))) {
         allAvailable = false;
         break;
       }
@@ -281,7 +313,8 @@ export async function resolveLocalEnvValues({
   const existingPorts = {
     WEB_PORT: getExistingValue(state, "apps/web/.env", "WEB_PORT"),
     API_PORT: getExistingValue(state, "apps/api/.env", "API_PORT"),
-    POSTGRES_PORT: getExistingValue(state, "db/postgres/.env", "POSTGRES_PORT")
+    POSTGRES_PORT: getExistingValue(state, "db/postgres/.env", "POSTGRES_PORT"),
+    SESSION_RUNTIME_PORT: getExistingValue(state, "apps/codex-session-runtime/.env", "PORT")
   };
 
   const resolvedPorts = {
@@ -293,13 +326,35 @@ export async function resolveLocalEnvValues({
       parsePort(env.POSTGRES_PORT, "POSTGRES_PORT") ??
       parsePostgresPortFromDatabaseUrl(explicitDatabaseUrl, "DATABASE_URL") ??
       parsePort(existingPorts.POSTGRES_PORT, "POSTGRES_PORT in .env") ??
-      parsePostgresPortFromDatabaseUrl(existingDatabaseUrl, "DATABASE_URL in .env")
+      parsePostgresPortFromDatabaseUrl(existingDatabaseUrl, "DATABASE_URL in .env"),
+    SESSION_RUNTIME_PORT:
+      parsePort(env.SESSION_RUNTIME_PORT, "SESSION_RUNTIME_PORT") ??
+      parsePort(existingPorts.SESSION_RUNTIME_PORT, "SESSION_RUNTIME_PORT in .env")
   };
 
+  const seenPorts = new Set();
+  for (const key of PORT_KEYS) {
+    const value = resolvedPorts[key];
+    if (!Number.isInteger(value)) {
+      continue;
+    }
+
+    if (seenPorts.has(value)) {
+      resolvedPorts[key] = undefined;
+      continue;
+    }
+
+    seenPorts.add(value);
+  }
+
+  const reservedPorts = new Set(
+    PORT_KEYS.map((key) => resolvedPorts[key]).filter((value) => Number.isInteger(value))
+  );
   const unresolvedPortKeys = PORT_KEYS.filter((key) => !resolvedPorts[key]);
   const generatedPorts = await findGeneratedPortTuple({
     rootDir,
     unresolvedPortKeys,
+    reservedPorts,
     isPortAvailableFn
   });
 
@@ -308,6 +363,16 @@ export async function resolveLocalEnvValues({
   }
 
   const existingViteApiBaseUrl = getExistingValue(state, "apps/web/.env", "VITE_API_BASE_URL");
+  const existingRuntimeEndpoint = getExistingValue(
+    state,
+    "apps/api/.env",
+    "AGENT_RUNTIME_ENDPOINT"
+  );
+  const existingRuntimeEngine = getExistingValue(
+    state,
+    "apps/codex-session-runtime/.env",
+    "SESSION_RUNTIME_ENGINE"
+  );
   const existingComposeProjectName = getExistingValue(
     state,
     "db/postgres/.env",
@@ -322,6 +387,12 @@ export async function resolveLocalEnvValues({
     normalizeValue(env.COMPOSE_PROJECT_NAME) ??
     existingComposeProjectName ??
     `compass-${getWorktreeSeed(rootDir).shortSeed}`;
+  const runtimeEndpoint =
+    normalizeValue(env.AGENT_RUNTIME_ENDPOINT) ??
+    existingRuntimeEndpoint ??
+    `http://127.0.0.1:${resolvedPorts.SESSION_RUNTIME_PORT}`;
+  const runtimeEngine =
+    normalizeValue(env.SESSION_RUNTIME_ENGINE) ?? existingRuntimeEngine ?? "codex";
   const databaseUrl =
     explicitDatabaseUrl ??
     existingDatabaseUrl ??
@@ -330,6 +401,8 @@ export async function resolveLocalEnvValues({
   return {
     ports: resolvedPorts,
     viteApiBaseUrl,
+    runtimeEndpoint,
+    runtimeEngine,
     composeProjectName,
     databaseUrl
   };
@@ -339,7 +412,13 @@ function buildRequiredAssignments(resolvedValues) {
   return {
     "apps/api/.env": {
       API_PORT: String(resolvedValues.ports.API_PORT),
-      AUTH_MODE: "mock"
+      AUTH_MODE: "mock",
+      AGENT_GATEWAY_ENABLED: "true",
+      AGENT_RUNTIME_PROVIDER: "local_process",
+      AGENT_RUNTIME_ENDPOINT: resolvedValues.runtimeEndpoint,
+      AGENT_CLOUD_MODE_ENABLED: "true",
+      AGENT_MODE_SWITCH_ENABLED: "true",
+      AGENT_LOCAL_MODE_ENABLED_DESKTOP: "true"
     },
     "apps/web/.env": {
       WEB_PORT: String(resolvedValues.ports.WEB_PORT),
@@ -349,6 +428,13 @@ function buildRequiredAssignments(resolvedValues) {
       COMPOSE_PROJECT_NAME: resolvedValues.composeProjectName,
       POSTGRES_PORT: String(resolvedValues.ports.POSTGRES_PORT),
       DATABASE_URL: resolvedValues.databaseUrl
+    },
+    "apps/codex-session-runtime/.env": {
+      HOST: "127.0.0.1",
+      PORT: String(resolvedValues.ports.SESSION_RUNTIME_PORT),
+      SESSION_RUNTIME_ENGINE: resolvedValues.runtimeEngine,
+      CODEX_APP_SERVER_COMMAND: "codex",
+      CODEX_APP_SERVER_ARGS: "app-server"
     }
   };
 }
@@ -403,14 +489,24 @@ export async function ensureLocalEnv({
       requiredAssignments,
       fileState.values
     );
-    if (updated !== fileState.content) {
-      await writeFile(fileState.absolutePath, updated, "utf8");
-      logger(`ensure-local-env: updated ${file.envPath} (added missing keys)`);
+    const forceSyncKeys = FORCE_SYNC_REQUIRED_KEYS_BY_PATH[file.envPath] ?? [];
+    const forceSyncAssignments = {};
+    for (const key of forceSyncKeys) {
+      if (requiredAssignments[key]) {
+        forceSyncAssignments[key] = requiredAssignments[key];
+      }
+    }
+
+    const synchronized = applyRequiredKeys(updated, forceSyncAssignments);
+
+    if (synchronized !== fileState.content) {
+      await writeFile(fileState.absolutePath, synchronized, "utf8");
+      logger(`ensure-local-env: updated ${file.envPath} (required keys synchronized)`);
     }
   }
 
   logger(
-    `ensure-local-env: using WEB/API/POSTGRES ports ${resolvedValues.ports.WEB_PORT}/${resolvedValues.ports.API_PORT}/${resolvedValues.ports.POSTGRES_PORT}`
+    `ensure-local-env: using WEB/API/POSTGRES/RUNTIME ports ${resolvedValues.ports.WEB_PORT}/${resolvedValues.ports.API_PORT}/${resolvedValues.ports.POSTGRES_PORT}/${resolvedValues.ports.SESSION_RUNTIME_PORT}`
   );
 
   return resolvedValues;

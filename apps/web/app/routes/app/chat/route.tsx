@@ -376,7 +376,9 @@ export default function ChatRoute() {
 
   const assistantStore = useMemo(
     () => ({
-      isRunning: activeTurnId !== null || submitFetcher.state !== "idle",
+      // Avoid optimistic empty assistant messages while the form submission is in-flight.
+      // Runtime should transition to running only once a real turn is active.
+      isRunning: activeTurnId !== null,
       messages: assistantMessages,
       convertMessage: convertAssistantStoreMessage,
       onNew: handleAssistantSend,
@@ -448,15 +450,6 @@ export default function ChatRoute() {
           executionMode={executionMode}
           localModeAvailable={localModeAvailable}
           onExecutionModeChange={handleModeChange}
-          onInspectEvent={(cursor, tab) => {
-            updateInspectState(
-              {
-                cursor,
-                tab
-              },
-              { replace: false }
-            );
-          }}
           runtime={assistantRuntime}
           surfaceState={surfaceState}
           switchingMode={modeFetcher.state !== "idle"}

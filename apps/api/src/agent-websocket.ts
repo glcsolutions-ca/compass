@@ -3,7 +3,7 @@ import type { Duplex } from "node:stream";
 import { WebSocketServer } from "ws";
 import type { AuthService } from "./auth-service.js";
 import { readSessionTokenFromCookie } from "./auth-service.js";
-import type { AgentService, AgentEventRecord } from "./agent-service.js";
+import type { AgentService, AgentEventRecord, RuntimeNotificationRecord } from "./agent-service.js";
 
 interface AgentWebSocketConnection {
   send(data: string): void;
@@ -66,6 +66,12 @@ function parseThreadStreamRequest(request: IncomingMessage): {
   };
 }
 
+function parseRuntimeStreamRequest(request: IncomingMessage): boolean {
+  const rawUrl = String(request.url || "");
+  const url = new URL(rawUrl, "http://localhost");
+  return url.pathname === "/v1/agent/runtime/stream";
+}
+
 function sendEvent(socket: { send(data: string): void }, event: AgentEventRecord): void {
   socket.send(
     JSON.stringify({
@@ -75,6 +81,21 @@ function sendEvent(socket: { send(data: string): void }, event: AgentEventRecord
       payload: event.payload,
       threadId: event.threadId,
       turnId: event.turnId,
+      createdAt: event.createdAt
+    })
+  );
+}
+
+function sendRuntimeEvent(
+  socket: { send(data: string): void },
+  event: RuntimeNotificationRecord
+): void {
+  socket.send(
+    JSON.stringify({
+      type: event.method,
+      method: event.method,
+      cursor: event.cursor,
+      payload: event.params,
       createdAt: event.createdAt
     })
   );
@@ -90,8 +111,9 @@ export function attachAgentWebSocketGateway(input: {
 
   input.server.on("upgrade", (request, socket, head) => {
     void (async () => {
-      const parsed = parseThreadStreamRequest(request);
-      if (!parsed) {
+      const parsedThread = parseThreadStreamRequest(request);
+      const parsedRuntime = parseRuntimeStreamRequest(request);
+      if (!parsedThread && !parsedRuntime) {
         return;
       }
 
@@ -119,39 +141,56 @@ export function attachAgentWebSocketGateway(input: {
         }
 
         userId = auth.user.id;
-        await input.agentService.readThread({
-          userId,
-          threadId: parsed.threadId
-        });
+        if (parsedThread) {
+          await input.agentService.readThread({
+            userId,
+            threadId: parsedThread.threadId
+          });
+        }
       } catch {
-        respondUpgradeError(socket, 403, "Thread stream access denied");
+        respondUpgradeError(socket, 403, "Agent stream access denied");
         return;
       }
 
       wss.handleUpgrade(request, socket, head, (ws) => {
         void (async () => {
           try {
-            const historical = await input.agentService!.listThreadEvents({
-              userId,
-              threadId: parsed.threadId,
-              cursor: parsed.cursor,
-              limit: 500
-            });
+            if (parsedThread) {
+              const historical = await input.agentService!.listThreadEvents({
+                userId,
+                threadId: parsedThread.threadId,
+                cursor: parsedThread.cursor,
+                limit: 500
+              });
 
-            for (const event of historical) {
-              sendEvent(ws, event);
+              for (const event of historical) {
+                sendEvent(ws, event);
+              }
+
+              const unsubscribe = input.agentService!.subscribeThreadEvents(
+                parsedThread.threadId,
+                (event) => {
+                  try {
+                    sendEvent(ws, event);
+                  } catch {
+                    // ignored; socket close lifecycle handles cleanup
+                  }
+                }
+              );
+
+              ws.on("close", () => {
+                unsubscribe();
+              });
+              return;
             }
 
-            const unsubscribe = input.agentService!.subscribeThreadEvents(
-              parsed.threadId,
-              (event) => {
-                try {
-                  sendEvent(ws, event);
-                } catch {
-                  // ignored; socket close lifecycle handles cleanup
-                }
+            const unsubscribe = input.agentService!.subscribeRuntimeNotifications((event) => {
+              try {
+                sendRuntimeEvent(ws, event);
+              } catch {
+                // ignored; socket close lifecycle handles cleanup
               }
-            );
+            });
 
             ws.on("close", () => {
               unsubscribe();

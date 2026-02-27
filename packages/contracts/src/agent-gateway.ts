@@ -108,6 +108,116 @@ export const AgentEventsListResponseSchema = z.object({
   events: z.array(AgentEventSchema)
 });
 
+export const RuntimeProviderSchema = z.enum([
+  "dynamic_sessions",
+  "local_process",
+  "local_docker",
+  "mock"
+]);
+
+export const CodexAuthModeSchema = z.enum(["apikey", "chatgpt", "chatgptAuthTokens"]);
+
+export const RuntimeCapabilitiesSchema = z.object({
+  interactiveAuth: z.boolean(),
+  supportsChatgptManaged: z.boolean(),
+  supportsApiKey: z.boolean(),
+  supportsChatgptAuthTokens: z.boolean(),
+  supportsRateLimits: z.boolean(),
+  supportsRuntimeStream: z.boolean()
+});
+
+export const RuntimeAccountSchema = z
+  .object({
+    type: z.string().min(1).optional(),
+    email: z.string().min(1).nullable().optional(),
+    name: z.string().min(1).nullable().optional(),
+    planType: z.string().min(1).nullable().optional(),
+    label: z.string().min(1).nullable().optional()
+  })
+  .passthrough();
+
+export const RuntimeAccountStateSchema = z.object({
+  provider: RuntimeProviderSchema,
+  capabilities: RuntimeCapabilitiesSchema,
+  authMode: CodexAuthModeSchema.nullable(),
+  requiresOpenaiAuth: z.boolean(),
+  account: RuntimeAccountSchema.nullable()
+});
+
+export const RuntimeAccountReadRequestSchema = z.object({
+  refreshToken: z.boolean().optional()
+});
+
+export const RuntimeAccountReadResponseSchema = RuntimeAccountStateSchema;
+
+export const RuntimeAccountLoginStartRequestSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("chatgpt")
+  }),
+  z.object({
+    type: z.literal("apiKey"),
+    apiKey: z.string().min(1)
+  }),
+  z.object({
+    type: z.literal("chatgptAuthTokens"),
+    accessToken: z.string().min(1),
+    chatgptAccountId: z.string().min(1),
+    chatgptPlanType: z.string().min(1).nullable().optional()
+  })
+]);
+
+export const RuntimeAccountLoginStartResponseSchema = z.object({
+  type: z.enum(["chatgpt", "apiKey", "chatgptAuthTokens"]),
+  loginId: z.string().min(1).nullable().optional(),
+  authUrl: z.string().url().nullable().optional()
+});
+
+export const RuntimeAccountLoginCancelRequestSchema = z.object({
+  loginId: z.string().min(1)
+});
+
+export const RuntimeAccountLoginCancelResponseSchema = z
+  .object({
+    status: z.string().min(1).optional()
+  })
+  .passthrough();
+
+export const RuntimeAccountLogoutResponseSchema = z.object({});
+
+export const RuntimeRateLimitWindowSchema = z.object({
+  usedPercent: z.number().min(0).max(100),
+  windowDurationMins: z.number().int().positive().nullable(),
+  resetsAt: z.number().int().nonnegative().nullable()
+});
+
+export const RuntimeRateLimitSnapshotSchema = z.object({
+  limitId: z.string().min(1).nullable(),
+  limitName: z.string().min(1).nullable(),
+  primary: RuntimeRateLimitWindowSchema.nullable(),
+  secondary: RuntimeRateLimitWindowSchema.nullable(),
+  credits: z.unknown().nullable().optional(),
+  planType: z.string().min(1).nullable().optional()
+});
+
+export const RuntimeAccountRateLimitsReadResponseSchema = z.object({
+  rateLimits: RuntimeRateLimitSnapshotSchema.nullable(),
+  rateLimitsByLimitId: z.record(RuntimeRateLimitSnapshotSchema.nullable()).nullable()
+});
+
+export const RuntimeNotificationMethodSchema = z.enum([
+  "account/login/completed",
+  "account/updated",
+  "account/rateLimits/updated",
+  "mcpServer/oauthLogin/completed"
+]);
+
+export const RuntimeNotificationSchema = z.object({
+  cursor: z.number().int().nonnegative().optional(),
+  method: RuntimeNotificationMethodSchema,
+  params: z.unknown(),
+  createdAt: z.string().datetime()
+});
+
 export const AgentStreamEventTypeSchema = z.enum([
   "thread.started",
   "thread.modeSwitched",
@@ -129,90 +239,6 @@ export const AgentStreamEventSchema = z.object({
   cursor: z.number().int().nonnegative().optional()
 });
 
-// Compatibility aliases for the codex-gateway transition window.
-export const ApprovalDecisionSchema = z.enum(["accept", "decline"]);
-
-export const ThreadStartRequestSchema = z.object({
-  model: z.string().min(1).optional(),
-  cwd: z.string().min(1).optional(),
-  approvalPolicy: z.string().min(1).optional(),
-  sandboxPolicy: z.unknown().optional(),
-  personality: z.string().min(1).optional()
-});
-
-export const TurnStartRequestSchema = z.object({
-  text: z.string().min(1),
-  cwd: z.string().min(1).optional(),
-  model: z.string().min(1).optional(),
-  approvalPolicy: z.string().min(1).optional(),
-  sandboxPolicy: z.unknown().optional(),
-  effort: z.string().min(1).optional(),
-  personality: z.string().min(1).optional()
-});
-
-export const TurnInterruptRequestSchema = z.object({
-  threadId: z.string().min(1),
-  turnId: z.string().min(1)
-});
-
-export const ApprovalResponseRequestSchema = z.object({
-  decision: ApprovalDecisionSchema
-});
-
-export const ApiKeyLoginRequestSchema = z.object({
-  apiKey: z.string().min(1)
-});
-
-export const ChatGptLoginCancelRequestSchema = z.object({
-  loginId: z.string().min(1)
-});
-
-export const KnownAuthModeSchema = z.enum(["apiKey", "chatgpt", "service", "entra", "none"]);
-
-export const AuthModeSchema = z.union([KnownAuthModeSchema, z.string().min(1)]);
-
-export const AuthAccountSchema = z
-  .object({
-    type: AuthModeSchema.optional(),
-    email: z.string().min(1).optional(),
-    name: z.string().min(1).optional()
-  })
-  .passthrough();
-
-export const AuthLoginStartResponseSchema = z
-  .object({
-    loginId: z.string().min(1).optional(),
-    authUrl: z.string().url().optional(),
-    account: AuthAccountSchema.nullish()
-  })
-  .passthrough();
-
-export const AuthAccountReadResponseSchema = z
-  .object({
-    account: AuthAccountSchema.nullish()
-  })
-  .passthrough();
-
-export const ThreadListResponseSchema = z.object({
-  data: z.array(z.unknown())
-});
-
-export const ThreadReadResponseSchema = z.object({
-  thread: z.unknown(),
-  turns: z.array(z.unknown()),
-  items: z.array(z.unknown()),
-  approvals: z.array(z.unknown()),
-  events: z.array(z.unknown())
-});
-
-export const StreamEventTypeSchema = AgentStreamEventTypeSchema;
-export const StreamEventSchema = z.object({
-  type: StreamEventTypeSchema,
-  method: z.string().optional(),
-  requestId: z.string().optional(),
-  payload: z.unknown()
-});
-
 export type AgentExecutionMode = z.infer<typeof AgentExecutionModeSchema>;
 export type AgentExecutionHost = z.infer<typeof AgentExecutionHostSchema>;
 export type AgentThreadStatus = z.infer<typeof AgentThreadStatusSchema>;
@@ -231,15 +257,28 @@ export type AgentEventsBatchRequest = z.infer<typeof AgentEventsBatchRequestSche
 export type AgentEventsBatchResponse = z.infer<typeof AgentEventsBatchResponseSchema>;
 export type AgentEventsListResponse = z.infer<typeof AgentEventsListResponseSchema>;
 export type AgentStreamEvent = z.infer<typeof AgentStreamEventSchema>;
-
-export type ApprovalDecision = z.infer<typeof ApprovalDecisionSchema>;
-export type ThreadStartRequest = z.infer<typeof ThreadStartRequestSchema>;
-export type TurnStartRequest = z.infer<typeof TurnStartRequestSchema>;
-export type ApprovalResponseRequest = z.infer<typeof ApprovalResponseRequestSchema>;
-export type ApiKeyLoginRequest = z.infer<typeof ApiKeyLoginRequestSchema>;
-export type ChatGptLoginCancelRequest = z.infer<typeof ChatGptLoginCancelRequestSchema>;
-export type AuthMode = z.infer<typeof AuthModeSchema>;
-export type AuthAccount = z.infer<typeof AuthAccountSchema>;
-export type AuthLoginStartResponse = z.infer<typeof AuthLoginStartResponseSchema>;
-export type AuthAccountReadResponse = z.infer<typeof AuthAccountReadResponseSchema>;
-export type StreamEvent = z.infer<typeof StreamEventSchema>;
+export type RuntimeProvider = z.infer<typeof RuntimeProviderSchema>;
+export type CodexAuthMode = z.infer<typeof CodexAuthModeSchema>;
+export type RuntimeCapabilities = z.infer<typeof RuntimeCapabilitiesSchema>;
+export type RuntimeAccount = z.infer<typeof RuntimeAccountSchema>;
+export type RuntimeAccountState = z.infer<typeof RuntimeAccountStateSchema>;
+export type RuntimeAccountReadRequest = z.infer<typeof RuntimeAccountReadRequestSchema>;
+export type RuntimeAccountReadResponse = z.infer<typeof RuntimeAccountReadResponseSchema>;
+export type RuntimeAccountLoginStartRequest = z.infer<typeof RuntimeAccountLoginStartRequestSchema>;
+export type RuntimeAccountLoginStartResponse = z.infer<
+  typeof RuntimeAccountLoginStartResponseSchema
+>;
+export type RuntimeAccountLoginCancelRequest = z.infer<
+  typeof RuntimeAccountLoginCancelRequestSchema
+>;
+export type RuntimeAccountLoginCancelResponse = z.infer<
+  typeof RuntimeAccountLoginCancelResponseSchema
+>;
+export type RuntimeAccountLogoutResponse = z.infer<typeof RuntimeAccountLogoutResponseSchema>;
+export type RuntimeRateLimitWindow = z.infer<typeof RuntimeRateLimitWindowSchema>;
+export type RuntimeRateLimitSnapshot = z.infer<typeof RuntimeRateLimitSnapshotSchema>;
+export type RuntimeAccountRateLimitsReadResponse = z.infer<
+  typeof RuntimeAccountRateLimitsReadResponseSchema
+>;
+export type RuntimeNotificationMethod = z.infer<typeof RuntimeNotificationMethodSchema>;
+export type RuntimeNotification = z.infer<typeof RuntimeNotificationSchema>;

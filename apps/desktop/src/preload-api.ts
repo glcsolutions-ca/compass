@@ -1,10 +1,19 @@
 import {
+  type AgentLocalLoginCancelInput,
   type AgentLocalLoginStartInput,
   type AgentLocalTurnInterruptInput,
   type AgentLocalTurnStartInput,
   IPC_CHANNELS
 } from "./ipc";
 import { assertExternalOpenAllowed } from "./navigation-policy";
+import type {
+  RuntimeAccountLoginCancelResponse,
+  RuntimeAccountLoginStartResponse,
+  RuntimeAccountLogoutResponse,
+  RuntimeAccountRateLimitsReadResponse,
+  RuntimeAccountReadResponse,
+  RuntimeNotification
+} from "@compass/contracts" with { "resolution-mode": "import" };
 
 export interface IpcRendererLike {
   invoke(channel: string, ...args: unknown[]): Promise<unknown>;
@@ -13,15 +22,10 @@ export interface IpcRendererLike {
   removeListener(channel: string, listener: (...args: unknown[]) => void): void;
 }
 
-export interface DesktopAgentAuthState {
-  authenticated: boolean;
-  mode: "chatgpt" | "apiKey" | null;
-  account: {
-    label: string;
-  } | null;
-  updatedAt: string | null;
-  authUrl?: string | null;
-}
+export type DesktopRuntimeAccountState = RuntimeAccountReadResponse;
+export type DesktopRuntimeLoginStartResponse = RuntimeAccountLoginStartResponse;
+export type DesktopRuntimeRateLimits = RuntimeAccountRateLimitsReadResponse;
+export type DesktopRuntimeNotification = RuntimeNotification;
 
 export interface DesktopAgentEvent {
   cursor: number;
@@ -44,14 +48,17 @@ export interface DesktopLocalTurnResult {
 export interface CompassDesktopApi {
   getAppVersion(): string;
   openExternal(url: string): Promise<void>;
-  localAuthStart(input: AgentLocalLoginStartInput): Promise<DesktopAgentAuthState>;
-  localAuthStatus(): Promise<DesktopAgentAuthState>;
-  localAuthLogout(): Promise<DesktopAgentAuthState>;
+  localAuthStart(input: AgentLocalLoginStartInput): Promise<DesktopRuntimeLoginStartResponse>;
+  localAuthStatus(): Promise<DesktopRuntimeAccountState>;
+  localAuthCancel(input: AgentLocalLoginCancelInput): Promise<RuntimeAccountLoginCancelResponse>;
+  localAuthLogout(): Promise<RuntimeAccountLogoutResponse>;
+  localRateLimitsRead(): Promise<DesktopRuntimeRateLimits>;
   localTurnStart(input: AgentLocalTurnStartInput): Promise<DesktopLocalTurnResult>;
   localTurnInterrupt(
     input: AgentLocalTurnInterruptInput
   ): Promise<{ turnId: string; status: string }>;
   onAgentEvent(listener: (event: DesktopAgentEvent) => void): () => void;
+  onRuntimeNotification(listener: (event: DesktopRuntimeNotification) => void): () => void;
   isDesktop(): true;
 }
 
@@ -70,19 +77,36 @@ export function createCompassDesktopApi(ipcRenderer: IpcRendererLike): CompassDe
       const parsed = assertExternalOpenAllowed(url);
       await ipcRenderer.invoke(IPC_CHANNELS.openExternal, parsed.toString());
     },
-    async localAuthStart(input: AgentLocalLoginStartInput): Promise<DesktopAgentAuthState> {
+    async localAuthStart(
+      input: AgentLocalLoginStartInput
+    ): Promise<DesktopRuntimeLoginStartResponse> {
       return (await ipcRenderer.invoke(
         IPC_CHANNELS.agentLocalLoginStart,
         input
-      )) as DesktopAgentAuthState;
+      )) as DesktopRuntimeLoginStartResponse;
     },
-    async localAuthStatus(): Promise<DesktopAgentAuthState> {
+    async localAuthStatus(): Promise<DesktopRuntimeAccountState> {
       return (await ipcRenderer.invoke(
         IPC_CHANNELS.agentLocalLoginStatus
-      )) as DesktopAgentAuthState;
+      )) as DesktopRuntimeAccountState;
     },
-    async localAuthLogout(): Promise<DesktopAgentAuthState> {
-      return (await ipcRenderer.invoke(IPC_CHANNELS.agentLocalLogout)) as DesktopAgentAuthState;
+    async localAuthCancel(
+      input: AgentLocalLoginCancelInput
+    ): Promise<RuntimeAccountLoginCancelResponse> {
+      return (await ipcRenderer.invoke(
+        IPC_CHANNELS.agentLocalLoginCancel,
+        input
+      )) as RuntimeAccountLoginCancelResponse;
+    },
+    async localAuthLogout(): Promise<RuntimeAccountLogoutResponse> {
+      return (await ipcRenderer.invoke(
+        IPC_CHANNELS.agentLocalLogout
+      )) as RuntimeAccountLogoutResponse;
+    },
+    async localRateLimitsRead(): Promise<DesktopRuntimeRateLimits> {
+      return (await ipcRenderer.invoke(
+        IPC_CHANNELS.agentLocalRateLimitsRead
+      )) as DesktopRuntimeRateLimits;
     },
     async localTurnStart(input: AgentLocalTurnStartInput): Promise<DesktopLocalTurnResult> {
       return (await ipcRenderer.invoke(
@@ -106,6 +130,16 @@ export function createCompassDesktopApi(ipcRenderer: IpcRendererLike): CompassDe
       ipcRenderer.on(IPC_CHANNELS.agentEvent, handler);
       return () => {
         ipcRenderer.removeListener(IPC_CHANNELS.agentEvent, handler);
+      };
+    },
+    onRuntimeNotification(listener: (event: DesktopRuntimeNotification) => void): () => void {
+      const handler = (_event: unknown, payload: unknown) => {
+        listener(payload as DesktopRuntimeNotification);
+      };
+
+      ipcRenderer.on(IPC_CHANNELS.agentRuntimeNotification, handler);
+      return () => {
+        ipcRenderer.removeListener(IPC_CHANNELS.agentRuntimeNotification, handler);
       };
     },
     isDesktop() {

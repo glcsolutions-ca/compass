@@ -3,6 +3,15 @@ import { randomUUID } from "node:crypto";
 import {
   AgentExecutionHostSchema,
   AgentExecutionModeSchema,
+  type RuntimeCapabilities,
+  type RuntimeAccountLoginCancelResponse,
+  type RuntimeAccountLoginStartRequest,
+  type RuntimeAccountLoginStartResponse,
+  type RuntimeAccountLogoutResponse,
+  type RuntimeAccountRateLimitsReadResponse,
+  type RuntimeAccountReadResponse,
+  type RuntimeNotificationMethod,
+  type RuntimeProvider as ContractRuntimeProvider,
   type AgentExecutionHost,
   type AgentExecutionMode
 } from "@compass/contracts";
@@ -45,6 +54,15 @@ export interface AgentEventRecord {
   createdAt: string;
 }
 
+export type RuntimeProvider = ContractRuntimeProvider;
+
+export interface RuntimeNotificationRecord {
+  cursor: number;
+  method: RuntimeNotificationMethod;
+  params: unknown;
+  createdAt: string;
+}
+
 interface AgentServiceThreadAccess {
   thread: AgentThreadRecord;
   workspaceId: string;
@@ -64,7 +82,13 @@ interface CloudInterruptResult {
   runtimeMetadata: Record<string, unknown>;
 }
 
-interface CloudExecutionDriver {
+interface AccessTokenProvider {
+  getToken(): Promise<string>;
+}
+
+interface RuntimeExecutionDriver {
+  readonly provider: RuntimeProvider;
+  readonly capabilities: RuntimeCapabilities;
   bootstrapSession(input: { thread: AgentThreadRecord }): Promise<CloudBootstrapResult>;
   runTurn(input: {
     thread: AgentThreadRecord;
@@ -75,9 +99,25 @@ interface CloudExecutionDriver {
     thread: AgentThreadRecord;
     turnId: string;
   }): Promise<CloudInterruptResult>;
+  readAccount(input: { refreshToken: boolean }): Promise<RuntimeAccountReadResponse>;
+  loginStart(input: RuntimeAccountLoginStartRequest): Promise<RuntimeAccountLoginStartResponse>;
+  loginCancel(input: { loginId: string }): Promise<RuntimeAccountLoginCancelResponse>;
+  logout(): Promise<RuntimeAccountLogoutResponse>;
+  readRateLimits(): Promise<RuntimeAccountRateLimitsReadResponse>;
+  subscribeNotifications(handler: (notification: RuntimeNotificationRecord) => void): () => void;
 }
 
-class MockCloudExecutionDriver implements CloudExecutionDriver {
+class MockCloudExecutionDriver implements RuntimeExecutionDriver {
+  readonly provider: RuntimeProvider = "mock";
+  readonly capabilities: RuntimeCapabilities = {
+    interactiveAuth: false,
+    supportsChatgptManaged: false,
+    supportsApiKey: false,
+    supportsChatgptAuthTokens: false,
+    supportsRateLimits: false,
+    supportsRuntimeStream: false
+  };
+
   async bootstrapSession(input: { thread: AgentThreadRecord }): Promise<CloudBootstrapResult> {
     return {
       runtimeMetadata: {
@@ -116,37 +156,115 @@ class MockCloudExecutionDriver implements CloudExecutionDriver {
       }
     };
   }
+
+  async readAccount(): Promise<RuntimeAccountReadResponse> {
+    return {
+      provider: this.provider,
+      capabilities: this.capabilities,
+      authMode: null,
+      requiresOpenaiAuth: false,
+      account: {
+        type: "mock",
+        label: "Mock runtime"
+      }
+    };
+  }
+
+  async loginStart(): Promise<RuntimeAccountLoginStartResponse> {
+    throw new ApiError(
+      400,
+      "AGENT_RUNTIME_PROVIDER_UNSUPPORTED",
+      "Interactive runtime authentication is unavailable for this runtime provider"
+    );
+  }
+
+  async loginCancel(): Promise<RuntimeAccountLoginCancelResponse> {
+    throw new ApiError(
+      400,
+      "AGENT_RUNTIME_PROVIDER_UNSUPPORTED",
+      "Interactive runtime authentication is unavailable for this runtime provider"
+    );
+  }
+
+  async logout(): Promise<RuntimeAccountLogoutResponse> {
+    throw new ApiError(
+      400,
+      "AGENT_RUNTIME_PROVIDER_UNSUPPORTED",
+      "Interactive runtime authentication is unavailable for this runtime provider"
+    );
+  }
+
+  async readRateLimits(): Promise<RuntimeAccountRateLimitsReadResponse> {
+    return {
+      rateLimits: null,
+      rateLimitsByLimitId: null
+    };
+  }
+
+  subscribeNotifications(): () => void {
+    return () => {};
+  }
 }
 
-class UnavailableCloudExecutionDriver implements CloudExecutionDriver {
+class UnavailableCloudExecutionDriver implements RuntimeExecutionDriver {
+  readonly provider: RuntimeProvider;
+  readonly capabilities: RuntimeCapabilities = {
+    interactiveAuth: false,
+    supportsChatgptManaged: false,
+    supportsApiKey: false,
+    supportsChatgptAuthTokens: false,
+    supportsRateLimits: false,
+    supportsRuntimeStream: false
+  };
   readonly #reason: string;
 
-  constructor(reason: string) {
-    this.#reason = reason;
+  constructor(input: { provider: RuntimeProvider; reason: string }) {
+    this.provider = input.provider;
+    this.#reason = input.reason;
+  }
+
+  private runtimeUnavailableError(): ApiError {
+    return new ApiError(
+      503,
+      "AGENT_RUNTIME_UNAVAILABLE",
+      `Runtime provider ${this.provider} is unavailable: ${this.#reason}`
+    );
   }
 
   async bootstrapSession(): Promise<CloudBootstrapResult> {
-    throw new ApiError(
-      503,
-      "AGENT_CLOUD_RUNTIME_UNAVAILABLE",
-      `Cloud runtime is unavailable: ${this.#reason}`
-    );
+    throw this.runtimeUnavailableError();
   }
 
   async runTurn(): Promise<CloudTurnResult> {
-    throw new ApiError(
-      503,
-      "AGENT_CLOUD_RUNTIME_UNAVAILABLE",
-      `Cloud runtime is unavailable: ${this.#reason}`
-    );
+    throw this.runtimeUnavailableError();
   }
 
   async interruptTurn(): Promise<CloudInterruptResult> {
-    throw new ApiError(
-      503,
-      "AGENT_CLOUD_RUNTIME_UNAVAILABLE",
-      `Cloud runtime is unavailable: ${this.#reason}`
-    );
+    throw this.runtimeUnavailableError();
+  }
+
+  async readAccount(): Promise<RuntimeAccountReadResponse> {
+    throw this.runtimeUnavailableError();
+  }
+
+  async loginStart(): Promise<RuntimeAccountLoginStartResponse> {
+    throw this.runtimeUnavailableError();
+  }
+
+  async loginCancel(): Promise<RuntimeAccountLoginCancelResponse> {
+    throw this.runtimeUnavailableError();
+  }
+
+  async logout(): Promise<RuntimeAccountLogoutResponse> {
+    throw this.runtimeUnavailableError();
+  }
+
+  async readRateLimits(): Promise<RuntimeAccountRateLimitsReadResponse> {
+    throw this.runtimeUnavailableError();
+  }
+
+  subscribeNotifications(): () => void {
+    throw this.runtimeUnavailableError();
   }
 }
 
@@ -269,14 +387,35 @@ class ManagedIdentityTokenProvider {
   }
 }
 
-class DynamicSessionsCloudExecutionDriver implements CloudExecutionDriver {
+class StaticAccessTokenProvider implements AccessTokenProvider {
+  readonly #token: string;
+
+  constructor(token: string) {
+    this.#token = token;
+  }
+
+  async getToken(): Promise<string> {
+    return this.#token;
+  }
+}
+
+class DynamicSessionsCloudExecutionDriver implements RuntimeExecutionDriver {
+  readonly provider: RuntimeProvider = "dynamic_sessions";
+  readonly capabilities: RuntimeCapabilities = {
+    interactiveAuth: false,
+    supportsChatgptManaged: false,
+    supportsApiKey: false,
+    supportsChatgptAuthTokens: false,
+    supportsRateLimits: false,
+    supportsRuntimeStream: false
+  };
   private readonly endpoint: string;
-  private readonly tokenProvider: ManagedIdentityTokenProvider;
+  private readonly tokenProvider: AccessTokenProvider;
   private readonly requestTimeoutMs: number;
 
   constructor(input: {
     endpoint: string;
-    tokenProvider: ManagedIdentityTokenProvider;
+    tokenProvider: AccessTokenProvider;
     requestTimeoutMs: number;
   }) {
     this.endpoint = input.endpoint.replace(/\/+$/u, "");
@@ -352,6 +491,54 @@ class DynamicSessionsCloudExecutionDriver implements CloudExecutionDriver {
     };
   }
 
+  async readAccount(): Promise<RuntimeAccountReadResponse> {
+    return {
+      provider: this.provider,
+      capabilities: this.capabilities,
+      authMode: null,
+      requiresOpenaiAuth: false,
+      account: {
+        type: "service",
+        label: "Managed runtime identity"
+      }
+    };
+  }
+
+  async loginStart(): Promise<RuntimeAccountLoginStartResponse> {
+    throw new ApiError(
+      400,
+      "AGENT_RUNTIME_PROVIDER_UNSUPPORTED",
+      "Interactive runtime authentication is unavailable for this runtime provider"
+    );
+  }
+
+  async loginCancel(): Promise<RuntimeAccountLoginCancelResponse> {
+    throw new ApiError(
+      400,
+      "AGENT_RUNTIME_PROVIDER_UNSUPPORTED",
+      "Interactive runtime authentication is unavailable for this runtime provider"
+    );
+  }
+
+  async logout(): Promise<RuntimeAccountLogoutResponse> {
+    throw new ApiError(
+      400,
+      "AGENT_RUNTIME_PROVIDER_UNSUPPORTED",
+      "Interactive runtime authentication is unavailable for this runtime provider"
+    );
+  }
+
+  async readRateLimits(): Promise<RuntimeAccountRateLimitsReadResponse> {
+    return {
+      rateLimits: null,
+      rateLimitsByLimitId: null
+    };
+  }
+
+  subscribeNotifications(): () => void {
+    return () => {};
+  }
+
   private async callRuntime(input: {
     path: string;
     identifier: string;
@@ -408,6 +595,416 @@ class DynamicSessionsCloudExecutionDriver implements CloudExecutionDriver {
   }
 }
 
+class LocalHttpExecutionDriver implements RuntimeExecutionDriver {
+  readonly provider: RuntimeProvider;
+  readonly capabilities: RuntimeCapabilities = {
+    interactiveAuth: true,
+    supportsChatgptManaged: true,
+    supportsApiKey: true,
+    supportsChatgptAuthTokens: true,
+    supportsRateLimits: true,
+    supportsRuntimeStream: true
+  };
+  private readonly endpoint: string;
+  private readonly requestTimeoutMs: number;
+  private readonly notificationEmitter = new EventEmitter();
+  private streamCursor = 0;
+  private streamAbort: AbortController | null = null;
+  private streamRunning = false;
+  private streamSubscribers = 0;
+
+  constructor(input: { provider: RuntimeProvider; endpoint: string; requestTimeoutMs: number }) {
+    this.provider = input.provider;
+    this.endpoint = input.endpoint.replace(/\/+$/u, "");
+    this.requestTimeoutMs = input.requestTimeoutMs;
+  }
+
+  async bootstrapSession(input: { thread: AgentThreadRecord }): Promise<CloudBootstrapResult> {
+    const identifier = input.thread.cloudSessionIdentifier || `thr-${input.thread.threadId}`;
+    const payload = await this.callRuntimePost({
+      path: "/agent/session/bootstrap",
+      identifier,
+      body: {
+        threadId: input.thread.threadId
+      }
+    });
+
+    return {
+      runtimeMetadata:
+        payload.runtime && typeof payload.runtime === "object"
+          ? (payload.runtime as Record<string, unknown>)
+          : { driver: this.provider, operation: "bootstrap" }
+    };
+  }
+
+  async runTurn(input: {
+    thread: AgentThreadRecord;
+    turnId: string;
+    text: string;
+  }): Promise<CloudTurnResult> {
+    const identifier = input.thread.cloudSessionIdentifier || `thr-${input.thread.threadId}`;
+    const payload = await this.callRuntimePost({
+      path: "/agent/turns/start",
+      identifier,
+      body: {
+        threadId: input.thread.threadId,
+        turnId: input.turnId,
+        text: input.text
+      }
+    });
+
+    const outputText = typeof payload.outputText === "string" ? payload.outputText : "";
+    return {
+      outputText,
+      runtimeMetadata:
+        payload.runtimeMetadata && typeof payload.runtimeMetadata === "object"
+          ? (payload.runtimeMetadata as Record<string, unknown>)
+          : { driver: this.provider }
+    };
+  }
+
+  async interruptTurn(input: {
+    thread: AgentThreadRecord;
+    turnId: string;
+  }): Promise<CloudInterruptResult> {
+    const identifier = input.thread.cloudSessionIdentifier || `thr-${input.thread.threadId}`;
+    const payload = await this.callRuntimePost({
+      path: `/agent/turns/${encodeURIComponent(input.turnId)}/interrupt`,
+      identifier,
+      body: {}
+    });
+
+    const interrupt = payload.interrupt;
+    const interruptMetadata =
+      interrupt && typeof interrupt === "object"
+        ? (interrupt as Record<string, unknown>)
+        : { driver: this.provider, operation: "interrupt" };
+    const interrupted = payload.status === "interrupted" || interruptMetadata.interrupted === true;
+
+    return {
+      interrupted,
+      runtimeMetadata: interruptMetadata
+    };
+  }
+
+  async readAccount(input: { refreshToken: boolean }): Promise<RuntimeAccountReadResponse> {
+    const payload = await this.callRuntimeRequest({
+      method: "POST",
+      path: "/agent/account/read",
+      body: {
+        refreshToken: input.refreshToken
+      }
+    });
+
+    const authModeCandidate = readRecordNullableString(payload, "authMode");
+    const authMode =
+      authModeCandidate === "apikey" ||
+      authModeCandidate === "chatgpt" ||
+      authModeCandidate === "chatgptAuthTokens"
+        ? authModeCandidate
+        : null;
+
+    const accountRecord = asRecord(payload.account);
+
+    return {
+      provider: this.provider,
+      capabilities: this.capabilities,
+      authMode,
+      requiresOpenaiAuth: payload.requiresOpenaiAuth === true,
+      account: accountRecord
+        ? {
+            ...accountRecord,
+            label: readRecordNullableString(accountRecord, "label")
+          }
+        : null
+    };
+  }
+
+  async loginStart(
+    input: RuntimeAccountLoginStartRequest
+  ): Promise<RuntimeAccountLoginStartResponse> {
+    const payload = await this.callRuntimeRequest({
+      method: "POST",
+      path: "/agent/account/login/start",
+      body: input
+    });
+
+    const type = readRecordString(payload, "type", "chatgpt");
+    const normalizedType =
+      type === "chatgpt" || type === "apiKey" || type === "chatgptAuthTokens" ? type : "chatgpt";
+
+    return {
+      type: normalizedType,
+      loginId: readRecordNullableString(payload, "loginId"),
+      authUrl: readRecordNullableString(payload, "authUrl")
+    };
+  }
+
+  async loginCancel(input: { loginId: string }): Promise<RuntimeAccountLoginCancelResponse> {
+    const payload = await this.callRuntimeRequest({
+      method: "POST",
+      path: "/agent/account/login/cancel",
+      body: {
+        loginId: input.loginId
+      }
+    });
+
+    return {
+      status: readRecordNullableString(payload, "status") ?? undefined
+    };
+  }
+
+  async logout(): Promise<RuntimeAccountLogoutResponse> {
+    await this.callRuntimeRequest({
+      method: "POST",
+      path: "/agent/account/logout",
+      body: {}
+    });
+    return {};
+  }
+
+  async readRateLimits(): Promise<RuntimeAccountRateLimitsReadResponse> {
+    const payload = await this.callRuntimeRequest({
+      method: "POST",
+      path: "/agent/account/rate-limits/read",
+      body: {}
+    });
+
+    const byLimitIdRecord = asRecord(payload.rateLimitsByLimitId);
+    const normalizedByLimitId: Record<string, unknown> = {};
+    if (byLimitIdRecord) {
+      for (const [key, value] of Object.entries(byLimitIdRecord)) {
+        normalizedByLimitId[key] = value;
+      }
+    }
+
+    return {
+      rateLimits:
+        (payload.rateLimits as RuntimeAccountRateLimitsReadResponse["rateLimits"]) ?? null,
+      rateLimitsByLimitId:
+        Object.keys(normalizedByLimitId).length > 0
+          ? (normalizedByLimitId as RuntimeAccountRateLimitsReadResponse["rateLimitsByLimitId"])
+          : null
+    };
+  }
+
+  subscribeNotifications(handler: (notification: RuntimeNotificationRecord) => void): () => void {
+    const listener = (notification: RuntimeNotificationRecord) => {
+      handler(notification);
+    };
+    this.notificationEmitter.on("runtime", listener);
+    this.streamSubscribers += 1;
+
+    if (!this.streamRunning) {
+      this.streamRunning = true;
+      void this.consumeRuntimeStream();
+    }
+
+    return () => {
+      this.notificationEmitter.off("runtime", listener);
+      this.streamSubscribers = Math.max(0, this.streamSubscribers - 1);
+      if (this.streamSubscribers === 0 && this.streamAbort) {
+        this.streamAbort.abort();
+        this.streamAbort = null;
+      }
+    };
+  }
+
+  private async consumeRuntimeStream(): Promise<void> {
+    const decoder = new TextDecoder();
+
+    while (this.streamRunning) {
+      if (this.streamSubscribers < 1) {
+        this.streamRunning = false;
+        return;
+      }
+
+      const controller = new AbortController();
+      this.streamAbort = controller;
+      const url = new URL("/agent/stream", this.endpoint);
+      url.searchParams.set("cursor", String(this.streamCursor));
+
+      try {
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            accept: "text/event-stream"
+          },
+          signal: controller.signal
+        });
+
+        if (!response.ok || !response.body) {
+          throw new Error(`Runtime stream failed (${response.status})`);
+        }
+
+        const reader = response.body.getReader();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          let separatorIndex = buffer.indexOf("\n\n");
+          while (separatorIndex >= 0) {
+            const chunk = buffer.slice(0, separatorIndex);
+            buffer = buffer.slice(separatorIndex + 2);
+            this.handleRuntimeSseChunk(chunk);
+            separatorIndex = buffer.indexOf("\n\n");
+          }
+        }
+      } catch {
+        // reconnect after backoff
+      } finally {
+        this.streamAbort = null;
+      }
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 750);
+      });
+    }
+  }
+
+  private handleRuntimeSseChunk(chunk: string): void {
+    const dataLine = chunk
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .find((line) => line.startsWith("data:"));
+    if (!dataLine) {
+      return;
+    }
+
+    const payloadText = dataLine.slice(5).trim();
+    if (!payloadText) {
+      return;
+    }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(payloadText);
+    } catch {
+      return;
+    }
+
+    const record = asRecord(payload);
+    if (!record) {
+      return;
+    }
+
+    const method = readRecordString(record, "method", "");
+    if (
+      method !== "account/login/completed" &&
+      method !== "account/updated" &&
+      method !== "account/rateLimits/updated" &&
+      method !== "mcpServer/oauthLogin/completed"
+    ) {
+      return;
+    }
+
+    const parsedCursor = Number(record.cursor);
+    const cursor =
+      Number.isInteger(parsedCursor) && parsedCursor > 0 ? parsedCursor : this.streamCursor + 1;
+    this.streamCursor = cursor;
+
+    this.notificationEmitter.emit("runtime", {
+      cursor,
+      method,
+      params: record.params ?? {},
+      createdAt: readRecordString(record, "createdAt", new Date().toISOString())
+    } satisfies RuntimeNotificationRecord);
+  }
+
+  private async callRuntimePost(input: {
+    path: string;
+    identifier: string;
+    body: Record<string, unknown>;
+  }): Promise<Record<string, unknown>> {
+    const url = new URL(input.path, this.endpoint);
+    url.searchParams.set("identifier", input.identifier);
+    return this.callRuntimeRequest({
+      method: "POST",
+      path: url.pathname + url.search,
+      body: input.body
+    });
+  }
+
+  private async callRuntimeRequest(input: {
+    method: "GET" | "POST";
+    path: string;
+    body?: Record<string, unknown>;
+  }): Promise<Record<string, unknown>> {
+    const url = new URL(input.path, this.endpoint);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, this.requestTimeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: input.method,
+        headers: {
+          "content-type": "application/json"
+        },
+        body: input.method === "POST" ? JSON.stringify(input.body ?? {}) : undefined,
+        signal: controller.signal
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new ApiError(
+          503,
+          "AGENT_RUNTIME_UNAVAILABLE",
+          `Local runtime request timed out after ${String(this.requestTimeoutMs)}ms`
+        );
+      }
+      throw new ApiError(
+        503,
+        "AGENT_RUNTIME_UNAVAILABLE",
+        error instanceof Error ? error.message : "Local runtime request failed"
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const bodyText = await response.text();
+    const bodyJson: unknown = (() => {
+      try {
+        const parsed = bodyText ? (JSON.parse(bodyText) as unknown) : null;
+        return parsed;
+      } catch {
+        return null;
+      }
+    })();
+
+    if (!response.ok) {
+      const errorBody =
+        bodyJson && typeof bodyJson === "object" ? (bodyJson as Record<string, unknown>) : {};
+      const code = readRecordString(errorBody, "code", "AGENT_RUNTIME_UNAVAILABLE");
+      const message =
+        readRecordString(errorBody, "message", "") ||
+        `Local runtime request failed (${response.status})`;
+      const authRequired =
+        code === "RUNTIME_EXECUTION_FAILED" && /(auth|login|api key|account)/iu.test(message);
+      const status = authRequired
+        ? 401
+        : code === "RUNTIME_AUTH_UNSUPPORTED"
+          ? 400
+          : response.status >= 500
+            ? 503
+            : Math.max(400, response.status);
+      const normalizedCode = authRequired
+        ? "AGENT_RUNTIME_AUTH_REQUIRED"
+        : code === "RUNTIME_AUTH_UNSUPPORTED"
+          ? "AGENT_RUNTIME_PROVIDER_UNSUPPORTED"
+          : code;
+      throw new ApiError(status, normalizedCode, message);
+    }
+
+    return bodyJson && typeof bodyJson === "object" ? (bodyJson as Record<string, unknown>) : {};
+  }
+}
+
 function parseExecutionMode(value: string): AgentExecutionMode {
   const parsed = AgentExecutionModeSchema.safeParse(value);
   if (!parsed.success) {
@@ -435,6 +1032,13 @@ function readRecordString(row: Record<string, unknown>, key: string, fallback = 
   return fallback;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
 function readRecordNullableString(row: Record<string, unknown>, key: string): string | null {
   const value = row[key];
   if (value == null) {
@@ -449,13 +1053,40 @@ function readRecordNullableString(row: Record<string, unknown>, key: string): st
   return null;
 }
 
+function coerceIsoDate(value: unknown): string | null {
+  if (value == null) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  }
+
+  return null;
+}
+
+function readRecordIsoDate(row: Record<string, unknown>, key: string): string {
+  const isoDate = coerceIsoDate(row[key]);
+  if (isoDate) {
+    return isoDate;
+  }
+
+  throw new RangeError(`Invalid ${key} timestamp value`);
+}
+
+function readRecordNullableIsoDate(row: Record<string, unknown>, key: string): string | null {
+  return coerceIsoDate(row[key]);
+}
+
 function mapThreadRow(row: Record<string, unknown>): AgentThreadRecord {
   const executionModeValue = readRecordString(row, "execution_mode", "cloud");
   const executionHostValue = readRecordString(row, "execution_host", "dynamic_sessions");
   const statusValue = readRecordString(row, "status", "idle");
-  const createdAtValue = readRecordString(row, "created_at");
-  const updatedAtValue = readRecordString(row, "updated_at");
-  const modeSwitchedAtValue = readRecordNullableString(row, "mode_switched_at");
 
   return {
     threadId: readRecordString(row, "thread_id"),
@@ -466,9 +1097,9 @@ function mapThreadRow(row: Record<string, unknown>): AgentThreadRecord {
     status: statusValue as AgentThreadRecord["status"],
     cloudSessionIdentifier: readRecordNullableString(row, "cloud_session_identifier"),
     title: readRecordNullableString(row, "title"),
-    createdAt: new Date(createdAtValue).toISOString(),
-    updatedAt: new Date(updatedAtValue).toISOString(),
-    modeSwitchedAt: modeSwitchedAtValue ? new Date(modeSwitchedAtValue).toISOString() : null
+    createdAt: readRecordIsoDate(row, "created_at"),
+    updatedAt: readRecordIsoDate(row, "updated_at"),
+    modeSwitchedAt: readRecordNullableIsoDate(row, "mode_switched_at")
   };
 }
 
@@ -476,8 +1107,6 @@ function mapTurnRow(row: Record<string, unknown>): AgentTurnRecord {
   const statusValue = readRecordString(row, "status", "idle");
   const executionModeValue = readRecordString(row, "execution_mode", "cloud");
   const executionHostValue = readRecordString(row, "execution_host", "dynamic_sessions");
-  const startedAtValue = readRecordString(row, "started_at");
-  const completedAtValue = readRecordNullableString(row, "completed_at");
 
   return {
     turnId: readRecordString(row, "turn_id"),
@@ -488,8 +1117,8 @@ function mapTurnRow(row: Record<string, unknown>): AgentTurnRecord {
     input: row.input ?? null,
     output: row.output ?? null,
     error: row.error ?? null,
-    startedAt: new Date(startedAtValue).toISOString(),
-    completedAt: completedAtValue ? new Date(completedAtValue).toISOString() : null
+    startedAt: readRecordIsoDate(row, "started_at"),
+    completedAt: readRecordNullableIsoDate(row, "completed_at")
   };
 }
 
@@ -500,15 +1129,52 @@ function mapEventRow(row: Record<string, unknown>): AgentEventRecord {
     turnId: readRecordNullableString(row, "turn_id"),
     method: readRecordString(row, "method"),
     payload: row.payload ?? {},
-    createdAt: new Date(readRecordString(row, "created_at")).toISOString()
+    createdAt: readRecordIsoDate(row, "created_at")
   };
 }
+
+export const __internalAgentServiceMapping = {
+  mapThreadRow,
+  mapTurnRow,
+  mapEventRow
+};
 
 function parseFeatureEnabled(value: string | undefined, fallback = false): boolean {
   if (!value) {
     return fallback;
   }
   return value.trim().toLowerCase() === "true";
+}
+
+function parsePositiveInteger(value: string | undefined, fallback: number): number {
+  if (!value || value.trim().length === 0) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(value.trim(), 10);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return parsed;
+}
+
+function parseRuntimeProvider(value: string | undefined): RuntimeProvider | null {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (
+    normalized === "dynamic_sessions" ||
+    normalized === "local_process" ||
+    normalized === "local_docker" ||
+    normalized === "mock"
+  ) {
+    return normalized;
+  }
+
+  return null;
 }
 
 function resolveDefaultExecutionHost(mode: AgentExecutionMode): AgentExecutionHost {
@@ -518,6 +1184,8 @@ function resolveDefaultExecutionHost(mode: AgentExecutionMode): AgentExecutionHo
 function toThreadEventName(threadId: string): string {
   return `thread:${threadId}`;
 }
+
+const RUNTIME_NOTIFICATION_EVENT = "runtime:notification";
 
 export interface AgentService {
   createThread(input: {
@@ -562,19 +1230,57 @@ export interface AgentService {
     cursor?: number;
     limit?: number;
   }): Promise<AgentEventRecord[]>;
+  readRuntimeAccountState(input: {
+    userId: string;
+    refreshToken?: boolean;
+  }): Promise<RuntimeAccountReadResponse>;
+  startRuntimeAccountLogin(input: {
+    userId: string;
+    request: RuntimeAccountLoginStartRequest;
+  }): Promise<RuntimeAccountLoginStartResponse>;
+  cancelRuntimeAccountLogin(input: {
+    userId: string;
+    loginId: string;
+  }): Promise<RuntimeAccountLoginCancelResponse>;
+  logoutRuntimeAccount(input: { userId: string }): Promise<RuntimeAccountLogoutResponse>;
+  readRuntimeRateLimits(input: { userId: string }): Promise<RuntimeAccountRateLimitsReadResponse>;
   subscribeThreadEvents(threadId: string, handler: (event: AgentEventRecord) => void): () => void;
+  subscribeRuntimeNotifications(handler: (event: RuntimeNotificationRecord) => void): () => void;
   close(): Promise<void>;
 }
 
 class PostgresAgentService implements AgentService {
   private readonly pool: Pool;
-  private readonly cloudExecutionDriver: CloudExecutionDriver;
+  private readonly runtimeExecutionDriver: RuntimeExecutionDriver;
   private readonly emitter = new EventEmitter();
+  private runtimeNotificationUnsubscribe: (() => void) | null = null;
 
-  constructor(input: { pool: Pool; cloudExecutionDriver: CloudExecutionDriver }) {
+  constructor(input: { pool: Pool; runtimeExecutionDriver: RuntimeExecutionDriver }) {
     this.pool = input.pool;
-    this.cloudExecutionDriver = input.cloudExecutionDriver;
+    this.runtimeExecutionDriver = input.runtimeExecutionDriver;
     this.emitter.setMaxListeners(1000);
+    try {
+      this.runtimeNotificationUnsubscribe = this.runtimeExecutionDriver.subscribeNotifications(
+        (notification) => {
+          this.publishRuntimeNotification(notification);
+        }
+      );
+    } catch {
+      this.runtimeNotificationUnsubscribe = null;
+      // runtime stream subscription is best-effort per provider
+    }
+  }
+
+  async close(): Promise<void> {
+    if (this.runtimeNotificationUnsubscribe) {
+      this.runtimeNotificationUnsubscribe();
+      this.runtimeNotificationUnsubscribe = null;
+    }
+    await this.pool.end();
+  }
+
+  private publishRuntimeNotification(notification: RuntimeNotificationRecord): void {
+    this.emitter.emit(RUNTIME_NOTIFICATION_EVENT, notification);
   }
 
   async createThread(input: {
@@ -596,7 +1302,7 @@ class PostgresAgentService implements AgentService {
     const cloudSessionIdentifier = executionMode === "cloud" ? `thr-${threadId}` : null;
 
     if (executionMode === "cloud") {
-      await this.cloudExecutionDriver.bootstrapSession({
+      await this.runtimeExecutionDriver.bootstrapSession({
         thread: {
           threadId,
           workspaceId: workspace.workspaceId,
@@ -918,11 +1624,11 @@ class PostgresAgentService implements AgentService {
 
     if (executionMode === "cloud") {
       try {
-        await this.cloudExecutionDriver.bootstrapSession({
+        await this.runtimeExecutionDriver.bootstrapSession({
           thread: effectiveThreadForExecution
         });
 
-        cloudResult = await this.cloudExecutionDriver.runTurn({
+        cloudResult = await this.runtimeExecutionDriver.runTurn({
           thread: effectiveThreadForExecution,
           turnId,
           text: input.text
@@ -1156,7 +1862,7 @@ class PostgresAgentService implements AgentService {
       this.publishEvent(event);
 
       if (turn.executionMode === "cloud") {
-        void this.cloudExecutionDriver
+        void this.runtimeExecutionDriver
           .interruptTurn({
             thread: {
               ...access.thread,
@@ -1267,6 +1973,61 @@ class PostgresAgentService implements AgentService {
     return result.rows.map((row) => mapEventRow(row as Record<string, unknown>));
   }
 
+  async readRuntimeAccountState(input: {
+    userId: string;
+    refreshToken?: boolean;
+  }): Promise<RuntimeAccountReadResponse> {
+    try {
+      return await this.runtimeExecutionDriver.readAccount({
+        refreshToken: input.refreshToken === true
+      });
+    } catch (error) {
+      this.rethrowRuntimeAuthError(error);
+    }
+  }
+
+  async startRuntimeAccountLogin(input: {
+    userId: string;
+    request: RuntimeAccountLoginStartRequest;
+  }): Promise<RuntimeAccountLoginStartResponse> {
+    try {
+      return await this.runtimeExecutionDriver.loginStart(input.request);
+    } catch (error) {
+      this.rethrowRuntimeAuthError(error);
+    }
+  }
+
+  async cancelRuntimeAccountLogin(input: {
+    userId: string;
+    loginId: string;
+  }): Promise<RuntimeAccountLoginCancelResponse> {
+    try {
+      return await this.runtimeExecutionDriver.loginCancel({
+        loginId: input.loginId
+      });
+    } catch (error) {
+      this.rethrowRuntimeAuthError(error);
+    }
+  }
+
+  async logoutRuntimeAccount(_input: { userId: string }): Promise<RuntimeAccountLogoutResponse> {
+    try {
+      return await this.runtimeExecutionDriver.logout();
+    } catch (error) {
+      this.rethrowRuntimeAuthError(error);
+    }
+  }
+
+  async readRuntimeRateLimits(_input: {
+    userId: string;
+  }): Promise<RuntimeAccountRateLimitsReadResponse> {
+    try {
+      return await this.runtimeExecutionDriver.readRateLimits();
+    } catch (error) {
+      this.rethrowRuntimeAuthError(error);
+    }
+  }
+
   subscribeThreadEvents(threadId: string, handler: (event: AgentEventRecord) => void): () => void {
     const eventName = toThreadEventName(threadId);
     this.emitter.on(eventName, handler);
@@ -1276,8 +2037,11 @@ class PostgresAgentService implements AgentService {
     };
   }
 
-  async close(): Promise<void> {
-    await this.pool.end();
+  subscribeRuntimeNotifications(handler: (event: RuntimeNotificationRecord) => void): () => void {
+    this.emitter.on(RUNTIME_NOTIFICATION_EVENT, handler);
+    return () => {
+      this.emitter.off(RUNTIME_NOTIFICATION_EVENT, handler);
+    };
   }
 
   private publishEvent(event: AgentEventRecord): void {
@@ -1405,41 +2169,90 @@ class PostgresAgentService implements AgentService {
       workspaceId: thread.workspaceId
     };
   }
+
+  private rethrowRuntimeAuthError(error: unknown): never {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    throw new ApiError(
+      503,
+      "AGENT_RUNTIME_UNAVAILABLE",
+      error instanceof Error ? error.message : "Runtime is unavailable"
+    );
+  }
 }
 
-function buildCloudExecutionDriver(env: NodeJS.ProcessEnv): CloudExecutionDriver {
+function resolveRuntimeProvider(env: NodeJS.ProcessEnv): RuntimeProvider {
+  const explicit = parseRuntimeProvider(env.AGENT_RUNTIME_PROVIDER);
+  if (explicit) {
+    return explicit;
+  }
+
   if (parseFeatureEnabled(env.AGENT_CLOUD_DRIVER_MOCK, false)) {
+    return "mock";
+  }
+
+  if (String(env.AGENT_RUNTIME_ENDPOINT || "").trim()) {
+    return "local_process";
+  }
+
+  return "dynamic_sessions";
+}
+
+function buildRuntimeExecutionDriver(env: NodeJS.ProcessEnv): RuntimeExecutionDriver {
+  const provider = resolveRuntimeProvider(env);
+  const requestTimeoutMs = parsePositiveInteger(
+    env.AGENT_RUNTIME_REQUEST_TIMEOUT_MS || env.DYNAMIC_SESSIONS_REQUEST_TIMEOUT_MS,
+    30_000
+  );
+
+  if (provider === "mock") {
     return new MockCloudExecutionDriver();
   }
 
-  const endpoint = String(env.DYNAMIC_SESSIONS_POOL_MANAGEMENT_ENDPOINT || "").trim();
-  const tokenResource = String(
-    env.DYNAMIC_SESSIONS_TOKEN_RESOURCE || "https://dynamicsessions.io"
-  ).trim();
-  const sessionExecutorClientId = String(env.DYNAMIC_SESSIONS_EXECUTOR_CLIENT_ID || "").trim();
-  const requestTimeoutCandidate = Number.parseInt(
-    String(env.DYNAMIC_SESSIONS_REQUEST_TIMEOUT_MS || "30000"),
-    10
-  );
-  const requestTimeoutMs =
-    Number.isInteger(requestTimeoutCandidate) && requestTimeoutCandidate >= 1000
-      ? requestTimeoutCandidate
-      : 30000;
+  if (provider === "local_process" || provider === "local_docker") {
+    const endpoint = String(env.AGENT_RUNTIME_ENDPOINT || "").trim();
+    if (!endpoint) {
+      return new UnavailableCloudExecutionDriver({
+        provider,
+        reason: "AGENT_RUNTIME_ENDPOINT is missing"
+      });
+    }
 
-  if (endpoint) {
-    return new DynamicSessionsCloudExecutionDriver({
+    return new LocalHttpExecutionDriver({
+      provider,
       endpoint,
-      tokenProvider: new ManagedIdentityTokenProvider({
-        resource: tokenResource,
-        clientId: sessionExecutorClientId
-      }),
       requestTimeoutMs
     });
   }
 
-  return new UnavailableCloudExecutionDriver(
-    "DYNAMIC_SESSIONS_POOL_MANAGEMENT_ENDPOINT is missing"
-  );
+  const endpoint = String(env.DYNAMIC_SESSIONS_POOL_MANAGEMENT_ENDPOINT || "").trim();
+  const staticBearerToken = String(env.DYNAMIC_SESSIONS_BEARER_TOKEN || "").trim();
+  const tokenResource = String(
+    env.DYNAMIC_SESSIONS_TOKEN_RESOURCE || "https://dynamicsessions.io"
+  ).trim();
+  const sessionExecutorClientId = String(env.DYNAMIC_SESSIONS_EXECUTOR_CLIENT_ID || "").trim();
+
+  if (!endpoint) {
+    return new UnavailableCloudExecutionDriver({
+      provider,
+      reason: "DYNAMIC_SESSIONS_POOL_MANAGEMENT_ENDPOINT is missing"
+    });
+  }
+
+  const tokenProvider = staticBearerToken
+    ? new StaticAccessTokenProvider(staticBearerToken)
+    : new ManagedIdentityTokenProvider({
+        resource: tokenResource,
+        clientId: sessionExecutorClientId
+      });
+
+  return new DynamicSessionsCloudExecutionDriver({
+    endpoint,
+    tokenProvider,
+    requestTimeoutMs
+  });
 }
 
 export function buildDefaultAgentService(input: {
@@ -1462,7 +2275,7 @@ export function buildDefaultAgentService(input: {
 
   const service = new PostgresAgentService({
     pool,
-    cloudExecutionDriver: buildCloudExecutionDriver(env)
+    runtimeExecutionDriver: buildRuntimeExecutionDriver(env)
   });
 
   return {

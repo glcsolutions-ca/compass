@@ -156,6 +156,107 @@ describe("chat action", () => {
     });
   });
 
+  it("resolves workspace slug from auth context when posting from /chat", async () => {
+    vi.mocked(loadAuthShellData).mockResolvedValue({
+      authenticated: true,
+      user: {
+        id: "user_1",
+        primaryEmail: "user@example.com",
+        displayName: "User"
+      },
+      organizations: [
+        {
+          organizationId: "org_personal",
+          organizationSlug: "personal-org",
+          organizationName: "Personal Organization",
+          role: "member",
+          status: "active"
+        }
+      ],
+      workspaces: [
+        {
+          id: "ws_personal",
+          organizationId: "org_personal",
+          organizationSlug: "personal-org",
+          organizationName: "Personal Organization",
+          slug: "personal-user-1",
+          name: "User Personal Workspace",
+          isPersonal: true,
+          role: "admin",
+          status: "active"
+        }
+      ],
+      activeWorkspaceSlug: "personal-user-1",
+      personalWorkspaceSlug: "personal-user-1"
+    });
+
+    vi.mocked(createAgentThread).mockResolvedValue({
+      status: 201,
+      data: {
+        threadId: "thread_2",
+        workspaceId: "ws_personal",
+        workspaceSlug: "personal-user-1",
+        executionMode: "cloud",
+        executionHost: "dynamic_sessions",
+        status: "idle",
+        cloudSessionIdentifier: null,
+        title: "hello from chat",
+        createdAt: null,
+        updatedAt: null,
+        modeSwitchedAt: null
+      },
+      error: null,
+      message: null
+    });
+
+    vi.mocked(startAgentTurn).mockResolvedValue({
+      status: 200,
+      data: {
+        turnId: "turn_2",
+        threadId: "thread_2",
+        status: "completed",
+        executionMode: "cloud",
+        executionHost: "dynamic_sessions",
+        input: null,
+        output: null,
+        error: null,
+        startedAt: null,
+        completedAt: null,
+        outputText: "response"
+      },
+      error: null,
+      message: null
+    });
+
+    const formData = new FormData();
+    formData.set("intent", "sendMessage");
+    formData.set("prompt", "hello from chat");
+
+    const result = await chatAction({
+      request: new Request("http://web.test/chat", {
+        method: "POST",
+        body: formData
+      }),
+      params: {}
+    });
+
+    expect(createAgentThread).toHaveBeenCalledWith(expect.any(Request), {
+      workspaceSlug: "personal-user-1",
+      executionMode: "cloud",
+      title: "hello from chat"
+    });
+    expect(result).toEqual({
+      intent: "sendMessage",
+      ok: true,
+      error: null,
+      threadId: "thread_2",
+      turnId: "turn_2",
+      executionMode: "cloud",
+      prompt: "hello from chat",
+      answer: "response"
+    });
+  });
+
   it("fails closed when auth workspaces are unexpectedly empty", async () => {
     vi.mocked(loadAuthShellData).mockResolvedValue({
       authenticated: true,

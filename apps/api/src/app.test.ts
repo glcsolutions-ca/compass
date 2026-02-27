@@ -258,6 +258,70 @@ describe("API app", () => {
     });
   });
 
+  it("returns runtime account state when authenticated", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const readRuntimeAccountState = vi.fn(async () => ({
+      provider: "local_process",
+      capabilities: {
+        interactiveAuth: true,
+        supportsChatgptManaged: true,
+        supportsApiKey: true,
+        supportsChatgptAuthTokens: true,
+        supportsRateLimits: true,
+        supportsRuntimeStream: true
+      },
+      authMode: null,
+      requiresOpenaiAuth: true,
+      account: null
+    }));
+
+    const app = buildApiApp({
+      authService,
+      agentService: {
+        readRuntimeAccountState
+      } as unknown as AgentService,
+      agentGatewayEnabled: true
+    });
+
+    const response = await request(app)
+      .post("/v1/agent/runtime/account/read")
+      .send({ refreshToken: false });
+
+    expect(response.status).toBe(200);
+    expect(response.body.provider).toBe("local_process");
+    expect(readRuntimeAccountState).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires apiKey payload for runtime apiKey login mode", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const app = buildApiApp({
+      authService,
+      agentService: {
+        startRuntimeAccountLogin: vi.fn()
+      } as unknown as AgentService,
+      agentGatewayEnabled: true
+    });
+
+    const response = await request(app)
+      .post("/v1/agent/runtime/account/login/start")
+      .send({ type: "apiKey" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("INVALID_REQUEST");
+  });
+
   it("creates an agent thread when authenticated", async () => {
     const authService = {
       readAuthMe: vi.fn(async () => ({

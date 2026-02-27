@@ -21,6 +21,15 @@ import {
   AgentEventsBatchRequestSchema,
   AgentEventsBatchResponseSchema,
   AgentEventsListResponseSchema,
+  RuntimeAccountLoginCancelRequestSchema,
+  RuntimeAccountLoginCancelResponseSchema,
+  RuntimeAccountLoginStartRequestSchema,
+  RuntimeAccountLoginStartResponseSchema,
+  RuntimeAccountLogoutResponseSchema,
+  RuntimeAccountRateLimitsReadResponseSchema,
+  RuntimeAccountReadRequestSchema,
+  RuntimeAccountReadResponseSchema,
+  RuntimeNotificationSchema,
   AgentThreadCreateRequestSchema,
   AgentThreadCreateResponseSchema,
   AgentThreadModePatchRequestSchema,
@@ -68,6 +77,18 @@ export function buildOpenApiDocument(): Record<string, unknown> {
   registry.register("AgentEventsBatchRequest", AgentEventsBatchRequestSchema);
   registry.register("AgentEventsBatchResponse", AgentEventsBatchResponseSchema);
   registry.register("AgentEventsListResponse", AgentEventsListResponseSchema);
+  registry.register("RuntimeAccountReadRequest", RuntimeAccountReadRequestSchema);
+  registry.register("RuntimeAccountReadResponse", RuntimeAccountReadResponseSchema);
+  registry.register("RuntimeAccountLoginStartRequest", RuntimeAccountLoginStartRequestSchema);
+  registry.register("RuntimeAccountLoginStartResponse", RuntimeAccountLoginStartResponseSchema);
+  registry.register("RuntimeAccountLoginCancelRequest", RuntimeAccountLoginCancelRequestSchema);
+  registry.register("RuntimeAccountLoginCancelResponse", RuntimeAccountLoginCancelResponseSchema);
+  registry.register("RuntimeAccountLogoutResponse", RuntimeAccountLogoutResponseSchema);
+  registry.register(
+    "RuntimeAccountRateLimitsReadResponse",
+    RuntimeAccountRateLimitsReadResponseSchema
+  );
+  registry.register("RuntimeNotification", RuntimeNotificationSchema);
 
   registry.registerComponent("securitySchemes", "sessionCookieAuth", {
     type: "apiKey",
@@ -549,6 +570,235 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       },
       409: {
         description: "Invite already accepted by another user",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/v1/agent/runtime/account/read",
+    operationId: "postAgentRuntimeAccountRead",
+    summary: "Read Codex runtime account state",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    request: {
+      body: {
+        content: {
+          "application/json": {
+            schema: RuntimeAccountReadRequestSchema
+          }
+        }
+      }
+    },
+    responses: {
+      200: {
+        description: "Runtime account state",
+        content: {
+          "application/json": {
+            schema: RuntimeAccountReadResponseSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      503: {
+        description: "Runtime unavailable",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/v1/agent/runtime/account/login/start",
+    operationId: "postAgentRuntimeAccountLoginStart",
+    summary: "Start Codex runtime account login",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    request: {
+      body: {
+        content: {
+          "application/json": {
+            schema: RuntimeAccountLoginStartRequestSchema
+          }
+        }
+      }
+    },
+    responses: {
+      200: {
+        description: "Runtime login start response",
+        content: {
+          "application/json": {
+            schema: RuntimeAccountLoginStartResponseSchema
+          }
+        }
+      },
+      400: {
+        description: "Invalid request or unsupported provider",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      503: {
+        description: "Runtime unavailable",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/v1/agent/runtime/account/login/cancel",
+    operationId: "postAgentRuntimeAccountLoginCancel",
+    summary: "Cancel pending runtime login",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    request: {
+      body: {
+        content: {
+          "application/json": {
+            schema: RuntimeAccountLoginCancelRequestSchema
+          }
+        }
+      }
+    },
+    responses: {
+      200: {
+        description: "Runtime login cancel status",
+        content: {
+          "application/json": {
+            schema: RuntimeAccountLoginCancelResponseSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      503: {
+        description: "Runtime unavailable",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/v1/agent/runtime/account/logout",
+    operationId: "postAgentRuntimeAccountLogout",
+    summary: "Logout runtime account",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    responses: {
+      200: {
+        description: "Runtime account logout result",
+        content: {
+          "application/json": {
+            schema: RuntimeAccountLogoutResponseSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      503: {
+        description: "Runtime unavailable",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/v1/agent/runtime/account/rate-limits/read",
+    operationId: "postAgentRuntimeAccountRateLimitsRead",
+    summary: "Read runtime account rate limits",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    responses: {
+      200: {
+        description: "Runtime account rate limits",
+        content: {
+          "application/json": {
+            schema: RuntimeAccountRateLimitsReadResponseSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      503: {
+        description: "Runtime unavailable",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/v1/agent/runtime/stream",
+    operationId: "getAgentRuntimeStream",
+    summary: "Runtime notification websocket stream",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    responses: {
+      426: {
+        description: "Use websocket upgrade for this endpoint",
         content: {
           "application/json": {
             schema: ApiErrorSchema

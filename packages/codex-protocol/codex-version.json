@@ -1,0 +1,9 @@
+{
+  "codexCliVersion": "codex-cli 0.105.0",
+  "generatedTag": "codex-cli-0.105.0",
+  "generatedAt": "2026-02-27T19:58:37.158Z",
+  "commands": [
+    "codex app-server generate-ts --out packages/codex-protocol/generated/codex-cli-0.105.0/ts",
+    "codex app-server generate-json-schema --out packages/codex-protocol/generated/codex-cli-0.105.0/json"
+  ]
+}

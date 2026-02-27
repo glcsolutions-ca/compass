@@ -1,16 +1,9 @@
-import type { TextMessagePartProps } from "@assistant-ui/react";
-import { AssistantRuntimeProvider, type AssistantRuntime, useMessage } from "@assistant-ui/react";
-import { MessagePart, Thread } from "@assistant-ui/react-ui";
+import { AssistantRuntimeProvider, type AssistantRuntime } from "@assistant-ui/react";
+import { Thread } from "@assistant-ui/react-ui";
 import { createContext, useContext, useMemo } from "react";
 import type { AgentExecutionMode } from "~/features/chat/agent-types";
 import { ChatComposerFooter } from "~/features/chat/presentation/chat-composer-footer";
-import {
-  type AssistantEventPartModel,
-  type ChatSurfaceState,
-  type ChatInspectTab,
-  readAssistantEventPartFromMetadata
-} from "~/features/chat/presentation/chat-runtime-store";
-import { cn } from "~/lib/utils/cn";
+import { type ChatSurfaceState } from "~/features/chat/presentation/chat-runtime-store";
 
 interface ChatCanvasProps {
   runtime: AssistantRuntime;
@@ -19,7 +12,6 @@ interface ChatCanvasProps {
   switchingMode: boolean;
   surfaceState: ChatSurfaceState;
   onExecutionModeChange: (nextMode: AgentExecutionMode) => void;
-  onInspectEvent: (cursor: number, tab: ChatInspectTab) => void;
 }
 
 interface ChatCanvasContextValue {
@@ -28,7 +20,6 @@ interface ChatCanvasContextValue {
   switchingMode: boolean;
   surfaceState: ChatSurfaceState;
   onExecutionModeChange: (nextMode: AgentExecutionMode) => void;
-  onInspectEvent: (cursor: number, tab: ChatInspectTab) => void;
 }
 
 const ChatCanvasContext = createContext<ChatCanvasContextValue | null>(null);
@@ -40,49 +31,6 @@ function useChatCanvasContext(): ChatCanvasContextValue {
   }
 
   return value;
-}
-
-function EventCard({
-  eventPart,
-  onInspectEvent
-}: {
-  eventPart: AssistantEventPartModel;
-  onInspectEvent: (cursor: number, tab: ChatInspectTab) => void;
-}) {
-  const canInspect = typeof eventPart.cursor === "number";
-  const toneClassName =
-    eventPart.kind === "approval"
-      ? "text-amber-700 dark:text-amber-300"
-      : eventPart.kind === "runtime"
-        ? "text-sky-700 dark:text-sky-300"
-        : "text-muted-foreground";
-
-  return (
-    <button
-      className={cn(
-        "w-full rounded-lg border border-border/70 bg-card/70 px-3 py-2 text-left transition-colors",
-        canInspect ? "hover:bg-accent/70" : "cursor-default"
-      )}
-      disabled={!canInspect}
-      onClick={() => {
-        if (!canInspect || eventPart.cursor === null) {
-          return;
-        }
-
-        onInspectEvent(eventPart.cursor, eventPart.defaultTab);
-      }}
-      type="button"
-    >
-      <p className={cn("text-[10px] font-semibold uppercase tracking-[0.12em]", toneClassName)}>
-        {eventPart.kind}
-      </p>
-      <p className="mt-1 text-sm font-medium text-foreground">{eventPart.label}</p>
-      {eventPart.detail ? (
-        <p className="mt-1 text-xs text-muted-foreground">{eventPart.detail}</p>
-      ) : null}
-      {canInspect ? <p className="mt-1 text-[11px] text-muted-foreground">Open details</p> : null}
-    </button>
-  );
 }
 
 function ChatCanvasComposer() {
@@ -99,24 +47,13 @@ function ChatCanvasComposer() {
   );
 }
 
-function ChatCanvasEventTextPart(_part: TextMessagePartProps) {
-  const context = useChatCanvasContext();
-  const eventPart = useMessage((state) => readAssistantEventPartFromMetadata(state.metadata));
-  if (!eventPart) {
-    return <MessagePart.Text />;
-  }
-
-  return <EventCard eventPart={eventPart} onInspectEvent={context.onInspectEvent} />;
-}
-
 export function ChatCanvas({
   runtime,
   executionMode,
   localModeAvailable,
   switchingMode,
   surfaceState,
-  onExecutionModeChange,
-  onInspectEvent
+  onExecutionModeChange
 }: ChatCanvasProps) {
   const contextValue = useMemo(
     () => ({
@@ -124,17 +61,9 @@ export function ChatCanvas({
       localModeAvailable,
       switchingMode,
       surfaceState,
-      onExecutionModeChange,
-      onInspectEvent
+      onExecutionModeChange
     }),
-    [
-      executionMode,
-      localModeAvailable,
-      onExecutionModeChange,
-      onInspectEvent,
-      surfaceState,
-      switchingMode
-    ]
+    [executionMode, localModeAvailable, onExecutionModeChange, surfaceState, switchingMode]
   );
 
   return (
@@ -146,10 +75,7 @@ export function ChatCanvas({
               allowReload: false,
               allowSpeak: false,
               allowFeedbackNegative: false,
-              allowFeedbackPositive: false,
-              components: {
-                Text: ChatCanvasEventTextPart
-              }
+              allowFeedbackPositive: false
             }}
             branchPicker={{
               allowBranchPicker: false

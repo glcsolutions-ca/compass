@@ -124,9 +124,20 @@ importers:
         specifier: 3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@25.3.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@1.8.0))(lightningcss@1.31.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
-  apps/codex-session-runtime: {}
+  apps/codex-session-runtime:
+    dependencies:
+      '@compass/codex-runtime-core':
+        specifier: workspace:*
+        version: link:../../packages/codex-runtime-core
 
   apps/desktop:
+    dependencies:
+      '@compass/codex-runtime-core':
+        specifier: workspace:*
+        version: link:../../packages/codex-runtime-core
+      '@compass/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
     devDependencies:
       '@electron-forge/cli':
         specifier: ^7.11.1
@@ -161,6 +172,9 @@ importers:
       '@assistant-ui/react-ui':
         specifier: ^0.2.1
         version: 0.2.1(@assistant-ui/react-markdown@0.12.5(@assistant-ui/react@0.12.14(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4)))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@assistant-ui/react@0.12.14(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4)))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4))
+      '@compass/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@compass/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -307,6 +321,14 @@ importers:
       vitest:
         specifier: 3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@25.3.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@1.8.0))(lightningcss@1.31.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/codex-protocol: {}
+
+  packages/codex-runtime-core:
+    dependencies:
+      '@compass/codex-protocol':
+        specifier: workspace:*
+        version: link:../codex-protocol
 
   packages/contracts:
     dependencies:

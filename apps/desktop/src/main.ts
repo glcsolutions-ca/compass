@@ -9,6 +9,7 @@ import {
 } from "./auth-deep-link";
 import { resolveDesktopRuntimeConfig, type DesktopRuntimeConfig } from "./config";
 import {
+  type AgentLocalLoginCancelInput,
   type AgentLocalLoginStartInput,
   type AgentLocalTurnInterruptInput,
   type AgentLocalTurnStartInput,
@@ -202,6 +203,13 @@ function registerIpcHandlers(): void {
       }
     }
   });
+  runtimeManager.subscribeRuntimeNotifications((event) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send(IPC_CHANNELS.agentRuntimeNotification, event);
+      }
+    }
+  });
 
   ipcMain.on(IPC_CHANNELS.getAppVersion, (event) => {
     event.returnValue = app.getVersion();
@@ -232,8 +240,23 @@ function registerIpcHandlers(): void {
     return runtimeManager.loginStatus();
   });
 
+  ipcMain.handle(
+    IPC_CHANNELS.agentLocalLoginCancel,
+    async (_event, payload: AgentLocalLoginCancelInput) => {
+      if (!payload || typeof payload.loginId !== "string") {
+        throw new Error("Invalid login cancel payload");
+      }
+
+      return runtimeManager.loginCancel(payload);
+    }
+  );
+
   ipcMain.handle(IPC_CHANNELS.agentLocalLogout, async () => {
     return runtimeManager.logout();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.agentLocalRateLimitsRead, async () => {
+    return runtimeManager.readRateLimits();
   });
 
   ipcMain.handle(

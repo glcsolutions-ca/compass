@@ -12,6 +12,7 @@
     "baseUrl": ".",
     "paths": {
       "~/*": ["./app/*"],
+      "@compass/contracts": ["../../packages/contracts/src/index.ts"],
       "@compass/sdk": ["../../packages/sdk/src/index.ts"]
     },
     "esModuleInterop": true,

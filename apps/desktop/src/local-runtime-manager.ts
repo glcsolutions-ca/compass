@@ -1,5 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
+import type {
+  RuntimeAccountLoginCancelResponse,
+  RuntimeAccountLoginStartResponse,
+  RuntimeAccountLogoutResponse,
+  RuntimeAccountRateLimitsReadResponse,
+  RuntimeAccountReadResponse,
+  RuntimeCapabilities
+} from "@compass/contracts" with { "resolution-mode": "import" };
 
 export type LocalAuthMode = "chatgpt" | "apiKey";
 
@@ -22,6 +29,17 @@ export interface LocalAgentEvent {
   createdAt: string;
 }
 
+export interface LocalRuntimeNotification {
+  method:
+    | "account/login/completed"
+    | "account/updated"
+    | "account/rateLimits/updated"
+    | "mcpServer/oauthLogin/completed";
+  params: Record<string, unknown>;
+  createdAt: string;
+}
+export type LocalRuntimeRateLimits = RuntimeAccountRateLimitsReadResponse;
+
 export interface LocalAuthStore {
   read(): Promise<LocalAuthState>;
   write(state: LocalAuthState): Promise<void>;
@@ -38,11 +56,46 @@ interface CodexLoginStartResult {
   authenticated: boolean;
   accountLabel: string | null;
   authUrl: string | null;
+  loginId?: string | null;
+}
+
+interface SharedCodexRuntimeClient {
+  readAccount(): Promise<{ type: string | null; label: string | null }>;
+  loginStart(input: { mode: LocalAuthMode; apiKey?: string }): Promise<{
+    authenticated: boolean;
+    accountLabel: string | null;
+    authUrl: string | null;
+    loginId?: string | null;
+  }>;
+  loginCancel(input: { loginId: string }): Promise<unknown>;
+  logout(): Promise<{ authenticated: boolean; accountLabel: string | null; mode: string | null }>;
+  readRateLimits(): Promise<RuntimeAccountRateLimitsReadResponse>;
+  subscribe(
+    listener: (notification: { method: string; params: Record<string, unknown> }) => void
+  ): () => void;
+  startThread(input?: { cwd?: string }): Promise<{ threadId: string }>;
+  runTurn(input: { threadId: string; text: string; onDelta: (delta: string) => void }): Promise<{
+    turnId: string;
+    status: "completed" | "interrupted" | "failed" | "inProgress";
+    outputText: string;
+  }>;
+  interruptTurn(input: { threadId: string; turnId: string }): Promise<{
+    interrupted: boolean;
+    reason?: string;
+    threadId?: string;
+    turnId?: string;
+  }>;
 }
 
 export interface LocalCodexClient {
   readAccount(): Promise<{ type: string | null; label: string | null }>;
   loginStart(input: { mode: LocalAuthMode; apiKey?: string }): Promise<CodexLoginStartResult>;
+  loginCancel(input: { loginId: string }): Promise<void>;
+  logout(): Promise<void>;
+  readRateLimits(): Promise<RuntimeAccountRateLimitsReadResponse>;
+  subscribeNotifications(
+    listener: (notification: { method: string; params: Record<string, unknown> }) => void
+  ): Promise<() => void>;
   startThread(input: { threadId: string }): Promise<{ codexThreadId: string }>;
   startTurn(input: {
     threadId: string;
@@ -54,18 +107,16 @@ export interface LocalCodexClient {
 }
 
 type EventListener = (event: LocalAgentEvent) => void;
+type RuntimeNotificationListener = (notification: LocalRuntimeNotification) => void;
 
-interface RpcNotification {
-  method: string;
-  params: Record<string, unknown>;
-}
-
-interface PendingRequest {
-  method: string;
-  resolve: (value: Record<string, unknown>) => void;
-  reject: (reason: unknown) => void;
-  timeout: NodeJS.Timeout;
-}
+const LOCAL_RUNTIME_CAPABILITIES: RuntimeCapabilities = {
+  interactiveAuth: true,
+  supportsChatgptManaged: true,
+  supportsApiKey: true,
+  supportsChatgptAuthTokens: true,
+  supportsRateLimits: true,
+  supportsRuntimeStream: true
+};
 
 function normalizeLocalAuthState(value: unknown): LocalAuthState {
   if (!value || typeof value !== "object") {
@@ -107,62 +158,100 @@ function normalizeLocalAuthState(value: unknown): LocalAuthState {
   };
 }
 
-function readNonEmptyString(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
+function accountLabelForType(type: string | null): string {
+  if (!type) {
+    return "Local account";
   }
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : null;
+  return `${type} account`;
 }
 
-function asObjectRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-  return value as Record<string, unknown>;
+function toRuntimeAccountState(authState: LocalAuthState): RuntimeAccountReadResponse {
+  const authMode =
+    authState.mode === "chatgpt" ? "chatgpt" : authState.mode === "apiKey" ? "apikey" : null;
+
+  return {
+    provider: "local_process",
+    capabilities: LOCAL_RUNTIME_CAPABILITIES,
+    authMode,
+    requiresOpenaiAuth: true,
+    account: authState.account
+      ? {
+          type: authState.mode ?? "local",
+          label: authState.account.label
+        }
+      : null
+  };
 }
 
-class CodexRpcClient implements LocalCodexClient {
-  readonly #command: string;
-  readonly #args: string[];
-  readonly #requestTimeoutMs: number;
-  readonly #turnTimeoutMs: number;
-  readonly #notificationListeners = new Set<(notification: RpcNotification) => void>();
+let codexClientCtorPromise: Promise<
+  new (input: {
+    command: string;
+    args: string;
+    requestTimeoutMs: number;
+    turnTimeoutMs: number;
+    initTimeoutMs: number;
+    maxRestarts: number;
+  }) => SharedCodexRuntimeClient
+> | null = null;
 
-  #child: ReturnType<typeof spawn> | null = null;
-  #startPromise: Promise<void> | null = null;
-  #pending = new Map<number, PendingRequest>();
-  #nextId = 1;
-  #buffer = "";
-  #initialized = false;
+async function loadCodexClientCtor(): Promise<
+  new (input: {
+    command: string;
+    args: string;
+    requestTimeoutMs: number;
+    turnTimeoutMs: number;
+    initTimeoutMs: number;
+    maxRestarts: number;
+  }) => SharedCodexRuntimeClient
+> {
+  if (!codexClientCtorPromise) {
+    codexClientCtorPromise = import("@compass/codex-runtime-core").then((module) => {
+      return module.CodexJsonRpcClient as new (input: {
+        command: string;
+        args: string;
+        requestTimeoutMs: number;
+        turnTimeoutMs: number;
+        initTimeoutMs: number;
+        maxRestarts: number;
+      }) => SharedCodexRuntimeClient;
+    });
+  }
+
+  return codexClientCtorPromise;
+}
+
+class SharedCodexClientAdapter implements LocalCodexClient {
+  readonly #client: Promise<SharedCodexRuntimeClient>;
 
   constructor() {
-    this.#command = String(process.env.CODEX_APP_SERVER_COMMAND || "codex").trim() || "codex";
-    this.#args = String(process.env.CODEX_APP_SERVER_ARGS || "app-server")
-      .split(" ")
-      .map((part) => part.trim())
-      .filter((part) => part.length > 0);
-    this.#requestTimeoutMs = Number.parseInt(
-      process.env.DESKTOP_CODEX_REQUEST_TIMEOUT_MS || "30000",
-      10
-    );
-    this.#turnTimeoutMs = Number.parseInt(
-      process.env.DESKTOP_CODEX_TURN_TIMEOUT_MS || "120000",
-      10
-    );
+    this.#client = this.#createClient();
+  }
+
+  async #createClient(): Promise<SharedCodexRuntimeClient> {
+    const CodexClient = await loadCodexClientCtor();
+    return new CodexClient({
+      command: String(process.env.CODEX_APP_SERVER_COMMAND || "codex").trim() || "codex",
+      args: String(process.env.CODEX_APP_SERVER_ARGS || "app-server"),
+      requestTimeoutMs: Number.parseInt(
+        process.env.DESKTOP_CODEX_REQUEST_TIMEOUT_MS || "30000",
+        10
+      ),
+      turnTimeoutMs: Number.parseInt(process.env.DESKTOP_CODEX_TURN_TIMEOUT_MS || "120000", 10),
+      initTimeoutMs: Number.parseInt(process.env.DESKTOP_CODEX_INIT_TIMEOUT_MS || "30000", 10),
+      maxRestarts: Number.parseInt(process.env.DESKTOP_CODEX_MAX_RESTARTS || "2", 10)
+    });
+  }
+
+  async #getClient(): Promise<SharedCodexRuntimeClient> {
+    return this.#client;
   }
 
   async readAccount(): Promise<{ type: string | null; label: string | null }> {
-    await this.ensureStarted();
-    const result = await this.request("account/read", {});
-    const account = asObjectRecord(result.account);
-    const type = readNonEmptyString(account?.type);
-    const email = readNonEmptyString(account?.email);
-    const name = readNonEmptyString(account?.name);
-
+    const client = await this.#getClient();
+    const account = await client.readAccount();
     return {
-      type,
-      label: name || email || (type ? `${type} account` : null)
+      type: account.type,
+      label: account.label
     };
   }
 
@@ -170,55 +259,49 @@ class CodexRpcClient implements LocalCodexClient {
     mode: LocalAuthMode;
     apiKey?: string;
   }): Promise<CodexLoginStartResult> {
-    await this.ensureStarted();
-
-    if (input.mode === "apiKey") {
-      const apiKey = readNonEmptyString(input.apiKey);
-      if (!apiKey) {
-        throw new Error("API key is required for apiKey login mode");
-      }
-
-      await this.request("account/login/start", {
-        type: "apiKey",
-        apiKey
-      });
-
-      const account = await this.readAccount();
-      return {
-        authenticated: Boolean(account.type),
-        accountLabel: account.label || "API key account",
-        authUrl: null
-      };
-    }
-
-    const login = await this.request("account/login/start", {
-      type: "chatgpt"
-    });
-
-    const account = await this.readAccount();
-    const authUrl = readNonEmptyString(login.authUrl);
-
+    const client = await this.#getClient();
+    const result = await client.loginStart(input);
     return {
-      authenticated: Boolean(account.type),
-      accountLabel: account.label || "ChatGPT account",
-      authUrl
+      authenticated: result.authenticated,
+      accountLabel: result.accountLabel,
+      authUrl: result.authUrl,
+      loginId: result.loginId ?? null
     };
   }
 
-  async startThread(input: { threadId: string }): Promise<{ codexThreadId: string }> {
-    await this.ensureStarted();
+  async loginCancel(input: { loginId: string }): Promise<void> {
+    const client = await this.#getClient();
+    await client.loginCancel({
+      loginId: input.loginId
+    });
+  }
 
-    const response = await this.request("thread/start", {
+  async logout(): Promise<void> {
+    const client = await this.#getClient();
+    await client.logout();
+  }
+
+  async readRateLimits(): Promise<LocalRuntimeRateLimits> {
+    const client = await this.#getClient();
+    return await client.readRateLimits();
+  }
+
+  async subscribeNotifications(
+    listener: (notification: { method: string; params: Record<string, unknown> }) => void
+  ): Promise<() => void> {
+    const client = await this.#getClient();
+    return client.subscribe(listener);
+  }
+
+  async startThread(_input: { threadId: string }): Promise<{ codexThreadId: string }> {
+    const client = await this.#getClient();
+    const started = await client.startThread({
       cwd: process.cwd()
     });
 
-    const thread = asObjectRecord(response.thread);
-    const codexThreadId = readNonEmptyString(thread?.id || response.threadId);
-    if (!codexThreadId) {
-      throw new Error(`thread/start did not return thread.id for ${input.threadId}`);
-    }
-
-    return { codexThreadId };
+    return {
+      codexThreadId: started.threadId
+    };
   }
 
   async startTurn(input: {
@@ -227,345 +310,33 @@ class CodexRpcClient implements LocalCodexClient {
     text: string;
     onDelta: (delta: string) => void;
   }): Promise<CodexTurnResult> {
-    await this.ensureStarted();
-
-    let turnId = "";
-    const chunks: string[] = [];
-    let status: CodexTurnResult["status"] = "inProgress";
-
-    let resolveCompleted: ((value?: void | PromiseLike<void>) => void) | null = null;
-    let rejectCompleted: ((reason?: unknown) => void) | null = null;
-    const completionPromise = new Promise<void>((resolve, reject) => {
-      resolveCompleted = resolve;
-      rejectCompleted = reject;
+    const client = await this.#getClient();
+    const result = await client.runTurn({
+      threadId: input.codexThreadId,
+      text: input.text,
+      onDelta: input.onDelta
     });
-
-    const timeout = setTimeout(() => {
-      if (rejectCompleted) {
-        rejectCompleted(
-          new Error(
-            `turn/start did not complete for thread ${input.threadId} within ${this.#turnTimeoutMs}ms`
-          )
-        );
-      }
-    }, this.#turnTimeoutMs);
-
-    const unsubscribe = this.subscribe((notification) => {
-      const params = notification.params || {};
-      const eventThreadId = readNonEmptyString(params.threadId);
-      if (eventThreadId !== input.codexThreadId) {
-        return;
-      }
-
-      const paramsTurn = asObjectRecord(params.turn);
-      const eventTurnId = readNonEmptyString(params.turnId || paramsTurn?.id);
-      if (turnId && eventTurnId && eventTurnId !== turnId) {
-        return;
-      }
-
-      if (notification.method === "item/agentMessage/delta") {
-        const delta = readNonEmptyString(params.delta);
-        if (!delta) {
-          return;
-        }
-
-        chunks.push(delta);
-        input.onDelta(delta);
-        return;
-      }
-
-      if (notification.method === "item/completed") {
-        const item = (params.item || {}) as { type?: unknown; text?: unknown };
-        if (item.type === "agentMessage") {
-          const text = readNonEmptyString(item.text);
-          if (text && chunks.length === 0) {
-            chunks.push(text);
-            input.onDelta(text);
-          }
-        }
-        return;
-      }
-
-      if (notification.method === "turn/completed") {
-        const completedTurn = asObjectRecord(params.turn);
-        status =
-          (readNonEmptyString(completedTurn?.status || params.status) as
-            | CodexTurnResult["status"]
-            | null) || "completed";
-        if (resolveCompleted) {
-          resolveCompleted();
-        }
-      }
-    });
-
-    try {
-      let awaitCompletion = true;
-      const started = await this.request("turn/start", {
-        threadId: input.codexThreadId,
-        input: [
-          {
-            type: "text",
-            text: input.text,
-            text_elements: []
-          }
-        ]
-      });
-
-      const startedTurn = asObjectRecord(started.turn);
-      turnId = readNonEmptyString(startedTurn?.id) || randomUUID();
-      const immediateStatus = readNonEmptyString(startedTurn?.status);
-      if (immediateStatus && immediateStatus !== "inProgress") {
-        status = immediateStatus as CodexTurnResult["status"];
-        awaitCompletion = false;
-      }
-
-      if (awaitCompletion) {
-        await completionPromise;
-      }
-    } finally {
-      clearTimeout(timeout);
-      unsubscribe();
-    }
 
     return {
-      turnId,
-      status,
-      outputText: chunks.join("")
+      turnId: result.turnId || randomUUID(),
+      status:
+        result.status === "failed" ||
+        result.status === "interrupted" ||
+        result.status === "completed" ||
+        result.status === "inProgress"
+          ? result.status
+          : "failed",
+      outputText: result.outputText
     };
   }
 
   async interruptTurn(input: { codexThreadId: string; turnId: string }): Promise<void> {
-    await this.ensureStarted();
-
-    await this.request("turn/interrupt", {
+    const client = await this.#getClient();
+    await client.interruptTurn({
       threadId: input.codexThreadId,
       turnId: input.turnId
     });
   }
-
-  private subscribe(handler: (notification: RpcNotification) => void): () => void {
-    this.#notificationListeners.add(handler);
-    return () => {
-      this.#notificationListeners.delete(handler);
-    };
-  }
-
-  private async ensureStarted(): Promise<void> {
-    if (this.#child && !this.#child.killed && this.#initialized) {
-      return;
-    }
-
-    if (this.#startPromise) {
-      await this.#startPromise;
-      return;
-    }
-
-    this.#startPromise = this.startInternal();
-    try {
-      await this.#startPromise;
-    } finally {
-      this.#startPromise = null;
-    }
-  }
-
-  private async startInternal(): Promise<void> {
-    const child = spawn(this.#command, this.#args, {
-      stdio: ["pipe", "pipe", "pipe"],
-      env: process.env
-    });
-
-    this.#child = child;
-    this.#initialized = false;
-
-    child.stdout.on("data", (chunk) => {
-      this.handleStdout(String(chunk));
-    });
-
-    child.stderr.on("data", (chunk) => {
-      const message = String(chunk);
-      if (message.trim().length > 0) {
-        process.stderr.write(message);
-      }
-    });
-
-    child.on("exit", (code, signal) => {
-      this.#child = null;
-      this.#initialized = false;
-      this.rejectAllPending(
-        new Error(`Local Codex App Server exited (code=${String(code)}, signal=${String(signal)})`)
-      );
-    });
-
-    await this.request(
-      "initialize",
-      {
-        protocolVersion: "2",
-        clientInfo: {
-          name: "compass-desktop-local-runtime",
-          version: "0.1.0"
-        },
-        capabilities: null
-      },
-      true
-    );
-
-    await this.notify("initialized", {}, true);
-    this.#initialized = true;
-  }
-
-  private handleStdout(text: string): void {
-    this.#buffer += text;
-
-    while (true) {
-      const newlineIndex = this.#buffer.indexOf("\n");
-      if (newlineIndex < 0) {
-        break;
-      }
-
-      const line = this.#buffer.slice(0, newlineIndex).trim();
-      this.#buffer = this.#buffer.slice(newlineIndex + 1);
-
-      if (!line) {
-        continue;
-      }
-
-      let parsedMessage: unknown;
-      try {
-        parsedMessage = JSON.parse(line) as unknown;
-      } catch {
-        continue;
-      }
-      const message = asObjectRecord(parsedMessage);
-      if (!message) {
-        continue;
-      }
-
-      if (Object.prototype.hasOwnProperty.call(message, "id")) {
-        const id = Number(message.id);
-        const pending = this.#pending.get(id);
-        if (!pending) {
-          continue;
-        }
-
-        this.#pending.delete(id);
-        clearTimeout(pending.timeout);
-
-        const error = asObjectRecord(message.error);
-        const errorMessage = readNonEmptyString(error?.message);
-        if (errorMessage) {
-          pending.reject(new Error(errorMessage));
-        } else {
-          pending.resolve(asObjectRecord(message.result) || {});
-        }
-        continue;
-      }
-
-      const method = readNonEmptyString(message.method);
-      if (method) {
-        const notification: RpcNotification = {
-          method,
-          params: asObjectRecord(message.params) || {}
-        };
-
-        for (const listener of this.#notificationListeners) {
-          listener(notification);
-        }
-      }
-    }
-  }
-
-  private rejectAllPending(error: Error): void {
-    for (const pending of this.#pending.values()) {
-      clearTimeout(pending.timeout);
-      pending.reject(error);
-    }
-    this.#pending.clear();
-  }
-
-  private async notify(
-    method: string,
-    params: Record<string, unknown>,
-    skipEnsureStarted = false
-  ): Promise<void> {
-    if (!skipEnsureStarted) {
-      await this.ensureStarted();
-    }
-
-    const child = this.#child;
-    if (!child || child.killed || !child.stdin) {
-      throw new Error("Local Codex App Server is unavailable");
-    }
-    const stdin = child.stdin;
-
-    await new Promise<void>((resolve, reject) => {
-      stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method, params })}\n`, "utf8", (error) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-
-        resolve();
-      });
-    });
-  }
-
-  private async request(
-    method: string,
-    params: Record<string, unknown>,
-    skipEnsureStarted = false
-  ): Promise<Record<string, unknown>> {
-    if (!skipEnsureStarted) {
-      await this.ensureStarted();
-    }
-
-    const child = this.#child;
-    if (!child || child.killed || !child.stdin) {
-      throw new Error("Local Codex App Server is unavailable");
-    }
-    const stdin = child.stdin;
-
-    const id = this.#nextId++;
-
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.#pending.delete(id);
-        reject(new Error(`${method} timed out after ${this.#requestTimeoutMs}ms`));
-      }, this.#requestTimeoutMs);
-
-      this.#pending.set(id, {
-        method,
-        resolve,
-        reject,
-        timeout
-      });
-
-      stdin.write(
-        `${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`,
-        "utf8",
-        (error) => {
-          if (!error) {
-            return;
-          }
-
-          const pending = this.#pending.get(id);
-          if (!pending) {
-            return;
-          }
-
-          this.#pending.delete(id);
-          clearTimeout(timeout);
-          reject(error);
-        }
-      );
-    });
-  }
-}
-
-function accountLabelForType(type: string | null): string {
-  if (!type) {
-    return "Local account";
-  }
-  return `${type} account`;
 }
 
 export class LocalRuntimeManager {
@@ -579,13 +350,41 @@ export class LocalRuntimeManager {
     { threadId: string; codexThreadId: string; codexTurnId: string }
   >();
   readonly #eventListeners = new Set<EventListener>();
+  readonly #runtimeNotificationListeners = new Set<RuntimeNotificationListener>();
 
   constructor(input: { authStore: LocalAuthStore; codexClient?: LocalCodexClient }) {
     this.#authStore = input.authStore;
-    this.#codexClient = input.codexClient ?? new CodexRpcClient();
+    this.#codexClient = input.codexClient ?? new SharedCodexClientAdapter();
+
+    void this.#codexClient
+      .subscribeNotifications((notification) => {
+        if (
+          notification.method !== "account/login/completed" &&
+          notification.method !== "account/updated" &&
+          notification.method !== "account/rateLimits/updated" &&
+          notification.method !== "mcpServer/oauthLogin/completed"
+        ) {
+          return;
+        }
+
+        const runtimeNotification: LocalRuntimeNotification = {
+          method: notification.method,
+          params: notification.params ?? {},
+          createdAt: new Date().toISOString()
+        };
+        for (const listener of this.#runtimeNotificationListeners) {
+          listener(runtimeNotification);
+        }
+      })
+      .catch(() => {
+        // Best-effort subscription; runtime notifications are optional.
+      });
   }
 
-  async loginStart(input: { mode: LocalAuthMode; apiKey?: string }): Promise<LocalAuthState> {
+  async loginStart(input: {
+    mode: LocalAuthMode;
+    apiKey?: string;
+  }): Promise<RuntimeAccountLoginStartResponse> {
     if (input.mode === "apiKey" && (!input.apiKey || !input.apiKey.trim())) {
       throw new Error("API key is required for apiKey login mode");
     }
@@ -604,19 +403,36 @@ export class LocalRuntimeManager {
     };
 
     await this.#authStore.write(state);
-    return state;
+    return {
+      type: input.mode,
+      loginId: login.loginId ?? null,
+      authUrl: login.authUrl ?? null
+    };
   }
 
-  async loginStatus(): Promise<LocalAuthState> {
+  async loginCancel(input: { loginId: string }): Promise<RuntimeAccountLoginCancelResponse> {
+    if (!input.loginId || !input.loginId.trim()) {
+      throw new Error("loginId is required");
+    }
+
+    await this.#codexClient.loginCancel({
+      loginId: input.loginId.trim()
+    });
+
+    return { status: "canceled" };
+  }
+
+  async loginStatus(): Promise<RuntimeAccountReadResponse> {
     const persisted = normalizeLocalAuthState(await this.#authStore.read());
 
     let account: { type: string | null; label: string | null };
     try {
       account = await this.#codexClient.readAccount();
     } catch {
-      // Keep persisted state when the local runtime is unavailable.
-      return persisted;
+      // Keep persisted state when local runtime process is unavailable.
+      return toRuntimeAccountState(persisted);
     }
+
     const accountType = account.type;
     const accountLabel = account.label;
 
@@ -636,26 +452,38 @@ export class LocalRuntimeManager {
     }
 
     await this.#authStore.write(nextState);
-    return nextState;
+    return toRuntimeAccountState(nextState);
   }
 
-  async logout(): Promise<LocalAuthState> {
+  async logout(): Promise<RuntimeAccountLogoutResponse> {
+    try {
+      await this.#codexClient.logout();
+    } catch {
+      // local logout is best effort; local cache clear remains authoritative.
+    }
+
     await this.#authStore.clear();
     this.#threadCodexMap.clear();
     this.#turnCodexMap.clear();
-    return {
-      authenticated: false,
-      mode: null,
-      account: null,
-      updatedAt: new Date().toISOString(),
-      authUrl: null
-    };
+
+    return {};
+  }
+
+  async readRateLimits(): Promise<LocalRuntimeRateLimits> {
+    return await this.#codexClient.readRateLimits();
   }
 
   subscribe(handler: EventListener): () => void {
     this.#eventListeners.add(handler);
     return () => {
       this.#eventListeners.delete(handler);
+    };
+  }
+
+  subscribeRuntimeNotifications(handler: RuntimeNotificationListener): () => void {
+    this.#runtimeNotificationListeners.add(handler);
+    return () => {
+      this.#runtimeNotificationListeners.delete(handler);
     };
   }
 
@@ -668,7 +496,7 @@ export class LocalRuntimeManager {
     executionHost: "desktop_local";
   }> {
     const auth = await this.loginStatus();
-    if (!auth.authenticated) {
+    if (!auth.authMode) {
       throw new Error("Local runtime is not authenticated");
     }
 
@@ -683,7 +511,6 @@ export class LocalRuntimeManager {
     const threadId = input.threadId.trim();
     const turnId = input.turnId?.trim() || randomUUID();
     const sessionId = this.#ensureThreadSession(threadId);
-
     const codexThreadId = await this.#ensureCodexThread(threadId);
 
     this.#emitEvent({
@@ -712,6 +539,7 @@ export class LocalRuntimeManager {
         });
       }
     });
+
     if (turn.status === "inProgress") {
       throw new Error("Local runtime returned non-terminal turn status");
     }

@@ -326,6 +326,28 @@ async function runFlow(
         await composerInput.fill("Smoke test prompt");
         await sendButton.click();
         await page.waitForTimeout(1200);
+
+        const sentPromptVisible = await page
+          .getByText("Smoke test prompt")
+          .last()
+          .isVisible()
+          .catch(() => false);
+        flowAssertions.push({
+          id: `${flowId}:chat-send-renders-user-prompt`,
+          description: `[${flowId}] Chat send renders the user prompt in the timeline`,
+          pass: sentPromptVisible
+        });
+
+        const applicationErrorVisible = await page
+          .getByText("Application Error", { exact: true })
+          .first()
+          .isVisible()
+          .catch(() => false);
+        flowAssertions.push({
+          id: `${flowId}:chat-send-no-application-error-overlay`,
+          description: `[${flowId}] Chat send does not trigger the application error overlay`,
+          pass: !applicationErrorVisible
+        });
       }
 
       if (smokeChatLayout && chatSurfaceAvailable) {

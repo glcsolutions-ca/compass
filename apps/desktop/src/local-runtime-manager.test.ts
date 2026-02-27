@@ -77,6 +77,19 @@ function createFakeCodexClient(options?: {
         authUrl: "https://example.com/fake-chatgpt-login"
       };
     },
+    async loginCancel() {},
+    async logout() {
+      authenticatedType = null;
+    },
+    async readRateLimits() {
+      return {
+        rateLimits: null,
+        rateLimitsByLimitId: null
+      };
+    },
+    async subscribeNotifications() {
+      return () => {};
+    },
     async startThread() {
       return {
         codexThreadId: "codex-thread-1"
@@ -155,13 +168,17 @@ describe("LocalRuntimeManager", () => {
 
     await expect(manager.loginStart({ mode: "apiKey" })).rejects.toThrow("API key is required");
 
-    const state = await manager.loginStart({ mode: "apiKey", apiKey: "sk-test" });
-    expect(state.authenticated).toBe(true);
-    expect(state.mode).toBe("apiKey");
+    const login = await manager.loginStart({ mode: "apiKey", apiKey: "sk-test" });
+    expect(login.type).toBe("apiKey");
+
+    const status = await manager.loginStatus();
+    expect(status.authMode).toBe("apikey");
 
     const loggedOut = await manager.logout();
-    expect(loggedOut.authenticated).toBe(false);
-    expect(loggedOut.mode).toBeNull();
+    expect(loggedOut).toEqual({});
+
+    const loggedOutStatus = await manager.loginStatus();
+    expect(loggedOutStatus.authMode).toBeNull();
   });
 
   it("returns chatgpt authUrl when chatgpt login is not yet authenticated", async () => {
@@ -171,9 +188,9 @@ describe("LocalRuntimeManager", () => {
       codexClient: client
     });
 
-    const state = await manager.loginStart({ mode: "chatgpt" });
-    expect(state.authenticated).toBe(false);
-    expect(state.authUrl).toBe("https://example.com/fake-chatgpt-login");
+    const login = await manager.loginStart({ mode: "chatgpt" });
+    expect(login.type).toBe("chatgpt");
+    expect(login.authUrl).toBe("https://example.com/fake-chatgpt-login");
   });
 
   it("forwards interrupts to codex runtime using stored turn mapping", async () => {

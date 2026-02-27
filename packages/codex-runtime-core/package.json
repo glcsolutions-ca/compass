@@ -1,0 +1,21 @@
+{
+  "name": "@compass/codex-runtime-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@compass/codex-protocol": "workspace:*"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "scripts": {
+    "lint": "eslint . --ext .js --max-warnings=0",
+    "test": "vitest run --passWithNoTests"
+  }
+}

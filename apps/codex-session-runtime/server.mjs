@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
-import { spawn } from "node:child_process";
+import { EventEmitter } from "node:events";
 import os from "node:os";
+import { CodexJsonRpcClient } from "@compass/codex-runtime-core";
 
-const host = process.env.HOST || "0.0.0.0";
+const host = process.env.HOST || "127.0.0.1";
 const port = Number.parseInt(process.env.PORT || "8080", 10);
-const engine = String(process.env.SESSION_RUNTIME_ENGINE || "mock")
+const engine = String(process.env.SESSION_RUNTIME_ENGINE || "codex")
   .trim()
   .toLowerCase();
 const maxBodyBytes = Number.parseInt(process.env.MAX_BODY_BYTES || "1048576", 10);
@@ -56,9 +57,41 @@ const bootAt = Date.now();
 const bootId = randomUUID();
 const hostname = os.hostname();
 let requestCount = 0;
+let runtimeNotificationCursor = 0;
 
 const sessionStore = new Map();
 const turnStore = new Map();
+const runtimeNotificationStore = [];
+const runtimeNotificationEmitter = new EventEmitter();
+
+const codexClient =
+  engine === "codex"
+    ? new CodexJsonRpcClient({
+        command: String(process.env.CODEX_APP_SERVER_COMMAND || "codex").trim() || "codex",
+        args: String(process.env.CODEX_APP_SERVER_ARGS || "app-server"),
+        requestTimeoutMs: codexRequestTimeoutMs,
+        turnTimeoutMs: codexTurnTimeoutMs,
+        initTimeoutMs: codexInitTimeoutMs,
+        maxRestarts: codexMaxRestarts,
+        autoLoginApiKey: String(process.env.OPENAI_API_KEY || "").trim() || null,
+        onStderr: (chunk) => {
+          process.stderr.write(chunk);
+        }
+      })
+    : null;
+
+if (codexClient) {
+  codexClient.subscribe((notification) => {
+    if (
+      notification.method === "account/login/completed" ||
+      notification.method === "account/updated" ||
+      notification.method === "account/rateLimits/updated" ||
+      notification.method === "mcpServer/oauthLogin/completed"
+    ) {
+      publishRuntimeNotification(notification);
+    }
+  });
+}
 
 function json(response, statusCode, payload) {
   response.writeHead(statusCode, {
@@ -68,21 +101,22 @@ function json(response, statusCode, payload) {
   response.end(JSON.stringify(payload));
 }
 
+function sleep(ms) {
+  if (ms <= 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 function safeInteger(value, fallback) {
   const parsed = Number.parseInt(String(value), 10);
   if (!Number.isFinite(parsed)) {
     return fallback;
   }
   return parsed;
-}
-
-function sleep(ms) {
-  if (ms <= 0) {
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }
 
 function readIdentifier(url) {
@@ -97,8 +131,31 @@ function readString(value) {
   if (typeof value !== "string") {
     return "";
   }
+
   const normalized = value.trim();
   return normalized;
+}
+
+function writeSseEvent(response, event) {
+  response.write(`event: runtime\n`);
+  response.write(`data: ${JSON.stringify(event)}\n\n`);
+}
+
+function publishRuntimeNotification(notification) {
+  runtimeNotificationCursor += 1;
+  const event = {
+    cursor: runtimeNotificationCursor,
+    method: notification.method,
+    params: notification.params,
+    createdAt: new Date().toISOString()
+  };
+
+  runtimeNotificationStore.push(event);
+  if (runtimeNotificationStore.length > 500) {
+    runtimeNotificationStore.shift();
+  }
+
+  runtimeNotificationEmitter.emit("event", event);
 }
 
 function ensureSession(identifier) {
@@ -130,11 +187,9 @@ async function readJsonBody(request) {
   for await (const chunk of request) {
     const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += bufferChunk.byteLength;
-
     if (size > maxBodyBytes) {
       throw new Error("BODY_TOO_LARGE");
     }
-
     chunks.push(bufferChunk);
   }
 
@@ -154,626 +209,50 @@ async function readJsonBody(request) {
   }
 }
 
-function createRpcError(method, message, code = -32000) {
-  const normalizedMethod = readString(method) || "unknown";
-  const normalizedMessage = readString(message) || "RPC request failed";
-  const error = new Error(`RPC ${normalizedMethod} failed (${String(code)}): ${normalizedMessage}`);
-  error.name = "RpcRequestError";
-  return error;
-}
-
-function isRecoverableTransportError(error) {
-  const message = error instanceof Error ? error.message : String(error);
-  return /RPC_TRANSPORT_(DISCONNECTED|WRITE_FAILED|STARTUP_FAILED|TIMEOUT)/u.test(message);
-}
-
-class JsonRpcStdioProcess {
-  constructor() {
-    this.child = null;
-    this.nextId = 1;
-    this.startPromise = null;
-    this.pending = new Map();
-    this.notificationListeners = new Set();
-    this.buffer = "";
-    this.stderrTail = [];
-    this.command = String(process.env.CODEX_APP_SERVER_COMMAND || "codex").trim() || "codex";
-    this.args = String(process.env.CODEX_APP_SERVER_ARGS || "app-server")
-      .split(" ")
-      .map((part) => part.trim())
-      .filter(Boolean);
-    this.initialized = false;
-    this.restartCount = 0;
-    this.lastError = "";
-    this.readyAt = null;
-    this.apiKey = readString(process.env.OPENAI_API_KEY || "");
-  }
-
-  async ensureStarted() {
-    if (this.child && !this.child.killed && this.initialized) {
-      return;
-    }
-
-    if (this.startPromise) {
-      await this.startPromise;
-      return;
-    }
-
-    this.startPromise = this.startInternal();
-    try {
-      await this.startPromise;
-    } finally {
-      this.startPromise = null;
-    }
-  }
-
-  async startInternal() {
-    const child = spawn(this.command, this.args, {
-      stdio: ["pipe", "pipe", "pipe"],
-      env: process.env
-    });
-
-    this.child = child;
-    this.initialized = false;
-    this.buffer = "";
-
-    child.stderr.on("data", (chunk) => {
-      const text = String(chunk);
-      this.stderrTail.push(text);
-      if (this.stderrTail.length > 50) {
-        this.stderrTail.shift();
-      }
-      process.stderr.write(text);
-    });
-
-    child.stdout.on("data", (chunk) => {
-      this.handleStdoutChunk(String(chunk));
-    });
-
-    child.on("error", (error) => {
-      this.lastError = `RPC_TRANSPORT_STARTUP_FAILED: ${error.message}`;
-      this.rejectAllPending(new Error(this.lastError));
-    });
-
-    child.on("exit", (code, signal) => {
-      const message = `RPC_TRANSPORT_DISCONNECTED: codex app server exited (code=${String(code)}, signal=${String(signal)})`;
-      this.lastError = message;
-      this.initialized = false;
-      this.child = null;
-      this.rejectAllPending(new Error(message));
-      process.stderr.write(`${message}\n`);
-    });
-
-    try {
-      await this.requestRaw(
-        "initialize",
-        {
-          protocolVersion: "2",
-          clientInfo: {
-            name: "compass-codex-session-runtime",
-            version: "0.1.0"
-          },
-          capabilities: null
-        },
-        codexInitTimeoutMs,
-        true
-      );
-
-      await this.notify("initialized", {}, true);
-      await this.ensureAccountAuth();
-
-      this.initialized = true;
-      this.readyAt = new Date().toISOString();
-    } catch (error) {
-      this.lastError = error instanceof Error ? error.message : String(error);
-      await this.forceRestart();
-      throw error;
-    }
-  }
-
-  handleStdoutChunk(text) {
-    this.buffer += text;
-
-    while (true) {
-      const newlineIndex = this.buffer.indexOf("\n");
-      if (newlineIndex < 0) {
-        break;
-      }
-
-      const line = this.buffer.slice(0, newlineIndex).trim();
-      this.buffer = this.buffer.slice(newlineIndex + 1);
-
-      if (!line) {
-        continue;
-      }
-
-      let message;
-      try {
-        message = JSON.parse(line);
-      } catch {
-        continue;
-      }
-
-      if (Object.prototype.hasOwnProperty.call(message, "id")) {
-        const id = Number(message.id);
-        const pending = this.pending.get(id);
-        if (!pending) {
-          continue;
-        }
-
-        this.pending.delete(id);
-        clearTimeout(pending.timeout);
-
-        if (message.error) {
-          pending.reject(
-            createRpcError(pending.method, message.error.message || "RPC error", message.error.code)
-          );
-          continue;
-        }
-
-        pending.resolve(message.result || {});
-        continue;
-      }
-
-      if (message && typeof message.method === "string") {
-        for (const listener of this.notificationListeners) {
-          listener({
-            method: message.method,
-            params: message.params || {}
-          });
-        }
-      }
-    }
-  }
-
-  rejectAllPending(error) {
-    for (const pending of this.pending.values()) {
-      clearTimeout(pending.timeout);
-      pending.reject(error);
-    }
-    this.pending.clear();
-  }
-
-  async request(method, params, timeoutMs = codexRequestTimeoutMs) {
-    return this.requestWithRestart(method, params, timeoutMs);
-  }
-
-  async requestWithRestart(method, params, timeoutMs = codexRequestTimeoutMs) {
-    let attempt = 0;
-
-    while (true) {
-      try {
-        await this.ensureStarted();
-        return await this.requestRaw(method, params, timeoutMs, true);
-      } catch (error) {
-        if (attempt >= codexMaxRestarts || !isRecoverableTransportError(error)) {
-          throw error;
-        }
-
-        attempt += 1;
-        this.restartCount += 1;
-        this.lastError = error instanceof Error ? error.message : String(error);
-        await this.forceRestart();
-      }
-    }
-  }
-
-  async requestRaw(method, params, timeoutMs, skipEnsureStarted = false) {
-    if (!skipEnsureStarted) {
-      await this.ensureStarted();
-    }
-
-    const child = this.child;
-    if (!child || child.killed || !child.stdin) {
-      throw new Error("RPC_TRANSPORT_DISCONNECTED: app server process is unavailable");
-    }
-
-    const id = this.nextId++;
-
-    const payload = {
-      jsonrpc: "2.0",
-      id,
-      method,
-      params: params ?? {}
-    };
-
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pending.delete(id);
-        reject(
-          new Error(`RPC_TRANSPORT_TIMEOUT: ${method} timed out after ${String(timeoutMs)}ms`)
-        );
-      }, timeoutMs);
-
-      this.pending.set(id, {
-        method,
-        resolve,
-        reject,
-        timeout
-      });
-
-      child.stdin.write(`${JSON.stringify(payload)}\n`, "utf8", (error) => {
-        if (!error) {
-          return;
-        }
-
-        const pending = this.pending.get(id);
-        if (!pending) {
-          return;
-        }
-
-        this.pending.delete(id);
-        clearTimeout(timeout);
-        reject(new Error(`RPC_TRANSPORT_WRITE_FAILED: ${error.message}`));
-      });
-    });
-  }
-
-  async notify(method, params, skipEnsureStarted = false) {
-    if (!skipEnsureStarted) {
-      await this.ensureStarted();
-    }
-
-    const child = this.child;
-    if (!child || child.killed || !child.stdin) {
-      throw new Error("RPC_TRANSPORT_DISCONNECTED: app server process is unavailable");
-    }
-
-    return new Promise((resolve, reject) => {
-      child.stdin.write(
-        `${JSON.stringify({ jsonrpc: "2.0", method, params: params ?? {} })}\n`,
-        "utf8",
-        (error) => {
-          if (error) {
-            reject(new Error(`RPC_TRANSPORT_WRITE_FAILED: ${error.message}`));
-            return;
-          }
-          resolve();
-        }
-      );
-    });
-  }
-
-  subscribe(listener) {
-    this.notificationListeners.add(listener);
-    return () => {
-      this.notificationListeners.delete(listener);
-    };
-  }
-
-  async ensureAccountAuth() {
-    let accountRead;
-    try {
-      accountRead = await this.requestRaw("account/read", {}, codexInitTimeoutMs, true);
-    } catch {
-      return;
-    }
-
-    const existingAccountType = readString(accountRead?.account?.type);
-    if (existingAccountType) {
-      return;
-    }
-
-    if (!this.apiKey) {
-      return;
-    }
-
-    await this.requestRaw(
-      "account/login/start",
-      {
-        type: "apiKey",
-        apiKey: this.apiKey
-      },
-      codexInitTimeoutMs,
-      true
-    );
-
-    const postLogin = await this.requestRaw("account/read", {}, codexInitTimeoutMs, true);
-    const loggedInType = readString(postLogin?.account?.type);
-    if (!loggedInType) {
-      throw new Error("RPC account/login/start did not produce an authenticated account state");
-    }
-  }
-
-  async forceRestart() {
-    const child = this.child;
-    this.initialized = false;
-    this.child = null;
-
-    if (!child || child.killed) {
-      return;
-    }
-
-    await new Promise((resolve) => {
-      const timeout = setTimeout(() => {
-        resolve();
-      }, 1000);
-
-      child.once("exit", () => {
-        clearTimeout(timeout);
-        resolve();
-      });
-
-      child.kill("SIGTERM");
-    });
-  }
-
-  health() {
-    return {
-      command: this.command,
-      args: this.args,
-      running: Boolean(this.child && !this.child.killed),
-      initialized: this.initialized,
-      pid: this.child?.pid || null,
-      readyAt: this.readyAt,
-      restartCount: this.restartCount,
-      lastError: this.lastError,
-      stderrTail: this.stderrTail.slice(-10)
-    };
-  }
-
-  stop() {
-    void this.forceRestart();
-  }
-}
-
-class CodexAppServerProcess {
-  constructor() {
-    this.rpc = new JsonRpcStdioProcess();
-  }
-
-  async bootstrapSession(session) {
-    if (readString(session.codexThreadId)) {
-      return session;
-    }
-
-    const response = await this.rpc.request("thread/start", {
-      cwd: process.cwd()
-    });
-
-    const codexThreadId = readString(response?.thread?.id || response?.threadId);
-    if (!codexThreadId) {
-      throw new Error("Codex thread bootstrap response did not include thread.id");
-    }
-
-    session.codexThreadId = codexThreadId;
-    session.codexBootstrappedAt = new Date().toISOString();
+async function ensureCodexSessionThread(session) {
+  if (!codexClient) {
     return session;
   }
 
-  async runTurn(input) {
-    let attempt = 0;
-
-    while (attempt < 2) {
-      attempt += 1;
-      const session = await this.bootstrapSession(input.session);
-
-      try {
-        return await this.runTurnOnSession({
-          ...input,
-          session
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const lostThread = /thread.*(not found|unknown)/iu.test(message);
-        if (!lostThread || attempt >= 2) {
-          throw error;
-        }
-
-        session.codexThreadId = null;
-      }
-    }
-
-    throw new Error("Unexpected codex turn failure");
+  if (readString(session.codexThreadId)) {
+    return session;
   }
 
-  async runTurnOnSession(input) {
-    const sessionThreadId = readString(input.session.codexThreadId);
-    if (!sessionThreadId) {
-      throw new Error("Codex session thread is unavailable");
-    }
-
-    let codexTurnId = "";
-    const outputChunks = [];
-    let completedStatus = "inProgress";
-    let completedError = null;
-
-    let resolveCompleted;
-    let rejectCompleted;
-    const completionPromise = new Promise((resolve, reject) => {
-      resolveCompleted = resolve;
-      rejectCompleted = reject;
-    });
-
-    const completionTimeout = setTimeout(() => {
-      rejectCompleted(
-        new Error(
-          `RPC_TRANSPORT_TIMEOUT: turn did not complete within ${String(codexTurnTimeoutMs)}ms`
-        )
-      );
-    }, codexTurnTimeoutMs);
-
-    const unsubscribe = this.rpc.subscribe((notification) => {
-      const params = notification.params || {};
-      const threadId = readString(params.threadId);
-      const turnId = readString(params.turnId || params.turn?.id);
-
-      if (threadId !== sessionThreadId) {
-        return;
-      }
-
-      if (notification.method === "item/agentMessage/delta") {
-        if (codexTurnId && turnId !== codexTurnId) {
-          return;
-        }
-
-        if (!codexTurnId) {
-          codexTurnId = turnId;
-        }
-
-        const delta = readString(params.delta);
-        if (delta) {
-          outputChunks.push(delta);
-        }
-        return;
-      }
-
-      if (notification.method === "item/completed") {
-        if (codexTurnId && turnId !== codexTurnId) {
-          return;
-        }
-
-        const item = params.item || {};
-        if (item.type === "agentMessage") {
-          const fullText = readString(item.text);
-          if (fullText && outputChunks.length === 0) {
-            outputChunks.push(fullText);
-          }
-        }
-        return;
-      }
-
-      if (notification.method === "error") {
-        if (codexTurnId && turnId !== codexTurnId) {
-          return;
-        }
-
-        const errorMessage = readString(
-          params.error?.message || params.error?.details || "Codex error"
-        );
-        completedError = errorMessage || "Codex error";
-        return;
-      }
-
-      if (notification.method === "turn/completed") {
-        const turn = params.turn || {};
-        const turnStatus = readString(turn.status) || "completed";
-        const completionTurnId = readString(turn.id || turnId);
-
-        if (codexTurnId && completionTurnId !== codexTurnId) {
-          return;
-        }
-
-        if (!codexTurnId) {
-          codexTurnId = completionTurnId;
-        }
-
-        completedStatus = turnStatus;
-        const turnErrorMessage = readString(turn.error?.message || "");
-        if (turnErrorMessage) {
-          completedError = turnErrorMessage;
-        }
-
-        resolveCompleted();
-      }
-    });
-
-    try {
-      const startResponse = await this.rpc.request("turn/start", {
-        threadId: sessionThreadId,
-        input: [
-          {
-            type: "text",
-            text: input.text,
-            text_elements: []
-          }
-        ]
-      });
-
-      const startedTurnId = readString(startResponse?.turn?.id);
-      if (startedTurnId) {
-        codexTurnId = startedTurnId;
-      }
-
-      const startedStatus = readString(startResponse?.turn?.status);
-      if (startedStatus && startedStatus !== "inProgress") {
-        completedStatus = startedStatus;
-        const immediateError = readString(startResponse?.turn?.error?.message || "");
-        if (immediateError) {
-          completedError = immediateError;
-        }
-        resolveCompleted();
-      }
-
-      await completionPromise;
-    } finally {
-      clearTimeout(completionTimeout);
-      unsubscribe();
-    }
-
-    if (!codexTurnId) {
-      codexTurnId = input.turnId;
-    }
-
-    const outputText = outputChunks.join("");
-
-    if (completedStatus === "failed") {
-      throw new Error(completedError || "Codex turn failed");
-    }
-
-    if (completedStatus === "interrupted") {
-      return {
-        outputText,
-        runtimeMetadata: {
-          engine: "codex",
-          protocol: "jsonrpc-v2",
-          status: "interrupted",
-          codexThreadId: sessionThreadId,
-          codexTurnId,
-          sessionId: input.session.sessionId,
-          identifier: input.identifier,
-          codexPid: this.rpc.health().pid
-        }
-      };
-    }
-
-    return {
-      outputText,
-      runtimeMetadata: {
-        engine: "codex",
-        protocol: "jsonrpc-v2",
-        status: completedStatus,
-        codexThreadId: sessionThreadId,
-        codexTurnId,
-        sessionId: input.session.sessionId,
-        identifier: input.identifier,
-        codexPid: this.rpc.health().pid
-      }
-    };
-  }
-
-  async interruptTurn(input) {
-    const codexThreadId = readString(input?.runtimeMetadata?.codexThreadId);
-    const codexTurnId = readString(input?.runtimeMetadata?.codexTurnId || input?.turnId);
-
-    if (!codexThreadId || !codexTurnId) {
-      return {
-        interrupted: false,
-        reason: "CODEX_TURN_METADATA_UNAVAILABLE"
-      };
-    }
-
-    await this.rpc.request("turn/interrupt", {
-      threadId: codexThreadId,
-      turnId: codexTurnId
-    });
-
-    return {
-      interrupted: true,
-      codexThreadId,
-      codexTurnId
-    };
-  }
-
-  health() {
-    return this.rpc.health();
-  }
-
-  async stop() {
-    this.rpc.stop();
-  }
+  const started = await codexClient.startThread({ cwd: process.cwd() });
+  session.codexThreadId = started.threadId;
+  session.codexBootstrappedAt = new Date().toISOString();
+  return session;
 }
 
-const codexProcess = new CodexAppServerProcess();
+async function readRuntimeAccountState({ refreshToken = false } = {}) {
+  if (!codexClient) {
+    return {
+      authMode: null,
+      requiresOpenaiAuth: false,
+      account: null
+    };
+  }
+
+  const state = await codexClient.readAccountState({
+    refreshToken
+  });
+  return {
+    authMode: state.authMode,
+    requiresOpenaiAuth: state.requiresOpenaiAuth,
+    account: state.account.raw
+  };
+}
+
+async function readRuntimeRateLimits() {
+  if (!codexClient) {
+    return {
+      rateLimits: null,
+      rateLimitsByLimitId: null
+    };
+  }
+
+  return await codexClient.readRateLimits();
+}
 
 async function runMockTurn(input) {
   const sleepMs = Math.max(0, Math.min(maxSleepMs, safeInteger(input.sleepMs, 0)));
@@ -791,16 +270,80 @@ async function runMockTurn(input) {
 }
 
 async function runTurn(input) {
-  if (engine === "codex") {
-    return codexProcess.runTurn(input);
+  if (!codexClient) {
+    return runMockTurn(input);
   }
 
-  return runMockTurn(input);
+  const isLostThreadError = (error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    return /thread.*(not found|unknown)/iu.test(message);
+  };
+
+  let attempt = 0;
+  while (attempt < 2) {
+    attempt += 1;
+
+    const session = await ensureCodexSessionThread(input.session);
+    const codexThreadId = readString(session.codexThreadId);
+    if (!codexThreadId) {
+      throw new Error("Codex session thread is unavailable");
+    }
+
+    try {
+      const result = await codexClient.runTurn({
+        threadId: codexThreadId,
+        turnId: input.turnId,
+        text: input.text
+      });
+
+      if (result.status === "failed") {
+        throw new Error(result.errorMessage || "Codex turn failed");
+      }
+
+      return {
+        outputText: result.outputText,
+        runtimeMetadata: {
+          engine: "codex",
+          protocol: "jsonrpc-v2",
+          status: result.status,
+          codexThreadId,
+          codexTurnId: result.turnId || input.turnId,
+          sessionId: session.sessionId,
+          identifier: input.identifier,
+          codexPid: codexClient.health().pid
+        }
+      };
+    } catch (error) {
+      if (!isLostThreadError(error) || attempt >= 2) {
+        throw error;
+      }
+
+      session.codexThreadId = null;
+      session.codexBootstrappedAt = null;
+    }
+  }
+
+  throw new Error("Codex turn failed after session recovery attempts");
+}
+
+function sendInvalidBodyError(response, error) {
+  const message = error instanceof Error ? error.message : "INVALID_REQUEST";
+  if (message === "BODY_TOO_LARGE") {
+    json(response, 413, {
+      code: "BODY_TOO_LARGE",
+      message: "Request body exceeds configured limit"
+    });
+    return;
+  }
+
+  json(response, 400, {
+    code: "INVALID_JSON",
+    message: "Request body must be valid JSON"
+  });
 }
 
 const server = createServer(async (request, response) => {
   requestCount += 1;
-
   const url = new URL(request.url || "/", "http://localhost");
 
   if (request.method === "GET" && url.pathname === "/health") {
@@ -813,8 +356,170 @@ const server = createServer(async (request, response) => {
       uptimeMs: Date.now() - bootAt,
       requestCount,
       engine,
-      codex: codexProcess.health()
+      codex: codexClient ? codexClient.health() : null
     });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/agent/stream") {
+    response.writeHead(200, {
+      "content-type": "text/event-stream",
+      "cache-control": "no-store",
+      connection: "keep-alive"
+    });
+
+    const cursorCandidate = Number(url.searchParams.get("cursor"));
+    const cursor = Number.isInteger(cursorCandidate) ? Math.max(0, cursorCandidate) : 0;
+
+    for (const event of runtimeNotificationStore) {
+      if (event.cursor > cursor) {
+        writeSseEvent(response, event);
+      }
+    }
+
+    const onRuntimeEvent = (event) => {
+      try {
+        writeSseEvent(response, event);
+      } catch {
+        // stream closed
+      }
+    };
+
+    runtimeNotificationEmitter.on("event", onRuntimeEvent);
+    request.on("close", () => {
+      runtimeNotificationEmitter.off("event", onRuntimeEvent);
+      response.end();
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/agent/account/read") {
+    let body;
+    try {
+      body = await readJsonBody(request);
+    } catch (error) {
+      sendInvalidBodyError(response, error);
+      return;
+    }
+
+    try {
+      const state = await readRuntimeAccountState({
+        refreshToken: body?.refreshToken === true
+      });
+      json(response, 200, state);
+    } catch (error) {
+      json(response, 502, {
+        code: "RUNTIME_ACCOUNT_READ_FAILED",
+        message: error instanceof Error ? error.message : "Runtime account read failed"
+      });
+    }
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/agent/account/login/start") {
+    if (!codexClient) {
+      json(response, 409, {
+        code: "RUNTIME_AUTH_UNSUPPORTED",
+        message: "Runtime auth controls are only available in codex mode"
+      });
+      return;
+    }
+
+    let body;
+    try {
+      body = await readJsonBody(request);
+    } catch (error) {
+      sendInvalidBodyError(response, error);
+      return;
+    }
+
+    const loginType = readString(body?.type);
+    try {
+      let result;
+      if (loginType === "chatgpt") {
+        result = await codexClient.loginStartAccount({
+          mode: "chatgpt"
+        });
+      } else if (loginType === "chatgptAuthTokens") {
+        result = await codexClient.loginStartAccount({
+          mode: "chatgptAuthTokens",
+          accessToken: body?.accessToken,
+          chatgptAccountId: body?.chatgptAccountId,
+          chatgptPlanType: body?.chatgptPlanType
+        });
+      } else {
+        result = await codexClient.loginStartAccount({
+          mode: "apiKey",
+          apiKey: body?.apiKey
+        });
+      }
+
+      json(response, 200, result);
+    } catch (error) {
+      json(response, 400, {
+        code: "RUNTIME_AUTH_LOGIN_FAILED",
+        message: error instanceof Error ? error.message : "Runtime login failed"
+      });
+    }
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/agent/account/login/cancel") {
+    if (!codexClient) {
+      json(response, 409, {
+        code: "RUNTIME_AUTH_UNSUPPORTED",
+        message: "Runtime auth controls are only available in codex mode"
+      });
+      return;
+    }
+
+    let body;
+    try {
+      body = await readJsonBody(request);
+    } catch (error) {
+      sendInvalidBodyError(response, error);
+      return;
+    }
+
+    try {
+      const result = await codexClient.loginCancel({
+        loginId: body?.loginId
+      });
+      json(response, 200, result);
+    } catch (error) {
+      json(response, 400, {
+        code: "RUNTIME_AUTH_LOGIN_CANCEL_FAILED",
+        message: error instanceof Error ? error.message : "Runtime login cancel failed"
+      });
+    }
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/agent/account/logout") {
+    try {
+      if (codexClient) {
+        await codexClient.logoutAccount();
+      }
+      json(response, 200, {});
+    } catch (error) {
+      json(response, 502, {
+        code: "RUNTIME_AUTH_LOGOUT_FAILED",
+        message: error instanceof Error ? error.message : "Runtime logout failed"
+      });
+    }
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/agent/account/rate-limits/read") {
+    try {
+      const rateLimits = await readRuntimeRateLimits();
+      json(response, 200, rateLimits);
+    } catch (error) {
+      json(response, 502, {
+        code: "RUNTIME_RATE_LIMITS_READ_FAILED",
+        message: error instanceof Error ? error.message : "Runtime rate-limit read failed"
+      });
+    }
     return;
   }
 
@@ -829,10 +534,9 @@ const server = createServer(async (request, response) => {
     }
 
     const session = ensureSession(identifier);
-
     try {
-      if (engine === "codex") {
-        await codexProcess.bootstrapSession(session);
+      if (codexClient) {
+        await ensureCodexSessionThread(session);
       }
     } catch (error) {
       json(response, 502, {
@@ -867,18 +571,7 @@ const server = createServer(async (request, response) => {
     try {
       body = await readJsonBody(request);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "INVALID_REQUEST";
-      if (message === "BODY_TOO_LARGE") {
-        json(response, 413, {
-          code: "BODY_TOO_LARGE",
-          message: "Request body exceeds configured limit"
-        });
-      } else {
-        json(response, 400, {
-          code: "INVALID_JSON",
-          message: "Request body must be valid JSON"
-        });
-      }
+      sendInvalidBodyError(response, error);
       return;
     }
 
@@ -912,7 +605,6 @@ const server = createServer(async (request, response) => {
         sessionId: session.sessionId
       }
     };
-
     turnStore.set(turnId, turn);
 
     try {
@@ -961,7 +653,6 @@ const server = createServer(async (request, response) => {
   if (interruptMatch) {
     const turnId = decodeURIComponent(interruptMatch[1]);
     const turn = turnStore.get(turnId);
-
     if (!turn) {
       json(response, 404, {
         code: "TURN_NOT_FOUND",
@@ -975,9 +666,12 @@ const server = createServer(async (request, response) => {
       reason: "NOT_REQUIRED"
     };
 
-    if (engine === "codex") {
+    if (codexClient) {
       try {
-        interruptResult = await codexProcess.interruptTurn(turn);
+        interruptResult = await codexClient.interruptTurn({
+          threadId: readString(turn.runtimeMetadata?.codexThreadId),
+          turnId: readString(turn.runtimeMetadata?.codexTurnId || turn.turnId)
+        });
       } catch (error) {
         json(response, 502, {
           code: "RUNTIME_INTERRUPT_FAILED",
@@ -1010,11 +704,13 @@ const server = createServer(async (request, response) => {
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {
-    void codexProcess.stop().finally(() => {
-      server.close(() => {
-        process.exit(0);
+    Promise.resolve(codexClient?.stop())
+      .catch(() => {})
+      .finally(() => {
+        server.close(() => {
+          process.exit(0);
+        });
       });
-    });
   });
 }
 

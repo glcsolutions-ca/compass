@@ -5,6 +5,8 @@ WORKDIR /app
 RUN npm install --global @openai/codex@0.106.0
 
 COPY apps/codex-session-runtime/server.mjs ./server.mjs
+COPY packages/codex-runtime-core/package.json ./node_modules/@compass/codex-runtime-core/package.json
+COPY packages/codex-runtime-core/src ./node_modules/@compass/codex-runtime-core/src
 
 ENV HOST=0.0.0.0
 ENV PORT=8080

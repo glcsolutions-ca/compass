@@ -225,6 +225,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agent/runtime/account/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read Codex runtime account state */
+        post: operations["postAgentRuntimeAccountRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/runtime/account/login/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Codex runtime account login */
+        post: operations["postAgentRuntimeAccountLoginStart"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/runtime/account/login/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel pending runtime login */
+        post: operations["postAgentRuntimeAccountLoginCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/runtime/account/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout runtime account */
+        post: operations["postAgentRuntimeAccountLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/runtime/account/rate-limits/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read runtime account rate limits */
+        post: operations["postAgentRuntimeAccountRateLimitsRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/runtime/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Runtime notification websocket stream */
+        get: operations["getAgentRuntimeStream"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agent/threads": {
         parameters: {
             query?: never;
@@ -632,6 +734,103 @@ export interface components {
                 /** Format: date-time */
                 createdAt: string;
             }[];
+        };
+        RuntimeAccountReadRequest: {
+            refreshToken?: boolean;
+        };
+        RuntimeAccountReadResponse: {
+            /** @enum {string} */
+            provider: "dynamic_sessions" | "local_process" | "local_docker" | "mock";
+            capabilities: {
+                interactiveAuth: boolean;
+                supportsChatgptManaged: boolean;
+                supportsApiKey: boolean;
+                supportsChatgptAuthTokens: boolean;
+                supportsRateLimits: boolean;
+                supportsRuntimeStream: boolean;
+            };
+            /** @enum {string|null} */
+            authMode: "apikey" | "chatgpt" | "chatgptAuthTokens" | null;
+            requiresOpenaiAuth: boolean;
+            account: {
+                type?: string;
+                email?: string | null;
+                name?: string | null;
+                planType?: string | null;
+                label?: string | null;
+            } | null;
+        };
+        RuntimeAccountLoginStartRequest: {
+            /** @enum {string} */
+            type: "chatgpt";
+        } | {
+            /** @enum {string} */
+            type: "apiKey";
+            apiKey: string;
+        } | {
+            /** @enum {string} */
+            type: "chatgptAuthTokens";
+            accessToken: string;
+            chatgptAccountId: string;
+            chatgptPlanType?: string | null;
+        };
+        RuntimeAccountLoginStartResponse: {
+            /** @enum {string} */
+            type: "chatgpt" | "apiKey" | "chatgptAuthTokens";
+            loginId?: string | null;
+            /** Format: uri */
+            authUrl?: string | null;
+        };
+        RuntimeAccountLoginCancelRequest: {
+            loginId: string;
+        };
+        RuntimeAccountLoginCancelResponse: {
+            status?: string;
+        };
+        RuntimeAccountLogoutResponse: Record<string, never>;
+        RuntimeAccountRateLimitsReadResponse: {
+            rateLimits: {
+                limitId: string | null;
+                limitName: string | null;
+                primary: {
+                    usedPercent: number;
+                    windowDurationMins: number | null;
+                    resetsAt: number | null;
+                } | null;
+                secondary: {
+                    usedPercent: number;
+                    windowDurationMins: number | null;
+                    resetsAt: number | null;
+                } | null;
+                credits?: unknown;
+                planType?: string | null;
+            } | null;
+            rateLimitsByLimitId: {
+                [key: string]: {
+                    limitId: string | null;
+                    limitName: string | null;
+                    primary: {
+                        usedPercent: number;
+                        windowDurationMins: number | null;
+                        resetsAt: number | null;
+                    } | null;
+                    secondary: {
+                        usedPercent: number;
+                        windowDurationMins: number | null;
+                        resetsAt: number | null;
+                    } | null;
+                    credits?: unknown;
+                    planType?: string | null;
+                } | null;
+            } | null;
+        };
+        RuntimeNotification: {
+            cursor?: number;
+            /** @enum {string} */
+            method: "account/login/completed" | "account/updated" | "account/rateLimits/updated" | "mcpServer/oauthLogin/completed";
+            params?: unknown;
+            /** Format: date-time */
+            createdAt: string;
         };
     };
     responses: never;
@@ -1316,6 +1515,354 @@ export interface operations {
             };
             /** @description Invite already accepted by another user */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    postAgentRuntimeAccountRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    refreshToken?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Runtime account state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        provider: "dynamic_sessions" | "local_process" | "local_docker" | "mock";
+                        capabilities: {
+                            interactiveAuth: boolean;
+                            supportsChatgptManaged: boolean;
+                            supportsApiKey: boolean;
+                            supportsChatgptAuthTokens: boolean;
+                            supportsRateLimits: boolean;
+                            supportsRuntimeStream: boolean;
+                        };
+                        /** @enum {string|null} */
+                        authMode: "apikey" | "chatgpt" | "chatgptAuthTokens" | null;
+                        requiresOpenaiAuth: boolean;
+                        account: {
+                            type?: string;
+                            email?: string | null;
+                            name?: string | null;
+                            planType?: string | null;
+                            label?: string | null;
+                        } | null;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Runtime unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    postAgentRuntimeAccountLoginStart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    type: "chatgpt";
+                } | {
+                    /** @enum {string} */
+                    type: "apiKey";
+                    apiKey: string;
+                } | {
+                    /** @enum {string} */
+                    type: "chatgptAuthTokens";
+                    accessToken: string;
+                    chatgptAccountId: string;
+                    chatgptPlanType?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Runtime login start response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        type: "chatgpt" | "apiKey" | "chatgptAuthTokens";
+                        loginId?: string | null;
+                        /** Format: uri */
+                        authUrl?: string | null;
+                    };
+                };
+            };
+            /** @description Invalid request or unsupported provider */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Runtime unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    postAgentRuntimeAccountLoginCancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    loginId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Runtime login cancel status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status?: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Runtime unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    postAgentRuntimeAccountLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runtime account logout result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Runtime unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    postAgentRuntimeAccountRateLimitsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runtime account rate limits */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        rateLimits: {
+                            limitId: string | null;
+                            limitName: string | null;
+                            primary: {
+                                usedPercent: number;
+                                windowDurationMins: number | null;
+                                resetsAt: number | null;
+                            } | null;
+                            secondary: {
+                                usedPercent: number;
+                                windowDurationMins: number | null;
+                                resetsAt: number | null;
+                            } | null;
+                            credits?: unknown;
+                            planType?: string | null;
+                        } | null;
+                        rateLimitsByLimitId: {
+                            [key: string]: {
+                                limitId: string | null;
+                                limitName: string | null;
+                                primary: {
+                                    usedPercent: number;
+                                    windowDurationMins: number | null;
+                                    resetsAt: number | null;
+                                } | null;
+                                secondary: {
+                                    usedPercent: number;
+                                    windowDurationMins: number | null;
+                                    resetsAt: number | null;
+                                } | null;
+                                credits?: unknown;
+                                planType?: string | null;
+                            } | null;
+                        } | null;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Runtime unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getAgentRuntimeStream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Use websocket upgrade for this endpoint */
+            426: {
                 headers: {
                     [name: string]: unknown;
                 };

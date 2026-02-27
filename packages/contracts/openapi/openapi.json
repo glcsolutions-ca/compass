@@ -1124,6 +1124,485 @@
         "required": [
           "events"
         ]
+      },
+      "RuntimeAccountReadRequest": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RuntimeAccountReadResponse": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "dynamic_sessions",
+              "local_process",
+              "local_docker",
+              "mock"
+            ]
+          },
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "interactiveAuth": {
+                "type": "boolean"
+              },
+              "supportsChatgptManaged": {
+                "type": "boolean"
+              },
+              "supportsApiKey": {
+                "type": "boolean"
+              },
+              "supportsChatgptAuthTokens": {
+                "type": "boolean"
+              },
+              "supportsRateLimits": {
+                "type": "boolean"
+              },
+              "supportsRuntimeStream": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "interactiveAuth",
+              "supportsChatgptManaged",
+              "supportsApiKey",
+              "supportsChatgptAuthTokens",
+              "supportsRateLimits",
+              "supportsRuntimeStream"
+            ]
+          },
+          "authMode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "apikey",
+              "chatgpt",
+              "chatgptAuthTokens"
+            ]
+          },
+          "requiresOpenaiAuth": {
+            "type": "boolean"
+          },
+          "account": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "email": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "planType": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "required": [
+          "provider",
+          "capabilities",
+          "authMode",
+          "requiresOpenaiAuth",
+          "account"
+        ]
+      },
+      "RuntimeAccountLoginStartRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "chatgpt"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "apiKey"
+                ]
+              },
+              "apiKey": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "type",
+              "apiKey"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "chatgptAuthTokens"
+                ]
+              },
+              "accessToken": {
+                "type": "string",
+                "minLength": 1
+              },
+              "chatgptAccountId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "chatgptPlanType": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              }
+            },
+            "required": [
+              "type",
+              "accessToken",
+              "chatgptAccountId"
+            ]
+          }
+        ]
+      },
+      "RuntimeAccountLoginStartResponse": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "chatgpt",
+              "apiKey",
+              "chatgptAuthTokens"
+            ]
+          },
+          "loginId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "authUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "RuntimeAccountLoginCancelRequest": {
+        "type": "object",
+        "properties": {
+          "loginId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "loginId"
+        ]
+      },
+      "RuntimeAccountLoginCancelResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "RuntimeAccountLogoutResponse": {
+        "type": "object",
+        "properties": {}
+      },
+      "RuntimeAccountRateLimitsReadResponse": {
+        "type": "object",
+        "properties": {
+          "rateLimits": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "limitId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "limitName": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "primary": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "usedPercent": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "windowDurationMins": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "exclusiveMinimum": 0
+                  },
+                  "resetsAt": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "usedPercent",
+                  "windowDurationMins",
+                  "resetsAt"
+                ]
+              },
+              "secondary": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "usedPercent": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "windowDurationMins": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "exclusiveMinimum": 0
+                  },
+                  "resetsAt": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "usedPercent",
+                  "windowDurationMins",
+                  "resetsAt"
+                ]
+              },
+              "credits": {},
+              "planType": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              }
+            },
+            "required": [
+              "limitId",
+              "limitName",
+              "primary",
+              "secondary"
+            ]
+          },
+          "rateLimitsByLimitId": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "limitId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1
+                },
+                "limitName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1
+                },
+                "primary": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "usedPercent": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "windowDurationMins": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0
+                    },
+                    "resetsAt": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "usedPercent",
+                    "windowDurationMins",
+                    "resetsAt"
+                  ]
+                },
+                "secondary": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "usedPercent": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "windowDurationMins": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0
+                    },
+                    "resetsAt": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "usedPercent",
+                    "windowDurationMins",
+                    "resetsAt"
+                  ]
+                },
+                "credits": {},
+                "planType": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "limitId",
+                "limitName",
+                "primary",
+                "secondary"
+              ]
+            }
+          }
+        },
+        "required": [
+          "rateLimits",
+          "rateLimitsByLimitId"
+        ]
+      },
+      "RuntimeNotification": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "account/login/completed",
+              "account/updated",
+              "account/rateLimits/updated",
+              "mcpServer/oauthLogin/completed"
+            ]
+          },
+          "params": {},
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "method",
+          "createdAt"
+        ]
       }
     },
     "parameters": {}
@@ -2622,6 +3101,895 @@
           },
           "409": {
             "description": "Invite already accepted by another user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/runtime/account/read": {
+      "post": {
+        "operationId": "postAgentRuntimeAccountRead",
+        "summary": "Read Codex runtime account state",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "sessionCookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refreshToken": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Runtime account state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "dynamic_sessions",
+                        "local_process",
+                        "local_docker",
+                        "mock"
+                      ]
+                    },
+                    "capabilities": {
+                      "type": "object",
+                      "properties": {
+                        "interactiveAuth": {
+                          "type": "boolean"
+                        },
+                        "supportsChatgptManaged": {
+                          "type": "boolean"
+                        },
+                        "supportsApiKey": {
+                          "type": "boolean"
+                        },
+                        "supportsChatgptAuthTokens": {
+                          "type": "boolean"
+                        },
+                        "supportsRateLimits": {
+                          "type": "boolean"
+                        },
+                        "supportsRuntimeStream": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "interactiveAuth",
+                        "supportsChatgptManaged",
+                        "supportsApiKey",
+                        "supportsChatgptAuthTokens",
+                        "supportsRateLimits",
+                        "supportsRuntimeStream"
+                      ]
+                    },
+                    "authMode": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "apikey",
+                        "chatgpt",
+                        "chatgptAuthTokens"
+                      ]
+                    },
+                    "requiresOpenaiAuth": {
+                      "type": "boolean"
+                    },
+                    "account": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "email": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1
+                        },
+                        "name": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1
+                        },
+                        "planType": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1
+                        },
+                        "label": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "capabilities",
+                    "authMode",
+                    "requiresOpenaiAuth",
+                    "account"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Runtime unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/runtime/account/login/start": {
+      "post": {
+        "operationId": "postAgentRuntimeAccountLoginStart",
+        "summary": "Start Codex runtime account login",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "sessionCookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "chatgpt"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "apiKey"
+                        ]
+                      },
+                      "apiKey": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "apiKey"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "chatgptAuthTokens"
+                        ]
+                      },
+                      "accessToken": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "chatgptAccountId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "chatgptPlanType": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "accessToken",
+                      "chatgptAccountId"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Runtime login start response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "chatgpt",
+                        "apiKey",
+                        "chatgptAuthTokens"
+                      ]
+                    },
+                    "loginId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "minLength": 1
+                    },
+                    "authUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uri"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or unsupported provider",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Runtime unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/runtime/account/login/cancel": {
+      "post": {
+        "operationId": "postAgentRuntimeAccountLoginCancel",
+        "summary": "Cancel pending runtime login",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "sessionCookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "loginId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "loginId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Runtime login cancel status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Runtime unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/runtime/account/logout": {
+      "post": {
+        "operationId": "postAgentRuntimeAccountLogout",
+        "summary": "Logout runtime account",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "sessionCookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Runtime account logout result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Runtime unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/runtime/account/rate-limits/read": {
+      "post": {
+        "operationId": "postAgentRuntimeAccountRateLimitsRead",
+        "summary": "Read runtime account rate limits",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "sessionCookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Runtime account rate limits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rateLimits": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "limitId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1
+                        },
+                        "limitName": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1
+                        },
+                        "primary": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "usedPercent": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "windowDurationMins": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "exclusiveMinimum": 0
+                            },
+                            "resetsAt": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "usedPercent",
+                            "windowDurationMins",
+                            "resetsAt"
+                          ]
+                        },
+                        "secondary": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "usedPercent": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "windowDurationMins": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "exclusiveMinimum": 0
+                            },
+                            "resetsAt": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "usedPercent",
+                            "windowDurationMins",
+                            "resetsAt"
+                          ]
+                        },
+                        "credits": {},
+                        "planType": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "limitId",
+                        "limitName",
+                        "primary",
+                        "secondary"
+                      ]
+                    },
+                    "rateLimitsByLimitId": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "limitId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "minLength": 1
+                          },
+                          "limitName": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "minLength": 1
+                          },
+                          "primary": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "usedPercent": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "windowDurationMins": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "exclusiveMinimum": 0
+                              },
+                              "resetsAt": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "usedPercent",
+                              "windowDurationMins",
+                              "resetsAt"
+                            ]
+                          },
+                          "secondary": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "usedPercent": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "windowDurationMins": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "exclusiveMinimum": 0
+                              },
+                              "resetsAt": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "usedPercent",
+                              "windowDurationMins",
+                              "resetsAt"
+                            ]
+                          },
+                          "credits": {},
+                          "planType": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "limitId",
+                          "limitName",
+                          "primary",
+                          "secondary"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "rateLimits",
+                    "rateLimitsByLimitId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Runtime unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/runtime/stream": {
+      "get": {
+        "operationId": "getAgentRuntimeStream",
+        "summary": "Runtime notification websocket stream",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "sessionCookieAuth": []
+          }
+        ],
+        "responses": {
+          "426": {
+            "description": "Use websocket upgrade for this endpoint",
             "content": {
               "application/json": {
                 "schema": {

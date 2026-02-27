@@ -76,16 +76,6 @@ export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelin
           createdAt: event.createdAt
         });
       }
-
-      timeline.push({
-        id: `evt-${event.cursor}`,
-        kind: "status",
-        label: "Turn started",
-        detail: null,
-        turnId,
-        cursor: event.cursor,
-        createdAt: event.createdAt
-      });
       continue;
     }
 
@@ -141,16 +131,6 @@ export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelin
           }
         }
       }
-
-      timeline.push({
-        id: `evt-${event.cursor}`,
-        kind: "status",
-        label: "Turn completed",
-        detail: null,
-        turnId,
-        cursor: event.cursor,
-        createdAt: event.createdAt
-      });
       continue;
     }
 
@@ -168,24 +148,18 @@ export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelin
     }
 
     if (method === "runtime.metadata" || method.startsWith("runtime.")) {
-      timeline.push({
-        id: `evt-${event.cursor}`,
-        kind: "runtime",
-        label,
-        detail: null,
-        payload: event.payload,
-        turnId,
-        cursor: event.cursor,
-        createdAt: event.createdAt
-      });
       continue;
     }
 
-    if (method === "thread.started" || method === "thread.modeSwitched" || method === "error") {
+    if (method === "thread.started" || method === "thread.modeSwitched") {
+      continue;
+    }
+
+    if (method === "error") {
       timeline.push({
         id: `evt-${event.cursor}`,
         kind: "status",
-        label,
+        label: "Error",
         detail: readText(readPayloadObject(event.payload)?.message),
         turnId,
         cursor: event.cursor,

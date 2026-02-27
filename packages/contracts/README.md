@@ -11,7 +11,6 @@
   - OpenAPI document builder (`buildOpenApiDocument`, `API_VERSION`)
   - message envelope schema (`EventEnvelopeSchema`, `EventEnvelope` type)
   - agent gateway request/response/stream schemas (`src/agent-gateway.ts`)
-  - codex gateway compatibility aliases (`src/codex-gateway.ts`)
 - Package export path: `@compass/contracts/openapi/openapi.json`
 
 ## Source-of-Truth Files
@@ -22,7 +21,6 @@
 | `src/openapi.ts`                 | OpenAPI registry and path registration logic.                              |
 | `src/messages/event-envelope.ts` | Event envelope schema used by async worker processing.                     |
 | `src/agent-gateway.ts`           | Canonical agent gateway HTTP/websocket payload schemas.                    |
-| `src/codex-gateway.ts`           | Compatibility aliases for codex naming during transition.                  |
 | `src/generate-openapi.ts`        | Generator that writes `openapi/openapi.json`.                              |
 | `openapi/openapi.json`           | Generated OpenAPI artifact consumed by SDK generation and contract checks. |
 

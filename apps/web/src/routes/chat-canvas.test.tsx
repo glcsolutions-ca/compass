@@ -49,7 +49,6 @@ function ChatCanvasHarness() {
       executionMode="cloud"
       localModeAvailable={false}
       onExecutionModeChange={() => undefined}
-      onInspectEvent={() => undefined}
       runtime={runtime}
       surfaceState={{
         transportLifecycle: "open",
@@ -136,7 +135,55 @@ function ChatCanvasInteractiveHarness() {
       executionMode="cloud"
       localModeAvailable={false}
       onExecutionModeChange={() => undefined}
-      onInspectEvent={() => undefined}
+      runtime={runtime}
+      surfaceState={{
+        transportLifecycle: "open",
+        transportLabel: "Live",
+        actionError: null,
+        transportError: null
+      }}
+      switchingMode={false}
+    />
+  );
+}
+
+function ChatCanvasMultipartAssistantHarness() {
+  const store = useMemo<ExternalStoreAdapter>(
+    () => ({
+      isRunning: false,
+      messages: [
+        {
+          id: "assistant-multipart",
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "First assistant part"
+            },
+            {
+              type: "text",
+              text: "Second assistant part"
+            }
+          ],
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+          status: {
+            type: "complete",
+            reason: "stop"
+          },
+          metadata: {}
+        } satisfies ThreadMessageLike
+      ],
+      onNew: async (_message) => undefined
+    }),
+    []
+  );
+  const runtime = useExternalStoreRuntime(store);
+
+  return (
+    <ChatCanvas
+      executionMode="cloud"
+      localModeAvailable={false}
+      onExecutionModeChange={() => undefined}
       runtime={runtime}
       surfaceState={{
         transportLifecycle: "open",
@@ -174,5 +221,12 @@ describe("chat canvas", () => {
     fireEvent.click(sendButton);
 
     expect(await screen.findByText("Investigate this bug")).not.toBeNull();
+  });
+
+  it("renders multi-part assistant text without lookup index errors", () => {
+    render(<ChatCanvasMultipartAssistantHarness />);
+
+    expect(screen.queryByText("First assistant part")).not.toBeNull();
+    expect(screen.queryByText("Second assistant part")).not.toBeNull();
   });
 });

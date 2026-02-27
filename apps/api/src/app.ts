@@ -3,6 +3,9 @@ import cors from "cors";
 import express, { type ErrorRequestHandler, type Express, type Response } from "express";
 import {
   AgentEventsBatchRequestSchema,
+  RuntimeAccountLoginCancelRequestSchema,
+  RuntimeAccountLoginStartRequestSchema,
+  RuntimeAccountReadRequestSchema,
   AgentThreadCreateRequestSchema,
   AgentThreadModePatchRequestSchema,
   AgentTurnStartRequestSchema,
@@ -839,6 +842,104 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
     }
   }
 
+  app.post("/v1/agent/runtime/account/read", async (request, response) => {
+    const actor = await requireAgentUser(request, response);
+    if (!actor || !agentService) {
+      return;
+    }
+
+    const body = parseOrReply(request.body, RuntimeAccountReadRequestSchema, response);
+    if (!body) {
+      return;
+    }
+
+    try {
+      const state = await agentService.readRuntimeAccountState({
+        userId: actor.userId,
+        refreshToken: body.refreshToken
+      });
+      response.status(200).json(state);
+    } catch (error) {
+      sendAuthError(request, response, error);
+    }
+  });
+
+  app.post("/v1/agent/runtime/account/login/start", async (request, response) => {
+    const actor = await requireAgentUser(request, response);
+    if (!actor || !agentService) {
+      return;
+    }
+
+    const body = parseOrReply(request.body, RuntimeAccountLoginStartRequestSchema, response);
+    if (!body) {
+      return;
+    }
+
+    try {
+      const result = await agentService.startRuntimeAccountLogin({
+        userId: actor.userId,
+        request: body
+      });
+      response.status(200).json(result);
+    } catch (error) {
+      sendAuthError(request, response, error);
+    }
+  });
+
+  app.post("/v1/agent/runtime/account/login/cancel", async (request, response) => {
+    const actor = await requireAgentUser(request, response);
+    if (!actor || !agentService) {
+      return;
+    }
+
+    const body = parseOrReply(request.body, RuntimeAccountLoginCancelRequestSchema, response);
+    if (!body) {
+      return;
+    }
+
+    try {
+      const result = await agentService.cancelRuntimeAccountLogin({
+        userId: actor.userId,
+        loginId: body.loginId
+      });
+      response.status(200).json(result);
+    } catch (error) {
+      sendAuthError(request, response, error);
+    }
+  });
+
+  app.post("/v1/agent/runtime/account/logout", async (request, response) => {
+    const actor = await requireAgentUser(request, response);
+    if (!actor || !agentService) {
+      return;
+    }
+
+    try {
+      const result = await agentService.logoutRuntimeAccount({
+        userId: actor.userId
+      });
+      response.status(200).json(result);
+    } catch (error) {
+      sendAuthError(request, response, error);
+    }
+  });
+
+  app.post("/v1/agent/runtime/account/rate-limits/read", async (request, response) => {
+    const actor = await requireAgentUser(request, response);
+    if (!actor || !agentService) {
+      return;
+    }
+
+    try {
+      const result = await agentService.readRuntimeRateLimits({
+        userId: actor.userId
+      });
+      response.status(200).json(result);
+    } catch (error) {
+      sendAuthError(request, response, error);
+    }
+  });
+
   app.post("/v1/agent/threads", async (request, response) => {
     const actor = await requireAgentUser(request, response);
     if (!actor || !agentService) {
@@ -1091,6 +1192,13 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
   });
 
   app.get("/v1/agent/threads/:threadId/stream", async (_request, response) => {
+    response.status(426).json({
+      code: "UPGRADE_REQUIRED",
+      message: "Use websocket upgrade for this endpoint"
+    });
+  });
+
+  app.get("/v1/agent/runtime/stream", async (_request, response) => {
     response.status(426).json({
       code: "UPGRADE_REQUIRED",
       message: "Use websocket upgrade for this endpoint"

@@ -53,16 +53,13 @@ describe("chat event normalizer", () => {
           role: "assistant",
           text: "Hi there",
           streaming: false
-        }),
-        expect.objectContaining({
-          kind: "status",
-          label: "Turn completed"
         })
       ])
     );
+    expect(timeline.some((item) => item.kind === "status")).toBe(false);
   });
 
-  it("keeps unknown methods as generic timeline events", () => {
+  it("hides runtime lifecycle events from the primary timeline", () => {
     const timeline = normalizeAgentEvents([
       {
         cursor: 9,
@@ -74,10 +71,25 @@ describe("chat event normalizer", () => {
       }
     ]);
 
+    expect(timeline).toHaveLength(0);
+  });
+
+  it("keeps unknown methods as generic timeline events", () => {
+    const timeline = normalizeAgentEvents([
+      {
+        cursor: 10,
+        threadId: "thread_1",
+        turnId: null,
+        method: "custom.newMethod",
+        payload: { detail: "ok" },
+        createdAt: "2026-01-01T00:00:00.000Z"
+      }
+    ]);
+
     expect(timeline[0]).toEqual(
       expect.objectContaining({
-        kind: "runtime",
-        label: "Runtime customEvent"
+        kind: "unknown",
+        label: "Custom newMethod"
       })
     );
   });

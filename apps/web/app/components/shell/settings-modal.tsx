@@ -13,6 +13,7 @@ import type { AuthShellLoaderData } from "~/features/auth/types";
 import type { SettingsSection } from "~/features/settings/types";
 import { cn } from "~/lib/utils/cn";
 import { ThemeControls } from "~/components/shell/theme-controls";
+import { RuntimeAccountControls } from "~/components/shell/runtime-account-controls";
 
 export interface SettingsModalProps {
   auth: AuthShellLoaderData;
@@ -186,6 +187,7 @@ export function SettingsModal({
                   </p>
                 </div>
                 <ThemeControls />
+                <RuntimeAccountControls />
               </div>
             </TabsContent>
 

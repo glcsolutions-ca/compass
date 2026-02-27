@@ -12,6 +12,8 @@ import {
 const SESSION_EXECUTOR_ROLE_DEFINITION_GUID = "0fb8eba5-a2bb-4abe-b1c1-49dfad359bb0";
 const AUTHORIZATION_RETRY_ATTEMPTS = 6;
 const AUTHORIZATION_RETRY_DELAY_MS = 5_000;
+const RUNTIME_CALL_RETRY_ATTEMPTS = 24;
+const RUNTIME_CALL_RETRY_DELAY_MS = 5_000;
 
 function addCheck({ checks, reasonCodes, id, pass, details, reasonCode }) {
   checks.push({ id, pass, details });
@@ -172,14 +174,22 @@ async function callRuntime(input) {
 
 async function callRuntimeWithAuthorizationRetry(input) {
   let result = null;
-  for (let attempt = 1; attempt <= AUTHORIZATION_RETRY_ATTEMPTS; attempt += 1) {
+  for (let attempt = 1; attempt <= RUNTIME_CALL_RETRY_ATTEMPTS; attempt += 1) {
     result = await callRuntime(input);
-    if (result.status !== 401 && result.status !== 403) {
+    if (
+      result.status !== 401 &&
+      result.status !== 403 &&
+      result.status !== 429 &&
+      result.status !== 500 &&
+      result.status !== 502 &&
+      result.status !== 503 &&
+      result.status !== 504
+    ) {
       break;
     }
 
-    if (attempt < AUTHORIZATION_RETRY_ATTEMPTS) {
-      await sleep(AUTHORIZATION_RETRY_DELAY_MS);
+    if (attempt < RUNTIME_CALL_RETRY_ATTEMPTS) {
+      await sleep(RUNTIME_CALL_RETRY_DELAY_MS);
     }
   }
 

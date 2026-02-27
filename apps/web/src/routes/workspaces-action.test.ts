@@ -6,6 +6,24 @@ afterEach(() => {
 });
 
 describe("workspaces action", () => {
+  it("logs out and redirects to login", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+
+    const formData = new FormData();
+    formData.set("intent", "logout");
+
+    const response = (await workspacesAction({
+      request: new Request("http://web.test/workspaces", {
+        method: "POST",
+        body: formData
+      })
+    })) as Response;
+
+    expect(response).toBeInstanceOf(Response);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/login");
+  });
+
   it("validates create payload", async () => {
     const formData = new FormData();
     formData.set("intent", "create");

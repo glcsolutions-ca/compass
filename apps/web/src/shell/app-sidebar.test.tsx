@@ -1,6 +1,6 @@
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router";
+import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router";
 import { AppSidebar } from "~/components/shell/app-sidebar";
 import { SidebarProvider } from "~/components/ui/sidebar";
 import type { AuthShellLoaderData } from "~/features/auth/types";
@@ -50,6 +50,7 @@ describe("app sidebar", () => {
   });
 
   afterEach(() => {
+    cleanup();
     vi.restoreAllMocks();
   });
 
@@ -57,7 +58,11 @@ describe("app sidebar", () => {
     render(
       <MemoryRouter initialEntries={["/workspaces"]}>
         <SidebarProvider>
-          <AppSidebar activeTenantSlug="acme" auth={AUTH_FIXTURE} />
+          <AppSidebar
+            activeTenantSlug="acme"
+            auth={AUTH_FIXTURE}
+            buildSettingsHref={(section) => `/t/acme/chat?modal=settings&section=${section}`}
+          />
         </SidebarProvider>
       </MemoryRouter>
     );
@@ -79,6 +84,7 @@ describe("app sidebar", () => {
               memberships: [],
               lastActiveTenantSlug: null
             }}
+            buildSettingsHref={(section) => `/workspaces?modal=settings&section=${section}`}
           />
         </SidebarProvider>
       </MemoryRouter>
@@ -91,7 +97,11 @@ describe("app sidebar", () => {
     const { container } = render(
       <MemoryRouter initialEntries={["/t/acme/chat"]}>
         <SidebarProvider defaultOpen={false}>
-          <AppSidebar activeTenantSlug="acme" auth={AUTH_FIXTURE} />
+          <AppSidebar
+            activeTenantSlug="acme"
+            auth={AUTH_FIXTURE}
+            buildSettingsHref={(section) => `/t/acme/chat?modal=settings&section=${section}`}
+          />
         </SidebarProvider>
       </MemoryRouter>
     );
@@ -106,5 +116,54 @@ describe("app sidebar", () => {
     const acmeLink = scoped.getByRole("link", { name: "Acme" });
     expect(acmeLink.getAttribute("aria-label")).toBe("Acme");
     expect(acmeLink.querySelector("span[aria-hidden]")?.textContent).toBe("A");
+  });
+
+  it("renders settings and personalization entries with URL-backed modal links", async () => {
+    const router = createMemoryRouter(
+      [
+        {
+          path: "*",
+          element: (
+            <SidebarProvider>
+              <AppSidebar
+                activeTenantSlug="acme"
+                auth={AUTH_FIXTURE}
+                buildSettingsHref={(section) => `/t/acme/chat?modal=settings&section=${section}`}
+              />
+            </SidebarProvider>
+          )
+        }
+      ],
+      {
+        initialEntries: ["/t/acme/chat"]
+      }
+    );
+
+    render(<RouterProvider router={router} />);
+
+    const accountTrigger = screen.getAllByRole("button", { name: "Open account menu" })[0];
+    fireEvent.pointerDown(accountTrigger as HTMLElement);
+    fireEvent.click(accountTrigger as HTMLElement);
+
+    const settingsItem = await screen.findByRole("menuitem", { name: "Settings" });
+    const personalizationItem = await screen.findByRole("menuitem", { name: "Personalization" });
+    const menuItemLabels = screen
+      .getAllByRole("menuitem")
+      .map((item) => item.textContent?.replace(/\s+/gu, " ").trim());
+
+    const settingsHref =
+      settingsItem.getAttribute("href") ??
+      settingsItem.querySelector("a")?.getAttribute("href") ??
+      "";
+    const personalizationHref =
+      personalizationItem.getAttribute("href") ??
+      personalizationItem.querySelector("a")?.getAttribute("href") ??
+      "";
+
+    expect(settingsHref).toContain("modal=settings&section=general");
+    expect(personalizationHref).toContain("modal=settings&section=personalization");
+    expect(menuItemLabels).toEqual(["Personalization", "Settings", "Help", "Log out"]);
+    expect(screen.queryByRole("menuitem", { name: "Manage workspaces" })).toBeNull();
+    expect(screen.queryByText("No workspaces found.")).toBeNull();
   });
 });

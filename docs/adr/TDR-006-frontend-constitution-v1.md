@@ -22,12 +22,13 @@ Adopt Frontend Constitution v2 for `apps/web` and perform a hard cutover with th
 2. Route contract is fixed to `/`, `/login`, `/workspaces`, `/t/:tenantSlug/chat`.
 3. Route entrypoints are single-file `route.tsx` modules under nested `app/routes/**` folders.
 4. Domain logic is organized under `app/features/{auth,workspace,chat}`.
-5. Shared shell/UI lives under `app/components/{shell,ui,icons}` with profile/workspace controls anchored in sidebar footer.
+5. Shared shell/UI lives under `app/components/{shell,ui,icons}` with an action-only profile launcher in sidebar footer and workspace switching kept in the sidebar workspace section.
 6. Global theming is tokenized in `app/app.css` with two selectors on `<html>`: mode (`.dark`) and palette (`data-theme`).
-7. Workspace authority remains URL-first (`/t/:tenantSlug/*`).
-8. `@compass/sdk` remains the only Compass API access path from web route/component code.
-9. Legacy v1 folders and compatibility paths are removed completely.
-10. Constitution enforcement remains fail-closed in quick gate (`ci:web-constitution-policy`).
+7. Theme controls are surfaced in a shared settings modal under `Settings > General` with URL-backed modal state.
+8. Workspace authority remains URL-first (`/t/:tenantSlug/*`).
+9. `@compass/sdk` remains the only Compass API access path from web route/component code.
+10. Legacy v1 folders and compatibility paths are removed completely.
+11. Constitution enforcement remains fail-closed in quick gate (`ci:web-constitution-policy`).
 
 ## Consequences
 

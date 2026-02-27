@@ -1,11 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ThemeStudio } from "~/components/shell/theme-studio";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from "~/components/ui/dropdown-menu";
+import { ThemeControls } from "~/components/shell/theme-controls";
 import { UI_MODE_STORAGE_KEY, UI_THEME_STORAGE_KEY } from "~/lib/theme/theme";
 
 let mediaMatches = false;
@@ -18,20 +13,7 @@ function emitMediaChange(nextMatches: boolean): void {
   }
 }
 
-function ThemeStudioHarness() {
-  return (
-    <DropdownMenu defaultOpen>
-      <DropdownMenuTrigger asChild>
-        <button type="button">Account</button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <ThemeStudio />
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-describe("theme studio", () => {
+describe("theme controls", () => {
   beforeEach(() => {
     mediaMatches = false;
     mediaListeners.length = 0;
@@ -77,16 +59,14 @@ describe("theme studio", () => {
     window.localStorage.setItem(UI_THEME_STORAGE_KEY, "compass");
     window.localStorage.setItem(UI_MODE_STORAGE_KEY, "light");
 
-    render(<ThemeStudioHarness />);
+    render(<ThemeControls />);
 
-    fireEvent.click(screen.getAllByRole("menuitem", { name: "Theme Studio" })[0] as HTMLElement);
     const slateButton = await screen.findByRole("button", { name: "Slate theme" });
 
     fireEvent.mouseEnter(slateButton);
     expect(document.documentElement.dataset.theme).toBe("slate");
 
-    const menus = screen.getAllByRole("menu");
-    fireEvent.pointerLeave(menus[menus.length - 1] as HTMLElement);
+    fireEvent.pointerLeave(screen.getByLabelText("Appearance settings"));
     expect(document.documentElement.dataset.theme).toBe("compass");
 
     fireEvent.click(slateButton);
@@ -98,12 +78,10 @@ describe("theme studio", () => {
     window.localStorage.setItem(UI_THEME_STORAGE_KEY, "compass");
     window.localStorage.setItem(UI_MODE_STORAGE_KEY, "light");
 
-    render(<ThemeStudioHarness />);
+    render(<ThemeControls />);
 
-    fireEvent.click(screen.getAllByRole("menuitem", { name: "Theme Studio" })[0] as HTMLElement);
-    const darkMode = await screen.findByRole("menuitemradio", { name: /dark/i });
-
-    fireEvent.click(darkMode);
+    const darkModeButton = await screen.findByRole("radio", { name: "Dark mode" });
+    fireEvent.click(darkModeButton);
 
     expect(window.localStorage.getItem(UI_MODE_STORAGE_KEY)).toBe("dark");
     expect(document.documentElement.classList.contains("dark")).toBe(true);
@@ -113,7 +91,7 @@ describe("theme studio", () => {
     window.localStorage.setItem(UI_THEME_STORAGE_KEY, "compass");
     window.localStorage.setItem(UI_MODE_STORAGE_KEY, "system");
 
-    render(<ThemeStudioHarness />);
+    render(<ThemeControls />);
 
     expect(document.documentElement.classList.contains("dark")).toBe(false);
 

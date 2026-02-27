@@ -51,8 +51,11 @@ app/
 - Authenticated routes render one persistent shell:
   - left navigation rail
   - center content canvas
-  - sidebar footer profile menu with workspace switcher + Theme Studio + sign-out
+  - sidebar footer profile launcher with `Settings` + `Personalization` + `Help` + `Log out`
 - Workspace switching preserves route intent by rewriting tenant slug in URL.
+- Settings modal state is URL-backed with query params:
+  - `?modal=settings&section=general`
+  - `?modal=settings&section=personalization`
 
 ## Theme System (v1)
 
@@ -60,7 +63,8 @@ app/
 - Mode storage key: `ui-mode` (`system | light | dark`)
 - Palette storage key: `ui-theme` (`compass | slate | rose`)
 - Bootstrapping runs pre-hydration in `app/root.tsx` to avoid first-paint flash.
-- Theme Studio supports hover preview and click-to-lock from the sidebar profile dropdown.
+- Theme controls live in Settings modal under `General > Appearance`.
+- Theme preview behavior remains hover-to-preview and click-to-lock.
 
 ## Env Table
 

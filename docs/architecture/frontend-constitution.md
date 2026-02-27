@@ -43,7 +43,11 @@ Define the non-negotiable implementation contract for `apps/web` so the frontend
 
 7. **Persistent authenticated shell**
    - Authenticated routes render a single shared shell layout.
-   - Shell includes rail navigation, sidebar footer profile menu, Theme Studio, workspace switcher, and sign-out.
+   - Shell includes rail navigation, workspace section, and sidebar footer account launcher.
+   - Profile menu exposes `Settings` and `Personalization`, both opening one shared settings modal.
+   - Profile launcher is action-only (`Personalization`, `Settings`, `Help`, `Log out`) with no workspace rows.
+   - Theme controls live in `Settings > General`, not directly in the profile dropdown.
+   - Settings modal state is URL-backed via `?modal=settings&section=general|personalization`.
 
 8. **Route-entrypoints + feature modules**
    - Route entrypoints live in `app/routes/**` with one `route.tsx` per route folder.

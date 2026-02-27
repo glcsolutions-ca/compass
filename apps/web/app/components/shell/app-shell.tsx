@@ -1,8 +1,14 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { useLocation } from "react-router";
+import { useLocation, useNavigate } from "react-router";
+import { AppSidebar } from "~/components/shell/app-sidebar";
+import { SettingsModal } from "~/components/shell/settings-modal";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "~/components/ui/sidebar";
 import type { AuthShellLoaderData } from "~/features/auth/types";
-import { AppSidebar } from "~/components/shell/app-sidebar";
+import {
+  buildSettingsModalUrl,
+  parseSettingsModalState
+} from "~/features/settings/settings-modal-state";
+import type { SettingsSection } from "~/features/settings/types";
 
 const SIDEBAR_OPEN_STORAGE_KEY = "compass-sidebar-open";
 
@@ -38,11 +44,25 @@ function persistSidebarOpenState(open: boolean): void {
 
 export function AppShell({ auth, children }: { auth: AuthShellLoaderData; children: ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => resolveInitialSidebarOpen());
   const activeTenantSlug = useMemo(
     () => readActiveTenantSlug(location.pathname),
     [location.pathname]
   );
+  const settingsModal = useMemo(() => parseSettingsModalState(location), [location]);
+
+  const openSettingsSection = (section: SettingsSection) => {
+    void navigate(buildSettingsModalUrl(location, { open: true, section }));
+  };
+
+  const closeSettingsModal = () => {
+    void navigate(buildSettingsModalUrl(location, { open: false }), { replace: true });
+  };
+
+  const switchSettingsSection = (section: SettingsSection) => {
+    void navigate(buildSettingsModalUrl(location, { open: true, section }), { replace: true });
+  };
 
   return (
     <SidebarProvider
@@ -59,7 +79,11 @@ export function AppShell({ auth, children }: { auth: AuthShellLoaderData; childr
         } as CSSProperties
       }
     >
-      <AppSidebar activeTenantSlug={activeTenantSlug} auth={auth} />
+      <AppSidebar
+        activeTenantSlug={activeTenantSlug}
+        auth={auth}
+        buildSettingsHref={(section) => buildSettingsModalUrl(location, { open: true, section })}
+      />
       <div className="fixed left-[calc(var(--sidebar-width)_-_2.5rem)] top-5 z-30 hidden transition-[left] duration-200 ease-in-out md:flex md:peer-data-[state=collapsed]:left-[calc(var(--sidebar-width-icon)_+_0.5rem)]">
         <SidebarTrigger
           aria-label="Toggle navigation"
@@ -72,6 +96,20 @@ export function AppShell({ auth, children }: { auth: AuthShellLoaderData; childr
           <span className="text-sm font-medium tracking-tight text-foreground">Compass</span>
         </header>
         <main className="relative flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+        <SettingsModal
+          auth={auth}
+          onOpenChange={(open) => {
+            if (open) {
+              openSettingsSection(settingsModal.section);
+              return;
+            }
+
+            closeSettingsModal();
+          }}
+          onSectionChange={switchSettingsSection}
+          open={settingsModal.isOpen}
+          section={settingsModal.section}
+        />
       </SidebarInset>
     </SidebarProvider>
   );

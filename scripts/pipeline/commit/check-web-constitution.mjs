@@ -8,8 +8,15 @@ const REQUIRED_PATHS = [
   "apps/web/postcss.config.mjs",
   "apps/web/app/app.css",
   "apps/web/app/lib/theme/theme.ts",
+  "apps/web/app/features/settings/types.ts",
+  "apps/web/app/features/settings/settings-modal-state.ts",
+  "apps/web/app/components/ui/alert-dialog.tsx",
+  "apps/web/app/components/ui/dialog.tsx",
+  "apps/web/app/components/ui/tabs.tsx",
   "apps/web/app/components/ui/sidebar.tsx",
   "apps/web/app/components/shell/app-sidebar.tsx",
+  "apps/web/app/components/shell/settings-modal.tsx",
+  "apps/web/app/components/shell/theme-controls.tsx",
   "apps/web/app/routes.ts",
   "apps/web/app/routes/root-redirect/route.tsx",
   "apps/web/app/routes/public/login/route.tsx",
@@ -31,7 +38,8 @@ const LEGACY_PATHS = [
   "apps/web/app/routes/app.workspaces",
   "apps/web/app/routes/app.t.$tenantSlug.chat",
   "apps/web/app/components/shell/sidebar.tsx",
-  "apps/web/app/components/shell/profile-menu.tsx"
+  "apps/web/app/components/shell/profile-menu.tsx",
+  "apps/web/app/components/shell/theme-studio.tsx"
 ];
 
 const FORBIDDEN_LIBRARY_IMPORT_PATTERNS = [/from\s+["']@mui\//u, /from\s+["']antd["']/u];
@@ -144,6 +152,60 @@ function validateRootThemeBootstrap(cwd, violations) {
   }
 }
 
+function validateSettingsCutover(cwd, violations) {
+  const sidebarPath = path.join(cwd, "apps/web/app/components/shell/app-sidebar.tsx");
+  const shellPath = path.join(cwd, "apps/web/app/components/shell/app-shell.tsx");
+
+  if (existsSync(sidebarPath)) {
+    const sidebarSource = readFileSync(sidebarPath, "utf8");
+    if (sidebarSource.includes("ThemeStudio")) {
+      violations.push(
+        "app-sidebar.tsx must not import or render ThemeStudio after settings cutover."
+      );
+    }
+
+    if (
+      !sidebarSource.includes('buildSettingsHref("general")') ||
+      !sidebarSource.includes('buildSettingsHref("personalization")')
+    ) {
+      violations.push(
+        "app-sidebar.tsx must expose profile menu entries that open URL-backed settings modal state."
+      );
+    }
+
+    if (
+      sidebarSource.includes("WorkspaceSwitcher") ||
+      sidebarSource.includes("Manage workspaces")
+    ) {
+      violations.push(
+        "app-sidebar.tsx profile launcher must be action-only and must not include workspace rows or manage links."
+      );
+    }
+
+    if (!sidebarSource.includes("AlertDialog")) {
+      violations.push(
+        "app-sidebar.tsx must require an AlertDialog confirmation before submitting logout."
+      );
+    }
+
+    if (
+      !sidebarSource.includes('action="/workspaces"') ||
+      !sidebarSource.includes('name="intent" type="hidden" value="logout"')
+    ) {
+      violations.push(
+        "app-sidebar.tsx logout confirmation must submit intent=logout to /workspaces."
+      );
+    }
+  }
+
+  if (existsSync(shellPath)) {
+    const shellSource = readFileSync(shellPath, "utf8");
+    if (!shellSource.includes("SettingsModal")) {
+      violations.push("app-shell.tsx must render SettingsModal as part of the persistent shell.");
+    }
+  }
+}
+
 function validateRouteFiles(cwd, violations) {
   const routesDir = path.join(cwd, "apps/web/app/routes");
   if (!existsSync(routesDir)) {
@@ -229,6 +291,7 @@ export function runWebConstitutionCheck({ cwd = process.cwd(), logger = console 
 
   validateGlobalCss(cwd, violations);
   validateRootThemeBootstrap(cwd, violations);
+  validateSettingsCutover(cwd, violations);
   validateComponentsConfig(cwd, violations);
   validateRouteFiles(cwd, violations);
 

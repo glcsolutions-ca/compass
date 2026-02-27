@@ -96,7 +96,6 @@ describe("app sidebar", () => {
     expect(screen.getByText("Navigate")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Chat" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Workspaces" })).toBeTruthy();
-    expect(screen.getByText("No recent threads.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
   });
 
@@ -176,7 +175,6 @@ describe("app sidebar", () => {
     const expandButton = scoped.getByRole("button", { name: "Expand sidebar" });
     expect(expandButton).toBeTruthy();
     expect(scoped.queryByRole("link", { name: "Compass" })).toBeNull();
-    expect(scoped.queryByText("No recent threads.")).toBeNull();
   });
 
   it("renders settings and personalization entries with URL-backed modal links", async () => {

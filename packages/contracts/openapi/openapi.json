@@ -1220,6 +1220,18 @@
             "required": false,
             "name": "returnTo",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "browser",
+                "desktop"
+              ]
+            },
+            "required": false,
+            "name": "client",
+            "in": "query"
           }
         ],
         "responses": {
@@ -1468,11 +1480,96 @@
             "required": false,
             "name": "returnTo",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "browser",
+                "desktop"
+              ]
+            },
+            "required": false,
+            "name": "client",
+            "in": "query"
           }
         ],
         "responses": {
           "302": {
             "description": "Redirect to Entra admin consent endpoint"
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/desktop/complete": {
+      "get": {
+        "operationId": "completeDesktopLogin",
+        "summary": "Complete desktop auth handoff and set session cookie",
+        "tags": [
+          "Auth"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "handoff",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to app route with established session or login guidance"
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limited",

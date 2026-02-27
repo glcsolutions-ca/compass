@@ -97,6 +97,7 @@ function buildConfig(): EntraAuthConfig {
     allowedTenantIds: [],
     scope: "openid profile email",
     webBaseUrl: "https://compass.glcsolutions.ca",
+    desktopAuthScheme: "ca.glsolutions.compass",
     sessionTtlSeconds: 60 * 60 * 8,
     sessionIdleTtlSeconds: 60 * 60
   };
@@ -338,6 +339,64 @@ describe("API auth integration", () => {
       .set("Cookie", ownerCookie);
     expect(listMembersAfter.status).toBe(200);
     expect(listMembersAfter.body.members).toHaveLength(2);
+  });
+
+  it("completes desktop login using one-time handoff and rejects replay", async () => {
+    const authService = new AuthService({
+      config: buildConfig(),
+      repository,
+      oidcClient: new FakeOidcClient({
+        claimsByCode: {
+          "code-user-1": buildClaims(
+            "11111111-1111-1111-1111-111111111111",
+            "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "owner@acme.test",
+            "Owner User"
+          )
+        }
+      })
+    });
+
+    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+
+    const startDesktop = await request(app).get("/v1/auth/entra/start?client=desktop");
+    expect(startDesktop.status).toBe(302);
+    const desktopState = parseRedirectLocation(startDesktop.headers.location).searchParams.get(
+      "state"
+    );
+    expect(desktopState).toBeTruthy();
+
+    const callbackDesktop = await request(app).get(
+      `/v1/auth/entra/callback?code=code-user-1&state=${encodeURIComponent(String(desktopState))}`
+    );
+    expect(callbackDesktop.status).toBe(302);
+    expect(callbackDesktop.headers["set-cookie"]).toBeUndefined();
+
+    const desktopRedirect = new URL(String(callbackDesktop.headers.location));
+    expect(desktopRedirect.protocol).toBe("ca.glsolutions.compass:");
+    expect(desktopRedirect.hostname).toBe("auth");
+    expect(desktopRedirect.pathname).toBe("/callback");
+    const handoffToken = desktopRedirect.searchParams.get("handoff");
+    expect(handoffToken).toBeTruthy();
+
+    const completeDesktop = await request(app).get(
+      `/v1/auth/desktop/complete?handoff=${encodeURIComponent(String(handoffToken))}`
+    );
+    expect(completeDesktop.status).toBe(302);
+    expect(completeDesktop.headers.location).toBe("/chat");
+    const desktopCookie = extractCookie(completeDesktop.headers["set-cookie"]);
+
+    const me = await request(app).get("/v1/auth/me").set("Cookie", desktopCookie);
+    expect(me.status).toBe(200);
+    expect(me.body.authenticated).toBe(true);
+
+    const replayComplete = await request(app).get(
+      `/v1/auth/desktop/complete?handoff=${encodeURIComponent(String(handoffToken))}`
+    );
+    expect(replayComplete.status).toBe(302);
+    const replayLocation = parseAppRedirect(String(replayComplete.headers.location));
+    expect(replayLocation.pathname).toBe("/login");
+    expect(replayLocation.searchParams.get("error")).toBe("desktop_handoff_invalid");
   });
 
   it("rejects callback state mismatch", async () => {

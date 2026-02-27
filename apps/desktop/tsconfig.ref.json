@@ -7,11 +7,6 @@
     "emitDeclarationOnly": true,
     "outDir": "dist-types"
   },
-  "references": [
-    {
-      "path": "../../packages/contracts/tsconfig.ref.json"
-    }
-  ],
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

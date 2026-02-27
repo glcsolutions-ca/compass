@@ -33,7 +33,8 @@ Define the non-negotiable implementation contract for `apps/web` so the frontend
 
 5. **Theme policy**
    - Light and dark mode are required from first commit.
-   - Theme is class-based on `<html>` and persists across reload.
+   - Color mode is class-based on `<html>` (`.dark`) and persists across reload.
+   - Palette is selected via `<html data-theme=\"<themeId>\">` and persists across reload.
    - Theme initialization must run pre-hydration to avoid flash.
 
 6. **Workspace context authority**
@@ -42,7 +43,7 @@ Define the non-negotiable implementation contract for `apps/web` so the frontend
 
 7. **Persistent authenticated shell**
    - Authenticated routes render a single shared shell layout.
-   - Shell includes rail navigation, sidebar footer profile menu, theme toggle, workspace switcher, and sign-out.
+   - Shell includes rail navigation, sidebar footer profile menu, Theme Studio, workspace switcher, and sign-out.
 
 8. **Route-entrypoints + feature modules**
    - Route entrypoints live in `app/routes/**` with one `route.tsx` per route folder.

@@ -7,6 +7,7 @@ const REQUIRED_PATHS = [
   "apps/web/tailwind.config.ts",
   "apps/web/postcss.config.mjs",
   "apps/web/app/app.css",
+  "apps/web/app/lib/theme/theme.ts",
   "apps/web/app/components/ui/sidebar.tsx",
   "apps/web/app/components/shell/app-sidebar.tsx",
   "apps/web/app/routes.ts",
@@ -108,6 +109,39 @@ function validateGlobalCss(cwd, violations) {
       "Global CSS tokens are incomplete. Expected token variables and a `.dark` selector in apps/web/app/app.css."
     );
   }
+
+  if (!css.includes(':root[data-theme="')) {
+    violations.push(
+      "Global CSS must define token overrides for at least one data-theme selector in apps/web/app/app.css."
+    );
+  }
+}
+
+function validateRootThemeBootstrap(cwd, violations) {
+  const rootPath = path.join(cwd, "apps/web/app/root.tsx");
+  const themeModulePath = path.join(cwd, "apps/web/app/lib/theme/theme.ts");
+  if (!existsSync(rootPath) || !existsSync(themeModulePath)) {
+    return;
+  }
+
+  const rootSource = readFileSync(rootPath, "utf8");
+  const themeSource = readFileSync(themeModulePath, "utf8");
+
+  if (!rootSource.includes("createThemeBootstrapScript")) {
+    violations.push(
+      "root.tsx must wire a pre-hydration theme bootstrap script via createThemeBootstrapScript()."
+    );
+  }
+
+  if (!themeSource.includes("root.dataset.theme")) {
+    violations.push(
+      "Theme bootstrap must set document.documentElement.dataset.theme before hydration."
+    );
+  }
+
+  if (!/classList\.toggle\(\s*["']dark["']/u.test(themeSource)) {
+    violations.push("Theme bootstrap must toggle the html .dark class before hydration.");
+  }
 }
 
 function validateRouteFiles(cwd, violations) {
@@ -194,6 +228,7 @@ export function runWebConstitutionCheck({ cwd = process.cwd(), logger = console 
   }
 
   validateGlobalCss(cwd, violations);
+  validateRootThemeBootstrap(cwd, violations);
   validateComponentsConfig(cwd, violations);
   validateRouteFiles(cwd, violations);
 

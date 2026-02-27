@@ -34,7 +34,7 @@ import {
 import type { AuthShellLoaderData } from "~/features/auth/types";
 import { resolveWorkspaceHref } from "~/features/workspace/workspace-routing";
 import { cn } from "~/lib/utils/cn";
-import { ThemeToggle } from "~/components/shell/theme-toggle";
+import { ThemeStudio } from "~/components/shell/theme-studio";
 import { buildWorkspaceMenuItems, WorkspaceSwitcher } from "~/components/shell/workspace-switcher";
 
 export interface AppSidebarProps {
@@ -142,7 +142,7 @@ function SidebarAccountMenu({
 
         <DropdownMenuSeparator />
         <div className="px-1 py-1">
-          <ThemeToggle />
+          <ThemeStudio />
         </div>
 
         <DropdownMenuSeparator />

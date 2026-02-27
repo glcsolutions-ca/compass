@@ -17,7 +17,7 @@ Key requirements:
 - React Router `clientLoader`/`clientAction` route APIs for route I/O
 - `@compass/sdk` for Compass API calls
 - shadcn/Radix primitive component policy
-- Tailwind + CSS variable tokens with first-class light/dark mode
+- Tailwind + CSS variable tokens with first-class light/dark + palette theming
 - Persistent authenticated shell and URL-driven workspace context
 
 ## UI Structure
@@ -51,8 +51,16 @@ app/
 - Authenticated routes render one persistent shell:
   - left navigation rail
   - center content canvas
-  - sidebar footer profile menu with workspace switcher + theme toggle + sign-out
+  - sidebar footer profile menu with workspace switcher + Theme Studio + sign-out
 - Workspace switching preserves route intent by rewriting tenant slug in URL.
+
+## Theme System (v1)
+
+- HTML contract: `<html data-theme=\"<themeId>\" class=\"dark\">`
+- Mode storage key: `ui-mode` (`system | light | dark`)
+- Palette storage key: `ui-theme` (`compass | slate | rose`)
+- Bootstrapping runs pre-hydration in `app/root.tsx` to avoid first-paint flash.
+- Theme Studio supports hover preview and click-to-lock from the sidebar profile dropdown.
 
 ## Env Table
 

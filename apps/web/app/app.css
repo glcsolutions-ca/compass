@@ -4,6 +4,15 @@
 
 @layer base {
   :root {
+    color-scheme: light;
+  }
+
+  :root.dark {
+    color-scheme: dark;
+  }
+
+  :root,
+  :root[data-theme="compass"] {
     --background: 0 0% 97%;
     --foreground: 220 13% 12%;
     --card: 0 0% 100%;
@@ -34,7 +43,8 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
-  .dark {
+  :root.dark,
+  :root[data-theme="compass"].dark {
     --background: 220 13% 8%;
     --foreground: 210 20% 96%;
     --card: 220 14% 11%;
@@ -62,6 +72,42 @@
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  :root[data-theme="slate"] {
+    --primary: 215 20% 42%;
+    --ring: 215 20% 42%;
+    --sidebar-primary: 215 25% 28%;
+    --sidebar-accent: 215 20% 92%;
+    --sidebar-accent-foreground: 215 25% 24%;
+    --sidebar-ring: 215 20% 42%;
+  }
+
+  :root[data-theme="slate"].dark {
+    --primary: 215 20% 62%;
+    --ring: 215 20% 62%;
+    --sidebar-primary: 215 28% 66%;
+    --sidebar-accent: 217 19% 20%;
+    --sidebar-accent-foreground: 214 20% 92%;
+    --sidebar-ring: 215 20% 62%;
+  }
+
+  :root[data-theme="rose"] {
+    --primary: 346 77% 49%;
+    --ring: 346 77% 49%;
+    --sidebar-primary: 346 72% 43%;
+    --sidebar-accent: 346 35% 93%;
+    --sidebar-accent-foreground: 346 35% 24%;
+    --sidebar-ring: 346 77% 49%;
+  }
+
+  :root[data-theme="rose"].dark {
+    --primary: 346 77% 60%;
+    --ring: 346 77% 60%;
+    --sidebar-primary: 346 70% 64%;
+    --sidebar-accent: 346 35% 19%;
+    --sidebar-accent-foreground: 346 28% 92%;
+    --sidebar-ring: 346 77% 60%;
   }
 
   * {

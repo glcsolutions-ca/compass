@@ -1,15 +1,8 @@
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import "./app.css";
+import { createThemeBootstrapScript } from "~/lib/theme/theme";
 
-const THEME_SCRIPT = `(() => {
-  const key = "compass-theme";
-  const root = document.documentElement;
-  const persisted = window.localStorage.getItem(key);
-  const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const theme = persisted === "light" || persisted === "dark" ? persisted : (systemDark ? "dark" : "light");
-  root.classList.toggle("dark", theme === "dark");
-  root.style.colorScheme = theme;
-})();`;
+const THEME_BOOTSTRAP_SCRIPT = createThemeBootstrapScript();
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -19,7 +12,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta content="width=device-width, initial-scale=1" name="viewport" />
         <Meta />
         <Links />
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
       </head>
       <body>
         {children}

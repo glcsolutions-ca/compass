@@ -2,6 +2,10 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "composite": false,
+    "baseUrl": ".",
+    "paths": {
+      "@compass/contracts": ["../../packages/contracts/dist-types/index.d.ts"]
+    },
     "rootDir": "src",
     "outDir": "dist",
     "declaration": false,

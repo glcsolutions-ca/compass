@@ -14,6 +14,7 @@ const AUTHORIZATION_RETRY_ATTEMPTS = 6;
 const AUTHORIZATION_RETRY_DELAY_MS = 5_000;
 const RUNTIME_CALL_RETRY_ATTEMPTS = 24;
 const RUNTIME_CALL_RETRY_DELAY_MS = 5_000;
+const RUNTIME_CALL_TIMEOUT_MS = 15_000;
 
 function addCheck({ checks, reasonCodes, id, pass, details, reasonCode }) {
   checks.push({ id, pass, details });
@@ -147,29 +148,40 @@ async function ensureVerifierHasSessionExecutorRole({
 }
 
 async function callRuntime(input) {
-  const response = await fetch(input.url, {
-    method: input.method,
-    headers: {
-      authorization: `Bearer ${input.bearerToken}`,
-      "content-type": "application/json"
-    },
-    body: input.body ? JSON.stringify(input.body) : undefined
-  });
-
-  const text = await response.text();
-  let json = null;
   try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    json = null;
-  }
+    const response = await fetch(input.url, {
+      method: input.method,
+      headers: {
+        authorization: `Bearer ${input.bearerToken}`,
+        "content-type": "application/json"
+      },
+      body: input.body ? JSON.stringify(input.body) : undefined,
+      signal: AbortSignal.timeout(RUNTIME_CALL_TIMEOUT_MS)
+    });
 
-  return {
-    status: response.status,
-    ok: response.ok,
-    bodyText: text,
-    bodyJson: json
-  };
+    const text = await response.text();
+    let json = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
+
+    return {
+      status: response.status,
+      ok: response.ok,
+      bodyText: text,
+      bodyJson: json
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      status: 598,
+      ok: false,
+      bodyText: message,
+      bodyJson: null
+    };
+  }
 }
 
 async function callRuntimeWithAuthorizationRetry(input) {
@@ -180,6 +192,7 @@ async function callRuntimeWithAuthorizationRetry(input) {
       result.status !== 401 &&
       result.status !== 403 &&
       result.status !== 429 &&
+      result.status !== 598 &&
       result.status !== 500 &&
       result.status !== 502 &&
       result.status !== 503 &&

@@ -52,6 +52,7 @@ async function main() {
   let ping = null;
   let authMe = null;
   let authStart = null;
+  let agentThreadsCreate = null;
 
   try {
     health = await request("/health", { method: "GET" });
@@ -142,6 +143,33 @@ async function main() {
       });
     }
 
+    agentThreadsCreate = await request("/v1/agent/threads", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(apiSmokeSessionCookie ? { cookie: apiSmokeSessionCookie } : {})
+      },
+      body: JSON.stringify({
+        tenantSlug: "smoke",
+        executionMode: "cloud"
+      })
+    });
+
+    const agentThreadsCreateCode =
+      agentThreadsCreate.json && typeof agentThreadsCreate.json === "object"
+        ? String(agentThreadsCreate.json.code || "")
+        : "";
+    const gatewayDisabledCodes = new Set([
+      "AGENT_GATEWAY_DISABLED",
+      "AGENT_GATEWAY_NOT_CONFIGURED",
+      "AGENT_CLOUD_MODE_DISABLED"
+    ]);
+    assertions.push({
+      id: "agent-cloud-route-available",
+      pass: agentThreadsCreate.status !== 503 && !gatewayDisabledCodes.has(agentThreadsCreateCode),
+      details: `status=${agentThreadsCreate.status}, code=${agentThreadsCreateCode || "(none)"}`
+    });
+
     if (verifyShaHeader) {
       const headerSha = health.headers.get("x-release-sha") ?? openapi.headers.get("x-release-sha");
       assertions.push({
@@ -182,7 +210,8 @@ async function main() {
       openapi: responsePreview(openapi),
       ping: responsePreview(ping),
       authMe: responsePreview(authMe),
-      authStart: responsePreview(authStart)
+      authStart: responsePreview(authStart),
+      agentThreadsCreate: responsePreview(agentThreadsCreate)
     },
     assertions
   });

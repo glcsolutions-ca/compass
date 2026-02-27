@@ -83,10 +83,10 @@ Pipeline deploy jobs pass release-candidate digest refs as parameter overrides f
 - `workerImage`
 - `dynamicSessionsRuntimeImage`
 
-Agent/Dynamic Sessions runtime defaults are fail-closed and explicitly wired via infra parameters:
+Agent/Dynamic Sessions runtime defaults are explicitly wired via infra parameters:
 
-- `agentGatewayEnabled=false`
-- `agentCloudModeEnabled=false`
+- `agentGatewayEnabled=true`
+- `agentCloudModeEnabled=true`
 - `agentLocalModeEnabledDesktop=false`
 - `agentModeSwitchEnabled=false`
 

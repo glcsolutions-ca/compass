@@ -45,6 +45,8 @@ It covers only infrastructure and delivery plumbing, not chat-thread routing log
 6. Manual acceptance rehearsal is available in `dynamic-sessions-acceptance-rehearsal.yml` to apply infra and verify Dynamic Sessions convergence for an existing release candidate (no rebuild).
 7. Required GitHub environment vars: `DYNAMIC_SESSIONS_POOL_NAME`, `DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME`.
 8. Deploy workflows refresh Azure OIDC login after infra apply to avoid token-expiry during post-apply convergence checks.
+9. Baseline cloud deploy params enable agent cloud API routes (`agentGatewayEnabled=true`, `agentCloudModeEnabled=true`) while keeping desktop-local/mode-switch flags off.
+10. Web runtime proxy is websocket-upgrade aware for `/v1/*` so `/v1/agent/threads/{threadId}/stream` can stay on websocket with polling fallback.
 
 ## Rollout Guardrails
 

@@ -100,7 +100,13 @@ export function SettingsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[88vh] max-h-[88vh] w-[min(92vw,860px)] max-w-[860px] overflow-hidden border-border/70 bg-background/95 p-0 shadow-2xl">
+      <DialogContent
+        className={cn(
+          "h-[88vh] max-h-[88vh] w-[min(92vw,860px)] max-w-[860px] overflow-hidden p-0",
+          "border-border/75 bg-card/95 text-card-foreground supports-[backdrop-filter]:bg-card/88",
+          "shadow-[0_36px_96px_-40px_hsl(var(--foreground)/0.55),0_20px_42px_-28px_hsl(var(--foreground)/0.35)]"
+        )}
+      >
         <DialogHeader className="sr-only">
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>Manage account settings and personalization.</DialogDescription>

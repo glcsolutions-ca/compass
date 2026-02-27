@@ -7,6 +7,7 @@ import {
   FolderKanban,
   LogOut,
   MessageSquareText,
+  PanelLeft,
   Settings2
 } from "lucide-react";
 import { useRef, useState } from "react";
@@ -43,7 +44,9 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarSeparator
+  SidebarSeparator,
+  SidebarTrigger,
+  useSidebar
 } from "~/components/ui/sidebar";
 import type { AuthShellLoaderData } from "~/features/auth/types";
 import type { SettingsSection } from "~/features/settings/types";
@@ -108,6 +111,79 @@ function readWorkspaceMonogram(name: string): string {
   }
 
   return trimmed[0]?.toUpperCase() ?? "?";
+}
+
+function SidebarBrandControl() {
+  const { state, toggleSidebar } = useSidebar();
+
+  if (state === "collapsed") {
+    return (
+      <div className="-m-1 p-1">
+        <button
+          aria-label="Expand sidebar"
+          className={cn(
+            "group/brand relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-primary/10 text-sidebar-primary",
+            "transition-colors duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          )}
+          onClick={toggleSidebar}
+          title="Expand sidebar"
+          type="button"
+        >
+          <Compass
+            className={cn(
+              "h-4 w-4 transition-[opacity,transform] duration-200 ease-out",
+              "opacity-100 scale-100",
+              "group-hover/brand:opacity-0 group-hover/brand:scale-90",
+              "group-focus-visible/brand:opacity-0 group-focus-visible/brand:scale-90"
+            )}
+          />
+          <PanelLeft
+            className={cn(
+              "absolute h-4 w-4 transition-[opacity,transform] duration-200 ease-out",
+              "opacity-0 scale-75 translate-x-0.5",
+              "group-hover/brand:translate-x-0 group-hover/brand:opacity-100 group-hover/brand:scale-100",
+              "group-focus-visible/brand:translate-x-0 group-focus-visible/brand:opacity-100 group-focus-visible/brand:scale-100"
+            )}
+          />
+          <span className="sr-only">Expand sidebar</span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      className={cn(
+        "flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-transparent px-2 py-2",
+        "text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+      )}
+      to="/workspaces"
+    >
+      <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-primary/10 text-sidebar-primary">
+        <Compass className="h-4 w-4" />
+      </span>
+      <span className="truncate text-sm font-semibold tracking-tight">Compass</span>
+    </Link>
+  );
+}
+
+function SidebarCollapseControl() {
+  const { state } = useSidebar();
+
+  if (state !== "expanded") {
+    return null;
+  }
+
+  return (
+    <SidebarTrigger
+      aria-label="Collapse sidebar"
+      className={cn(
+        "hidden h-8 w-8 shrink-0 border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-sm transition-colors",
+        "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground md:inline-flex"
+      )}
+    />
+  );
 }
 
 function SidebarAccountMenu({
@@ -177,12 +253,15 @@ function SidebarAccountMenu({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
-          className="w-[19rem] rounded-2xl border-border/70 bg-popover/95 p-2 shadow-xl backdrop-blur supports-[backdrop-filter]:bg-popover/90"
+          className={cn(
+            "relative z-[60] w-[19rem] rounded-2xl border border-border/75 bg-card p-2.5 text-card-foreground",
+            "shadow-[0_16px_36px_-16px_hsl(var(--foreground)/0.28),0_8px_18px_-12px_hsl(var(--foreground)/0.18)]"
+          )}
           collisionPadding={12}
           side="top"
           sideOffset={8}
         >
-          <DropdownMenuLabel className="rounded-xl px-2 py-2">
+          <DropdownMenuLabel className="rounded-xl px-2.5 py-2.5">
             <div className="flex items-center gap-2.5">
               <Avatar className="h-8 w-8 rounded-md">
                 <AvatarFallback className="rounded-md bg-primary/15 text-xs font-semibold text-primary">
@@ -198,16 +277,22 @@ function SidebarAccountMenu({
             </div>
           </DropdownMenuLabel>
 
-          <DropdownMenuSeparator className="my-2 bg-border/60" />
+          <DropdownMenuSeparator className="my-2.5 bg-border/55" />
 
           <div className="space-y-1">
-            <DropdownMenuItem asChild className="h-11 gap-2.5 rounded-lg px-2.5 text-sm md:h-10">
+            <DropdownMenuItem
+              asChild
+              className="h-10 gap-3 rounded-lg px-2.5 text-[15px] font-medium leading-none"
+            >
               <Link to={buildSettingsHref("personalization")}>
                 <Clock3 className="h-4 w-4 text-muted-foreground" />
                 <span>Personalization</span>
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild className="h-11 gap-2.5 rounded-lg px-2.5 text-sm md:h-10">
+            <DropdownMenuItem
+              asChild
+              className="h-10 gap-3 rounded-lg px-2.5 text-[15px] font-medium leading-none"
+            >
               <Link to={buildSettingsHref("general")}>
                 <Settings2 className="h-4 w-4 text-muted-foreground" />
                 <span>Settings</span>
@@ -215,17 +300,23 @@ function SidebarAccountMenu({
             </DropdownMenuItem>
           </div>
 
-          <DropdownMenuSeparator className="my-2 bg-border/60" />
+          <DropdownMenuSeparator className="my-2.5 bg-border/55" />
 
           <div className="space-y-1">
-            <DropdownMenuItem asChild className="h-11 gap-2.5 rounded-lg px-2.5 text-sm md:h-10">
+            <DropdownMenuItem
+              asChild
+              className="h-10 gap-3 rounded-lg px-2.5 text-[15px] font-medium leading-none"
+            >
               <a href="https://help.openai.com" rel="noreferrer" target="_blank">
                 <CircleHelp className="h-4 w-4 text-muted-foreground" />
                 <span>Help</span>
               </a>
             </DropdownMenuItem>
             <DropdownMenuItem
-              className="h-11 gap-2.5 rounded-lg px-2.5 text-sm text-destructive focus:bg-destructive/10 focus:text-destructive md:h-10"
+              className={cn(
+                "h-10 gap-3 rounded-lg px-2.5 text-[15px] font-medium leading-none text-destructive",
+                "focus:bg-destructive/10 focus:text-destructive data-[highlighted]:bg-destructive/10 data-[highlighted]:text-destructive"
+              )}
               onSelect={(event) => {
                 event.preventDefault();
                 openSignOutConfirm();
@@ -293,21 +384,8 @@ export function AppSidebar({ auth, activeTenantSlug, buildSettingsHref }: AppSid
     <Sidebar collapsible="icon" side="left" variant="sidebar">
       <SidebarHeader className="px-3 pb-2 pt-3">
         <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-          <Link
-            className={cn(
-              "flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-transparent px-2 py-2",
-              "group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0",
-              "text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )}
-            to="/workspaces"
-          >
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-primary/10 text-sidebar-primary">
-              <Compass className="h-4 w-4" />
-            </span>
-            <span className="truncate text-sm font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
-              Compass
-            </span>
-          </Link>
+          <SidebarBrandControl />
+          <SidebarCollapseControl />
         </div>
       </SidebarHeader>
 

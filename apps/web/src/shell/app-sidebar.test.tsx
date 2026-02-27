@@ -71,6 +71,7 @@ describe("app sidebar", () => {
     expect(screen.getAllByText("Workspaces").length).toBeGreaterThan(0);
     expect(screen.getByText("Acme")).toBeTruthy();
     expect(screen.getByText("Globex")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
   });
 
   it("shows empty workspace state when user has no memberships", () => {
@@ -116,6 +117,10 @@ describe("app sidebar", () => {
     const acmeLink = scoped.getByRole("link", { name: "Acme" });
     expect(acmeLink.getAttribute("aria-label")).toBe("Acme");
     expect(acmeLink.querySelector("span[aria-hidden]")?.textContent).toBe("A");
+
+    const expandButton = scoped.getByRole("button", { name: "Expand sidebar" });
+    expect(expandButton).toBeTruthy();
+    expect(scoped.queryByRole("link", { name: "Compass" })).toBeNull();
   });
 
   it("renders settings and personalization entries with URL-backed modal links", async () => {

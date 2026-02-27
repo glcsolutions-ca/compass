@@ -84,12 +84,6 @@ export function AppShell({ auth, children }: { auth: AuthShellLoaderData; childr
         auth={auth}
         buildSettingsHref={(section) => buildSettingsModalUrl(location, { open: true, section })}
       />
-      <div className="fixed left-[calc(var(--sidebar-width)_-_2.5rem)] top-5 z-30 hidden transition-[left] duration-200 ease-in-out md:flex md:peer-data-[state=collapsed]:left-[calc(var(--sidebar-width-icon)_+_0.5rem)]">
-        <SidebarTrigger
-          aria-label="Toggle navigation"
-          className="h-8 w-8 border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-        />
-      </div>
       <SidebarInset className="shell-surface min-h-screen">
         <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-border/70 bg-background/80 px-3 backdrop-blur md:hidden">
           <SidebarTrigger aria-label="Open navigation" className="h-8 w-8" />

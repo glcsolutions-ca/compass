@@ -32,9 +32,10 @@ Expected behavior:
 
 Routes:
 
-- `GET /v1/auth/entra/start?returnTo=...`
+- `GET /v1/auth/entra/start?returnTo=...&client=browser|desktop`
 - `GET /v1/auth/entra/callback`
-- `GET /v1/auth/entra/admin-consent/start?tenantHint=...&returnTo=...`
+- `GET /v1/auth/entra/admin-consent/start?tenantHint=...&returnTo=...&client=browser|desktop`
+- `GET /v1/auth/desktop/complete?handoff=...`
 - `GET /v1/auth/me`
 - `POST /v1/auth/logout`
 
@@ -42,12 +43,15 @@ Behavior:
 
 - Start route generates `state`, `nonce`, and PKCE verifier/challenge and persists short-lived request state.
 - Callback route validates state, exchanges code, validates ID token, links/creates user identity, and issues session cookie.
+- Desktop callback mode (`client=desktop`) returns a custom deep-link redirect with one-time handoff token instead of directly issuing browser session cookie.
+- Desktop handoff completion route (`/v1/auth/desktop/complete`) consumes the one-time handoff and then issues the normal session cookie within the app session.
 - Successful callback defaults to `/chat` when `returnTo` is absent or legacy tenant-scoped.
 - Successful login and `/v1/auth/me` reads enforce personal workspace auto-provisioning, ensuring at least one active membership.
 - Callback route enforces optional Entra tenant allow-listing (`ENTRA_ALLOWED_TENANT_IDS`).
 - Session cookie is `__Host-compass_session`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`.
 - Auth endpoints are rate limited per client IP.
 - Cookie-authenticated state-changing endpoints enforce same-origin CSRF checks using `Origin`/`Referer`.
+- Desktop deep-link scheme defaults to reverse-domain format (`ca.glsolutions.compass`) and must be consistent between API and desktop shell.
 
 ## Workspace and Invite API Contract
 
@@ -73,6 +77,7 @@ Behavior:
 - all routes listed above
 - `sessionCookieAuth` security scheme (cookie `__Host-compass_session`)
 - operation-level security for protected routes (`/v1/auth/me`, `/v1/auth/logout`, `/v1/workspaces/**`)
+- desktop completion metadata for `GET /v1/auth/desktop/complete`
 
 Validation command:
 

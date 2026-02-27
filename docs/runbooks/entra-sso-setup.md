@@ -14,8 +14,9 @@ Keep one source of truth per concern:
 
 - Web login route: `GET /login`
 - Entra flow routes:
-  - `GET /v1/auth/entra/start`
+  - `GET /v1/auth/entra/start` (`client=browser|desktop`)
   - `GET /v1/auth/entra/callback`
+  - `GET /v1/auth/desktop/complete`
   - `POST /v1/auth/logout`
 - Cloud deployment wiring via `infra/azure/**` and cloud deployment workflows.
 
@@ -137,11 +138,37 @@ The `location` URL must include:
 
 `redirect_uri=https%3A%2F%2Fcompass.glcsolutions.ca%2Fv1%2Fauth%2Fentra%2Fcallback`
 
+Check desktop start redirect shape (same Entra authorize endpoint, desktop client hint accepted):
+
+```bash
+curl -sSI "https://compass.glcsolutions.ca/v1/auth/entra/start?client=desktop&returnTo=%2F" | grep -i '^location:'
+```
+
+The redirect still targets:
+
+- host `login.microsoftonline.com`
+- path `/organizations/oauth2/v2.0/authorize`
+- `redirect_uri=https://compass.glcsolutions.ca/v1/auth/entra/callback`
+
+Check desktop completion endpoint exists (it should not be `404`):
+
+```bash
+curl -i "https://compass.glcsolutions.ca/v1/auth/desktop/complete?handoff=invalid"
+```
+
+Expected behavior:
+
+- endpoint is routed by API (status is not `404`)
+- invalid handoff redirects to `/login?error=desktop_handoff_invalid`
+
 ## Troubleshooting
 
 - `AADSTS50011` (redirect URI mismatch):
   - Entra app redirect list is missing or incorrect for `https://compass.glcsolutions.ca/v1/auth/entra/callback`.
   - Update redirect URIs and retry.
+- Desktop app does not return to Compass after browser sign-in:
+  - Verify API supports `GET /v1/auth/desktop/complete` (non-`404`), then rebuild desktop app with matching deep-link scheme.
+  - `DESKTOP_AUTH_SCHEME` should be reverse-domain style and aligned between API env and desktop packaging config.
 - `/v1/auth/entra/start` returns internal ACA callback host:
   - API runtime `WEB_BASE_URL` is wrong.
   - Re-run cloud deploy from `main` and confirm IaC params keep custom domains set.

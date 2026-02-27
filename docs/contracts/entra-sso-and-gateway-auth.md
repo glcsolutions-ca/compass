@@ -2,6 +2,8 @@
 
 This document records the v1 Entra-only auth contract for Compass API and web entry flows.
 
+See also [Agent Runtime and Chat Contract](./agent-runtime-and-chat-contract.md) for `/v1/agent/**` runtime/thread surfaces.
+
 ## Scope
 
 - API auth endpoints in `apps/api`

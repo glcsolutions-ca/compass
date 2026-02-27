@@ -17,6 +17,19 @@ import {
   TenantMembersResponseSchema,
   TenantReadResponseSchema
 } from "./schemas.js";
+import {
+  AgentEventsBatchRequestSchema,
+  AgentEventsBatchResponseSchema,
+  AgentEventsListResponseSchema,
+  AgentThreadCreateRequestSchema,
+  AgentThreadCreateResponseSchema,
+  AgentThreadModePatchRequestSchema,
+  AgentThreadModePatchResponseSchema,
+  AgentThreadReadResponseSchema,
+  AgentTurnInterruptResponseSchema,
+  AgentTurnStartRequestSchema,
+  AgentTurnStartResponseSchema
+} from "./agent-gateway.js";
 
 export const API_VERSION = "v1";
 
@@ -44,6 +57,17 @@ export function buildOpenApiDocument(): Record<string, unknown> {
   registry.register("TenantInviteCreateRequest", TenantInviteCreateRequestSchema);
   registry.register("TenantInviteCreateResponse", TenantInviteCreateResponseSchema);
   registry.register("TenantInviteAcceptResponse", TenantInviteAcceptResponseSchema);
+  registry.register("AgentThreadCreateRequest", AgentThreadCreateRequestSchema);
+  registry.register("AgentThreadCreateResponse", AgentThreadCreateResponseSchema);
+  registry.register("AgentThreadReadResponse", AgentThreadReadResponseSchema);
+  registry.register("AgentThreadModePatchRequest", AgentThreadModePatchRequestSchema);
+  registry.register("AgentThreadModePatchResponse", AgentThreadModePatchResponseSchema);
+  registry.register("AgentTurnStartRequest", AgentTurnStartRequestSchema);
+  registry.register("AgentTurnStartResponse", AgentTurnStartResponseSchema);
+  registry.register("AgentTurnInterruptResponse", AgentTurnInterruptResponseSchema);
+  registry.register("AgentEventsBatchRequest", AgentEventsBatchRequestSchema);
+  registry.register("AgentEventsBatchResponse", AgentEventsBatchResponseSchema);
+  registry.register("AgentEventsListResponse", AgentEventsListResponseSchema);
 
   registry.registerComponent("securitySchemes", "sessionCookieAuth", {
     type: "apiKey",
@@ -498,6 +522,450 @@ export function buildOpenApiDocument(): Record<string, unknown> {
     }
   });
 
+  registry.registerPath({
+    method: "post",
+    path: "/v1/agent/threads",
+    operationId: "createAgentThread",
+    summary: "Create an agent thread",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    request: {
+      body: {
+        content: {
+          "application/json": {
+            schema: AgentThreadCreateRequestSchema
+          }
+        }
+      }
+    },
+    responses: {
+      201: {
+        description: "Agent thread created",
+        content: {
+          "application/json": {
+            schema: AgentThreadCreateResponseSchema
+          }
+        }
+      },
+      400: {
+        description: "Invalid request",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      403: {
+        description: "Forbidden",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/v1/agent/threads/{threadId}",
+    operationId: "getAgentThread",
+    summary: "Read an agent thread",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    request: {
+      params: z.object({
+        threadId: z.string().min(1)
+      })
+    },
+    responses: {
+      200: {
+        description: "Agent thread state",
+        content: {
+          "application/json": {
+            schema: AgentThreadReadResponseSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      403: {
+        description: "Forbidden",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      404: {
+        description: "Thread not found",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "patch",
+    path: "/v1/agent/threads/{threadId}/mode",
+    operationId: "patchAgentThreadMode",
+    summary: "Switch execution mode for an agent thread",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    request: {
+      params: z.object({
+        threadId: z.string().min(1)
+      }),
+      body: {
+        content: {
+          "application/json": {
+            schema: AgentThreadModePatchRequestSchema
+          }
+        }
+      }
+    },
+    responses: {
+      200: {
+        description: "Thread mode updated",
+        content: {
+          "application/json": {
+            schema: AgentThreadModePatchResponseSchema
+          }
+        }
+      },
+      400: {
+        description: "Invalid request",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      403: {
+        description: "Forbidden",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      409: {
+        description: "Thread mode switch conflict",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/v1/agent/threads/{threadId}/turns",
+    operationId: "createAgentTurn",
+    summary: "Start a turn for an agent thread",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    request: {
+      params: z.object({
+        threadId: z.string().min(1)
+      }),
+      body: {
+        content: {
+          "application/json": {
+            schema: AgentTurnStartRequestSchema
+          }
+        }
+      }
+    },
+    responses: {
+      200: {
+        description: "Turn accepted and processed",
+        content: {
+          "application/json": {
+            schema: AgentTurnStartResponseSchema
+          }
+        }
+      },
+      400: {
+        description: "Invalid request",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      403: {
+        description: "Forbidden",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      404: {
+        description: "Thread not found",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      409: {
+        description: "Turn conflict",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/v1/agent/threads/{threadId}/turns/{turnId}/interrupt",
+    operationId: "interruptAgentTurn",
+    summary: "Interrupt an in-progress turn",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    request: {
+      params: z.object({
+        threadId: z.string().min(1),
+        turnId: z.string().min(1)
+      })
+    },
+    responses: {
+      200: {
+        description: "Turn interrupted",
+        content: {
+          "application/json": {
+            schema: AgentTurnInterruptResponseSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      403: {
+        description: "Forbidden",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      404: {
+        description: "Thread/turn not found",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      409: {
+        description: "Turn state conflict",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/v1/agent/threads/{threadId}/events:batch",
+    operationId: "appendAgentThreadEventsBatch",
+    summary: "Append externally sourced events to a thread",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    request: {
+      params: z.object({
+        threadId: z.string().min(1)
+      }),
+      body: {
+        content: {
+          "application/json": {
+            schema: AgentEventsBatchRequestSchema
+          }
+        }
+      }
+    },
+    responses: {
+      200: {
+        description: "Events accepted",
+        content: {
+          "application/json": {
+            schema: AgentEventsBatchResponseSchema
+          }
+        }
+      },
+      400: {
+        description: "Invalid request",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      403: {
+        description: "Forbidden",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/v1/agent/threads/{threadId}/events",
+    operationId: "listAgentThreadEvents",
+    summary: "List persisted thread events",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    request: {
+      params: z.object({
+        threadId: z.string().min(1)
+      }),
+      query: z.object({
+        cursor: z.coerce.number().int().nonnegative().optional(),
+        limit: z.coerce.number().int().min(1).max(500).optional()
+      })
+    },
+    responses: {
+      200: {
+        description: "Thread events",
+        content: {
+          "application/json": {
+            schema: AgentEventsListResponseSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      403: {
+        description: "Forbidden",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      404: {
+        description: "Thread not found",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/v1/agent/threads/{threadId}/stream",
+    operationId: "streamAgentThreadEvents",
+    summary: "Upgrade to websocket stream for thread events",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    request: {
+      params: z.object({
+        threadId: z.string().min(1)
+      }),
+      query: z.object({
+        cursor: z.coerce.number().int().nonnegative().optional()
+      })
+    },
+    responses: {
+      101: {
+        description: "WebSocket protocol upgrade accepted"
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      403: {
+        description: "Forbidden",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      404: {
+        description: "Thread not found",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
   const generator = new OpenApiGeneratorV31(registry.definitions);
   return generator.generateDocument({
     openapi: "3.1.0",
@@ -510,7 +978,8 @@ export function buildOpenApiDocument(): Record<string, unknown> {
     tags: [
       { name: "System", description: "Platform system endpoints" },
       { name: "Auth", description: "Authentication and session endpoints" },
-      { name: "Tenants", description: "Tenant membership and invite endpoints" }
+      { name: "Tenants", description: "Tenant membership and invite endpoints" },
+      { name: "Agent", description: "Agent thread and turn orchestration endpoints" }
     ]
   }) as unknown as Record<string, unknown>;
 }

@@ -38,6 +38,7 @@
 - `entra-client-secret`
 - `auth-oidc-state-encryption-key`
 - `oauth-token-signing-secret`
+- `openai-api-key`
 
 ## Bootstrap Contract
 
@@ -81,6 +82,19 @@ Pipeline deploy jobs pass release-candidate digest refs as parameter overrides f
 - `webImage`
 - `workerImage`
 - `dynamicSessionsRuntimeImage`
+
+Agent/Dynamic Sessions runtime defaults are fail-closed and explicitly wired via infra parameters:
+
+- `agentGatewayEnabled=false`
+- `agentCloudModeEnabled=false`
+- `agentLocalModeEnabledDesktop=false`
+- `agentModeSwitchEnabled=false`
+
+When enabled, API receives:
+
+- `DYNAMIC_SESSIONS_POOL_MANAGEMENT_ENDPOINT`
+- `DYNAMIC_SESSIONS_EXECUTOR_CLIENT_ID`
+- explicit `AGENT_*` flags
 
 ## Notes
 

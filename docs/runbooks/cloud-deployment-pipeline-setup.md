@@ -25,6 +25,15 @@ Required for baseline cloud deploy:
 - `AZURE_GITHUB_CLIENT_ID`
 - `ACR_NAME`
 - `KEY_VAULT_NAME`
+- `DYNAMIC_SESSIONS_POOL_NAME`
+- `DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME`
+
+Recommended agent groundwork flags:
+
+- `AGENT_GATEWAY_ENABLED=false` (default fail-closed baseline)
+- `AGENT_CLOUD_MODE_ENABLED=false` (enable after internal rollout approval)
+- `AGENT_LOCAL_MODE_ENABLED_DESKTOP=false` (enable with desktop local runtime rollout)
+- `AGENT_MODE_SWITCH_ENABLED=false` (enable after both modes are stable)
 
 Optional identity-converge path is disabled unless:
 
@@ -40,6 +49,7 @@ Secrets required in `KEY_VAULT_NAME`:
 - `entra-client-secret`
 - `auth-oidc-state-encryption-key`
 - `oauth-token-signing-secret`
+- `openai-api-key` (Dynamic Sessions Codex runtime secret)
 
 ## Secret Rotation Hygiene
 

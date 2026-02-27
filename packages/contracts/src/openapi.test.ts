@@ -23,6 +23,14 @@ describe("buildOpenApiDocument", () => {
     expect(document.paths?.["/v1/tenants/{tenantSlug}/members"]).toBeTruthy();
     expect(document.paths?.["/v1/tenants/{tenantSlug}/invites"]).toBeTruthy();
     expect(document.paths?.["/v1/tenants/{tenantSlug}/invites/{token}/accept"]).toBeTruthy();
+    expect(document.paths?.["/v1/agent/threads"]).toBeTruthy();
+    expect(document.paths?.["/v1/agent/threads/{threadId}"]).toBeTruthy();
+    expect(document.paths?.["/v1/agent/threads/{threadId}/mode"]).toBeTruthy();
+    expect(document.paths?.["/v1/agent/threads/{threadId}/turns"]).toBeTruthy();
+    expect(document.paths?.["/v1/agent/threads/{threadId}/turns/{turnId}/interrupt"]).toBeTruthy();
+    expect(document.paths?.["/v1/agent/threads/{threadId}/events:batch"]).toBeTruthy();
+    expect(document.paths?.["/v1/agent/threads/{threadId}/events"]).toBeTruthy();
+    expect(document.paths?.["/v1/agent/threads/{threadId}/stream"]).toBeTruthy();
     expect(document.paths?.["/health"]?.get?.operationId).toBe("getHealth");
     expect(document.paths?.["/v1/ping"]?.get?.operationId).toBe("getPing");
     expect(document.paths?.["/v1/auth/entra/start"]?.get?.operationId).toBe("startEntraLogin");
@@ -42,6 +50,10 @@ describe("buildOpenApiDocument", () => {
     expect(
       document.paths?.["/v1/tenants/{tenantSlug}/invites/{token}/accept"]?.post?.operationId
     ).toBe("acceptTenantInvite");
+    expect(document.paths?.["/v1/agent/threads"]?.post?.operationId).toBe("createAgentThread");
+    expect(document.paths?.["/v1/agent/threads/{threadId}"]?.get?.operationId).toBe(
+      "getAgentThread"
+    );
     expect(document.components?.securitySchemes?.sessionCookieAuth).toBeTruthy();
 
     const callbackParameters = (

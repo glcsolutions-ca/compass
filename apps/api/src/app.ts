@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import cors from "cors";
 import express, { type ErrorRequestHandler, type Express, type Response } from "express";
 import {
+  AgentEventsBatchRequestSchema,
+  AgentThreadCreateRequestSchema,
+  AgentThreadModePatchRequestSchema,
+  AgentTurnStartRequestSchema,
   TenantCreateRequestSchema,
   TenantInviteCreateRequestSchema,
   buildOpenApiDocument
@@ -13,6 +17,7 @@ import {
   parseAuthError,
   readSessionTokenFromCookie
 } from "./auth-service.js";
+import type { AgentService } from "./agent-service.js";
 
 interface JsonParseError extends Error {
   status?: number;
@@ -22,6 +27,11 @@ interface JsonParseError extends Error {
 interface ApiAppOptions {
   now?: () => Date;
   authService?: AuthService | null;
+  agentService?: AgentService | null;
+  agentGatewayEnabled?: boolean;
+  agentCloudModeEnabled?: boolean;
+  agentLocalModeEnabledDesktop?: boolean;
+  agentModeSwitchEnabled?: boolean;
   allowedOrigins?: string[];
   authRateLimitWindowMs?: number;
   authRateLimitMaxRequests?: number;
@@ -35,6 +45,20 @@ const TenantSlugParamsSchema = z.object({
 const InviteTokenParamsSchema = z.object({
   tenantSlug: z.string().min(1),
   token: z.string().min(1)
+});
+
+const AgentThreadParamsSchema = z.object({
+  threadId: z.string().min(1)
+});
+
+const AgentThreadTurnParamsSchema = z.object({
+  threadId: z.string().min(1),
+  turnId: z.string().min(1)
+});
+
+const AgentThreadEventsQuerySchema = z.object({
+  cursor: z.coerce.number().int().nonnegative().optional(),
+  limit: z.coerce.number().int().min(1).max(500).optional()
 });
 
 const EntraStartQuerySchema = z.object({
@@ -327,9 +351,28 @@ function parsePositiveInteger(value: string | undefined, fallback: number): numb
   return parsed;
 }
 
+function parseFeatureFlag(value: string | undefined, fallback: boolean): boolean {
+  if (!value || value.trim().length === 0) {
+    return fallback;
+  }
+
+  return value.trim().toLowerCase() === "true";
+}
+
 export function buildApiApp(options: ApiAppOptions = {}): Express {
   const now = options.now ?? (() => new Date());
   const authService = options.authService ?? null;
+  const agentService = options.agentService ?? null;
+  const agentGatewayEnabled =
+    options.agentGatewayEnabled ?? parseFeatureFlag(process.env.AGENT_GATEWAY_ENABLED, false);
+  const agentCloudModeEnabled =
+    options.agentCloudModeEnabled ?? parseFeatureFlag(process.env.AGENT_CLOUD_MODE_ENABLED, false);
+  const agentLocalModeEnabledDesktop =
+    options.agentLocalModeEnabledDesktop ??
+    parseFeatureFlag(process.env.AGENT_LOCAL_MODE_ENABLED_DESKTOP, false);
+  const agentModeSwitchEnabled =
+    options.agentModeSwitchEnabled ??
+    parseFeatureFlag(process.env.AGENT_MODE_SWITCH_ENABLED, false);
   const allowedOrigins = buildAllowedOrigins(options.allowedOrigins, process.env.WEB_BASE_URL);
   const authRateLimiter = new InMemoryRateLimiter({
     windowMs:
@@ -700,6 +743,305 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
     } catch (error) {
       sendAuthError(request, response, error);
     }
+  });
+
+  async function requireAgentUser(
+    request: express.Request,
+    response: express.Response
+  ): Promise<{ userId: string } | null> {
+    if (!agentGatewayEnabled) {
+      response.status(503).json({
+        code: "AGENT_GATEWAY_DISABLED",
+        message: "Agent gateway is disabled"
+      });
+      return null;
+    }
+
+    if (!authService || !agentService) {
+      response.status(503).json({
+        code: "AGENT_GATEWAY_NOT_CONFIGURED",
+        message: "Agent gateway is not configured"
+      });
+      return null;
+    }
+
+    try {
+      const authMe = await authService.readAuthMe({
+        sessionToken: currentSessionToken(request),
+        now: now()
+      });
+
+      if (!authMe.authenticated || !authMe.user?.id) {
+        response.status(401).json({
+          code: "UNAUTHORIZED",
+          message: "Authentication required"
+        });
+        return null;
+      }
+
+      return { userId: authMe.user.id };
+    } catch (error) {
+      sendAuthError(request, response, error);
+      return null;
+    }
+  }
+
+  app.post("/v1/agent/threads", async (request, response) => {
+    const actor = await requireAgentUser(request, response);
+    if (!actor || !agentService) {
+      return;
+    }
+
+    const body = parseOrReply(request.body, AgentThreadCreateRequestSchema, response);
+    if (!body) {
+      return;
+    }
+
+    if (body.executionMode === "cloud" && !agentCloudModeEnabled) {
+      response.status(503).json({
+        code: "AGENT_CLOUD_MODE_DISABLED",
+        message: "Cloud mode is disabled"
+      });
+      return;
+    }
+
+    if (body.executionMode === "local" && !agentLocalModeEnabledDesktop) {
+      response.status(503).json({
+        code: "AGENT_LOCAL_MODE_DISABLED",
+        message: "Local mode is disabled"
+      });
+      return;
+    }
+
+    try {
+      const thread = await agentService.createThread({
+        userId: actor.userId,
+        tenantSlug: body.tenantSlug,
+        executionMode: body.executionMode ?? "cloud",
+        executionHost: body.executionHost,
+        title: body.title,
+        now: now()
+      });
+      response.status(201).json({ thread });
+    } catch (error) {
+      sendAuthError(request, response, error);
+    }
+  });
+
+  app.get("/v1/agent/threads/:threadId", async (request, response) => {
+    const actor = await requireAgentUser(request, response);
+    if (!actor || !agentService) {
+      return;
+    }
+
+    const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
+    if (!params) {
+      return;
+    }
+
+    try {
+      const thread = await agentService.readThread({
+        userId: actor.userId,
+        threadId: params.threadId
+      });
+      response.status(200).json({ thread });
+    } catch (error) {
+      sendAuthError(request, response, error);
+    }
+  });
+
+  app.patch("/v1/agent/threads/:threadId/mode", async (request, response) => {
+    const actor = await requireAgentUser(request, response);
+    if (!actor || !agentService) {
+      return;
+    }
+
+    const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
+    if (!params) {
+      return;
+    }
+
+    const body = parseOrReply(request.body, AgentThreadModePatchRequestSchema, response);
+    if (!body) {
+      return;
+    }
+
+    if (!agentModeSwitchEnabled) {
+      response.status(503).json({
+        code: "AGENT_MODE_SWITCH_DISABLED",
+        message: "Mode switching is disabled"
+      });
+      return;
+    }
+
+    if (body.executionMode === "cloud" && !agentCloudModeEnabled) {
+      response.status(503).json({
+        code: "AGENT_CLOUD_MODE_DISABLED",
+        message: "Cloud mode is disabled"
+      });
+      return;
+    }
+
+    if (body.executionMode === "local" && !agentLocalModeEnabledDesktop) {
+      response.status(503).json({
+        code: "AGENT_LOCAL_MODE_DISABLED",
+        message: "Local mode is disabled"
+      });
+      return;
+    }
+
+    try {
+      const thread = await agentService.switchThreadMode({
+        userId: actor.userId,
+        threadId: params.threadId,
+        executionMode: body.executionMode,
+        executionHost: body.executionHost,
+        now: now()
+      });
+      response.status(200).json({ thread });
+    } catch (error) {
+      sendAuthError(request, response, error);
+    }
+  });
+
+  app.post("/v1/agent/threads/:threadId/turns", async (request, response) => {
+    const actor = await requireAgentUser(request, response);
+    if (!actor || !agentService) {
+      return;
+    }
+
+    const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
+    if (!params) {
+      return;
+    }
+
+    const body = parseOrReply(request.body, AgentTurnStartRequestSchema, response);
+    if (!body) {
+      return;
+    }
+
+    if (body.executionMode === "cloud" && !agentCloudModeEnabled) {
+      response.status(503).json({
+        code: "AGENT_CLOUD_MODE_DISABLED",
+        message: "Cloud mode is disabled"
+      });
+      return;
+    }
+
+    if (body.executionMode === "local" && !agentLocalModeEnabledDesktop) {
+      response.status(503).json({
+        code: "AGENT_LOCAL_MODE_DISABLED",
+        message: "Local mode is disabled"
+      });
+      return;
+    }
+
+    try {
+      const result = await agentService.startTurn({
+        userId: actor.userId,
+        threadId: params.threadId,
+        text: body.text,
+        executionMode: body.executionMode,
+        executionHost: body.executionHost,
+        now: now()
+      });
+      response.status(200).json(result);
+    } catch (error) {
+      sendAuthError(request, response, error);
+    }
+  });
+
+  app.post("/v1/agent/threads/:threadId/turns/:turnId/interrupt", async (request, response) => {
+    const actor = await requireAgentUser(request, response);
+    if (!actor || !agentService) {
+      return;
+    }
+
+    const params = parseOrReply(request.params, AgentThreadTurnParamsSchema, response);
+    if (!params) {
+      return;
+    }
+
+    try {
+      const turn = await agentService.interruptTurn({
+        userId: actor.userId,
+        threadId: params.threadId,
+        turnId: params.turnId,
+        now: now()
+      });
+      response.status(200).json({ turn });
+    } catch (error) {
+      sendAuthError(request, response, error);
+    }
+  });
+
+  app.post("/v1/agent/threads/:threadId/events:batch", async (request, response) => {
+    const actor = await requireAgentUser(request, response);
+    if (!actor || !agentService) {
+      return;
+    }
+
+    const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
+    if (!params) {
+      return;
+    }
+
+    const body = parseOrReply(request.body, AgentEventsBatchRequestSchema, response);
+    if (!body) {
+      return;
+    }
+
+    try {
+      const result = await agentService.appendThreadEventsBatch({
+        userId: actor.userId,
+        threadId: params.threadId,
+        events: body.events.map((event) => ({
+          turnId: event.turnId,
+          method: event.method,
+          payload: event.payload ?? {}
+        })),
+        now: now()
+      });
+      response.status(200).json(result);
+    } catch (error) {
+      sendAuthError(request, response, error);
+    }
+  });
+
+  app.get("/v1/agent/threads/:threadId/events", async (request, response) => {
+    const actor = await requireAgentUser(request, response);
+    if (!actor || !agentService) {
+      return;
+    }
+
+    const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
+    if (!params) {
+      return;
+    }
+
+    const query = parseOrReply(request.query, AgentThreadEventsQuerySchema, response);
+    if (!query) {
+      return;
+    }
+
+    try {
+      const events = await agentService.listThreadEvents({
+        userId: actor.userId,
+        threadId: params.threadId,
+        cursor: query.cursor,
+        limit: query.limit
+      });
+      response.status(200).json({ events });
+    } catch (error) {
+      sendAuthError(request, response, error);
+    }
+  });
+
+  app.get("/v1/agent/threads/:threadId/stream", async (_request, response) => {
+    response.status(426).json({
+      code: "UPGRADE_REQUIRED",
+      message: "Use websocket upgrade for this endpoint"
+    });
   });
 
   app.use((_req, res) => {

@@ -208,6 +208,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agent/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create an agent thread */
+        post: operations["createAgentThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/threads/{threadId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an agent thread */
+        get: operations["getAgentThread"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/threads/{threadId}/mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Switch execution mode for an agent thread */
+        patch: operations["patchAgentThreadMode"];
+        trace?: never;
+    };
+    "/v1/agent/threads/{threadId}/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a turn for an agent thread */
+        post: operations["createAgentTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/threads/{threadId}/turns/{turnId}/interrupt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Interrupt an in-progress turn */
+        post: operations["interruptAgentTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/threads/{threadId}/events:batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Append externally sourced events to a thread */
+        post: operations["appendAgentThreadEventsBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/threads/{threadId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List persisted thread events */
+        get: operations["listAgentThreadEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/threads/{threadId}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Upgrade to websocket stream for thread events */
+        get: operations["streamAgentThreadEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -307,6 +443,158 @@ export interface components {
             role: "owner" | "admin" | "member" | "viewer";
             /** @enum {string} */
             status: "active" | "invited" | "disabled";
+        };
+        AgentThreadCreateRequest: {
+            tenantSlug: string;
+            /**
+             * @default cloud
+             * @enum {string}
+             */
+            executionMode: "cloud" | "local";
+            /** @enum {string} */
+            executionHost?: "dynamic_sessions" | "desktop_local";
+            title?: string;
+        };
+        AgentThreadCreateResponse: {
+            thread: {
+                threadId: string;
+                tenantId: string;
+                tenantSlug: string;
+                /** @enum {string} */
+                executionMode: "cloud" | "local";
+                /** @enum {string} */
+                executionHost: "dynamic_sessions" | "desktop_local";
+                /** @enum {string} */
+                status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
+                cloudSessionIdentifier?: string | null;
+                title?: string | null;
+                /** Format: date-time */
+                createdAt: string;
+                /** Format: date-time */
+                updatedAt: string;
+                /** Format: date-time */
+                modeSwitchedAt?: string | null;
+            };
+        };
+        AgentThreadReadResponse: {
+            thread: {
+                threadId: string;
+                tenantId: string;
+                tenantSlug: string;
+                /** @enum {string} */
+                executionMode: "cloud" | "local";
+                /** @enum {string} */
+                executionHost: "dynamic_sessions" | "desktop_local";
+                /** @enum {string} */
+                status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
+                cloudSessionIdentifier?: string | null;
+                title?: string | null;
+                /** Format: date-time */
+                createdAt: string;
+                /** Format: date-time */
+                updatedAt: string;
+                /** Format: date-time */
+                modeSwitchedAt?: string | null;
+            };
+        };
+        AgentThreadModePatchRequest: {
+            /** @enum {string} */
+            executionMode: "cloud" | "local";
+            /** @enum {string} */
+            executionHost?: "dynamic_sessions" | "desktop_local";
+        };
+        AgentThreadModePatchResponse: {
+            thread: {
+                threadId: string;
+                tenantId: string;
+                tenantSlug: string;
+                /** @enum {string} */
+                executionMode: "cloud" | "local";
+                /** @enum {string} */
+                executionHost: "dynamic_sessions" | "desktop_local";
+                /** @enum {string} */
+                status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
+                cloudSessionIdentifier?: string | null;
+                title?: string | null;
+                /** Format: date-time */
+                createdAt: string;
+                /** Format: date-time */
+                updatedAt: string;
+                /** Format: date-time */
+                modeSwitchedAt?: string | null;
+            };
+        };
+        AgentTurnStartRequest: {
+            text: string;
+            /** @enum {string} */
+            executionMode?: "cloud" | "local";
+            /** @enum {string} */
+            executionHost?: "dynamic_sessions" | "desktop_local";
+            model?: string;
+            approvalPolicy?: string;
+            sandboxPolicy?: unknown;
+            effort?: string;
+            personality?: string;
+        };
+        AgentTurnStartResponse: {
+            turn: {
+                turnId: string;
+                threadId: string;
+                /** @enum {string} */
+                status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
+                /** @enum {string} */
+                executionMode: "cloud" | "local";
+                /** @enum {string} */
+                executionHost: "dynamic_sessions" | "desktop_local";
+                input?: unknown;
+                output?: unknown;
+                error?: unknown;
+                /** Format: date-time */
+                startedAt: string;
+                /** Format: date-time */
+                completedAt?: string | null;
+            };
+            outputText?: string | null;
+        };
+        AgentTurnInterruptResponse: {
+            turn: {
+                turnId: string;
+                threadId: string;
+                /** @enum {string} */
+                status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
+                /** @enum {string} */
+                executionMode: "cloud" | "local";
+                /** @enum {string} */
+                executionHost: "dynamic_sessions" | "desktop_local";
+                input?: unknown;
+                output?: unknown;
+                error?: unknown;
+                /** Format: date-time */
+                startedAt: string;
+                /** Format: date-time */
+                completedAt?: string | null;
+            };
+        };
+        AgentEventsBatchRequest: {
+            events: {
+                turnId?: string;
+                method: string;
+                payload?: unknown;
+            }[];
+        };
+        AgentEventsBatchResponse: {
+            accepted: number;
+        };
+        AgentEventsListResponse: {
+            events: {
+                cursor: number;
+                threadId: string;
+                turnId?: string | null;
+                method: string;
+                payload?: unknown;
+                /** Format: date-time */
+                createdAt: string;
+            }[];
         };
     };
     responses: never;
@@ -925,6 +1213,677 @@ export interface operations {
             };
             /** @description Invite already accepted by another user */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    createAgentThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    tenantSlug: string;
+                    /**
+                     * @default cloud
+                     * @enum {string}
+                     */
+                    executionMode?: "cloud" | "local";
+                    /** @enum {string} */
+                    executionHost?: "dynamic_sessions" | "desktop_local";
+                    title?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Agent thread created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        thread: {
+                            threadId: string;
+                            tenantId: string;
+                            tenantSlug: string;
+                            /** @enum {string} */
+                            executionMode: "cloud" | "local";
+                            /** @enum {string} */
+                            executionHost: "dynamic_sessions" | "desktop_local";
+                            /** @enum {string} */
+                            status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
+                            cloudSessionIdentifier?: string | null;
+                            title?: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** Format: date-time */
+                            modeSwitchedAt?: string | null;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    getAgentThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent thread state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        thread: {
+                            threadId: string;
+                            tenantId: string;
+                            tenantSlug: string;
+                            /** @enum {string} */
+                            executionMode: "cloud" | "local";
+                            /** @enum {string} */
+                            executionHost: "dynamic_sessions" | "desktop_local";
+                            /** @enum {string} */
+                            status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
+                            cloudSessionIdentifier?: string | null;
+                            title?: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** Format: date-time */
+                            modeSwitchedAt?: string | null;
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    patchAgentThreadMode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    executionMode: "cloud" | "local";
+                    /** @enum {string} */
+                    executionHost?: "dynamic_sessions" | "desktop_local";
+                };
+            };
+        };
+        responses: {
+            /** @description Thread mode updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        thread: {
+                            threadId: string;
+                            tenantId: string;
+                            tenantSlug: string;
+                            /** @enum {string} */
+                            executionMode: "cloud" | "local";
+                            /** @enum {string} */
+                            executionHost: "dynamic_sessions" | "desktop_local";
+                            /** @enum {string} */
+                            status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
+                            cloudSessionIdentifier?: string | null;
+                            title?: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** Format: date-time */
+                            modeSwitchedAt?: string | null;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Thread mode switch conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    createAgentTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    text: string;
+                    /** @enum {string} */
+                    executionMode?: "cloud" | "local";
+                    /** @enum {string} */
+                    executionHost?: "dynamic_sessions" | "desktop_local";
+                    model?: string;
+                    approvalPolicy?: string;
+                    sandboxPolicy?: unknown;
+                    effort?: string;
+                    personality?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Turn accepted and processed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        turn: {
+                            turnId: string;
+                            threadId: string;
+                            /** @enum {string} */
+                            status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
+                            /** @enum {string} */
+                            executionMode: "cloud" | "local";
+                            /** @enum {string} */
+                            executionHost: "dynamic_sessions" | "desktop_local";
+                            input?: unknown;
+                            output?: unknown;
+                            error?: unknown;
+                            /** Format: date-time */
+                            startedAt: string;
+                            /** Format: date-time */
+                            completedAt?: string | null;
+                        };
+                        outputText?: string | null;
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Turn conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    interruptAgentTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                threadId: string;
+                turnId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Turn interrupted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        turn: {
+                            turnId: string;
+                            threadId: string;
+                            /** @enum {string} */
+                            status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
+                            /** @enum {string} */
+                            executionMode: "cloud" | "local";
+                            /** @enum {string} */
+                            executionHost: "dynamic_sessions" | "desktop_local";
+                            input?: unknown;
+                            output?: unknown;
+                            error?: unknown;
+                            /** Format: date-time */
+                            startedAt: string;
+                            /** Format: date-time */
+                            completedAt?: string | null;
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Thread/turn not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Turn state conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    appendAgentThreadEventsBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    events: {
+                        turnId?: string;
+                        method: string;
+                        payload?: unknown;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Events accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        accepted: number;
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    listAgentThreadEvents: {
+        parameters: {
+            query?: {
+                cursor?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thread events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        events: {
+                            cursor: number;
+                            threadId: string;
+                            turnId?: string | null;
+                            method: string;
+                            payload?: unknown;
+                            /** Format: date-time */
+                            createdAt: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    streamAgentThreadEvents: {
+        parameters: {
+            query?: {
+                cursor?: number | null;
+            };
+            header?: never;
+            path: {
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description WebSocket protocol upgrade accepted */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Thread not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

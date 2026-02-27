@@ -6,6 +6,8 @@ const integrationGateWorkflowPath = ".github/workflows/integration-gate.yml";
 const cloudDeploymentPipelineWorkflowPath = ".github/workflows/cloud-deployment-pipeline.yml";
 const cloudDeploymentPipelineReplayWorkflowPath =
   ".github/workflows/cloud-deployment-pipeline-replay.yml";
+const dynamicSessionsAcceptanceRehearsalWorkflowPath =
+  ".github/workflows/dynamic-sessions-acceptance-rehearsal.yml";
 const mainRedRecoveryWorkflowPath = ".github/workflows/main-red-recovery.yml";
 const legacyMergeGroupToken = ["merge", "group"].join("_");
 
@@ -34,6 +36,7 @@ describe("workflow pipeline contract", () => {
   it("keeps cloud deployment push-only and replay manual-only", () => {
     const delivery = readUtf8(cloudDeploymentPipelineWorkflowPath);
     const replay = readUtf8(cloudDeploymentPipelineReplayWorkflowPath);
+    const rehearsal = readUtf8(dynamicSessionsAcceptanceRehearsalWorkflowPath);
 
     expect(delivery).toContain("push:");
     expect(delivery).not.toContain("workflow_dispatch:");
@@ -41,6 +44,9 @@ describe("workflow pipeline contract", () => {
     expect(replay).toContain("workflow_dispatch:");
     expect(replay).toContain("release_candidate_sha:");
     expect(replay).not.toContain("\n  push:");
+    expect(rehearsal).toContain("workflow_dispatch:");
+    expect(rehearsal).toContain("release_candidate_sha:");
+    expect(rehearsal).not.toContain("\n  push:");
 
     expect(delivery).toContain("COMMIT_STAGE_EVENT: push");
     expect(delivery).toContain("INTEGRATION_GATE_EVENT: push");
@@ -49,6 +55,7 @@ describe("workflow pipeline contract", () => {
   it("keeps build-once release candidate contract in delivery and no-rebuild replay", () => {
     const delivery = readUtf8(cloudDeploymentPipelineWorkflowPath);
     const replay = readUtf8(cloudDeploymentPipelineReplayWorkflowPath);
+    const rehearsal = readUtf8(dynamicSessionsAcceptanceRehearsalWorkflowPath);
 
     expect(delivery).toContain("build_release_candidate_images:");
     expect(delivery).toContain("publish_release_candidate:");
@@ -62,6 +69,10 @@ describe("workflow pipeline contract", () => {
     );
     expect(replay).toContain("run-id: ${{ needs.resolve_replay_source.outputs.source_run_id }}");
     expect(replay).not.toContain("build_release_candidate_images:");
+    expect(rehearsal).toContain(
+      "run-id: ${{ needs.resolve_rehearsal_source.outputs.source_run_id }}"
+    );
+    expect(rehearsal).not.toContain("build_release_candidate_images:");
   });
 
   it("uses single deploy-cloud and production-smoke flow in both workflows", () => {
@@ -79,6 +90,9 @@ describe("workflow pipeline contract", () => {
       expect(workflow).toContain("node scripts/pipeline/cloud/deployment-stage/apply-infra.mjs");
       expect(workflow).toContain(
         "node scripts/pipeline/cloud/deployment-stage/verify-api-smoke.mjs"
+      );
+      expect(workflow).toContain(
+        "node scripts/pipeline/cloud/deployment-stage/verify-agent-runtime-compatibility.mjs"
       );
     }
   });

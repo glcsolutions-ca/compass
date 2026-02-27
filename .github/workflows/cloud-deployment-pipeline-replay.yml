@@ -281,6 +281,9 @@ jobs:
           RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ env.DYNAMIC_SESSIONS_RUNTIME_IMAGE }}
         run: node scripts/pipeline/cloud/deployment-stage/verify-dynamic-sessions-convergence.mjs
 
+      - name: Verify agent runtime compatibility
+        run: node scripts/pipeline/cloud/deployment-stage/verify-agent-runtime-compatibility.mjs
+
       - name: Verify worker Service Bus cutover
         run: node scripts/pipeline/cloud/deployment-stage/verify-worker-servicebus-cutover.mjs
 

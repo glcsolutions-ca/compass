@@ -9,7 +9,8 @@ const DEFAULT_REQUIRED_SECRET_NAMES = [
   "web-session-secret",
   "entra-client-secret",
   "auth-oidc-state-encryption-key",
-  "oauth-token-signing-secret"
+  "oauth-token-signing-secret",
+  "openai-api-key"
 ];
 
 function parseSecretNames(raw) {

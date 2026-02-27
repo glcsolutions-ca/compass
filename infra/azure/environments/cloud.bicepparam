@@ -73,3 +73,18 @@ param authBootstrapDelegatedUserEmail = 'jkropp@glcsolutions.ca'
 
 param migrationLockTimeout = '5s'
 param migrationStatementTimeout = '15min'
+param dynamicSessionsCodexApiKeySecretName = 'openai-api-key'
+param dynamicSessionsCodexApiKey = az.getSecret(
+  readEnvironmentVariable('AZURE_SUBSCRIPTION_ID', '4514a0d0-2cdc-468e-be25-895aef2846ad'),
+  readEnvironmentVariable('AZURE_RESOURCE_GROUP', 'rg-compass-prod-canadacentral-02'),
+  keyVaultName,
+  dynamicSessionsCodexApiKeySecretName
+)
+param dynamicSessionsRuntimeEngine = 'codex'
+param dynamicSessionsCodexAppServerCommand = 'codex'
+param dynamicSessionsCodexAppServerArgs = 'app-server'
+param dynamicSessionsCodexTurnTimeoutMs = 120000
+param agentGatewayEnabled = false
+param agentCloudModeEnabled = false
+param agentLocalModeEnabledDesktop = false
+param agentModeSwitchEnabled = false

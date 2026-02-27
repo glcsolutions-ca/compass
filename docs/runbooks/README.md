@@ -9,6 +9,8 @@
 - [`test-quick-farley-assessment.md`](./test-quick-farley-assessment.md): trunk-wide Farley-first assessment of `pnpm test:quick` with timing evidence, overlap analysis, and vNext recommendations.
 - [`entra-sso-setup.md`](./entra-sso-setup.md): enterprise Microsoft Entra SSO setup and verification for web front-door login.
 - [`desktop-deployment-pipeline.md`](./desktop-deployment-pipeline.md): desktop installer delivery operations.
+- [`agent-runtime-groundwork.md`](./agent-runtime-groundwork.md): operating baseline for dual-mode agent groundwork (`cloud` + `local`) and validation checks.
+- [`dynamic-sessions-one-pager.md`](./dynamic-sessions-one-pager.md): production Dynamic Sessions plumbing, identity model, pipeline evidence, and rollout guardrails.
 - [`auth-v1-cutover.md`](./auth-v1-cutover.md): Entra-only auth baseline reset and cutover flow.
 - [`auth-v1-pilot-readiness.md`](./auth-v1-pilot-readiness.md): post-launch two-tenant pilot operations and strict exit gate.
 - [`github-governance-verification.md`](./github-governance-verification.md): governance and branch-protection verification.

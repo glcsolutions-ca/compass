@@ -4,6 +4,7 @@ param managedEnvironmentId string
 param image string
 param registryServer string
 param registryIdentityResourceId string
+param sessionExecutorIdentityResourceId string = ''
 param keyVaultUri string
 param webBaseUrl string
 @allowed([
@@ -24,18 +25,34 @@ param oauthTokenIssuer string
 param oauthTokenAudience string
 param logLevel string = 'warn'
 param customDomainName string = ''
+param dynamicSessionsPoolManagementEndpoint string = ''
+param dynamicSessionsExecutorClientId string = ''
+param agentGatewayEnabled bool = false
+param agentCloudModeEnabled bool = false
+param agentLocalModeEnabledDesktop bool = false
+param agentModeSwitchEnabled bool = false
 
 var normalizedKeyVaultUri = endsWith(keyVaultUri, '/') ? keyVaultUri : '${keyVaultUri}/'
 var keyVaultSecretBaseUrl = '${normalizedKeyVaultUri}secrets'
+var userAssignedIdentities = empty(sessionExecutorIdentityResourceId)
+  ? {
+      '${registryIdentityResourceId}': {}
+    }
+  : union(
+      {
+        '${registryIdentityResourceId}': {}
+      },
+      {
+        '${sessionExecutorIdentityResourceId}': {}
+      }
+    )
 
 resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
   name: containerAppName
   location: location
   identity: {
     type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${registryIdentityResourceId}': {}
-    }
+    userAssignedIdentities: userAssignedIdentities
   }
   properties: {
     managedEnvironmentId: managedEnvironmentId
@@ -117,6 +134,30 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
             {
               name: 'WEB_BASE_URL'
               value: webBaseUrl
+            }
+            {
+              name: 'DYNAMIC_SESSIONS_POOL_MANAGEMENT_ENDPOINT'
+              value: dynamicSessionsPoolManagementEndpoint
+            }
+            {
+              name: 'DYNAMIC_SESSIONS_EXECUTOR_CLIENT_ID'
+              value: dynamicSessionsExecutorClientId
+            }
+            {
+              name: 'AGENT_GATEWAY_ENABLED'
+              value: string(agentGatewayEnabled)
+            }
+            {
+              name: 'AGENT_CLOUD_MODE_ENABLED'
+              value: string(agentCloudModeEnabled)
+            }
+            {
+              name: 'AGENT_LOCAL_MODE_ENABLED_DESKTOP'
+              value: string(agentLocalModeEnabledDesktop)
+            }
+            {
+              name: 'AGENT_MODE_SWITCH_ENABLED'
+              value: string(agentModeSwitchEnabled)
             }
             {
               name: 'AUTH_MODE'

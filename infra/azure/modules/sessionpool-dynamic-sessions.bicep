@@ -6,6 +6,13 @@ param registryServer string
 param registryIdentityResourceId string
 param sessionExecutorPrincipalId string
 param sessionExecutorRoleDefinitionId string
+param runtimeEngine string = 'codex'
+param codexAppServerCommand string = 'codex'
+param codexAppServerArgs string = 'app-server'
+param codexTurnTimeoutMs int = 120000
+param codexApiKeySecretName string = 'openai-api-key'
+@secure()
+param codexApiKeySecretValue string = ''
 param targetPort int = 8080
 param readySessionInstances int = 0
 param maxConcurrentSessions int = 20
@@ -14,6 +21,52 @@ param sessionNetworkStatus string = 'EgressEnabled'
 param cpu string = '0.25'
 param memory string = '0.5Gi'
 param tags object = {}
+
+var runtimeEnvironmentVariables = concat(
+  [
+    {
+      name: 'PORT'
+      value: string(targetPort)
+    }
+    {
+      name: 'HOST'
+      value: '0.0.0.0'
+    }
+    {
+      name: 'SESSION_RUNTIME_ENGINE'
+      value: runtimeEngine
+    }
+    {
+      name: 'CODEX_APP_SERVER_COMMAND'
+      value: codexAppServerCommand
+    }
+    {
+      name: 'CODEX_APP_SERVER_ARGS'
+      value: codexAppServerArgs
+    }
+    {
+      name: 'CODEX_RUNTIME_TURN_TIMEOUT_MS'
+      value: string(codexTurnTimeoutMs)
+    }
+  ],
+  empty(codexApiKeySecretValue)
+    ? []
+    : [
+        {
+          name: 'OPENAI_API_KEY'
+          secretRef: codexApiKeySecretName
+        }
+      ]
+)
+
+var runtimeSecrets = empty(codexApiKeySecretValue)
+  ? []
+  : [
+      {
+        name: codexApiKeySecretName
+        value: codexApiKeySecretValue
+      }
+    ]
 
 resource sessionPool 'Microsoft.App/sessionPools@2025-07-01' = {
   name: sessionPoolName
@@ -29,6 +82,7 @@ resource sessionPool 'Microsoft.App/sessionPools@2025-07-01' = {
     environmentId: environmentId
     poolManagementType: 'Dynamic'
     containerType: 'CustomContainer'
+    secrets: runtimeSecrets
     scaleConfiguration: {
       maxConcurrentSessions: maxConcurrentSessions
       readySessionInstances: readySessionInstances
@@ -52,16 +106,7 @@ resource sessionPool 'Microsoft.App/sessionPools@2025-07-01' = {
             cpu: json(cpu)
             memory: memory
           }
-          env: [
-            {
-              name: 'PORT'
-              value: string(targetPort)
-            }
-            {
-              name: 'HOST'
-              value: '0.0.0.0'
-            }
-          ]
+          env: runtimeEnvironmentVariables
         }
       ]
       ingress: {

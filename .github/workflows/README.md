@@ -6,7 +6,8 @@
 2. `integration-gate.yml` runs on push to `main` (and optional PR preview).
 3. `cloud-deployment-pipeline.yml` runs on push to `main`.
 4. `cloud-deployment-pipeline-replay.yml` is manual (`workflow_dispatch`) and redeploys by release-candidate SHA.
-5. `desktop-deployment-pipeline.yml` is independent of cloud runtime delivery.
+5. `dynamic-sessions-acceptance-rehearsal.yml` is manual (`workflow_dispatch`) and rehearses infra convergence for a release-candidate SHA in the acceptance environment.
+6. `desktop-deployment-pipeline.yml` is independent of cloud runtime delivery.
 
 ## Cloud Runtime Path
 
@@ -48,13 +49,20 @@ Key artifacts:
   - `AZURE_GITHUB_CLIENT_ID`
   - `ACR_NAME`
   - `KEY_VAULT_NAME`
+  - `DYNAMIC_SESSIONS_POOL_NAME`
+  - `DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME`
 - Optional identity convergence is disabled by default and only runs when:
   - `IDENTITY_CONVERGE_ENABLED=true`
   - required identity backend vars are present.
 
-## Removed Legacy Flow
+## Acceptance Rehearsal
 
-The former cloud acceptance topology and acceptance rehearsal workflow are removed from cloud runtime delivery. Release evidence now comes from one push-to-main cloud deploy path plus one manual replay path.
+`dynamic-sessions-acceptance-rehearsal.yml` reuses a previously published release-candidate manifest (no image rebuild), applies infra, and runs:
+
+1. `verify-dynamic-sessions-convergence.mjs`
+2. `verify-agent-runtime-compatibility.mjs`
+
+Release evidence for production remains push-to-main cloud deployment plus manual replay.
 
 ## References
 

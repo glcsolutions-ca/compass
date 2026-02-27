@@ -68,6 +68,17 @@ param authBootstrapDelegatedUserOid string = 'SET_IN_GITHUB_ENV'
 param authBootstrapDelegatedUserEmail string = 'SET_IN_GITHUB_ENV'
 param migrationLockTimeout string = '5s'
 param migrationStatementTimeout string = '15min'
+param dynamicSessionsCodexApiKeySecretName string = 'openai-api-key'
+@secure()
+param dynamicSessionsCodexApiKey string = ''
+param dynamicSessionsRuntimeEngine string = 'codex'
+param dynamicSessionsCodexAppServerCommand string = 'codex'
+param dynamicSessionsCodexAppServerArgs string = 'app-server'
+param dynamicSessionsCodexTurnTimeoutMs int = 120000
+param agentGatewayEnabled bool = false
+param agentCloudModeEnabled bool = false
+param agentLocalModeEnabledDesktop bool = false
+param agentModeSwitchEnabled bool = false
 
 var acrPullRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
@@ -156,7 +167,6 @@ var apiBaseUrl = empty(apiCustomDomain)
 var webBaseUrl = empty(webCustomDomain)
   ? 'https://${webAppName}.${containerEnvironment.outputs.defaultDomain}'
   : 'https://${webCustomDomain}'
-
 resource acrPullIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: acrPullIdentityName
   location: location
@@ -229,6 +239,7 @@ module api './modules/containerapp-api.bicep' = {
     image: apiImage
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
+    sessionExecutorIdentityResourceId: dynamicSessionsExecutorIdentity.id
     keyVaultUri: keyVaultUri
     webBaseUrl: webBaseUrl
     authMode: authMode
@@ -244,6 +255,12 @@ module api './modules/containerapp-api.bicep' = {
     oauthTokenIssuer: oauthTokenIssuer
     oauthTokenAudience: oauthTokenAudience
     customDomainName: apiCustomDomain
+    dynamicSessionsPoolManagementEndpoint: dynamicSessions.outputs.poolManagementEndpoint
+    dynamicSessionsExecutorClientId: dynamicSessionsExecutorIdentity.properties.clientId
+    agentGatewayEnabled: agentGatewayEnabled
+    agentCloudModeEnabled: agentCloudModeEnabled
+    agentLocalModeEnabledDesktop: agentLocalModeEnabledDesktop
+    agentModeSwitchEnabled: agentModeSwitchEnabled
   }
   dependsOn: [
     acrPullIdentityRoleAssignment
@@ -306,6 +323,12 @@ module dynamicSessions './modules/sessionpool-dynamic-sessions.bicep' = {
     registryIdentityResourceId: acrPullIdentity.id
     sessionExecutorPrincipalId: dynamicSessionsExecutorIdentity.properties.principalId
     sessionExecutorRoleDefinitionId: sessionExecutorRoleDefinitionId
+    runtimeEngine: dynamicSessionsRuntimeEngine
+    codexAppServerCommand: dynamicSessionsCodexAppServerCommand
+    codexAppServerArgs: dynamicSessionsCodexAppServerArgs
+    codexTurnTimeoutMs: dynamicSessionsCodexTurnTimeoutMs
+    codexApiKeySecretName: dynamicSessionsCodexApiKeySecretName
+    codexApiKeySecretValue: dynamicSessionsCodexApiKey
   }
   dependsOn: [
     acrPullIdentityRoleAssignment

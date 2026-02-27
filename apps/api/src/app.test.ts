@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { buildApiApp } from "./app.js";
 import type { AuthService } from "./auth-service.js";
+import type { AgentService } from "./agent-service.js";
 
 describe("API app", () => {
   it("returns health status", async () => {
@@ -218,5 +219,111 @@ describe("API app", () => {
       .get("/v1/auth/entra/start")
       .set("x-forwarded-for", "203.0.113.1");
     expect(firstIpSecond.status).toBe(302);
+  });
+
+  it("returns disabled error for agent routes when feature flag is off", async () => {
+    const app = buildApiApp({
+      authService: {
+        readAuthMe: vi.fn()
+      } as unknown as AuthService,
+      agentService: {
+        createThread: vi.fn()
+      } as unknown as AgentService,
+      agentGatewayEnabled: false
+    });
+
+    const response = await request(app)
+      .post("/v1/agent/threads")
+      .send({ tenantSlug: "acme", executionMode: "cloud" });
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      code: "AGENT_GATEWAY_DISABLED",
+      message: "Agent gateway is disabled"
+    });
+  });
+
+  it("creates an agent thread when authenticated", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const createThread = vi.fn(async () => {
+      return {
+        threadId: "thread-1",
+        tenantId: "tenant-1",
+        tenantSlug: "acme",
+        executionMode: "cloud",
+        executionHost: "dynamic_sessions",
+        status: "idle",
+        cloudSessionIdentifier: "thr-thread-1",
+        title: null,
+        createdAt: "2026-02-27T00:00:00.000Z",
+        updatedAt: "2026-02-27T00:00:00.000Z",
+        modeSwitchedAt: null
+      };
+    });
+    const agentService = {
+      createThread
+    } as unknown as AgentService;
+
+    const app = buildApiApp({
+      authService,
+      agentService,
+      agentGatewayEnabled: true,
+      agentCloudModeEnabled: true
+    });
+
+    const response = await request(app).post("/v1/agent/threads").send({
+      tenantSlug: "acme",
+      executionMode: "cloud"
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body.thread.threadId).toBe("thread-1");
+    expect(createThread).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns upgrade required on HTTP access to agent stream route", async () => {
+    const app = buildApiApp();
+
+    const response = await request(app).get("/v1/agent/threads/thread-1/stream");
+
+    expect(response.status).toBe(426);
+    expect(response.body).toEqual({
+      code: "UPGRADE_REQUIRED",
+      message: "Use websocket upgrade for this endpoint"
+    });
+  });
+
+  it("blocks mode switching when AGENT_MODE_SWITCH_ENABLED is false", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const app = buildApiApp({
+      authService,
+      agentService: {
+        switchThreadMode: vi.fn()
+      } as unknown as AgentService,
+      agentGatewayEnabled: true,
+      agentModeSwitchEnabled: false
+    });
+
+    const response = await request(app)
+      .patch("/v1/agent/threads/thread-1/mode")
+      .send({ executionMode: "local" });
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      code: "AGENT_MODE_SWITCH_DISABLED",
+      message: "Mode switching is disabled"
+    });
   });
 });

@@ -12,6 +12,7 @@
 - `wait-migration-job.mjs`: waits for migration completion and captures status/log metadata.
 - `verify-api-smoke.mjs`: validates API health, OpenAPI, allowed/denied auth behavior.
 - `verify-dynamic-sessions-convergence.mjs`: verifies session-pool control-plane convergence (image digest, endpoint, role scope, network mode).
+- `verify-agent-runtime-compatibility.mjs`: verifies runtime endpoint compatibility (`/agent/session/bootstrap`, `/agent/turns/start`, interrupt) plus identifier stickiness/isolation invariants through the Dynamic Sessions management endpoint.
 - `record-release.mjs`: records successful deployment in GitHub Deployments.
 - `decide-deployment-stage.mjs`: computes production YES/NO decision artifact.
 - `utils.mjs`: shared execution/env/artifact helpers.
@@ -25,6 +26,7 @@
 - `ACA_WEB_APP_NAME`
 - `ACA_MIGRATE_JOB_NAME`
 - `ACR_NAME`
+- `DYNAMIC_SESSIONS_POOL_NAME`
 
 ### Release context
 

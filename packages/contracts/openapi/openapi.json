@@ -22,6 +22,10 @@
     {
       "name": "Tenants",
       "description": "Tenant membership and invite endpoints"
+    },
+    {
+      "name": "Agent",
+      "description": "Agent thread and turn orchestration endpoints"
     }
   ],
   "components": {
@@ -443,6 +447,593 @@
           "tenantSlug",
           "role",
           "status"
+        ]
+      },
+      "AgentThreadCreateRequest": {
+        "type": "object",
+        "properties": {
+          "tenantSlug": {
+            "type": "string",
+            "minLength": 1
+          },
+          "executionMode": {
+            "type": "string",
+            "enum": [
+              "cloud",
+              "local"
+            ],
+            "default": "cloud"
+          },
+          "executionHost": {
+            "type": "string",
+            "enum": [
+              "dynamic_sessions",
+              "desktop_local"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "tenantSlug"
+        ]
+      },
+      "AgentThreadCreateResponse": {
+        "type": "object",
+        "properties": {
+          "thread": {
+            "type": "object",
+            "properties": {
+              "threadId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "tenantId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "tenantSlug": {
+                "type": "string",
+                "minLength": 1
+              },
+              "executionMode": {
+                "type": "string",
+                "enum": [
+                  "cloud",
+                  "local"
+                ]
+              },
+              "executionHost": {
+                "type": "string",
+                "enum": [
+                  "dynamic_sessions",
+                  "desktop_local"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "idle",
+                  "inProgress",
+                  "completed",
+                  "interrupted",
+                  "error"
+                ]
+              },
+              "cloudSessionIdentifier": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "modeSwitchedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "threadId",
+              "tenantId",
+              "tenantSlug",
+              "executionMode",
+              "executionHost",
+              "status",
+              "createdAt",
+              "updatedAt"
+            ]
+          }
+        },
+        "required": [
+          "thread"
+        ]
+      },
+      "AgentThreadReadResponse": {
+        "type": "object",
+        "properties": {
+          "thread": {
+            "type": "object",
+            "properties": {
+              "threadId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "tenantId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "tenantSlug": {
+                "type": "string",
+                "minLength": 1
+              },
+              "executionMode": {
+                "type": "string",
+                "enum": [
+                  "cloud",
+                  "local"
+                ]
+              },
+              "executionHost": {
+                "type": "string",
+                "enum": [
+                  "dynamic_sessions",
+                  "desktop_local"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "idle",
+                  "inProgress",
+                  "completed",
+                  "interrupted",
+                  "error"
+                ]
+              },
+              "cloudSessionIdentifier": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "modeSwitchedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "threadId",
+              "tenantId",
+              "tenantSlug",
+              "executionMode",
+              "executionHost",
+              "status",
+              "createdAt",
+              "updatedAt"
+            ]
+          }
+        },
+        "required": [
+          "thread"
+        ]
+      },
+      "AgentThreadModePatchRequest": {
+        "type": "object",
+        "properties": {
+          "executionMode": {
+            "type": "string",
+            "enum": [
+              "cloud",
+              "local"
+            ]
+          },
+          "executionHost": {
+            "type": "string",
+            "enum": [
+              "dynamic_sessions",
+              "desktop_local"
+            ]
+          }
+        },
+        "required": [
+          "executionMode"
+        ]
+      },
+      "AgentThreadModePatchResponse": {
+        "type": "object",
+        "properties": {
+          "thread": {
+            "type": "object",
+            "properties": {
+              "threadId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "tenantId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "tenantSlug": {
+                "type": "string",
+                "minLength": 1
+              },
+              "executionMode": {
+                "type": "string",
+                "enum": [
+                  "cloud",
+                  "local"
+                ]
+              },
+              "executionHost": {
+                "type": "string",
+                "enum": [
+                  "dynamic_sessions",
+                  "desktop_local"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "idle",
+                  "inProgress",
+                  "completed",
+                  "interrupted",
+                  "error"
+                ]
+              },
+              "cloudSessionIdentifier": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "modeSwitchedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "threadId",
+              "tenantId",
+              "tenantSlug",
+              "executionMode",
+              "executionHost",
+              "status",
+              "createdAt",
+              "updatedAt"
+            ]
+          }
+        },
+        "required": [
+          "thread"
+        ]
+      },
+      "AgentTurnStartRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "executionMode": {
+            "type": "string",
+            "enum": [
+              "cloud",
+              "local"
+            ]
+          },
+          "executionHost": {
+            "type": "string",
+            "enum": [
+              "dynamic_sessions",
+              "desktop_local"
+            ]
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "approvalPolicy": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sandboxPolicy": {},
+          "effort": {
+            "type": "string",
+            "minLength": 1
+          },
+          "personality": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "AgentTurnStartResponse": {
+        "type": "object",
+        "properties": {
+          "turn": {
+            "type": "object",
+            "properties": {
+              "turnId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "threadId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "idle",
+                  "inProgress",
+                  "completed",
+                  "interrupted",
+                  "error"
+                ]
+              },
+              "executionMode": {
+                "type": "string",
+                "enum": [
+                  "cloud",
+                  "local"
+                ]
+              },
+              "executionHost": {
+                "type": "string",
+                "enum": [
+                  "dynamic_sessions",
+                  "desktop_local"
+                ]
+              },
+              "input": {},
+              "output": {},
+              "error": {},
+              "startedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "completedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "turnId",
+              "threadId",
+              "status",
+              "executionMode",
+              "executionHost",
+              "startedAt"
+            ]
+          },
+          "outputText": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "turn"
+        ]
+      },
+      "AgentTurnInterruptResponse": {
+        "type": "object",
+        "properties": {
+          "turn": {
+            "type": "object",
+            "properties": {
+              "turnId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "threadId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "idle",
+                  "inProgress",
+                  "completed",
+                  "interrupted",
+                  "error"
+                ]
+              },
+              "executionMode": {
+                "type": "string",
+                "enum": [
+                  "cloud",
+                  "local"
+                ]
+              },
+              "executionHost": {
+                "type": "string",
+                "enum": [
+                  "dynamic_sessions",
+                  "desktop_local"
+                ]
+              },
+              "input": {},
+              "output": {},
+              "error": {},
+              "startedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "completedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "turnId",
+              "threadId",
+              "status",
+              "executionMode",
+              "executionHost",
+              "startedAt"
+            ]
+          }
+        },
+        "required": [
+          "turn"
+        ]
+      },
+      "AgentEventsBatchRequest": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "turnId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "method": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "payload": {}
+              },
+              "required": [
+                "method"
+              ]
+            }
+          }
+        },
+        "required": [
+          "events"
+        ]
+      },
+      "AgentEventsBatchResponse": {
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "accepted"
+        ]
+      },
+      "AgentEventsListResponse": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "cursor": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "threadId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "turnId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1
+                },
+                "method": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "payload": {},
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "cursor",
+                "threadId",
+                "method",
+                "createdAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "events"
         ]
       }
     },
@@ -1756,6 +2347,1589 @@
           },
           "409": {
             "description": "Invite already accepted by another user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/threads": {
+      "post": {
+        "operationId": "createAgentThread",
+        "summary": "Create an agent thread",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "sessionCookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tenantSlug": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "executionMode": {
+                    "type": "string",
+                    "enum": [
+                      "cloud",
+                      "local"
+                    ],
+                    "default": "cloud"
+                  },
+                  "executionHost": {
+                    "type": "string",
+                    "enum": [
+                      "dynamic_sessions",
+                      "desktop_local"
+                    ]
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "tenantSlug"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Agent thread created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "thread": {
+                      "type": "object",
+                      "properties": {
+                        "threadId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "tenantId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "tenantSlug": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "executionMode": {
+                          "type": "string",
+                          "enum": [
+                            "cloud",
+                            "local"
+                          ]
+                        },
+                        "executionHost": {
+                          "type": "string",
+                          "enum": [
+                            "dynamic_sessions",
+                            "desktop_local"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "idle",
+                            "inProgress",
+                            "completed",
+                            "interrupted",
+                            "error"
+                          ]
+                        },
+                        "cloudSessionIdentifier": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1
+                        },
+                        "title": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "modeSwitchedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "threadId",
+                        "tenantId",
+                        "tenantSlug",
+                        "executionMode",
+                        "executionHost",
+                        "status",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "thread"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/threads/{threadId}": {
+      "get": {
+        "operationId": "getAgentThread",
+        "summary": "Read an agent thread",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "sessionCookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent thread state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "thread": {
+                      "type": "object",
+                      "properties": {
+                        "threadId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "tenantId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "tenantSlug": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "executionMode": {
+                          "type": "string",
+                          "enum": [
+                            "cloud",
+                            "local"
+                          ]
+                        },
+                        "executionHost": {
+                          "type": "string",
+                          "enum": [
+                            "dynamic_sessions",
+                            "desktop_local"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "idle",
+                            "inProgress",
+                            "completed",
+                            "interrupted",
+                            "error"
+                          ]
+                        },
+                        "cloudSessionIdentifier": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1
+                        },
+                        "title": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "modeSwitchedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "threadId",
+                        "tenantId",
+                        "tenantSlug",
+                        "executionMode",
+                        "executionHost",
+                        "status",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "thread"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Thread not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/threads/{threadId}/mode": {
+      "patch": {
+        "operationId": "patchAgentThreadMode",
+        "summary": "Switch execution mode for an agent thread",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "sessionCookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "executionMode": {
+                    "type": "string",
+                    "enum": [
+                      "cloud",
+                      "local"
+                    ]
+                  },
+                  "executionHost": {
+                    "type": "string",
+                    "enum": [
+                      "dynamic_sessions",
+                      "desktop_local"
+                    ]
+                  }
+                },
+                "required": [
+                  "executionMode"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thread mode updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "thread": {
+                      "type": "object",
+                      "properties": {
+                        "threadId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "tenantId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "tenantSlug": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "executionMode": {
+                          "type": "string",
+                          "enum": [
+                            "cloud",
+                            "local"
+                          ]
+                        },
+                        "executionHost": {
+                          "type": "string",
+                          "enum": [
+                            "dynamic_sessions",
+                            "desktop_local"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "idle",
+                            "inProgress",
+                            "completed",
+                            "interrupted",
+                            "error"
+                          ]
+                        },
+                        "cloudSessionIdentifier": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1
+                        },
+                        "title": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "modeSwitchedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "threadId",
+                        "tenantId",
+                        "tenantSlug",
+                        "executionMode",
+                        "executionHost",
+                        "status",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "thread"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Thread mode switch conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/threads/{threadId}/turns": {
+      "post": {
+        "operationId": "createAgentTurn",
+        "summary": "Start a turn for an agent thread",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "sessionCookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "executionMode": {
+                    "type": "string",
+                    "enum": [
+                      "cloud",
+                      "local"
+                    ]
+                  },
+                  "executionHost": {
+                    "type": "string",
+                    "enum": [
+                      "dynamic_sessions",
+                      "desktop_local"
+                    ]
+                  },
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "approvalPolicy": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sandboxPolicy": {},
+                  "effort": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "personality": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Turn accepted and processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "turn": {
+                      "type": "object",
+                      "properties": {
+                        "turnId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "threadId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "idle",
+                            "inProgress",
+                            "completed",
+                            "interrupted",
+                            "error"
+                          ]
+                        },
+                        "executionMode": {
+                          "type": "string",
+                          "enum": [
+                            "cloud",
+                            "local"
+                          ]
+                        },
+                        "executionHost": {
+                          "type": "string",
+                          "enum": [
+                            "dynamic_sessions",
+                            "desktop_local"
+                          ]
+                        },
+                        "input": {},
+                        "output": {},
+                        "error": {},
+                        "startedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "completedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "turnId",
+                        "threadId",
+                        "status",
+                        "executionMode",
+                        "executionHost",
+                        "startedAt"
+                      ]
+                    },
+                    "outputText": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "turn"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Thread not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Turn conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/threads/{threadId}/turns/{turnId}/interrupt": {
+      "post": {
+        "operationId": "interruptAgentTurn",
+        "summary": "Interrupt an in-progress turn",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "sessionCookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "turnId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Turn interrupted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "turn": {
+                      "type": "object",
+                      "properties": {
+                        "turnId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "threadId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "idle",
+                            "inProgress",
+                            "completed",
+                            "interrupted",
+                            "error"
+                          ]
+                        },
+                        "executionMode": {
+                          "type": "string",
+                          "enum": [
+                            "cloud",
+                            "local"
+                          ]
+                        },
+                        "executionHost": {
+                          "type": "string",
+                          "enum": [
+                            "dynamic_sessions",
+                            "desktop_local"
+                          ]
+                        },
+                        "input": {},
+                        "output": {},
+                        "error": {},
+                        "startedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "completedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "turnId",
+                        "threadId",
+                        "status",
+                        "executionMode",
+                        "executionHost",
+                        "startedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "turn"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Thread/turn not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Turn state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/threads/{threadId}/events:batch": {
+      "post": {
+        "operationId": "appendAgentThreadEventsBatch",
+        "summary": "Append externally sourced events to a thread",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "sessionCookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "turnId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "method": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "payload": {}
+                      },
+                      "required": [
+                        "method"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "events"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Events accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accepted": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "accepted"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/threads/{threadId}/events": {
+      "get": {
+        "operationId": "listAgentThreadEvents",
+        "summary": "List persisted thread events",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "sessionCookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thread events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "cursor": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "threadId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "turnId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "minLength": 1
+                          },
+                          "method": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "payload": {},
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "cursor",
+                          "threadId",
+                          "method",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "events"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Thread not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/threads/{threadId}/stream": {
+      "get": {
+        "operationId": "streamAgentThreadEvents",
+        "summary": "Upgrade to websocket stream for thread events",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "sessionCookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "WebSocket protocol upgrade accepted"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Thread not found",
             "content": {
               "application/json": {
                 "schema": {

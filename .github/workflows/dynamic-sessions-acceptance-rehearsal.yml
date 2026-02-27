@@ -1,0 +1,213 @@
+name: Dynamic Sessions Acceptance Rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_candidate_sha:
+        description: Release candidate SHA to rehearse
+        required: true
+        type: string
+      parameters_file:
+        description: Bicep parameters file path
+        required: false
+        default: infra/azure/environments/cloud.bicepparam
+        type: string
+      deployment_name_prefix:
+        description: Infra deployment name prefix
+        required: false
+        default: acceptance-rehearsal
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+jobs:
+  resolve_rehearsal_source:
+    name: resolve-rehearsal-source
+    runs-on: ubuntu-latest
+    outputs:
+      release_candidate_sha: ${{ steps.source.outputs.release_candidate_sha }}
+      source_run_id: ${{ steps.resolve_run.outputs.run_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Resolve release candidate SHA
+        id: source
+        env:
+          RELEASE_CANDIDATE_SHA: ${{ inputs.release_candidate_sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RELEASE_CANDIDATE_SHA:-}" ]; then
+            echo "release_candidate_sha input is required" >&2
+            exit 1
+          fi
+          echo "release_candidate_sha=$RELEASE_CANDIDATE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve source run id
+        id: resolve_run
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          WORKFLOW_FILE: cloud-deployment-pipeline.yml
+          HEAD_SHA: ${{ steps.source.outputs.release_candidate_sha }}
+          RUN_EVENT: push
+          RUN_STATUS: success
+          RUN_STATUS_FALLBACK: completed
+        run: node scripts/pipeline/shared/resolve-triggered-run-id.mjs
+
+  load_release_candidate:
+    name: load-release-candidate
+    needs:
+      - resolve_rehearsal_source
+    runs-on: ubuntu-latest
+    outputs:
+      head_sha: ${{ steps.parse.outputs.head_sha }}
+      api_ref: ${{ steps.parse.outputs.release_candidate_api_ref }}
+      web_ref: ${{ steps.parse.outputs.release_candidate_web_ref }}
+      worker_ref: ${{ steps.parse.outputs.release_candidate_worker_ref }}
+      dynamic_sessions_runtime_ref: ${{ steps.parse.outputs.release_candidate_dynamic_sessions_runtime_ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download release candidate artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-candidate-${{ needs.resolve_rehearsal_source.outputs.release_candidate_sha }}
+          path: .artifacts/release-candidate/${{ needs.resolve_rehearsal_source.outputs.release_candidate_sha }}
+          run-id: ${{ needs.resolve_rehearsal_source.outputs.source_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Parse release candidate manifest
+        id: parse
+        env:
+          RELEASE_CANDIDATE_MANIFEST_PATH: .artifacts/release-candidate/${{ needs.resolve_rehearsal_source.outputs.release_candidate_sha }}/manifest.json
+          RUN_ID: ${{ needs.resolve_rehearsal_source.outputs.source_run_id }}
+        run: node scripts/pipeline/shared/load-release-candidate-contract.mjs
+
+      - name: Upload release candidate manifest copy
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-rehearsal-release-candidate-${{ steps.parse.outputs.head_sha }}
+          path: .artifacts/acceptance/${{ steps.parse.outputs.head_sha }}/release-candidate-manifest.json
+          if-no-files-found: error
+
+  rehearse_acceptance:
+    name: rehearse-acceptance
+    needs:
+      - load_release_candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: acceptance
+    env:
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      API_IMAGE: ${{ needs.load_release_candidate.outputs.api_ref }}
+      WEB_IMAGE: ${{ needs.load_release_candidate.outputs.web_ref }}
+      WORKER_IMAGE: ${{ needs.load_release_candidate.outputs.worker_ref }}
+      DYNAMIC_SESSIONS_RUNTIME_IMAGE: ${{ needs.load_release_candidate.outputs.dynamic_sessions_runtime_ref }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      ARM_PARAMETERS_FILE_INPUT: ${{ inputs.parameters_file }}
+      ARM_DEPLOYMENT_NAME_PREFIX_INPUT: ${{ inputs.deployment_name_prefix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Validate release candidate refs
+        run: |
+          set -euo pipefail
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$DYNAMIC_SESSIONS_RUNTIME_IMAGE"; do
+            if [ -z "$image" ]; then
+              echo "Missing release candidate image reference" >&2
+              exit 1
+            fi
+            if [[ "$image" != *"@sha256:"* ]]; then
+              echo "Release candidate image is not digest-pinned: $image" >&2
+              exit 1
+            fi
+          done
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Apply infra
+        run: |
+          set -euo pipefail
+
+          export ARM_TEMPLATE_FILE="infra/azure/main.bicep"
+          export ARM_PARAMETERS_FILE="${ARM_PARAMETERS_FILE_INPUT}"
+          export ARM_ARTIFACT_DIR=".artifacts/infra/$HEAD_SHA"
+          export ARM_DEPLOYMENT_NAME_PREFIX="${ARM_DEPLOYMENT_NAME_PREFIX_INPUT}"
+          export ARM_PARAMETERS_OVERRIDES="$(cat <<PARAMS
+          apiImage=$API_IMAGE
+          webImage=$WEB_IMAGE
+          workerImage=$WORKER_IMAGE
+          dynamicSessionsRuntimeImage=$DYNAMIC_SESSIONS_RUNTIME_IMAGE
+          PARAMS
+          )"
+
+          node scripts/pipeline/cloud/deployment-stage/apply-infra.mjs
+
+      - name: Refresh Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve deployed resource names
+        run: |
+          set -euo pipefail
+
+          deployment_json=".artifacts/infra/$HEAD_SHA/deployment.json"
+          echo "DYNAMIC_SESSIONS_POOL_NAME=$(jq -er '.properties.outputs.dynamicSessionsPoolNameOutput.value' "$deployment_json")" >> "$GITHUB_ENV"
+          echo "DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME=$(jq -er '.properties.outputs.dynamicSessionsExecutorIdentityName.value' "$deployment_json")" >> "$GITHUB_ENV"
+
+      - name: Verify Dynamic Sessions convergence
+        env:
+          RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ env.DYNAMIC_SESSIONS_RUNTIME_IMAGE }}
+        run: node scripts/pipeline/cloud/deployment-stage/verify-dynamic-sessions-convergence.mjs
+
+      - name: Verify agent runtime compatibility
+        run: node scripts/pipeline/cloud/deployment-stage/verify-agent-runtime-compatibility.mjs
+
+      - name: Upload rehearsal artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dynamic-sessions-acceptance-rehearsal-${{ env.HEAD_SHA }}
+          path: |
+            .artifacts/infra/${{ env.HEAD_SHA }}
+            .artifacts/acceptance/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
+
+      - name: Publish rehearsal summary
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+
+          echo "## Dynamic Sessions Acceptance Rehearsal" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Release candidate SHA: \\`${HEAD_SHA}\\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Parameters file: \\`${ARM_PARAMETERS_FILE_INPUT}\\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Deployment artifact: \\`.artifacts/infra/${HEAD_SHA}/deployment.json\\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Convergence artifact: \\`.artifacts/infra/${HEAD_SHA}/dynamic-sessions-convergence.json\\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Runtime compatibility artifact: \\`.artifacts/infra/${HEAD_SHA}/agent-runtime-compatibility.json\\`" >> "$GITHUB_STEP_SUMMARY"

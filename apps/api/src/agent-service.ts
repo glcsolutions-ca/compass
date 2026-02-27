@@ -272,10 +272,16 @@ class ManagedIdentityTokenProvider {
 class DynamicSessionsCloudExecutionDriver implements CloudExecutionDriver {
   private readonly endpoint: string;
   private readonly tokenProvider: ManagedIdentityTokenProvider;
+  private readonly requestTimeoutMs: number;
 
-  constructor(input: { endpoint: string; tokenProvider: ManagedIdentityTokenProvider }) {
+  constructor(input: {
+    endpoint: string;
+    tokenProvider: ManagedIdentityTokenProvider;
+    requestTimeoutMs: number;
+  }) {
     this.endpoint = input.endpoint.replace(/\/+$/u, "");
     this.tokenProvider = input.tokenProvider;
+    this.requestTimeoutMs = input.requestTimeoutMs;
   }
 
   async bootstrapSession(input: { thread: AgentThreadRecord }): Promise<CloudBootstrapResult> {
@@ -301,7 +307,7 @@ class DynamicSessionsCloudExecutionDriver implements CloudExecutionDriver {
     turnId: string;
     text: string;
   }): Promise<CloudTurnResult> {
-    const identifier = input.thread.cloudSessionIdentifier || input.thread.threadId;
+    const identifier = input.thread.cloudSessionIdentifier || `thr-${input.thread.threadId}`;
     const payload = await this.callRuntime({
       path: "/agent/turns/start",
       identifier,
@@ -326,7 +332,7 @@ class DynamicSessionsCloudExecutionDriver implements CloudExecutionDriver {
     thread: AgentThreadRecord;
     turnId: string;
   }): Promise<CloudInterruptResult> {
-    const identifier = input.thread.cloudSessionIdentifier || input.thread.threadId;
+    const identifier = input.thread.cloudSessionIdentifier || `thr-${input.thread.threadId}`;
     const payload = await this.callRuntime({
       path: `/agent/turns/${encodeURIComponent(input.turnId)}/interrupt`,
       identifier,
@@ -354,15 +360,33 @@ class DynamicSessionsCloudExecutionDriver implements CloudExecutionDriver {
     const bearerToken = await this.tokenProvider.getToken();
     const url = new URL(input.path, this.endpoint);
     url.searchParams.set("identifier", input.identifier);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, this.requestTimeoutMs);
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${bearerToken}`
-      },
-      body: JSON.stringify(input.body)
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${bearerToken}`
+        },
+        body: JSON.stringify(input.body),
+        signal: controller.signal
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(
+          `Dynamic Sessions runtime request timed out after ${String(this.requestTimeoutMs)}ms`,
+          { cause: error }
+        );
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     const bodyText = await response.text();
     const bodyJson: unknown = (() => {
@@ -920,6 +944,8 @@ class PostgresAgentService implements AgentService {
     const completeClient = await this.pool.connect();
     try {
       await completeClient.query("begin");
+      const completionNow = new Date();
+      const completionIso = completionNow.toISOString();
 
       const finalizedStatus = turnError ? "error" : "completed";
       const finalizedOutput = cloudResult ? { text: cloudResult.outputText } : null;
@@ -952,7 +978,7 @@ class PostgresAgentService implements AgentService {
           finalizedStatus,
           JSON.stringify(finalizedOutput),
           JSON.stringify(turnError),
-          input.now.toISOString(),
+          completionIso,
           JSON.stringify(cloudResult?.runtimeMetadata || {})
         ]
       );
@@ -979,7 +1005,7 @@ class PostgresAgentService implements AgentService {
             input.threadId,
             turnId,
             JSON.stringify({ text: cloudResult.outputText }),
-            input.now.toISOString()
+            completionIso
           ]
         );
       }
@@ -996,7 +1022,7 @@ class PostgresAgentService implements AgentService {
               type: turnError ? "error" : "assistant_message",
               text: cloudResult.outputText
             },
-            now: input.now
+            now: completionNow
           },
           completeClient
         );
@@ -1008,7 +1034,7 @@ class PostgresAgentService implements AgentService {
             turnId,
             method: "runtime.metadata",
             payload: cloudResult.runtimeMetadata,
-            now: input.now
+            now: completionNow
           },
           completeClient
         );
@@ -1026,7 +1052,7 @@ class PostgresAgentService implements AgentService {
             output: updatedTurn.output,
             error: updatedTurn.error
           },
-          now: input.now
+          now: completionNow
         },
         completeClient
       );
@@ -1040,7 +1066,7 @@ class PostgresAgentService implements AgentService {
             updated_at = $3
           where thread_id = $1
         `,
-        [input.threadId, updatedTurn.status, input.now.toISOString()]
+        [input.threadId, updatedTurn.status, completionIso]
       );
 
       await completeClient.query("commit");
@@ -1391,6 +1417,14 @@ function buildCloudExecutionDriver(env: NodeJS.ProcessEnv): CloudExecutionDriver
     env.DYNAMIC_SESSIONS_TOKEN_RESOURCE || "https://dynamicsessions.io"
   ).trim();
   const sessionExecutorClientId = String(env.DYNAMIC_SESSIONS_EXECUTOR_CLIENT_ID || "").trim();
+  const requestTimeoutCandidate = Number.parseInt(
+    String(env.DYNAMIC_SESSIONS_REQUEST_TIMEOUT_MS || "30000"),
+    10
+  );
+  const requestTimeoutMs =
+    Number.isInteger(requestTimeoutCandidate) && requestTimeoutCandidate >= 1000
+      ? requestTimeoutCandidate
+      : 30000;
 
   if (endpoint) {
     return new DynamicSessionsCloudExecutionDriver({
@@ -1398,7 +1432,8 @@ function buildCloudExecutionDriver(env: NodeJS.ProcessEnv): CloudExecutionDriver
       tokenProvider: new ManagedIdentityTokenProvider({
         resource: tokenResource,
         clientId: sessionExecutorClientId
-      })
+      }),
+      requestTimeoutMs
     });
   }
 

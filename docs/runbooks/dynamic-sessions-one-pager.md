@@ -3,7 +3,7 @@
 ## Purpose
 
 This is the production baseline for Azure Container Apps Dynamic Sessions in Compass.
-It covers only infrastructure and delivery plumbing, not chat-thread routing logic.
+It covers infrastructure, delivery plumbing, and the current cloud runtime execution path.
 
 ## How It Works
 
@@ -27,6 +27,8 @@ It covers only infrastructure and delivery plumbing, not chat-thread routing log
    - `cpu=0.25`
    - `memory=0.5Gi`
    - `sessionNetworkConfiguration.status=EgressEnabled`
+8. API cloud execution uses deterministic thread mapping (`identifier=thr-{threadId}`) and forwards bootstrap/start/interrupt requests to the Dynamic Sessions pool endpoint.
+9. Turn/runtime events are persisted in `agent_events` and streamed over websocket with polling fallback.
 
 ## Security Boundaries
 
@@ -66,7 +68,7 @@ It covers only infrastructure and delivery plumbing, not chat-thread routing log
 
 1. Replace `compass-codex-session-runtime` image with the real Codex runtime image (digest-pinned through the same manifest field).
 2. Keep cloud execution API-brokered (`client -> API -> Dynamic Sessions runtime`) for tenant isolation and token containment.
-3. Add backend conversation/thread -> session `identifier` mapping and Dynamic Sessions request forwarding.
+3. Evolve identifier strategy beyond `thr-{threadId}` only when product requirements need migration, remapping, or cross-thread orchestration.
 4. Keep browser clients unaware of raw identifiers or Dynamic Sessions tokens.
 
 ## Dual-Mode Alignment
@@ -75,7 +77,7 @@ It covers only infrastructure and delivery plumbing, not chat-thread routing log
 2. `local` mode (desktop only) uses Electron main-process runtime manager and uplinks local events through `/v1/agent/threads/{threadId}/events:batch`.
 3. Both modes persist to the same `agent_events` timeline so history remains thread-continuous.
 
-## Not Yet Implemented
+## Deferred Scope
 
-1. Conversation/thread to session `identifier` mapping.
-2. Dynamic Sessions request forwarding in product API routes.
+1. Alternate identifier orchestration (migration/remap policies) beyond deterministic `thr-{threadId}`.
+2. Any browser-direct Dynamic Sessions access (intentionally unsupported; API-brokered only).

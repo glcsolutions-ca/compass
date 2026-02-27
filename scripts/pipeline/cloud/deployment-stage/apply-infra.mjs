@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { getHeadSha, requireEnv, sleep, writeArtifact } from "./utils.mjs";
 
 const execFileAsync = promisify(execFile);
+const DEFAULT_AZ_COMMAND_TIMEOUT_MS = 30 * 60 * 1000;
 
 export const TRANSIENT_DEPLOYMENT_ERROR_PATTERN =
   /(OperationExpired|GatewayTimeout|TooManyRequests|ResourceNotReady|another operation is in progress|OperationInProgress|retryable|temporar|timeout|timed out)/i;
@@ -93,10 +94,20 @@ export function isTransientDeploymentError(stderr) {
 }
 
 export async function executeAz(args) {
+  const timeoutCandidate = Number.parseInt(
+    String(process.env.ARM_AZURE_COMMAND_TIMEOUT_MS || DEFAULT_AZ_COMMAND_TIMEOUT_MS),
+    10
+  );
+  const timeoutMs =
+    Number.isInteger(timeoutCandidate) && timeoutCandidate > 0
+      ? timeoutCandidate
+      : DEFAULT_AZ_COMMAND_TIMEOUT_MS;
+
   try {
     const { stdout, stderr } = await execFileAsync("az", args, {
       encoding: "utf8",
-      maxBuffer: 10 * 1024 * 1024
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: timeoutMs
     });
 
     return {

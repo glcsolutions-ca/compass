@@ -661,7 +661,7 @@ export class LocalRuntimeManager {
 
   async startTurn(input: { threadId: string; text: string; turnId?: string }): Promise<{
     turnId: string;
-    status: "completed";
+    status: "completed" | "interrupted" | "failed";
     outputText: string;
     sessionId: string;
     executionMode: "local";
@@ -712,6 +712,9 @@ export class LocalRuntimeManager {
         });
       }
     });
+    if (turn.status === "inProgress") {
+      throw new Error("Local runtime returned non-terminal turn status");
+    }
 
     this.#turnCodexMap.set(turnId, {
       threadId,
@@ -730,7 +733,7 @@ export class LocalRuntimeManager {
 
     return {
       turnId,
-      status: "completed",
+      status: turn.status,
       outputText: turn.outputText,
       sessionId,
       executionMode: "local",

@@ -35,7 +35,11 @@ function createInMemoryAuthStore(initial?: Partial<LocalAuthState>): LocalAuthSt
   };
 }
 
-function createFakeCodexClient(options?: { chatgptAuthenticated?: boolean }): {
+function createFakeCodexClient(options?: {
+  chatgptAuthenticated?: boolean;
+  turnStatus?: "completed" | "interrupted" | "failed";
+  turnOutputText?: string;
+}): {
   client: LocalCodexClient;
   calls: {
     interrupt: Array<{ codexThreadId: string; turnId: string }>;
@@ -79,11 +83,14 @@ function createFakeCodexClient(options?: { chatgptAuthenticated?: boolean }): {
       };
     },
     async startTurn(input) {
-      input.onDelta(`Local(${input.threadId}) response`);
+      const outputText = options?.turnOutputText ?? `Local(${input.threadId}) response`;
+      if (outputText.length > 0) {
+        input.onDelta(outputText);
+      }
       return {
         turnId: "codex-turn-1",
-        status: "completed",
-        outputText: `Local(${input.threadId}) response`
+        status: options?.turnStatus ?? "completed",
+        outputText
       };
     },
     async interruptTurn(input) {
@@ -191,5 +198,26 @@ describe("LocalRuntimeManager", () => {
         turnId: "codex-turn-1"
       }
     ]);
+  });
+
+  it("returns terminal failure status when local codex turn fails", async () => {
+    const { client } = createFakeCodexClient({
+      turnStatus: "failed",
+      turnOutputText: ""
+    });
+    const manager = new LocalRuntimeManager({
+      authStore: createInMemoryAuthStore(),
+      codexClient: client
+    });
+
+    await manager.loginStart({ mode: "apiKey", apiKey: "sk-test" });
+    const result = await manager.startTurn({
+      threadId: "thread-1",
+      turnId: "turn-1",
+      text: "hello"
+    });
+
+    expect(result.status).toBe("failed");
+    expect(result.outputText).toBe("");
   });
 });

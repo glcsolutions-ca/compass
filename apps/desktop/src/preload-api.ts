@@ -34,7 +34,7 @@ export interface DesktopAgentEvent {
 
 export interface DesktopLocalTurnResult {
   turnId: string;
-  status: "completed";
+  status: "completed" | "interrupted" | "failed";
   outputText: string;
   sessionId: string;
   executionMode: "local";

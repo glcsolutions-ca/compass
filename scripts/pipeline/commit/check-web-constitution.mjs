@@ -232,8 +232,14 @@ function validateRouteMap(cwd, violations) {
   }
 
   const source = readFileSync(routesPath, "utf8");
-  if (!source.includes('route("chat", "routes/app/chat/route.tsx")')) {
-    violations.push("routes.ts must register /chat using routes/app/chat/route.tsx.");
+  const registersChatRoute =
+    source.includes('route("chat", "routes/app/chat/route.tsx")') ||
+    source.includes('route("chat/:threadId?", "routes/app/chat/route.tsx")');
+
+  if (!registersChatRoute) {
+    violations.push(
+      'routes.ts must register chat via route("chat", ...) or route("chat/:threadId?", ...).'
+    );
   }
 
   if (source.includes('route("t/:tenantSlug/chat"')) {

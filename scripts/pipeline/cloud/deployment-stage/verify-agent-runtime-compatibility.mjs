@@ -502,12 +502,24 @@ async function main() {
       body: interruptTurnResult.bodyJson || interruptTurnResult.bodyText
     };
 
+    const interruptErrorCode = String(interruptTurnResult.bodyJson?.code || "").trim();
+    const interruptErrorMessage = String(interruptTurnResult.bodyJson?.message || "")
+      .trim()
+      .toLowerCase();
+    const interruptTerminalState =
+      interruptTurnResult.status === 404 ||
+      (interruptTurnResult.status === 502 &&
+        interruptErrorCode === "RUNTIME_INTERRUPT_FAILED" &&
+        /thread not found|turn not found|already completed|not in progress/u.test(
+          interruptErrorMessage
+        ));
+
     addCheck({
       checks,
       reasonCodes,
       id: "agent-turn-interrupt-endpoint-reachable",
-      pass: interruptTurnResult.ok || interruptTurnResult.status === 404,
-      details: `status=${interruptTurnResult.status}`,
+      pass: interruptTurnResult.ok || interruptTerminalState,
+      details: `status=${interruptTurnResult.status}, code=${interruptErrorCode || "(none)"}`,
       reasonCode: "AGENT_RUNTIME_INTERRUPT_FAILED"
     });
   } catch (error) {

@@ -21,8 +21,7 @@ It covers only infrastructure and delivery plumbing, not chat-thread routing log
 5. A dedicated managed identity is provisioned for Session Executor permissions.
 6. Session Executor role assignment is scoped to the session pool only.
 7. Pool defaults:
-   - `readySessionInstances=0`
-   - `maxSessionPoolSize=20`
+   - `readySessionInstances=1`
    - `maxConcurrentSessions=20`
    - `cooldownPeriodInSeconds=300`
    - `cpu=0.25`
@@ -57,10 +56,9 @@ It covers only infrastructure and delivery plumbing, not chat-thread routing log
 ## Operational Notes
 
 1. Dynamic Sessions custom-container pools are Dedicated-plan billed capacity.
-2. Baseline sizing is intentionally cost-minimal (`readySessionInstances=0`) and should be tuned with production telemetry.
-3. Keep `maxSessionPoolSize` greater than `0`; a zero pool size prevents on-demand session allocation.
-4. API cloud mode fails closed when Dynamic Sessions management endpoint or managed-identity token path is unavailable.
-5. Changes to pool sizing, identity, or network posture should follow normal acceptance -> production convergence.
+2. Production baseline keeps one warm session (`readySessionInstances=1`) for stable allocation behavior with custom runtime images.
+3. API cloud mode fails closed when Dynamic Sessions management endpoint or managed-identity token path is unavailable.
+4. Changes to pool sizing, identity, or network posture should follow normal acceptance -> production convergence.
 
 ## Migration Path
 

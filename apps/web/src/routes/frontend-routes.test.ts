@@ -29,6 +29,21 @@ describe("frontend route loaders", () => {
     expect(response.headers.get("Location")).toBe("/login");
   });
 
+  it("redirects root route to login when auth context request fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network unavailable"));
+
+    const response = await rootRedirectLoader({
+      request: new Request("http://web.test/")
+    });
+
+    expect(response).toBeInstanceOf(Response);
+    if (!(response instanceof Response)) {
+      throw new Error("Expected redirect response");
+    }
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/login");
+  });
+
   it("redirects root route to chat when authenticated", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
@@ -78,6 +93,21 @@ describe("frontend route loaders", () => {
 
   it("builds login route links when unauthenticated", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 401 }));
+
+    const data = await loginLoader({
+      request: new Request("http://web.test/login?returnTo=%2Fchat")
+    });
+
+    expect(data).toEqual({
+      signInHref: "/v1/auth/entra/start?returnTo=%2Fchat",
+      adminConsentHref: "/v1/auth/entra/admin-consent/start?returnTo=%2Fchat",
+      showAdminConsentNotice: false,
+      showAdminConsentSuccess: false
+    });
+  });
+
+  it("builds login route links when auth context request fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network unavailable"));
 
     const data = await loginLoader({
       request: new Request("http://web.test/login?returnTo=%2Fchat")

@@ -52,8 +52,14 @@ export async function clientLoader({
   const url = new URL(request.url);
   const query = readLoginQuery(url);
 
-  const authResult = await getAuthMe(request);
-  if (authResult.status === 200 && authResult.data) {
+  let authResult: Awaited<ReturnType<typeof getAuthMe>> | null;
+  try {
+    authResult = await getAuthMe(request);
+  } catch {
+    authResult = null;
+  }
+
+  if (authResult?.status === 200 && authResult.data) {
     const auth = parseAuthShellData(authResult.data);
     if (auth) {
       return redirect(resolveAuthenticatedLandingPath(auth));

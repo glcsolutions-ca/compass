@@ -5,8 +5,16 @@
     "rootDir": ".",
     "outDir": "dist-types",
     "baseUrl": ".",
+    "paths": {
+      "@compass/contracts": ["../../packages/contracts"]
+    },
     "module": "Node16",
     "moduleResolution": "Node16"
   },
+  "references": [
+    {
+      "path": "../../packages/contracts"
+    }
+  ],
   "include": ["src/**/*.ts", "forge.config.ts"]
 }

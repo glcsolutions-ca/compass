@@ -25,12 +25,6 @@ const config = {
     name: "Compass",
     prune: false,
     extraResource: ["dist/desktop-runtime.json"],
-    protocols: [
-      {
-        name: "Compass",
-        schemes: ["ca.glsolutions.compass"]
-      }
-    ],
     ignore: [
       /^\/src($|\/)/,
       /^\/scripts($|\/)/,

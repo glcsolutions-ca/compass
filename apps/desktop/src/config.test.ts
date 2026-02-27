@@ -41,6 +41,8 @@ describe("resolveDesktopRuntimeConfig", () => {
     expect(config.startUrl).toBe("http://localhost:3000");
     expect(config.allowedOrigins.has("http://localhost:3000")).toBe(true);
     expect(config.allowedOrigins.has("http://127.0.0.1:3000")).toBe(true);
+    expect(config.authProviderOrigins.has("https://login.microsoftonline.com")).toBe(true);
+    expect(config.authProviderOrigins.has("https://login.live.com")).toBe(true);
   });
 
   it("requires HTTPS packaged start URL", async () => {
@@ -89,5 +91,23 @@ describe("resolveDesktopRuntimeConfig", () => {
     expect(config.allowedOrigins.has("https://app.example.com")).toBe(true);
     expect(config.allowedOrigins.has("https://docs.example.com")).toBe(true);
     expect(config.allowedOrigins.has("https://support.example.com")).toBe(true);
+  });
+
+  it("parses auth provider origins from COMPASS_DESKTOP_AUTH_PROVIDER_ORIGINS", async () => {
+    const resourcesPath = await createResourcesDir({
+      startUrl: "https://app.example.com"
+    });
+
+    const config = resolveDesktopRuntimeConfig({
+      isPackaged: true,
+      env: {
+        COMPASS_DESKTOP_AUTH_PROVIDER_ORIGINS:
+          "https://login.microsoftonline.us/tenant, https://id.example.com/login"
+      },
+      resourcesPath
+    });
+
+    expect(config.authProviderOrigins.has("https://login.microsoftonline.us")).toBe(true);
+    expect(config.authProviderOrigins.has("https://id.example.com")).toBe(true);
   });
 });

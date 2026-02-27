@@ -14,8 +14,8 @@ The renderer is the existing web app loaded from `COMPASS_DESKTOP_START_URL` in 
 
 The main process blocks in-app navigation to unknown origins and only allows `https:`/`mailto:`
 for external URL opens.
-Desktop auth callbacks return through the custom `ca.glsolutions.compass://auth/callback` deep link, then
-the app completes auth via `/v1/auth/desktop/complete` inside the Electron session.
+Microsoft Entra sign-in runs in an in-app auth window and completes by returning to the configured
+Compass origin in the same Electron session.
 
 ## Runtime Configuration
 
@@ -29,6 +29,8 @@ Windows signing is handled in CI by Azure Trusted Signing. Without signing crede
 Optional:
 
 - `COMPASS_DESKTOP_ALLOWED_ORIGINS`: comma-separated list of allowed HTTP(S) origins.
+- `COMPASS_DESKTOP_AUTH_PROVIDER_ORIGINS`: comma-separated list of auth-provider origins allowed in
+  the in-app auth window (defaults to `https://login.microsoftonline.com,https://login.live.com`).
 
 `make:*` scripts write a generated runtime file at `dist/desktop-runtime.json` that is embedded
 in packaged artifacts.

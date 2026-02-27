@@ -5,6 +5,7 @@ import { parseOriginAllowlist, toHttpOrigin } from "./navigation-policy";
 export interface DesktopRuntimeConfig {
   startUrl: string;
   allowedOrigins: ReadonlySet<string>;
+  authProviderOrigins: ReadonlySet<string>;
   isPackaged: boolean;
 }
 
@@ -21,6 +22,10 @@ interface PackagedRuntimeConfigFile {
 const DEFAULT_DEV_START_URL = "http://localhost:3000";
 const RUNTIME_CONFIG_FILENAME = "desktop-runtime.json";
 const DEFAULT_DEV_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"] as const;
+const DEFAULT_AUTH_PROVIDER_ORIGINS = [
+  "https://login.microsoftonline.com",
+  "https://login.live.com"
+] as const;
 
 function parseCommaSeparatedList(value: string | undefined): string[] {
   if (!value) {
@@ -101,9 +106,17 @@ export function resolveDesktopRuntimeConfig(
     }
   }
 
+  const authProviderOriginEntries = parseCommaSeparatedList(
+    options.env.COMPASS_DESKTOP_AUTH_PROVIDER_ORIGINS
+  );
+  const authProviderOrigins = parseOriginAllowlist(
+    authProviderOriginEntries.length > 0 ? authProviderOriginEntries : DEFAULT_AUTH_PROVIDER_ORIGINS
+  );
+
   return {
     startUrl,
     allowedOrigins,
+    authProviderOrigins,
     isPackaged: options.isPackaged
   };
 }

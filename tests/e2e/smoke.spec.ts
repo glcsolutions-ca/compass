@@ -214,6 +214,35 @@ function parseSmokeChatSendMode(rawValue: string | undefined): SmokeChatSendMode
   return "auto";
 }
 
+async function waitForApiGateway(page: Page, baseUrl: string, timeoutMs = 30_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let lastDetails = "unreachable";
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await page.request.get(`${baseUrl}/v1/ping`, {
+        timeout: 2_500
+      });
+      const body = await response.text();
+      const payload = parseJsonObject<{ ok?: unknown }>(body);
+
+      if (response.status() === 200 && payload?.ok === true) {
+        return;
+      }
+
+      lastDetails = `status=${response.status()}, body=${body.slice(0, 120)}`;
+    } catch (error) {
+      lastDetails = error instanceof Error ? error.message : String(error);
+    }
+
+    await page.waitForTimeout(500);
+  }
+
+  throw new Error(
+    `API gateway did not become ready at ${baseUrl}/v1/ping within ${timeoutMs.toString()}ms (${lastDetails})`
+  );
+}
+
 async function runFlow(
   page: Page,
   flowId: string,
@@ -474,6 +503,8 @@ test("compass smoke flow", async ({ page }) => {
     path: string;
     createdAt: string;
   }> = [];
+
+  await waitForApiGateway(page, baseUrl);
 
   let hasFailedFlow = false;
 

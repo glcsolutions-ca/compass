@@ -209,9 +209,7 @@ describe("chat canvas", () => {
     expect(screen.queryByText("Plain assistant reply")).not.toBeNull();
 
     const input = screen.getAllByPlaceholderText("Ask Compass anything...").at(-1);
-    const sendButton =
-      screen.queryAllByLabelText("Send prompt").at(-1) ??
-      screen.queryAllByRole("button", { name: /send/i }).at(-1);
+    const sendButton = screen.getAllByLabelText("Send prompt").at(-1);
     expect(input).toBeDefined();
     expect(sendButton).toBeDefined();
 

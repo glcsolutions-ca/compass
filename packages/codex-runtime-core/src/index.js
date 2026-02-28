@@ -293,13 +293,11 @@ export class CodexJsonRpcClient {
 
       await this.notify("initialized", {}, true);
 
-      // Mark the transport as initialized before auth bootstrap to avoid
-      // re-entrant ensureStarted() waits during startup.
-      this.initialized = true;
       if (this.autoLoginApiKey) {
         await this.ensureAccountAuth(this.autoLoginApiKey);
       }
 
+      this.initialized = true;
       this.readyAt = new Date().toISOString();
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);

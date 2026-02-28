@@ -366,6 +366,42 @@ describe("API app", () => {
     expect(createThread).toHaveBeenCalledTimes(1);
   });
 
+  it("returns explicit local mode not implemented error when starting local turns", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const app = buildApiApp({
+      authService,
+      agentService: {
+        startTurn: vi.fn(async () => {
+          throw new ApiError(
+            503,
+            "AGENT_LOCAL_MODE_NOT_IMPLEMENTED",
+            "Local mode turns are not implemented yet."
+          );
+        })
+      } as unknown as AgentService,
+      agentGatewayEnabled: true,
+      agentCloudModeEnabled: true,
+      agentLocalModeEnabledDesktop: true
+    });
+
+    const response = await request(app).post("/v1/agent/threads/thread-1/turns").send({
+      text: "hello",
+      executionMode: "local"
+    });
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      code: "AGENT_LOCAL_MODE_NOT_IMPLEMENTED",
+      message: "Local mode turns are not implemented yet."
+    });
+  });
+
   it("returns upgrade required on HTTP access to agent stream route", async () => {
     const app = buildApiApp();
 

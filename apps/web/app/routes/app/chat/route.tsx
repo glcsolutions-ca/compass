@@ -63,16 +63,6 @@ function readTransportSummary(state: ChatTransportState): TransportSummary {
   };
 }
 
-function isDesktopLocalModeAvailable(): boolean {
-  const desktopCandidate = (window as { compassDesktop?: unknown }).compassDesktop;
-  if (!desktopCandidate || typeof desktopCandidate !== "object") {
-    return false;
-  }
-
-  const runtime = desktopCandidate as { isDesktop?: () => boolean };
-  return typeof runtime.isDesktop === "function" ? runtime.isDesktop() : false;
-}
-
 export const meta: MetaFunction<typeof clientLoader> = ({ params }) => {
   const threadId = params.threadId?.trim();
   return [{ title: threadId ? `Compass Chat · ${threadId.slice(0, 8)}` : "Compass Chat" }];
@@ -117,13 +107,7 @@ export default function ChatRoute() {
   const location = useLocation();
   const navigate = useNavigate();
   const [executionMode, setExecutionMode] = useState<AgentExecutionMode>(loaderData.executionMode);
-  const [localModeAvailable] = useState<boolean>(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    return isDesktopLocalModeAvailable();
-  });
+  const localModeAvailable = false;
 
   useEffect(() => {
     setExecutionMode(loaderData.executionMode);

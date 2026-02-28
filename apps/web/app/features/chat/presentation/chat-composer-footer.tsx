@@ -51,7 +51,7 @@ export function ChatComposerFooter({
           >
             <option value="cloud">Cloud</option>
             <option disabled={!localModeAvailable} value="local">
-              Local{localModeAvailable ? "" : " (desktop only)"}
+              Local{localModeAvailable ? "" : " (coming soon)"}
             </option>
           </select>
           <span

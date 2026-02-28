@@ -352,8 +352,8 @@ describe("chat action", () => {
         threadId: "thread_1",
         workspaceId: "ws_personal",
         workspaceSlug: "personal-user-1",
-        executionMode: "local",
-        executionHost: "desktop_local",
+        executionMode: "cloud",
+        executionHost: "dynamic_sessions",
         status: "idle",
         cloudSessionIdentifier: null,
         title: "thread",
@@ -368,7 +368,7 @@ describe("chat action", () => {
     const formData = new FormData();
     formData.set("intent", "switchMode");
     formData.set("threadId", "thread_1");
-    formData.set("executionMode", "local");
+    formData.set("executionMode", "cloud");
 
     const result = await chatAction({
       request: new Request("http://web.test/w/personal-user-1/chat/thread_1", {
@@ -383,13 +383,44 @@ describe("chat action", () => {
 
     expect(switchAgentThreadMode).toHaveBeenCalledWith(expect.any(Request), {
       threadId: "thread_1",
-      executionMode: "local"
+      executionMode: "cloud"
     });
     expect(result).toMatchObject({
       intent: "switchMode",
       ok: true,
       threadId: "thread_1",
-      executionMode: "local"
+      executionMode: "cloud"
+    });
+  });
+
+  it("rejects local mode send attempts until local turns are implemented", async () => {
+    const formData = new FormData();
+    formData.set("intent", "sendMessage");
+    formData.set("executionMode", "local");
+    formData.set("prompt", "hello");
+
+    const result = await chatAction({
+      request: new Request("http://web.test/w/personal-user-1/chat/thread_1", {
+        method: "POST",
+        body: formData
+      }),
+      params: {
+        workspaceSlug: "personal-user-1",
+        threadId: "thread_1"
+      }
+    });
+
+    expect(createAgentThread).not.toHaveBeenCalled();
+    expect(startAgentTurn).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      intent: "sendMessage",
+      ok: false,
+      error: "Local mode turns are not implemented yet.",
+      threadId: null,
+      turnId: null,
+      executionMode: "local",
+      prompt: null,
+      answer: null
     });
   });
 });

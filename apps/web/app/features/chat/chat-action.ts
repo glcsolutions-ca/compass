@@ -72,6 +72,13 @@ export async function submitChatAction({
 
   const requestedExecutionMode = ChatExecutionModeSchema.safeParse(formData.get("executionMode"));
   const executionMode = requestedExecutionMode.success ? requestedExecutionMode.data : "cloud";
+  if (executionMode === "local") {
+    return createErrorAction({
+      intent,
+      executionMode,
+      error: "Local mode turns are not implemented yet."
+    });
+  }
   const formThreadId = ChatThreadIdSchema.safeParse(formData.get("threadId"));
   const targetThreadId = formThreadId.success
     ? (formThreadId.data ?? threadId ?? null)

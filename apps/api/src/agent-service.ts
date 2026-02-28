@@ -1414,6 +1414,13 @@ class PostgresAgentService implements AgentService {
   }): Promise<AgentThreadRecord> {
     const executionMode = input.executionMode;
     const executionHost = input.executionHost ?? resolveDefaultExecutionHost(executionMode);
+    if (executionMode === "local") {
+      throw new ApiError(
+        503,
+        "AGENT_LOCAL_MODE_NOT_IMPLEMENTED",
+        "Local mode turns are not implemented yet."
+      );
+    }
 
     const client = await this.pool.connect();
     try {
@@ -1528,6 +1535,13 @@ class PostgresAgentService implements AgentService {
 
     const executionMode = input.executionMode ?? access.thread.executionMode;
     const executionHost = input.executionHost ?? access.thread.executionHost;
+    if (executionMode === "local") {
+      throw new ApiError(
+        503,
+        "AGENT_LOCAL_MODE_NOT_IMPLEMENTED",
+        "Local mode turns are not implemented yet."
+      );
+    }
     const turnId = randomUUID();
 
     const client = await this.pool.connect();
@@ -1645,28 +1659,19 @@ class PostgresAgentService implements AgentService {
         (executionMode === "cloud" ? `thr-${input.threadId}` : null)
     };
 
-    if (executionMode === "cloud") {
-      try {
-        await this.runtimeExecutionDriver.bootstrapSession({
-          thread: effectiveThreadForExecution
-        });
+    try {
+      await this.runtimeExecutionDriver.bootstrapSession({
+        thread: effectiveThreadForExecution
+      });
 
-        cloudResult = await this.runtimeExecutionDriver.runTurn({
-          thread: effectiveThreadForExecution,
-          turnId,
-          text: input.text
-        });
-      } catch (error) {
-        turnError = {
-          message: error instanceof Error ? error.message : String(error)
-        };
-      }
-    } else {
-      cloudResult = {
-        outputText: "Local turn accepted. Awaiting desktop local runtime events.",
-        runtimeMetadata: {
-          driver: "desktop_local"
-        }
+      cloudResult = await this.runtimeExecutionDriver.runTurn({
+        thread: effectiveThreadForExecution,
+        turnId,
+        text: input.text
+      });
+    } catch (error) {
+      turnError = {
+        message: error instanceof Error ? error.message : String(error)
       };
     }
 

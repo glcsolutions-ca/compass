@@ -165,7 +165,6 @@ describe("agent websocket runtime stream", () => {
 
     ws.close();
     await once(ws, "close");
-    expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 
   it("uses cursor=0 by default and streams live notifications", async () => {

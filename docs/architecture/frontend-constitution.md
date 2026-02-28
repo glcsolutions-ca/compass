@@ -63,6 +63,8 @@ Define the non-negotiable implementation contract for `apps/web` so the frontend
    - Chat surface must be immersive and full-screen with no route-level header/card framing.
    - Timeline, welcome state, runtime event cards, and composer must share one centered canonical width contract.
    - Chat timeline rendering must normalize agent events and fail-open for unknown methods.
+   - Chat send/interrupt/switch actions must target the active thread from loader-derived route state (loader-authoritative), not stale fetcher payloads.
+   - Local execution mode must fail closed until full local turn execution is wired end-to-end; synthetic placeholder completions are forbidden.
    - Execution/runtime signals are timeline-first and inline; deep event details open in a right inspect drawer.
    - Composer remains docked at the bottom of the timeline as the primary interaction control.
    - Inspect drawer URL state is query-backed via `inspect` and `inspectTab`.

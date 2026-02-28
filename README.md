@@ -14,7 +14,8 @@ Requirements:
 
 ```bash
 pnpm install
-pnpm db:postgres:up   # optional for API/data work
+pnpm db:postgres:up
+pnpm runtime:session:up
 pnpm dev
 ```
 
@@ -47,6 +48,11 @@ pnpm dev:worker
 - `pnpm build` - build all apps/packages
 - `pnpm db:postgres:up` - start local Postgres, apply migrations, seed data
 - `pnpm db:postgres:down` - stop local Postgres
+- `pnpm runtime:session:up` - start local Codex session runtime
+- `pnpm runtime:session:down` - stop local Codex session runtime
+- `pnpm runtime:session:reset` - restart local runtime and clear pid/log state
+- `pnpm runtime:session:status` - print local runtime health and endpoint
+- `pnpm runtime:session:logs` - tail local runtime logs
 
 ## Local Env Bootstrap
 
@@ -56,6 +62,7 @@ pnpm dev:worker
 - Worker env is intentionally not auto-managed by this script.
 - Value precedence is: explicit shell env var > existing `.env` value > generated worktree default.
 - Generated defaults include per-worktree ports (`WEB_PORT`, `API_PORT`, `POSTGRES_PORT`), `VITE_API_BASE_URL`, `DATABASE_URL`, and `COMPOSE_PROJECT_NAME`.
+- `AGENT_RUNTIME_ENDPOINT` is synchronized to the managed runtime port by default and only overridden when explicit shell env (`AGENT_RUNTIME_ENDPOINT`) is intentionally set.
 
 ## Trunk-first flow
 
@@ -72,6 +79,13 @@ If `pnpm test:full` fails backend preflight (`FULL001`), run:
 pnpm db:postgres:up
 pnpm test:full
 pnpm db:postgres:down
+```
+
+If `pnpm dev` fails local runtime preflight, run:
+
+```bash
+pnpm runtime:session:up
+pnpm dev
 ```
 
 If `pnpm test:quick` fails formatting (`FMT001`), run:

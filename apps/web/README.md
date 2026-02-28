@@ -58,6 +58,7 @@ app/
 - Authenticated users always land in `/chat`, which immediately redirects to `/w/:workspaceSlug/chat`.
 - Chat remains workspace-backed internally; backend auth guarantees at least one active workspace membership by auto-provisioning a personal workspace.
 - Chat thread creation resolves workspace slug from real memberships only (no hardcoded fallback slugs).
+- Chat action targeting is loader-authoritative: send/interrupt/switch operations target the active thread from route loader state, never stale fetcher results from prior routes.
 - Authenticated routes render one persistent shell:
   - left navigation rail
   - top utility cluster (`New thread`, `Automations`, `Skills`)
@@ -74,6 +75,7 @@ app/
   - deep execution inspection opens in a right drawer (`Activity | Terminal | Files | Diff | Raw`)
   - inspect drawer state is URL-backed via `?inspect=<cursor>&inspectTab=<tab>`
 - Live updates stream through websocket (`/v1/agent/threads/:threadId/stream`) with `/events` polling fallback.
+- Local execution mode remains explicitly disabled in web chat until end-to-end local turn execution is implemented; no synthetic local turn completions are emitted.
 - `Automations` and `Skills` currently ship as polished authenticated placeholder pages.
 - Settings modal state is URL-backed with query params:
   - `?modal=settings&section=general`

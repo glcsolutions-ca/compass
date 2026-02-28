@@ -280,12 +280,17 @@ function validateRouteMap(cwd, violations) {
 
 function validateChatExperienceCutover(cwd, violations) {
   const chatRoutePath = path.join(cwd, "apps/web/app/routes/app/chat/route.tsx");
+  const chatActionPath = path.join(cwd, "apps/web/app/features/chat/chat-action.ts");
   const transportPath = path.join(cwd, "apps/web/app/features/chat/agent-transport.ts");
   const transportHookPath = path.join(
     cwd,
     "apps/web/app/features/chat/hooks/use-chat-transport.ts"
   );
   const timelineHookPath = path.join(cwd, "apps/web/app/features/chat/hooks/use-chat-timeline.ts");
+  const chatActionsHookPath = path.join(
+    cwd,
+    "apps/web/app/features/chat/hooks/use-chat-actions.ts"
+  );
   const chatCanvasPath = path.join(cwd, "apps/web/app/features/chat/presentation/chat-canvas.tsx");
   const chatThreadRailPath = path.join(cwd, "apps/web/app/components/shell/chat-thread-rail.tsx");
   const runtimeStorePath = path.join(
@@ -296,9 +301,11 @@ function validateChatExperienceCutover(cwd, violations) {
 
   if (
     !existsSync(chatRoutePath) ||
+    !existsSync(chatActionPath) ||
     !existsSync(transportPath) ||
     !existsSync(transportHookPath) ||
     !existsSync(timelineHookPath) ||
+    !existsSync(chatActionsHookPath) ||
     !existsSync(chatCanvasPath) ||
     !existsSync(chatThreadRailPath) ||
     !existsSync(runtimeStorePath) ||
@@ -308,9 +315,11 @@ function validateChatExperienceCutover(cwd, violations) {
   }
 
   const chatRouteSource = readFileSync(chatRoutePath, "utf8");
+  const chatActionSource = readFileSync(chatActionPath, "utf8");
   const transportSource = readFileSync(transportPath, "utf8");
   const transportHookSource = readFileSync(transportHookPath, "utf8");
   const timelineHookSource = readFileSync(timelineHookPath, "utf8");
+  const chatActionsHookSource = readFileSync(chatActionsHookPath, "utf8");
   const chatCanvasSource = readFileSync(chatCanvasPath, "utf8");
   const chatThreadRailSource = readFileSync(chatThreadRailPath, "utf8");
   const runtimeStoreSource = readFileSync(runtimeStorePath, "utf8");
@@ -325,6 +334,12 @@ function validateChatExperienceCutover(cwd, violations) {
   if (!timelineHookSource.includes("normalizeAgentEvents")) {
     violations.push(
       "chat timeline hook must normalize backend agent events before rendering timeline."
+    );
+  }
+
+  if (!/loaderThreadId\s*\?\?\s*input\.submitResultThreadId/u.test(chatActionsHookSource)) {
+    violations.push(
+      "chat actions hook must keep active thread targeting loader-authoritative before any submit result fallback."
     );
   }
 
@@ -364,6 +379,16 @@ function validateChatExperienceCutover(cwd, violations) {
     violations.push(
       "chat runtime store must not encode event metadata into message text prefixes."
     );
+  }
+
+  if (!chatActionSource.includes("Local mode turns are not implemented yet.")) {
+    violations.push(
+      "chat action must fail closed for local execution mode until full local-turn wiring is implemented."
+    );
+  }
+
+  if (chatActionSource.includes("Local turn accepted and queued for desktop execution.")) {
+    violations.push("chat action must not emit synthetic placeholder local turn completions.");
   }
 
   if (!transportSource.includes("/v1/agent/threads/") || !transportSource.includes("/stream")) {

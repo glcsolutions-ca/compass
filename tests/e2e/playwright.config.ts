@@ -2,6 +2,8 @@ import { defineConfig } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+const REPO_ROOT = path.resolve(__dirname, "..", "..");
+
 function parseEnvFile(filePath: string): Record<string, string> {
   if (!existsSync(filePath)) {
     return {};
@@ -45,7 +47,7 @@ function resolveBaseUrl(): string {
     return `http://localhost:${process.env.WEB_PORT}`;
   }
 
-  const webEnvPath = path.resolve(process.cwd(), "apps/web/.env");
+  const webEnvPath = path.resolve(REPO_ROOT, "apps/web/.env");
   const webEnv = parseEnvFile(webEnvPath);
   if (webEnv.WEB_PORT) {
     return `http://localhost:${webEnv.WEB_PORT}`;

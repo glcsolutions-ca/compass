@@ -11,6 +11,7 @@ import { SidebarGroup, SidebarGroupContent, SidebarGroupLabel } from "~/componen
 import { buildThreadHref, buildNewThreadHref } from "~/features/chat/new-thread-routing";
 import {
   readChatThreadHistory,
+  subscribeChatThreadHistory,
   type ChatThreadHistoryItem
 } from "~/features/chat/chat-thread-history";
 import { buildAssistantThreadListItems } from "~/features/chat/presentation/chat-runtime-store";
@@ -58,8 +59,12 @@ export function ChatThreadRail({
   const [threads, setThreads] = useState<ChatThreadHistoryItem[]>([]);
 
   useEffect(() => {
-    setThreads(readChatThreadHistory());
-  }, [pathname]);
+    const refreshThreads = () => {
+      setThreads(readChatThreadHistory());
+    };
+    refreshThreads();
+    return subscribeChatThreadHistory(refreshThreads);
+  }, []);
 
   const visibleThreads = useMemo(() => threads.slice(0, 12), [threads]);
   const activeThreadId = readActiveThreadId(pathname);

@@ -2,6 +2,7 @@ import type { AgentExecutionMode, AgentThreadStatus } from "~/features/chat/agen
 
 const CHAT_THREAD_HISTORY_STORAGE_KEY = "compass-chat-thread-history-v1";
 const CHAT_THREAD_HISTORY_LIMIT = 40;
+const CHAT_THREAD_HISTORY_UPDATED_EVENT = "compass:chat-thread-history-updated";
 
 export interface ChatThreadHistoryItem {
   threadId: string;
@@ -66,6 +67,18 @@ function writeStorageValue(storage: Storage, value: string): void {
   }
 }
 
+function dispatchHistoryUpdated(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.dispatchEvent(new Event(CHAT_THREAD_HISTORY_UPDATED_EVENT));
+  } catch {
+    // Ignore event dispatch failures in constrained environments.
+  }
+}
+
 export function readChatThreadHistory(
   storage: Storage | null = globalThis.localStorage
 ): ChatThreadHistoryItem[] {
@@ -118,10 +131,37 @@ export function upsertChatThreadHistoryItem(
   ].slice(0, CHAT_THREAD_HISTORY_LIMIT);
 
   writeStorageValue(storage, JSON.stringify(next));
+  dispatchHistoryUpdated();
   return next;
+}
+
+export function subscribeChatThreadHistory(
+  listener: () => void,
+  storageKey = CHAT_THREAD_HISTORY_STORAGE_KEY
+): () => void {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  const handleUpdated = () => {
+    listener();
+  };
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === storageKey) {
+      listener();
+    }
+  };
+
+  window.addEventListener(CHAT_THREAD_HISTORY_UPDATED_EVENT, handleUpdated);
+  window.addEventListener("storage", handleStorage);
+  return () => {
+    window.removeEventListener(CHAT_THREAD_HISTORY_UPDATED_EVENT, handleUpdated);
+    window.removeEventListener("storage", handleStorage);
+  };
 }
 
 export const __private__ = {
   CHAT_THREAD_HISTORY_STORAGE_KEY,
-  CHAT_THREAD_HISTORY_LIMIT
+  CHAT_THREAD_HISTORY_LIMIT,
+  CHAT_THREAD_HISTORY_UPDATED_EVENT
 };

@@ -179,6 +179,22 @@
   @apply text-sm leading-relaxed;
 }
 
+.aui-composer-dictate {
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/70 bg-background text-foreground transition-colors hover:bg-accent;
+}
+
+.aui-composer-quote {
+  @apply mx-2 mt-2 flex items-center gap-2 rounded-md border border-border/70 bg-muted/50 px-2 py-1;
+}
+
+.aui-composer-quote-text {
+  @apply line-clamp-1 flex-1 text-xs text-muted-foreground;
+}
+
+.aui-composer-quote-dismiss {
+  @apply inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground;
+}
+
 .aui-thread-list-root {
   @apply flex flex-col gap-1;
 }
@@ -193,6 +209,14 @@
 
 .aui-thread-list-item-trigger[data-active="true"] {
   @apply bg-sidebar-accent text-sidebar-accent-foreground;
+}
+
+.aui-selection-toolbar {
+  @apply z-30 rounded-md border border-border/80 bg-popover px-1 py-1 shadow-md;
+}
+
+.aui-selection-toolbar-quote {
+  @apply rounded px-2 py-1 text-xs font-medium text-popover-foreground hover:bg-accent;
 }
 
 @layer utilities {

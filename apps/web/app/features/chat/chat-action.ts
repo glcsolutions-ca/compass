@@ -10,6 +10,7 @@ import { resolveThreadCreateWorkspaceSlug } from "~/features/chat/chat-context";
 import {
   ChatExecutionModeSchema,
   ChatIntentSchema,
+  ChatMessageIdSchema,
   ChatPromptSchema,
   ChatThreadIdSchema,
   ChatTurnIdSchema
@@ -17,7 +18,13 @@ import {
 import { logoutAndRedirect } from "~/lib/auth/auth-session";
 
 export interface ChatActionData {
-  intent: "sendMessage" | "interruptTurn" | "switchMode" | "logout";
+  intent:
+    | "sendMessage"
+    | "editMessage"
+    | "reloadMessage"
+    | "interruptTurn"
+    | "switchMode"
+    | "logout";
   ok: boolean;
   error: string | null;
   threadId: string | null;
@@ -25,6 +32,8 @@ export interface ChatActionData {
   executionMode: AgentExecutionMode;
   prompt: string | null;
   answer: string | null;
+  sourceMessageId?: string | null;
+  parentMessageId?: string | null;
 }
 
 function createErrorAction(input: {
@@ -34,8 +43,10 @@ function createErrorAction(input: {
   threadId?: string | null;
   turnId?: string | null;
   prompt?: string | null;
+  sourceMessageId?: string | null;
+  parentMessageId?: string | null;
 }): ChatActionData {
-  return {
+  const result: ChatActionData = {
     intent: input.intent,
     ok: false,
     error: input.error,
@@ -45,6 +56,16 @@ function createErrorAction(input: {
     prompt: input.prompt ?? null,
     answer: null
   };
+
+  if (input.sourceMessageId !== undefined) {
+    result.sourceMessageId = input.sourceMessageId;
+  }
+
+  if (input.parentMessageId !== undefined) {
+    result.parentMessageId = input.parentMessageId;
+  }
+
+  return result;
 }
 
 export async function submitChatAction({
@@ -159,12 +180,21 @@ export async function submitChatAction({
     };
   }
 
+  const sourceMessageIdResult = ChatMessageIdSchema.safeParse(formData.get("sourceMessageId"));
+  const sourceMessageId = sourceMessageIdResult.success
+    ? (sourceMessageIdResult.data ?? null)
+    : null;
+  const parentMessageIdResult = ChatMessageIdSchema.safeParse(formData.get("parentMessageId"));
+  const parentMessageId = parentMessageIdResult.success
+    ? (parentMessageIdResult.data ?? null)
+    : null;
+
   const parsedPrompt = ChatPromptSchema.safeParse({
     prompt: formData.get("prompt")
   });
   if (!parsedPrompt.success) {
     return createErrorAction({
-      intent: "sendMessage",
+      intent,
       executionMode,
       threadId: targetThreadId,
       error: parsedPrompt.error.issues[0]?.message ?? "Prompt is required."
@@ -173,6 +203,16 @@ export async function submitChatAction({
 
   const prompt = parsedPrompt.data.prompt;
   let resolvedThreadId = targetThreadId;
+  const requiresExistingThread = intent === "editMessage" || intent === "reloadMessage";
+
+  if (!resolvedThreadId && requiresExistingThread) {
+    return createErrorAction({
+      intent,
+      executionMode,
+      prompt,
+      error: "Select a thread before editing or reloading."
+    });
+  }
 
   if (!resolvedThreadId) {
     const auth = await loadAuthShellData({ request });
@@ -187,7 +227,7 @@ export async function submitChatAction({
       const message =
         error instanceof Error ? error.message : "Unable to resolve workspace context.";
       return createErrorAction({
-        intent: "sendMessage",
+        intent,
         executionMode,
         prompt,
         error: message
@@ -202,7 +242,7 @@ export async function submitChatAction({
 
     if (!createThreadResult.data || createThreadResult.status >= 400) {
       return createErrorAction({
-        intent: "sendMessage",
+        intent,
         executionMode,
         prompt,
         error: createThreadResult.message || "Unable to create a new chat thread."
@@ -220,7 +260,7 @@ export async function submitChatAction({
 
   if (!startTurnResult.data || startTurnResult.status >= 400) {
     return createErrorAction({
-      intent: "sendMessage",
+      intent,
       executionMode,
       threadId: resolvedThreadId,
       prompt,
@@ -228,8 +268,8 @@ export async function submitChatAction({
     });
   }
 
-  return {
-    intent: "sendMessage",
+  const result: ChatActionData = {
+    intent,
     ok: true,
     error: null,
     threadId: startTurnResult.data.threadId,
@@ -238,4 +278,14 @@ export async function submitChatAction({
     prompt,
     answer: startTurnResult.data.outputText
   };
+
+  if (sourceMessageId) {
+    result.sourceMessageId = sourceMessageId;
+  }
+
+  if (parentMessageId) {
+    result.parentMessageId = parentMessageId;
+  }
+
+  return result;
 }

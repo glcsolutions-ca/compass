@@ -1,6 +1,13 @@
 import { z } from "zod";
 
-export const ChatIntentSchema = z.enum(["sendMessage", "interruptTurn", "switchMode", "logout"]);
+export const ChatIntentSchema = z.enum([
+  "sendMessage",
+  "editMessage",
+  "reloadMessage",
+  "interruptTurn",
+  "switchMode",
+  "logout"
+]);
 
 export const ChatPromptSchema = z.object({
   prompt: z.string().trim().min(1, "Prompt is required.")
@@ -15,6 +22,14 @@ export const ChatThreadIdSchema = z
   .optional();
 
 export const ChatTurnIdSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9_:-]+$/u)
+  .optional();
+
+export const ChatMessageIdSchema = z
   .string()
   .trim()
   .min(1)

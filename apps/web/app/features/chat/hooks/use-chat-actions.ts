@@ -28,6 +28,13 @@ export interface ChatActionsController {
   activeThreadId: string | null;
   actionError: string | null;
   handleAssistantSend: (message: AppendMessage) => Promise<void>;
+  handleAssistantEdit: (message: AppendMessage) => Promise<void>;
+  handleAssistantReload: (input: { parentId: string | null; prompt: string }) => Promise<void>;
+  submitAssistantFeedback: (input: {
+    messageId: string;
+    turnId: string | null;
+    type: "positive" | "negative";
+  }) => Promise<void>;
   submitInterruptTurn: (activeTurnId: string | null) => void;
   handleModeChange: (mode: AgentExecutionMode) => void;
 }
@@ -50,7 +57,13 @@ export function useChatActions({
 
   useEffect(() => {
     const actionResult = submitFetcher.data;
-    if (!actionResult || actionResult.intent !== "sendMessage" || !actionResult.ok) {
+    if (
+      !actionResult ||
+      (actionResult.intent !== "sendMessage" &&
+        actionResult.intent !== "editMessage" &&
+        actionResult.intent !== "reloadMessage") ||
+      !actionResult.ok
+    ) {
       return;
     }
 
@@ -73,25 +86,93 @@ export function useChatActions({
     }
   }, [loaderThreadId, navigate, submitFetcher.data, workspaceSlug]);
 
-  const handleAssistantSend = useCallback(
-    async (message: AppendMessage): Promise<void> => {
+  const submitPromptIntent = useCallback(
+    (input: {
+      intent: "sendMessage" | "editMessage" | "reloadMessage";
+      prompt: string;
+      sourceMessageId?: string | null;
+      parentMessageId?: string | null;
+    }) => {
       if (submitFetcher.state !== "idle") {
         return;
       }
 
-      const prompt = readAppendMessagePrompt(message);
+      const prompt = input.prompt.trim();
       if (!prompt) {
         return;
       }
 
       const formData = new FormData();
-      formData.set("intent", "sendMessage");
+      formData.set("intent", input.intent);
       formData.set("threadId", activeThreadId ?? "");
       formData.set("executionMode", executionMode);
       formData.set("prompt", prompt);
+
+      if (input.sourceMessageId) {
+        formData.set("sourceMessageId", input.sourceMessageId);
+      }
+
+      if (input.parentMessageId) {
+        formData.set("parentMessageId", input.parentMessageId);
+      }
+
       void submitFetcher.submit(formData, { method: "post" });
     },
     [activeThreadId, executionMode, submitFetcher]
+  );
+
+  const handleAssistantSend = useCallback(
+    async (message: AppendMessage): Promise<void> => {
+      const prompt = readAppendMessagePrompt(message);
+      if (!prompt) {
+        return;
+      }
+
+      submitPromptIntent({
+        intent: "sendMessage",
+        prompt
+      });
+    },
+    [submitPromptIntent]
+  );
+
+  const handleAssistantEdit = useCallback(
+    async (message: AppendMessage): Promise<void> => {
+      const prompt = readAppendMessagePrompt(message);
+      if (!prompt) {
+        return;
+      }
+
+      submitPromptIntent({
+        intent: "editMessage",
+        prompt,
+        sourceMessageId: message.sourceId,
+        parentMessageId: message.parentId
+      });
+    },
+    [submitPromptIntent]
+  );
+
+  const handleAssistantReload = useCallback(
+    async (input: { parentId: string | null; prompt: string }): Promise<void> => {
+      submitPromptIntent({
+        intent: "reloadMessage",
+        prompt: input.prompt,
+        parentMessageId: input.parentId
+      });
+    },
+    [submitPromptIntent]
+  );
+
+  const submitAssistantFeedback = useCallback(
+    async (_input: {
+      messageId: string;
+      turnId: string | null;
+      type: "positive" | "negative";
+    }): Promise<void> => {
+      // Runtime feedback persistence is handled by route-level adapter composition.
+    },
+    []
   );
 
   const submitInterruptTurn = useCallback(
@@ -142,6 +223,9 @@ export function useChatActions({
     activeThreadId,
     actionError,
     handleAssistantSend,
+    handleAssistantEdit,
+    handleAssistantReload,
+    submitAssistantFeedback,
     submitInterruptTurn,
     handleModeChange
   };

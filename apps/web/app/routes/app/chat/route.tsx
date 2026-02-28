@@ -1,11 +1,20 @@
-import { useExternalStoreRuntime } from "@assistant-ui/react";
+import {
+  CompositeAttachmentAdapter,
+  SimpleImageAttachmentAdapter,
+  SimpleTextAttachmentAdapter,
+  WebSpeechDictationAdapter,
+  WebSpeechSynthesisAdapter,
+  useExternalStoreRuntime
+} from "@assistant-ui/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLoaderData, useLocation, useNavigate } from "react-router";
 import type { MetaFunction } from "react-router";
 import type { ShellRouteHandle } from "~/features/auth/types";
+import { appendAgentThreadEventsBatchClient } from "~/features/chat/agent-client";
 import type { AgentExecutionMode, ChatTransportState } from "~/features/chat/agent-types";
 import type { ChatActionData } from "~/features/chat/chat-action";
 import { submitChatAction } from "~/features/chat/chat-action";
+import { resolveReloadPrompt } from "~/features/chat/hooks/chat-compose-utils";
 import { useChatActions } from "~/features/chat/hooks/use-chat-actions";
 import { useChatTimeline } from "~/features/chat/hooks/use-chat-timeline";
 import { useChatTransport } from "~/features/chat/hooks/use-chat-transport";
@@ -135,7 +144,13 @@ export default function ChatRoute() {
 
   useEffect(() => {
     const actionResult = chatActions.submitFetcher.data;
-    if (!actionResult || actionResult.intent !== "sendMessage" || !actionResult.ok) {
+    if (
+      !actionResult ||
+      (actionResult.intent !== "sendMessage" &&
+        actionResult.intent !== "editMessage" &&
+        actionResult.intent !== "reloadMessage") ||
+      !actionResult.ok
+    ) {
       return;
     }
 
@@ -153,15 +168,100 @@ export default function ChatRoute() {
     chatActions.submitInterruptTurn(activeTurnId);
   }, [activeTurnId, chatActions]);
 
+  const handleAssistantReload = useCallback(
+    async (parentId: string | null): Promise<void> => {
+      const prompt = resolveReloadPrompt(assistantMessages, parentId);
+      if (!prompt) {
+        return;
+      }
+
+      await chatActions.handleAssistantReload({
+        parentId,
+        prompt
+      });
+    },
+    [assistantMessages, chatActions]
+  );
+
+  const attachmentsAdapter = useMemo(
+    () =>
+      new CompositeAttachmentAdapter([
+        new SimpleImageAttachmentAdapter(),
+        new SimpleTextAttachmentAdapter()
+      ]),
+    []
+  );
+  const speechAdapter = useMemo(() => new WebSpeechSynthesisAdapter(), []);
+  const dictationAdapter = useMemo(
+    () =>
+      WebSpeechDictationAdapter.isSupported()
+        ? new WebSpeechDictationAdapter({
+            interimResults: true
+          })
+        : undefined,
+    []
+  );
+
+  const feedbackAdapter = useMemo(
+    () => ({
+      submit: (feedback: {
+        message: { id: string; metadata?: { custom?: { turnId?: unknown } } };
+        type: "positive" | "negative";
+      }) => {
+        if (!chatActions.activeThreadId) {
+          return;
+        }
+
+        const turnId = feedback.message.metadata?.custom?.turnId;
+        void appendAgentThreadEventsBatchClient({
+          threadId: chatActions.activeThreadId,
+          events: [
+            {
+              turnId: typeof turnId === "string" ? turnId : undefined,
+              method: "message.feedback.submitted",
+              payload: {
+                messageId: feedback.message.id,
+                type: feedback.type
+              }
+            }
+          ]
+        });
+      }
+    }),
+    [chatActions.activeThreadId]
+  );
+
   const assistantStore = useMemo(
     () => ({
       isRunning: activeTurnId !== null,
       messages: assistantMessages,
       convertMessage: convertAssistantStoreMessage,
       onNew: chatActions.handleAssistantSend,
-      onCancel: handleAssistantCancel
+      onEdit: chatActions.handleAssistantEdit,
+      onReload: handleAssistantReload,
+      onCancel: handleAssistantCancel,
+      adapters: {
+        attachments: attachmentsAdapter,
+        speech: speechAdapter,
+        dictation: dictationAdapter,
+        feedback: feedbackAdapter
+      },
+      unstable_capabilities: {
+        copy: true
+      }
     }),
-    [activeTurnId, assistantMessages, chatActions.handleAssistantSend, handleAssistantCancel]
+    [
+      activeTurnId,
+      assistantMessages,
+      attachmentsAdapter,
+      chatActions.handleAssistantEdit,
+      chatActions.handleAssistantSend,
+      dictationAdapter,
+      feedbackAdapter,
+      handleAssistantCancel,
+      handleAssistantReload,
+      speechAdapter
+    ]
   );
 
   const assistantRuntime = useExternalStoreRuntime(assistantStore);

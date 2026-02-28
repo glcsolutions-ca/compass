@@ -1,6 +1,7 @@
 import { createApiClient } from "@compass/sdk";
 import {
   AgentEventSchema,
+  AgentEventsBatchResponseSchema,
   AgentEventsListResponseSchema,
   AgentThreadCreateResponseSchema,
   AgentThreadModePatchResponseSchema,
@@ -278,6 +279,43 @@ export async function listAgentThreadEventsClient(payload: {
   }
 
   return toEventsResult(parsed.data);
+}
+
+export async function appendAgentThreadEventsBatchClient(payload: {
+  threadId: string;
+  events: Array<{
+    turnId?: string;
+    method: string;
+    payload: unknown;
+  }>;
+  baseUrl?: string;
+}): Promise<{ accepted: number }> {
+  const baseUrl = payload.baseUrl ?? window.location.origin;
+  const client = createBrowserClient(baseUrl);
+  const result = await client.POST("/v1/agent/threads/{threadId}/events:batch", {
+    credentials: "include",
+    params: {
+      path: {
+        threadId: payload.threadId
+      }
+    },
+    body: {
+      events: payload.events
+    }
+  });
+
+  if (result.response.status >= 400) {
+    throw new Error(readApiErrorMessage(result.error, "Unable to submit chat feedback."));
+  }
+
+  const parsed = AgentEventsBatchResponseSchema.safeParse(result.data);
+  if (!parsed.success) {
+    return { accepted: 0 };
+  }
+
+  return {
+    accepted: parsed.data.accepted
+  };
 }
 
 export function parseStreamEventPayload(payload: unknown): AgentEvent | null {

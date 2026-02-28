@@ -293,15 +293,12 @@ export class CodexJsonRpcClient {
 
       await this.notify("initialized", {}, true);
 
-      // Mark startup complete before optional account bootstrap.
-      // ensureAccountAuth uses request(), which re-enters ensureStarted().
-      // If initialized stays false here, ensureStarted waits on startPromise and deadlocks.
-      this.initialized = true;
-      this.readyAt = new Date().toISOString();
-
       if (this.autoLoginApiKey) {
         await this.ensureAccountAuth(this.autoLoginApiKey);
       }
+
+      this.initialized = true;
+      this.readyAt = new Date().toISOString();
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
       await this.forceRestart();
@@ -381,6 +378,7 @@ export class CodexJsonRpcClient {
 
   async handleServerRequest(request) {
     const responsePayload = {
+      jsonrpc: "2.0",
       id: request.id
     };
 
@@ -476,6 +474,7 @@ export class CodexJsonRpcClient {
     const idKey = String(id);
 
     const payload = {
+      jsonrpc: "2.0",
       id,
       method,
       params: params ?? {}
@@ -518,7 +517,7 @@ export class CodexJsonRpcClient {
       await this.ensureStarted();
     }
 
-    await this.writeRawMessage({ method, params: params ?? {} });
+    await this.writeRawMessage({ jsonrpc: "2.0", method, params: params ?? {} });
   }
 
   subscribe(listener) {

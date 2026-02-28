@@ -2,7 +2,7 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-RUN npm install --global @openai/codex@0.105.0
+RUN npm install --global @openai/codex@0.106.0
 
 COPY apps/codex-session-runtime/server.mjs ./server.mjs
 COPY packages/codex-runtime-core/package.json ./node_modules/@compass/codex-runtime-core/package.json

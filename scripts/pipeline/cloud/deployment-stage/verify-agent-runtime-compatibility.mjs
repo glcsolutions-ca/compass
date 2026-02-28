@@ -12,9 +12,9 @@ import {
 const SESSION_EXECUTOR_ROLE_DEFINITION_GUID = "0fb8eba5-a2bb-4abe-b1c1-49dfad359bb0";
 const AUTHORIZATION_RETRY_ATTEMPTS = 6;
 const AUTHORIZATION_RETRY_DELAY_MS = 5_000;
-const RUNTIME_CALL_RETRY_ATTEMPTS = 24;
+const RUNTIME_CALL_RETRY_ATTEMPTS = 8;
 const RUNTIME_CALL_RETRY_DELAY_MS = 5_000;
-const RUNTIME_CALL_TIMEOUT_MS = 15_000;
+const RUNTIME_CALL_TIMEOUT_MS = 120_000;
 
 function addCheck({ checks, reasonCodes, id, pass, details, reasonCode }) {
   checks.push({ id, pass, details });

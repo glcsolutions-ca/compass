@@ -12,9 +12,13 @@ import {
 const SESSION_EXECUTOR_ROLE_DEFINITION_GUID = "0fb8eba5-a2bb-4abe-b1c1-49dfad359bb0";
 const AUTHORIZATION_RETRY_ATTEMPTS = 6;
 const AUTHORIZATION_RETRY_DELAY_MS = 5_000;
-const RUNTIME_CALL_RETRY_ATTEMPTS = 8;
+const RUNTIME_CALL_RETRY_ATTEMPTS = 6;
 const RUNTIME_CALL_RETRY_DELAY_MS = 5_000;
-const RUNTIME_CALL_TIMEOUT_MS = 120_000;
+const RUNTIME_CALL_TIMEOUT_MS = 45_000;
+const RUNTIME_COMPATIBILITY_MAX_DURATION_MS = 12 * 60 * 1000;
+const RUNTIME_BOOTSTRAP_TIMEOUT_MS = 60_000;
+const RUNTIME_TURN_TIMEOUT_MS = 75_000;
+const RUNTIME_INTERRUPT_TIMEOUT_MS = 30_000;
 
 function addCheck({ checks, reasonCodes, id, pass, details, reasonCode }) {
   checks.push({ id, pass, details });
@@ -156,7 +160,7 @@ async function callRuntime(input) {
         "content-type": "application/json"
       },
       body: input.body ? JSON.stringify(input.body) : undefined,
-      signal: AbortSignal.timeout(RUNTIME_CALL_TIMEOUT_MS)
+      signal: AbortSignal.timeout(input.timeoutMs ?? RUNTIME_CALL_TIMEOUT_MS)
     });
 
     const text = await response.text();
@@ -185,8 +189,22 @@ async function callRuntime(input) {
 }
 
 async function callRuntimeWithAuthorizationRetry(input) {
+  const deadlineAt =
+    typeof input.deadlineAt === "number"
+      ? input.deadlineAt
+      : Date.now() + RUNTIME_COMPATIBILITY_MAX_DURATION_MS;
+  const maxAttempts = Math.max(1, Number(input.maxAttempts || RUNTIME_CALL_RETRY_ATTEMPTS));
   let result = null;
-  for (let attempt = 1; attempt <= RUNTIME_CALL_RETRY_ATTEMPTS; attempt += 1) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    if (Date.now() >= deadlineAt) {
+      return {
+        status: 598,
+        ok: false,
+        bodyText: "runtime compatibility retry deadline exceeded",
+        bodyJson: null
+      };
+    }
+
     result = await callRuntime(input);
     if (
       result.status !== 401 &&
@@ -201,7 +219,10 @@ async function callRuntimeWithAuthorizationRetry(input) {
       break;
     }
 
-    if (attempt < RUNTIME_CALL_RETRY_ATTEMPTS) {
+    if (attempt < maxAttempts) {
+      if (Date.now() + RUNTIME_CALL_RETRY_DELAY_MS >= deadlineAt) {
+        break;
+      }
       await sleep(RUNTIME_CALL_RETRY_DELAY_MS);
     }
   }
@@ -219,6 +240,7 @@ async function main() {
   const checks = [];
   const reasonCodes = [];
   let runtimeError = "";
+  const runtimeCompatibilityDeadlineAt = Date.now() + RUNTIME_COMPATIBILITY_MAX_DURATION_MS;
   const observed = {
     poolManagementEndpoint: "",
     bootstrapIdentifierAFirst: null,
@@ -333,7 +355,9 @@ async function main() {
       url: bootstrapAFirstUrl,
       method: "POST",
       bearerToken,
-      body: { reason: "pipeline-compatibility-check" }
+      body: { reason: "pipeline-compatibility-check" },
+      timeoutMs: RUNTIME_BOOTSTRAP_TIMEOUT_MS,
+      deadlineAt: runtimeCompatibilityDeadlineAt
     });
 
     observed.bootstrapIdentifierAFirst = {
@@ -358,7 +382,9 @@ async function main() {
       url: bootstrapASecondUrl,
       method: "POST",
       bearerToken,
-      body: { reason: "pipeline-compatibility-check-repeat" }
+      body: { reason: "pipeline-compatibility-check-repeat" },
+      timeoutMs: RUNTIME_BOOTSTRAP_TIMEOUT_MS,
+      deadlineAt: runtimeCompatibilityDeadlineAt
     });
     observed.bootstrapIdentifierASecond = {
       status: bootstrapASecondResult.status,
@@ -373,7 +399,9 @@ async function main() {
       url: bootstrapBFirstUrl,
       method: "POST",
       bearerToken,
-      body: { reason: "pipeline-compatibility-check-isolation" }
+      body: { reason: "pipeline-compatibility-check-isolation" },
+      timeoutMs: RUNTIME_BOOTSTRAP_TIMEOUT_MS,
+      deadlineAt: runtimeCompatibilityDeadlineAt
     });
     observed.bootstrapIdentifierBFirst = {
       status: bootstrapBFirstResult.status,
@@ -474,7 +502,9 @@ async function main() {
         threadId: identifierA,
         turnId,
         text: "compatibility probe"
-      }
+      },
+      timeoutMs: RUNTIME_TURN_TIMEOUT_MS,
+      deadlineAt: runtimeCompatibilityDeadlineAt
     });
     observed.startTurn = {
       status: startTurnResult.status,
@@ -508,7 +538,9 @@ async function main() {
       url: interruptTurnUrl,
       method: "POST",
       bearerToken,
-      body: {}
+      body: {},
+      timeoutMs: RUNTIME_INTERRUPT_TIMEOUT_MS,
+      deadlineAt: runtimeCompatibilityDeadlineAt
     });
     observed.interruptTurn = {
       status: interruptTurnResult.status,

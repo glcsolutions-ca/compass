@@ -182,36 +182,6 @@ jobs:
           pnpm test:integration
           pnpm exec playwright install chromium
 
-          api_port="$(awk -F= '/^API_PORT=/{print $2}' apps/api/.env | tail -n1 | tr -d '\r' | xargs)"
-          if [ -z "${api_port:-}" ]; then
-            echo "Unable to resolve API_PORT from apps/api/.env"
-            exit 1
-          fi
-          health_url="http://127.0.0.1:${api_port}/health"
-
-          pnpm --filter @compass/api dev >/tmp/compass-api.log 2>&1 &
-          api_pid=$!
-          cleanup() {
-            kill "$api_pid" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-
-          for attempt in $(seq 1 60); do
-            if curl --fail --silent --show-error "$health_url" >/dev/null; then
-              break
-            fi
-
-            if [ "$attempt" -eq 60 ]; then
-              echo "API failed to become ready on $health_url"
-              echo "----- /tmp/compass-api.log -----"
-              cat /tmp/compass-api.log || true
-              echo "----- end api log -----"
-              exit 1
-            fi
-
-            sleep 1
-          done
-
           SMOKE_CHAT_SEND=required pnpm test:e2e
 
       - name: Tear down local Postgres

@@ -72,7 +72,6 @@ export default defineConfig({
         url: baseURL,
         env: {
           ...process.env,
-          AUTH_MODE: "mock",
           AGENT_GATEWAY_ENABLED: process.env.AGENT_GATEWAY_ENABLED ?? "false",
           AGENT_RUNTIME_PROVIDER: process.env.AGENT_RUNTIME_PROVIDER ?? "mock"
         },

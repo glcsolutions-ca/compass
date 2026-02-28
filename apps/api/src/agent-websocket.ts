@@ -69,7 +69,19 @@ function parseThreadStreamRequest(request: IncomingMessage): {
 function parseRuntimeStreamRequest(request: IncomingMessage): boolean {
   const rawUrl = String(request.url || "");
   const url = new URL(rawUrl, "http://localhost");
-  return url.pathname === "/v1/agent/runtime/stream";
+  if (url.pathname !== "/v1/agent/runtime/stream") {
+    return false;
+  }
+
+  return true;
+}
+
+function parseRuntimeStreamCursor(request: IncomingMessage): number {
+  const rawUrl = String(request.url || "");
+  const url = new URL(rawUrl, "http://localhost");
+  const cursorRaw = url.searchParams.get("cursor");
+  const cursorCandidate = cursorRaw ? Number(cursorRaw) : Number.NaN;
+  return Number.isInteger(cursorCandidate) ? Math.max(0, cursorCandidate) : 0;
 }
 
 function sendEvent(socket: { send(data: string): void }, event: AgentEventRecord): void {
@@ -129,6 +141,7 @@ export function attachAgentWebSocketGateway(input: {
       }
 
       let userId = "";
+      let runtimeCursor = 0;
       try {
         const auth = await input.authService.readAuthMe({
           sessionToken,
@@ -146,6 +159,8 @@ export function attachAgentWebSocketGateway(input: {
             userId,
             threadId: parsedThread.threadId
           });
+        } else if (parsedRuntime) {
+          runtimeCursor = parseRuntimeStreamCursor(request);
         }
       } catch {
         respondUpgradeError(socket, 403, "Agent stream access denied");
@@ -184,13 +199,49 @@ export function attachAgentWebSocketGateway(input: {
               return;
             }
 
+            let replaying = true;
+            let deliveredCursor = runtimeCursor;
+            const bufferedEvents: RuntimeNotificationRecord[] = [];
             const unsubscribe = input.agentService!.subscribeRuntimeNotifications((event) => {
+              if (replaying) {
+                bufferedEvents.push(event);
+                return;
+              }
+
+              if (event.cursor <= deliveredCursor) {
+                return;
+              }
+
+              deliveredCursor = event.cursor;
               try {
                 sendRuntimeEvent(ws, event);
               } catch {
                 // ignored; socket close lifecycle handles cleanup
               }
             });
+
+            const historical = await input.agentService!.listRuntimeNotifications({
+              userId,
+              cursor: runtimeCursor,
+              limit: 500
+            });
+            for (const event of historical) {
+              if (event.cursor <= deliveredCursor) {
+                continue;
+              }
+              deliveredCursor = event.cursor;
+              sendRuntimeEvent(ws, event);
+            }
+
+            replaying = false;
+            bufferedEvents.sort((a, b) => a.cursor - b.cursor);
+            for (const event of bufferedEvents) {
+              if (event.cursor <= deliveredCursor) {
+                continue;
+              }
+              deliveredCursor = event.cursor;
+              sendRuntimeEvent(ws, event);
+            }
 
             ws.on("close", () => {
               unsubscribe();
@@ -207,3 +258,9 @@ export function attachAgentWebSocketGateway(input: {
     })();
   });
 }
+
+export const __internalAgentWebSocket = {
+  parseThreadStreamRequest,
+  parseRuntimeStreamRequest,
+  parseRuntimeStreamCursor
+};

@@ -1244,6 +1244,11 @@ export interface AgentService {
   }): Promise<RuntimeAccountLoginCancelResponse>;
   logoutRuntimeAccount(input: { userId: string }): Promise<RuntimeAccountLogoutResponse>;
   readRuntimeRateLimits(input: { userId: string }): Promise<RuntimeAccountRateLimitsReadResponse>;
+  listRuntimeNotifications(input: {
+    userId: string;
+    cursor?: number;
+    limit?: number;
+  }): Promise<RuntimeNotificationRecord[]>;
   subscribeThreadEvents(threadId: string, handler: (event: AgentEventRecord) => void): () => void;
   subscribeRuntimeNotifications(handler: (event: RuntimeNotificationRecord) => void): () => void;
   close(): Promise<void>;
@@ -1253,6 +1258,9 @@ class PostgresAgentService implements AgentService {
   private readonly pool: Pool;
   private readonly runtimeExecutionDriver: RuntimeExecutionDriver;
   private readonly emitter = new EventEmitter();
+  private readonly runtimeNotificationBufferLimit = 1000;
+  private runtimeNotificationCursor = 0;
+  private readonly runtimeNotificationBuffer: RuntimeNotificationRecord[] = [];
   private runtimeNotificationUnsubscribe: (() => void) | null = null;
 
   constructor(input: { pool: Pool; runtimeExecutionDriver: RuntimeExecutionDriver }) {
@@ -1280,7 +1288,22 @@ class PostgresAgentService implements AgentService {
   }
 
   private publishRuntimeNotification(notification: RuntimeNotificationRecord): void {
-    this.emitter.emit(RUNTIME_NOTIFICATION_EVENT, notification);
+    const bufferedNotification: RuntimeNotificationRecord = {
+      cursor: this.runtimeNotificationCursor + 1,
+      method: notification.method,
+      params: notification.params ?? {},
+      createdAt: notification.createdAt || new Date().toISOString()
+    };
+    this.runtimeNotificationCursor = bufferedNotification.cursor;
+    this.runtimeNotificationBuffer.push(bufferedNotification);
+    if (this.runtimeNotificationBuffer.length > this.runtimeNotificationBufferLimit) {
+      this.runtimeNotificationBuffer.splice(
+        0,
+        this.runtimeNotificationBuffer.length - this.runtimeNotificationBufferLimit
+      );
+    }
+
+    this.emitter.emit(RUNTIME_NOTIFICATION_EVENT, bufferedNotification);
   }
 
   async createThread(input: {
@@ -2026,6 +2049,23 @@ class PostgresAgentService implements AgentService {
     } catch (error) {
       this.rethrowRuntimeAuthError(error);
     }
+  }
+
+  async listRuntimeNotifications(input: {
+    userId: string;
+    cursor?: number;
+    limit?: number;
+  }): Promise<RuntimeNotificationRecord[]> {
+    const cursor = Number.isInteger(input.cursor) ? Math.max(0, Number(input.cursor)) : 0;
+    const limit = Number.isInteger(input.limit)
+      ? Math.min(500, Math.max(1, Number(input.limit)))
+      : 200;
+
+    const filtered = this.runtimeNotificationBuffer.filter((event) => event.cursor > cursor);
+    if (filtered.length <= limit) {
+      return filtered;
+    }
+    return filtered.slice(filtered.length - limit);
   }
 
   subscribeThreadEvents(threadId: string, handler: (event: AgentEventRecord) => void): () => void {

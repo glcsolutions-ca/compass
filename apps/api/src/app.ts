@@ -802,10 +802,10 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
     }
   });
 
-  async function requireAgentUser(
+  async function requireAgentContext(
     request: express.Request,
     response: express.Response
-  ): Promise<{ userId: string } | null> {
+  ): Promise<{ userId: string; service: AgentService } | null> {
     if (!agentGatewayEnabled) {
       response.status(503).json({
         code: "AGENT_GATEWAY_DISABLED",
@@ -836,10 +836,30 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
         return null;
       }
 
-      return { userId: authMe.user.id };
+      return {
+        userId: authMe.user.id,
+        service: agentService
+      };
     } catch (error) {
       sendAuthError(request, response, error);
       return null;
+    }
+  }
+
+  async function withAgentContext(
+    request: express.Request,
+    response: express.Response,
+    handler: (context: { userId: string; service: AgentService }) => Promise<void>
+  ): Promise<void> {
+    const context = await requireAgentContext(request, response);
+    if (!context) {
+      return;
+    }
+
+    try {
+      await handler(context);
+    } catch (error) {
+      sendAuthError(request, response, error);
     }
   }
 
@@ -879,121 +899,81 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
   }
 
   app.post("/v1/agent/runtime/account/read", async (request, response) => {
-    const actor = await requireAgentUser(request, response);
-    if (!actor || !agentService) {
-      return;
-    }
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const body = parseOrReply(request.body, RuntimeAccountReadRequestSchema, response);
+      if (!body) {
+        return;
+      }
 
-    const body = parseOrReply(request.body, RuntimeAccountReadRequestSchema, response);
-    if (!body) {
-      return;
-    }
-
-    try {
-      const state = await agentService.readRuntimeAccountState({
-        userId: actor.userId,
+      const state = await service.readRuntimeAccountState({
+        userId,
         refreshToken: body.refreshToken
       });
       response.status(200).json(state);
-    } catch (error) {
-      sendAuthError(request, response, error);
-    }
+    });
   });
 
   app.post("/v1/agent/runtime/account/login/start", async (request, response) => {
-    const actor = await requireAgentUser(request, response);
-    if (!actor || !agentService) {
-      return;
-    }
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const body = parseOrReply(request.body, RuntimeAccountLoginStartRequestSchema, response);
+      if (!body) {
+        return;
+      }
 
-    const body = parseOrReply(request.body, RuntimeAccountLoginStartRequestSchema, response);
-    if (!body) {
-      return;
-    }
-
-    try {
-      const result = await agentService.startRuntimeAccountLogin({
-        userId: actor.userId,
+      const result = await service.startRuntimeAccountLogin({
+        userId,
         request: body
       });
       response.status(200).json(result);
-    } catch (error) {
-      sendAuthError(request, response, error);
-    }
+    });
   });
 
   app.post("/v1/agent/runtime/account/login/cancel", async (request, response) => {
-    const actor = await requireAgentUser(request, response);
-    if (!actor || !agentService) {
-      return;
-    }
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const body = parseOrReply(request.body, RuntimeAccountLoginCancelRequestSchema, response);
+      if (!body) {
+        return;
+      }
 
-    const body = parseOrReply(request.body, RuntimeAccountLoginCancelRequestSchema, response);
-    if (!body) {
-      return;
-    }
-
-    try {
-      const result = await agentService.cancelRuntimeAccountLogin({
-        userId: actor.userId,
+      const result = await service.cancelRuntimeAccountLogin({
+        userId,
         loginId: body.loginId
       });
       response.status(200).json(result);
-    } catch (error) {
-      sendAuthError(request, response, error);
-    }
+    });
   });
 
   app.post("/v1/agent/runtime/account/logout", async (request, response) => {
-    const actor = await requireAgentUser(request, response);
-    if (!actor || !agentService) {
-      return;
-    }
-
-    try {
-      const result = await agentService.logoutRuntimeAccount({
-        userId: actor.userId
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const result = await service.logoutRuntimeAccount({
+        userId
       });
       response.status(200).json(result);
-    } catch (error) {
-      sendAuthError(request, response, error);
-    }
+    });
   });
 
   app.post("/v1/agent/runtime/account/rate-limits/read", async (request, response) => {
-    const actor = await requireAgentUser(request, response);
-    if (!actor || !agentService) {
-      return;
-    }
-
-    try {
-      const result = await agentService.readRuntimeRateLimits({
-        userId: actor.userId
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const result = await service.readRuntimeRateLimits({
+        userId
       });
       response.status(200).json(result);
-    } catch (error) {
-      sendAuthError(request, response, error);
-    }
+    });
   });
 
   app.post("/v1/agent/threads", async (request, response) => {
-    const actor = await requireAgentUser(request, response);
-    if (!actor || !agentService) {
-      return;
-    }
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const body = parseOrReply(request.body, AgentThreadCreateRequestSchema, response);
+      if (!body) {
+        return;
+      }
 
-    const body = parseOrReply(request.body, AgentThreadCreateRequestSchema, response);
-    if (!body) {
-      return;
-    }
+      if (!ensureExecutionModeEnabled(response, body.executionMode)) {
+        return;
+      }
 
-    if (!ensureExecutionModeEnabled(response, body.executionMode)) {
-      return;
-    }
-
-    try {
-      const thread = await agentService.createThread({
-        userId: actor.userId,
+      const thread = await service.createThread({
+        userId,
         workspaceSlug: body.workspaceSlug,
         executionMode: body.executionMode ?? "cloud",
         executionHost: body.executionHost,
@@ -1001,94 +981,73 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
         now: now()
       });
       response.status(201).json({ thread });
-    } catch (error) {
-      sendAuthError(request, response, error);
-    }
+    });
   });
 
   app.get("/v1/agent/threads/:threadId", async (request, response) => {
-    const actor = await requireAgentUser(request, response);
-    if (!actor || !agentService) {
-      return;
-    }
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
+      if (!params) {
+        return;
+      }
 
-    const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
-    if (!params) {
-      return;
-    }
-
-    try {
-      const thread = await agentService.readThread({
-        userId: actor.userId,
+      const thread = await service.readThread({
+        userId,
         threadId: params.threadId
       });
       response.status(200).json({ thread });
-    } catch (error) {
-      sendAuthError(request, response, error);
-    }
+    });
   });
 
   app.patch("/v1/agent/threads/:threadId/mode", async (request, response) => {
-    const actor = await requireAgentUser(request, response);
-    if (!actor || !agentService) {
-      return;
-    }
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
+      if (!params) {
+        return;
+      }
 
-    const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
-    if (!params) {
-      return;
-    }
+      const body = parseOrReply(request.body, AgentThreadModePatchRequestSchema, response);
+      if (!body) {
+        return;
+      }
 
-    const body = parseOrReply(request.body, AgentThreadModePatchRequestSchema, response);
-    if (!body) {
-      return;
-    }
+      if (!ensureModeSwitchEnabled(response)) {
+        return;
+      }
 
-    if (!ensureModeSwitchEnabled(response)) {
-      return;
-    }
+      if (!ensureExecutionModeEnabled(response, body.executionMode)) {
+        return;
+      }
 
-    if (!ensureExecutionModeEnabled(response, body.executionMode)) {
-      return;
-    }
-
-    try {
-      const thread = await agentService.switchThreadMode({
-        userId: actor.userId,
+      const thread = await service.switchThreadMode({
+        userId,
         threadId: params.threadId,
         executionMode: body.executionMode,
         executionHost: body.executionHost,
         now: now()
       });
       response.status(200).json({ thread });
-    } catch (error) {
-      sendAuthError(request, response, error);
-    }
+    });
   });
 
   app.post("/v1/agent/threads/:threadId/turns", async (request, response) => {
-    const actor = await requireAgentUser(request, response);
-    if (!actor || !agentService) {
-      return;
-    }
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
+      if (!params) {
+        return;
+      }
 
-    const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
-    if (!params) {
-      return;
-    }
+      const body = parseOrReply(request.body, AgentTurnStartRequestSchema, response);
+      if (!body) {
+        return;
+      }
 
-    const body = parseOrReply(request.body, AgentTurnStartRequestSchema, response);
-    if (!body) {
-      return;
-    }
+      if (!ensureExecutionModeEnabled(response, body.executionMode)) {
+        return;
+      }
 
-    if (!ensureExecutionModeEnabled(response, body.executionMode)) {
-      return;
-    }
-
-    try {
-      const result = await agentService.startTurn({
-        userId: actor.userId,
+      const result = await service.startTurn({
+        userId,
         threadId: params.threadId,
         text: body.text,
         executionMode: body.executionMode,
@@ -1096,54 +1055,40 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
         now: now()
       });
       response.status(200).json(result);
-    } catch (error) {
-      sendAuthError(request, response, error);
-    }
+    });
   });
 
   app.post("/v1/agent/threads/:threadId/turns/:turnId/interrupt", async (request, response) => {
-    const actor = await requireAgentUser(request, response);
-    if (!actor || !agentService) {
-      return;
-    }
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const params = parseOrReply(request.params, AgentThreadTurnParamsSchema, response);
+      if (!params) {
+        return;
+      }
 
-    const params = parseOrReply(request.params, AgentThreadTurnParamsSchema, response);
-    if (!params) {
-      return;
-    }
-
-    try {
-      const turn = await agentService.interruptTurn({
-        userId: actor.userId,
+      const turn = await service.interruptTurn({
+        userId,
         threadId: params.threadId,
         turnId: params.turnId,
         now: now()
       });
       response.status(200).json({ turn });
-    } catch (error) {
-      sendAuthError(request, response, error);
-    }
+    });
   });
 
   app.post("/v1/agent/threads/:threadId/events:batch", async (request, response) => {
-    const actor = await requireAgentUser(request, response);
-    if (!actor || !agentService) {
-      return;
-    }
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
+      if (!params) {
+        return;
+      }
 
-    const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
-    if (!params) {
-      return;
-    }
+      const body = parseOrReply(request.body, AgentEventsBatchRequestSchema, response);
+      if (!body) {
+        return;
+      }
 
-    const body = parseOrReply(request.body, AgentEventsBatchRequestSchema, response);
-    if (!body) {
-      return;
-    }
-
-    try {
-      const result = await agentService.appendThreadEventsBatch({
-        userId: actor.userId,
+      const result = await service.appendThreadEventsBatch({
+        userId,
         threadId: params.threadId,
         events: body.events.map((event) => ({
           turnId: event.turnId,
@@ -1153,38 +1098,29 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
         now: now()
       });
       response.status(200).json(result);
-    } catch (error) {
-      sendAuthError(request, response, error);
-    }
+    });
   });
 
   app.get("/v1/agent/threads/:threadId/events", async (request, response) => {
-    const actor = await requireAgentUser(request, response);
-    if (!actor || !agentService) {
-      return;
-    }
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
+      if (!params) {
+        return;
+      }
 
-    const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
-    if (!params) {
-      return;
-    }
+      const query = parseOrReply(request.query, AgentThreadEventsQuerySchema, response);
+      if (!query) {
+        return;
+      }
 
-    const query = parseOrReply(request.query, AgentThreadEventsQuerySchema, response);
-    if (!query) {
-      return;
-    }
-
-    try {
-      const events = await agentService.listThreadEvents({
-        userId: actor.userId,
+      const events = await service.listThreadEvents({
+        userId,
         threadId: params.threadId,
         cursor: query.cursor,
         limit: query.limit
       });
       response.status(200).json({ events });
-    } catch (error) {
-      sendAuthError(request, response, error);
-    }
+    });
   });
 
   app.get("/v1/agent/threads/:threadId/stream", async (_request, response) => {

@@ -13,7 +13,8 @@ import {
   type RuntimeNotificationMethod,
   type RuntimeProvider as ContractRuntimeProvider,
   type AgentExecutionHost,
-  type AgentExecutionMode
+  type AgentExecutionMode,
+  type AgentThreadListState
 } from "@compass/contracts";
 import { Pool, type PoolClient } from "pg";
 import { ApiError } from "./auth-service.js";
@@ -27,6 +28,7 @@ export interface AgentThreadRecord {
   status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
   cloudSessionIdentifier: string | null;
   title: string | null;
+  archived: boolean;
   createdAt: string;
   updatedAt: string;
   modeSwitchedAt: string | null;
@@ -1053,6 +1055,30 @@ function readRecordNullableString(row: Record<string, unknown>, key: string): st
   return null;
 }
 
+function readRecordBoolean(row: Record<string, unknown>, key: string, fallback = false): boolean {
+  const value = row[key];
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "t" || normalized === "1") {
+      return true;
+    }
+
+    if (normalized === "false" || normalized === "f" || normalized === "0") {
+      return false;
+    }
+  }
+
+  return fallback;
+}
+
 function coerceIsoDate(value: unknown): string | null {
   if (value == null) {
     return null;
@@ -1097,6 +1123,7 @@ function mapThreadRow(row: Record<string, unknown>): AgentThreadRecord {
     status: statusValue as AgentThreadRecord["status"],
     cloudSessionIdentifier: readRecordNullableString(row, "cloud_session_identifier"),
     title: readRecordNullableString(row, "title"),
+    archived: readRecordBoolean(row, "archived", false),
     createdAt: readRecordIsoDate(row, "created_at"),
     updatedAt: readRecordIsoDate(row, "updated_at"),
     modeSwitchedAt: readRecordNullableIsoDate(row, "mode_switched_at")
@@ -1188,6 +1215,12 @@ function toThreadEventName(threadId: string): string {
 const RUNTIME_NOTIFICATION_EVENT = "runtime:notification";
 
 export interface AgentService {
+  listThreads(input: {
+    userId: string;
+    workspaceSlug: string;
+    state?: AgentThreadListState;
+    limit?: number;
+  }): Promise<AgentThreadRecord[]>;
   createThread(input: {
     userId: string;
     workspaceSlug: string;
@@ -1197,6 +1230,14 @@ export interface AgentService {
     now: Date;
   }): Promise<AgentThreadRecord>;
   readThread(input: { userId: string; threadId: string }): Promise<AgentThreadRecord>;
+  updateThread(input: {
+    userId: string;
+    threadId: string;
+    title?: string;
+    archived?: boolean;
+    now: Date;
+  }): Promise<AgentThreadRecord>;
+  deleteThread(input: { userId: string; threadId: string; now: Date }): Promise<{ deleted: true }>;
   switchThreadMode(input: {
     userId: string;
     threadId: string;
@@ -1306,6 +1347,55 @@ class PostgresAgentService implements AgentService {
     this.emitter.emit(RUNTIME_NOTIFICATION_EVENT, bufferedNotification);
   }
 
+  async listThreads(input: {
+    userId: string;
+    workspaceSlug: string;
+    state?: AgentThreadListState;
+    limit?: number;
+  }): Promise<AgentThreadRecord[]> {
+    const workspace = await this.requireWorkspaceMembership({
+      userId: input.userId,
+      workspaceSlug: input.workspaceSlug
+    });
+
+    const state = input.state ?? "regular";
+    const limit = Number.isInteger(input.limit)
+      ? Math.min(200, Math.max(1, Number(input.limit)))
+      : 40;
+    const archiveClause =
+      state === "all"
+        ? ""
+        : state === "archived"
+          ? "and at.archived = true"
+          : "and at.archived = false";
+
+    const result = await this.pool.query(
+      `
+        select
+          at.thread_id,
+          at.workspace_id,
+          at.execution_mode,
+          at.execution_host,
+          at.cloud_session_identifier,
+          at.title,
+          at.archived,
+          at.status,
+          at.created_at,
+          at.updated_at,
+          at.mode_switched_at,
+          $3::text as workspace_slug
+        from agent_threads at
+        where at.workspace_id = $1
+        ${archiveClause}
+        order by at.updated_at desc
+        limit $2
+      `,
+      [workspace.workspaceId, limit, workspace.workspaceSlug]
+    );
+
+    return result.rows.map((row) => mapThreadRow(row as Record<string, unknown>));
+  }
+
   async createThread(input: {
     userId: string;
     workspaceSlug: string;
@@ -1335,6 +1425,7 @@ class PostgresAgentService implements AgentService {
           status: "idle",
           cloudSessionIdentifier,
           title: input.title?.trim() || null,
+          archived: false,
           createdAt: input.now.toISOString(),
           updatedAt: input.now.toISOString(),
           modeSwitchedAt: null
@@ -1364,6 +1455,7 @@ class PostgresAgentService implements AgentService {
           execution_host,
           cloud_session_identifier,
           title,
+          archived,
           status,
           created_at,
           updated_at,
@@ -1403,6 +1495,113 @@ class PostgresAgentService implements AgentService {
     });
 
     return access.thread;
+  }
+
+  async updateThread(input: {
+    userId: string;
+    threadId: string;
+    title?: string;
+    archived?: boolean;
+    now: Date;
+  }): Promise<AgentThreadRecord> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+
+      const access = await this.requireThreadAccess(
+        {
+          userId: input.userId,
+          threadId: input.threadId
+        },
+        client,
+        true
+      );
+
+      const updates: string[] = ["updated_at = $2"];
+      const params: unknown[] = [input.threadId, input.now.toISOString()];
+      let parameterIndex = 3;
+
+      if (input.title !== undefined) {
+        updates.push(`title = $${parameterIndex}`);
+        params.push(input.title.trim());
+        parameterIndex += 1;
+      }
+
+      if (input.archived !== undefined) {
+        updates.push(`archived = $${parameterIndex}`);
+        params.push(input.archived);
+        parameterIndex += 1;
+      }
+
+      if (updates.length < 2) {
+        throw new ApiError(
+          400,
+          "INVALID_REQUEST",
+          "At least one thread field must be provided for update"
+        );
+      }
+
+      params.push(access.thread.workspaceSlug);
+
+      const updated = await client.query(
+        `
+          update agent_threads
+          set ${updates.join(", ")}
+          where thread_id = $1
+          returning
+            thread_id,
+            workspace_id,
+            execution_mode,
+            execution_host,
+            cloud_session_identifier,
+            title,
+            archived,
+            status,
+            created_at,
+            updated_at,
+            mode_switched_at,
+            $${parameterIndex}::text as workspace_slug
+        `,
+        params
+      );
+
+      if ((updated.rowCount ?? 0) < 1) {
+        throw new ApiError(404, "AGENT_THREAD_NOT_FOUND", "Thread not found");
+      }
+
+      await client.query("commit");
+      return mapThreadRow(updated.rows[0] as Record<string, unknown>);
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async deleteThread(input: {
+    userId: string;
+    threadId: string;
+    now: Date;
+  }): Promise<{ deleted: true }> {
+    await this.requireThreadAccess({
+      userId: input.userId,
+      threadId: input.threadId
+    });
+
+    const deleted = await this.pool.query(
+      `
+        delete from agent_threads
+        where thread_id = $1
+      `,
+      [input.threadId]
+    );
+
+    if ((deleted.rowCount ?? 0) < 1) {
+      throw new ApiError(404, "AGENT_THREAD_NOT_FOUND", "Thread not found");
+    }
+
+    return { deleted: true };
   }
 
   async switchThreadMode(input: {
@@ -1473,6 +1672,7 @@ class PostgresAgentService implements AgentService {
             execution_host,
             cloud_session_identifier,
             title,
+            archived,
             status,
             created_at,
             updated_at,
@@ -2177,6 +2377,7 @@ class PostgresAgentService implements AgentService {
           at.execution_host,
           at.cloud_session_identifier,
           at.title,
+          at.archived,
           at.status,
           at.created_at,
           at.updated_at,

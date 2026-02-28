@@ -5,7 +5,15 @@ describe("buildOpenApiDocument", () => {
   it("exposes baseline system and auth paths with operation ids", () => {
     const document = buildOpenApiDocument() as {
       openapi?: string;
-      paths?: Record<string, { get?: { operationId?: string }; post?: { operationId?: string } }>;
+      paths?: Record<
+        string,
+        {
+          get?: { operationId?: string };
+          post?: { operationId?: string };
+          patch?: { operationId?: string };
+          delete?: { operationId?: string };
+        }
+      >;
       components?: {
         securitySchemes?: Record<string, unknown>;
       };
@@ -56,9 +64,16 @@ describe("buildOpenApiDocument", () => {
     expect(
       document.paths?.["/v1/workspaces/{workspaceSlug}/invites/{token}/accept"]?.post?.operationId
     ).toBe("acceptWorkspaceInvite");
+    expect(document.paths?.["/v1/agent/threads"]?.get?.operationId).toBe("listAgentThreads");
     expect(document.paths?.["/v1/agent/threads"]?.post?.operationId).toBe("createAgentThread");
     expect(document.paths?.["/v1/agent/threads/{threadId}"]?.get?.operationId).toBe(
       "getAgentThread"
+    );
+    expect(document.paths?.["/v1/agent/threads/{threadId}"]?.patch?.operationId).toBe(
+      "patchAgentThread"
+    );
+    expect(document.paths?.["/v1/agent/threads/{threadId}"]?.delete?.operationId).toBe(
+      "deleteAgentThread"
     );
     expect(document.components?.securitySchemes?.sessionCookieAuth).toBeTruthy();
 

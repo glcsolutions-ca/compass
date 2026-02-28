@@ -4,6 +4,8 @@ import express, { type ErrorRequestHandler, type Express, type Response } from "
 import {
   AgentEventsBatchRequestSchema,
   type AgentExecutionMode,
+  AgentThreadListQuerySchema,
+  AgentThreadPatchRequestSchema,
   RuntimeAccountLoginCancelRequestSchema,
   RuntimeAccountLoginStartRequestSchema,
   RuntimeAccountReadRequestSchema,
@@ -961,6 +963,23 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
     });
   });
 
+  app.get("/v1/agent/threads", async (request, response) => {
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const query = parseOrReply(request.query, AgentThreadListQuerySchema, response);
+      if (!query) {
+        return;
+      }
+
+      const threads = await service.listThreads({
+        userId,
+        workspaceSlug: query.workspaceSlug,
+        state: query.state,
+        limit: query.limit
+      });
+      response.status(200).json({ threads });
+    });
+  });
+
   app.post("/v1/agent/threads", async (request, response) => {
     await withAgentContext(request, response, async ({ userId, service }) => {
       const body = parseOrReply(request.body, AgentThreadCreateRequestSchema, response);
@@ -996,6 +1015,45 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
         threadId: params.threadId
       });
       response.status(200).json({ thread });
+    });
+  });
+
+  app.patch("/v1/agent/threads/:threadId", async (request, response) => {
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
+      if (!params) {
+        return;
+      }
+
+      const body = parseOrReply(request.body, AgentThreadPatchRequestSchema, response);
+      if (!body) {
+        return;
+      }
+
+      const thread = await service.updateThread({
+        userId,
+        threadId: params.threadId,
+        title: body.title,
+        archived: body.archived,
+        now: now()
+      });
+      response.status(200).json({ thread });
+    });
+  });
+
+  app.delete("/v1/agent/threads/:threadId", async (request, response) => {
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
+      if (!params) {
+        return;
+      }
+
+      const deleted = await service.deleteThread({
+        userId,
+        threadId: params.threadId,
+        now: now()
+      });
+      response.status(200).json(deleted);
     });
   });
 

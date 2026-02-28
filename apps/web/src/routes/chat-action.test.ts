@@ -94,6 +94,7 @@ describe("chat action", () => {
         status: "idle",
         cloudSessionIdentifier: null,
         title: "hello",
+        archived: false,
         createdAt: null,
         updatedAt: null,
         modeSwitchedAt: null
@@ -201,6 +202,7 @@ describe("chat action", () => {
         status: "idle",
         cloudSessionIdentifier: null,
         title: "hello from chat",
+        archived: false,
         createdAt: null,
         updatedAt: null,
         modeSwitchedAt: null
@@ -357,6 +359,7 @@ describe("chat action", () => {
         status: "idle",
         cloudSessionIdentifier: null,
         title: "thread",
+        archived: false,
         createdAt: null,
         updatedAt: null,
         modeSwitchedAt: null

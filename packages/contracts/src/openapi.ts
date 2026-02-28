@@ -32,8 +32,13 @@ import {
   RuntimeNotificationSchema,
   AgentThreadCreateRequestSchema,
   AgentThreadCreateResponseSchema,
+  AgentThreadDeleteResponseSchema,
+  AgentThreadListQuerySchema,
+  AgentThreadListResponseSchema,
   AgentThreadModePatchRequestSchema,
   AgentThreadModePatchResponseSchema,
+  AgentThreadPatchRequestSchema,
+  AgentThreadPatchResponseSchema,
   AgentThreadReadResponseSchema,
   AgentTurnInterruptResponseSchema,
   AgentTurnStartRequestSchema,
@@ -69,6 +74,11 @@ export function buildOpenApiDocument(): Record<string, unknown> {
   registry.register("AgentThreadCreateRequest", AgentThreadCreateRequestSchema);
   registry.register("AgentThreadCreateResponse", AgentThreadCreateResponseSchema);
   registry.register("AgentThreadReadResponse", AgentThreadReadResponseSchema);
+  registry.register("AgentThreadListQuery", AgentThreadListQuerySchema);
+  registry.register("AgentThreadListResponse", AgentThreadListResponseSchema);
+  registry.register("AgentThreadPatchRequest", AgentThreadPatchRequestSchema);
+  registry.register("AgentThreadPatchResponse", AgentThreadPatchResponseSchema);
+  registry.register("AgentThreadDeleteResponse", AgentThreadDeleteResponseSchema);
   registry.register("AgentThreadModePatchRequest", AgentThreadModePatchRequestSchema);
   registry.register("AgentThreadModePatchResponse", AgentThreadModePatchResponseSchema);
   registry.register("AgentTurnStartRequest", AgentTurnStartRequestSchema);
@@ -809,6 +819,52 @@ export function buildOpenApiDocument(): Record<string, unknown> {
   });
 
   registry.registerPath({
+    method: "get",
+    path: "/v1/agent/threads",
+    operationId: "listAgentThreads",
+    summary: "List agent threads for a workspace",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    request: {
+      query: AgentThreadListQuerySchema
+    },
+    responses: {
+      200: {
+        description: "Agent threads",
+        content: {
+          "application/json": {
+            schema: AgentThreadListResponseSchema
+          }
+        }
+      },
+      400: {
+        description: "Invalid request",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      403: {
+        description: "Forbidden",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
     method: "post",
     path: "/v1/agent/threads",
     operationId: "createAgentThread",
@@ -878,6 +934,117 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         content: {
           "application/json": {
             schema: AgentThreadReadResponseSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      403: {
+        description: "Forbidden",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      404: {
+        description: "Thread not found",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "patch",
+    path: "/v1/agent/threads/{threadId}",
+    operationId: "patchAgentThread",
+    summary: "Update thread metadata",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    request: {
+      params: z.object({
+        threadId: z.string().min(1)
+      }),
+      body: {
+        content: {
+          "application/json": {
+            schema: AgentThreadPatchRequestSchema
+          }
+        }
+      }
+    },
+    responses: {
+      200: {
+        description: "Updated thread",
+        content: {
+          "application/json": {
+            schema: AgentThreadPatchResponseSchema
+          }
+        }
+      },
+      400: {
+        description: "Invalid request",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      403: {
+        description: "Forbidden",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      404: {
+        description: "Thread not found",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "delete",
+    path: "/v1/agent/threads/{threadId}",
+    operationId: "deleteAgentThread",
+    summary: "Delete a thread",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    request: {
+      params: z.object({
+        threadId: z.string().min(1)
+      })
+    },
+    responses: {
+      200: {
+        description: "Thread deleted",
+        content: {
+          "application/json": {
+            schema: AgentThreadDeleteResponseSchema
           }
         }
       },

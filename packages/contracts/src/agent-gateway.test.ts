@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ApiErrorSchema } from "./schemas.js";
 import {
+  AgentThreadListQuerySchema,
+  AgentThreadPatchRequestSchema,
   AgentStreamEventSchema,
   AgentThreadCreateRequestSchema,
   AgentTurnStartRequestSchema,
@@ -27,6 +29,21 @@ describe("agent gateway contract schemas", () => {
         executionMode: "cloud"
       }).text
     ).toBe("hello");
+
+    expect(
+      AgentThreadListQuerySchema.parse({
+        workspaceSlug: "personal-jkropp",
+        state: "all",
+        limit: 25
+      }).state
+    ).toBe("all");
+
+    expect(
+      AgentThreadPatchRequestSchema.parse({
+        title: "Renamed thread",
+        archived: true
+      }).archived
+    ).toBe(true);
 
     expect(
       RuntimeAccountLoginStartRequestSchema.parse({
@@ -117,6 +134,8 @@ describe("agent gateway contract schemas", () => {
         createdAt: new Date().toISOString()
       }).success
     ).toBe(false);
+
+    expect(AgentThreadPatchRequestSchema.safeParse({}).success).toBe(false);
   });
 
   it("keeps shared API error shape stable", () => {

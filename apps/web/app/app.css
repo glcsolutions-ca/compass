@@ -200,15 +200,31 @@
 }
 
 .aui-thread-list-item {
-  @apply rounded-md;
+  @apply flex items-center gap-1 rounded-md;
 }
 
 .aui-thread-list-item-trigger {
-  @apply rounded-md px-2 py-1.5 text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
+  @apply min-w-0 flex-1 rounded-md px-2 py-1.5 text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
 }
 
 .aui-thread-list-item-trigger[data-active="true"] {
   @apply bg-sidebar-accent text-sidebar-accent-foreground;
+}
+
+.aui-thread-list-item-title {
+  @apply truncate text-xs;
+}
+
+.aui-thread-list-item-actions {
+  @apply mr-1 flex items-center gap-1;
+}
+
+.aui-thread-list-item-action {
+  @apply inline-flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground/65 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
+}
+
+.aui-thread-list-item-action-danger {
+  @apply text-destructive/80 hover:bg-destructive/15 hover:text-destructive;
 }
 
 .aui-selection-toolbar {

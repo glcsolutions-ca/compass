@@ -334,7 +334,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List agent threads for a workspace */
+        get: operations["listAgentThreads"];
         put?: never;
         /** Create an agent thread */
         post: operations["createAgentThread"];
@@ -355,10 +356,12 @@ export interface paths {
         get: operations["getAgentThread"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete a thread */
+        delete: operations["deleteAgentThread"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update thread metadata */
+        patch: operations["patchAgentThread"];
         trace?: never;
     };
     "/v1/agent/threads/{threadId}/mode": {
@@ -607,6 +610,7 @@ export interface components {
                 status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
                 cloudSessionIdentifier?: string | null;
                 title?: string | null;
+                archived: boolean;
                 /** Format: date-time */
                 createdAt: string;
                 /** Format: date-time */
@@ -628,6 +632,7 @@ export interface components {
                 status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
                 cloudSessionIdentifier?: string | null;
                 title?: string | null;
+                archived: boolean;
                 /** Format: date-time */
                 createdAt: string;
                 /** Format: date-time */
@@ -635,6 +640,64 @@ export interface components {
                 /** Format: date-time */
                 modeSwitchedAt?: string | null;
             };
+        };
+        AgentThreadListQuery: {
+            workspaceSlug: string;
+            /** @enum {string} */
+            state?: "regular" | "archived" | "all";
+            limit?: number;
+        };
+        AgentThreadListResponse: {
+            threads: {
+                threadId: string;
+                workspaceId: string;
+                workspaceSlug: string;
+                /** @enum {string} */
+                executionMode: "cloud" | "local";
+                /** @enum {string} */
+                executionHost: "dynamic_sessions" | "desktop_local";
+                /** @enum {string} */
+                status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
+                cloudSessionIdentifier?: string | null;
+                title?: string | null;
+                archived: boolean;
+                /** Format: date-time */
+                createdAt: string;
+                /** Format: date-time */
+                updatedAt: string;
+                /** Format: date-time */
+                modeSwitchedAt?: string | null;
+            }[];
+        };
+        AgentThreadPatchRequest: {
+            title?: string;
+            archived?: boolean;
+        };
+        AgentThreadPatchResponse: {
+            thread: {
+                threadId: string;
+                workspaceId: string;
+                workspaceSlug: string;
+                /** @enum {string} */
+                executionMode: "cloud" | "local";
+                /** @enum {string} */
+                executionHost: "dynamic_sessions" | "desktop_local";
+                /** @enum {string} */
+                status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
+                cloudSessionIdentifier?: string | null;
+                title?: string | null;
+                archived: boolean;
+                /** Format: date-time */
+                createdAt: string;
+                /** Format: date-time */
+                updatedAt: string;
+                /** Format: date-time */
+                modeSwitchedAt?: string | null;
+            };
+        };
+        AgentThreadDeleteResponse: {
+            /** @enum {boolean} */
+            deleted: true;
         };
         AgentThreadModePatchRequest: {
             /** @enum {string} */
@@ -655,6 +718,7 @@ export interface components {
                 status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
                 cloudSessionIdentifier?: string | null;
                 title?: string | null;
+                archived: boolean;
                 /** Format: date-time */
                 createdAt: string;
                 /** Format: date-time */
@@ -1875,6 +1939,87 @@ export interface operations {
             };
         };
     };
+    listAgentThreads: {
+        parameters: {
+            query: {
+                workspaceSlug: string;
+                state?: "regular" | "archived" | "all";
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent threads */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        threads: {
+                            threadId: string;
+                            workspaceId: string;
+                            workspaceSlug: string;
+                            /** @enum {string} */
+                            executionMode: "cloud" | "local";
+                            /** @enum {string} */
+                            executionHost: "dynamic_sessions" | "desktop_local";
+                            /** @enum {string} */
+                            status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
+                            cloudSessionIdentifier?: string | null;
+                            title?: string | null;
+                            archived: boolean;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** Format: date-time */
+                            modeSwitchedAt?: string | null;
+                        }[];
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
     createAgentThread: {
         parameters: {
             query?: never;
@@ -1917,6 +2062,7 @@ export interface operations {
                             status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
                             cloudSessionIdentifier?: string | null;
                             title?: string | null;
+                            archived: boolean;
                             /** Format: date-time */
                             createdAt: string;
                             /** Format: date-time */
@@ -1995,6 +2141,7 @@ export interface operations {
                             status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
                             cloudSessionIdentifier?: string | null;
                             title?: string | null;
+                            archived: boolean;
                             /** Format: date-time */
                             createdAt: string;
                             /** Format: date-time */
@@ -2002,6 +2149,165 @@ export interface operations {
                             /** Format: date-time */
                             modeSwitchedAt?: string | null;
                         };
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    deleteAgentThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thread deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        deleted: true;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    patchAgentThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    title?: string;
+                    archived?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        thread: {
+                            threadId: string;
+                            workspaceId: string;
+                            workspaceSlug: string;
+                            /** @enum {string} */
+                            executionMode: "cloud" | "local";
+                            /** @enum {string} */
+                            executionHost: "dynamic_sessions" | "desktop_local";
+                            /** @enum {string} */
+                            status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
+                            cloudSessionIdentifier?: string | null;
+                            title?: string | null;
+                            archived: boolean;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** Format: date-time */
+                            modeSwitchedAt?: string | null;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
                     };
                 };
             };
@@ -2082,6 +2388,7 @@ export interface operations {
                             status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
                             cloudSessionIdentifier?: string | null;
                             title?: string | null;
+                            archived: boolean;
                             /** Format: date-time */
                             createdAt: string;
                             /** Format: date-time */

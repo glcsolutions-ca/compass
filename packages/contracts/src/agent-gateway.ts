@@ -19,6 +19,7 @@ export const AgentThreadSchema = z.object({
   status: AgentThreadStatusSchema,
   cloudSessionIdentifier: z.string().min(1).nullish(),
   title: z.string().min(1).nullish(),
+  archived: z.boolean(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   modeSwitchedAt: z.string().datetime().nullish()
@@ -37,6 +38,35 @@ export const AgentThreadCreateResponseSchema = z.object({
 
 export const AgentThreadReadResponseSchema = z.object({
   thread: AgentThreadSchema
+});
+
+export const AgentThreadListStateSchema = z.enum(["regular", "archived", "all"]);
+
+export const AgentThreadListQuerySchema = z.object({
+  workspaceSlug: z.string().min(1),
+  state: AgentThreadListStateSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional()
+});
+
+export const AgentThreadListResponseSchema = z.object({
+  threads: z.array(AgentThreadSchema)
+});
+
+export const AgentThreadPatchRequestSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    archived: z.boolean().optional()
+  })
+  .refine((value) => value.title !== undefined || value.archived !== undefined, {
+    message: "At least one thread field must be provided"
+  });
+
+export const AgentThreadPatchResponseSchema = z.object({
+  thread: AgentThreadSchema
+});
+
+export const AgentThreadDeleteResponseSchema = z.object({
+  deleted: z.literal(true)
 });
 
 export const AgentThreadModePatchRequestSchema = z.object({
@@ -246,6 +276,12 @@ export type AgentThread = z.infer<typeof AgentThreadSchema>;
 export type AgentThreadCreateRequest = z.infer<typeof AgentThreadCreateRequestSchema>;
 export type AgentThreadCreateResponse = z.infer<typeof AgentThreadCreateResponseSchema>;
 export type AgentThreadReadResponse = z.infer<typeof AgentThreadReadResponseSchema>;
+export type AgentThreadListState = z.infer<typeof AgentThreadListStateSchema>;
+export type AgentThreadListQuery = z.infer<typeof AgentThreadListQuerySchema>;
+export type AgentThreadListResponse = z.infer<typeof AgentThreadListResponseSchema>;
+export type AgentThreadPatchRequest = z.infer<typeof AgentThreadPatchRequestSchema>;
+export type AgentThreadPatchResponse = z.infer<typeof AgentThreadPatchResponseSchema>;
+export type AgentThreadDeleteResponse = z.infer<typeof AgentThreadDeleteResponseSchema>;
 export type AgentThreadModePatchRequest = z.infer<typeof AgentThreadModePatchRequestSchema>;
 export type AgentThreadModePatchResponse = z.infer<typeof AgentThreadModePatchResponseSchema>;
 export type AgentTurn = z.infer<typeof AgentTurnSchema>;

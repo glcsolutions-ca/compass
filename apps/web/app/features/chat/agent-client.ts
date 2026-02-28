@@ -4,7 +4,10 @@ import {
   AgentEventsBatchResponseSchema,
   AgentEventsListResponseSchema,
   AgentThreadCreateResponseSchema,
+  AgentThreadDeleteResponseSchema,
+  AgentThreadListResponseSchema,
   AgentThreadModePatchResponseSchema,
+  AgentThreadPatchResponseSchema,
   AgentThreadReadResponseSchema,
   AgentTurnInterruptResponseSchema,
   AgentTurnStartResponseSchema,
@@ -31,6 +34,7 @@ interface UntypedApiClient {
   GET(path: string, options?: Record<string, unknown>): Promise<RawClientResult>;
   POST(path: string, options?: Record<string, unknown>): Promise<RawClientResult>;
   PATCH(path: string, options?: Record<string, unknown>): Promise<RawClientResult>;
+  DELETE(path: string, options?: Record<string, unknown>): Promise<RawClientResult>;
 }
 
 interface ApiResult<T> {
@@ -49,6 +53,18 @@ function createBrowserClient(baseUrl: string): UntypedApiClient {
     baseUrl,
     fetch: globalThis.fetch.bind(globalThis)
   }) as unknown as UntypedApiClient;
+}
+
+function resolveBrowserBaseUrl(baseUrl?: string): string {
+  if (baseUrl && baseUrl.trim().length > 0) {
+    return baseUrl;
+  }
+
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+
+  return "http://localhost";
 }
 
 function normalizeApiResult<TPayload, TResult>({
@@ -117,6 +133,33 @@ export async function createAgentThread(
   });
 }
 
+export async function listAgentThreads(
+  request: Request,
+  payload: {
+    workspaceSlug: string;
+    state?: "regular" | "archived" | "all";
+    limit?: number;
+  }
+): Promise<ApiResult<AgentThread[]>> {
+  const client = createRouteClient(request);
+  const result = await client.GET("/v1/agent/threads", {
+    credentials: "include",
+    params: {
+      query: {
+        workspaceSlug: payload.workspaceSlug,
+        state: payload.state,
+        limit: payload.limit
+      }
+    }
+  });
+
+  return normalizeApiResult({
+    result,
+    schema: AgentThreadListResponseSchema,
+    select: (parsed) => parsed.threads
+  });
+}
+
 export async function getAgentThread(
   request: Request,
   threadId: string
@@ -136,6 +179,94 @@ export async function getAgentThread(
     schema: AgentThreadReadResponseSchema,
     select: (parsed) => parsed.thread
   });
+}
+
+export async function listAgentThreadsClient(payload: {
+  workspaceSlug: string;
+  state?: "regular" | "archived" | "all";
+  limit?: number;
+  baseUrl?: string;
+}): Promise<AgentThread[]> {
+  const client = createBrowserClient(resolveBrowserBaseUrl(payload.baseUrl));
+  const result = await client.GET("/v1/agent/threads", {
+    credentials: "include",
+    params: {
+      query: {
+        workspaceSlug: payload.workspaceSlug,
+        state: payload.state,
+        limit: payload.limit
+      }
+    }
+  });
+
+  if (result.response.status >= 400) {
+    throw new Error(readApiErrorMessage(result.error, "Unable to load chat threads."));
+  }
+
+  const parsed = AgentThreadListResponseSchema.safeParse(result.data);
+  if (!parsed.success) {
+    return [];
+  }
+
+  return parsed.data.threads;
+}
+
+export async function patchAgentThreadClient(payload: {
+  threadId: string;
+  title?: string;
+  archived?: boolean;
+  baseUrl?: string;
+}): Promise<AgentThread> {
+  const client = createBrowserClient(resolveBrowserBaseUrl(payload.baseUrl));
+  const result = await client.PATCH("/v1/agent/threads/{threadId}", {
+    credentials: "include",
+    params: {
+      path: {
+        threadId: payload.threadId
+      }
+    },
+    body: {
+      title: payload.title,
+      archived: payload.archived
+    }
+  });
+
+  if (result.response.status >= 400) {
+    throw new Error(readApiErrorMessage(result.error, "Unable to update chat thread."));
+  }
+
+  const parsed = AgentThreadPatchResponseSchema.safeParse(result.data);
+  if (!parsed.success) {
+    throw new Error("Unable to update chat thread.");
+  }
+
+  return parsed.data.thread;
+}
+
+export async function deleteAgentThreadClient(payload: {
+  threadId: string;
+  baseUrl?: string;
+}): Promise<{ deleted: true }> {
+  const client = createBrowserClient(resolveBrowserBaseUrl(payload.baseUrl));
+  const result = await client.DELETE("/v1/agent/threads/{threadId}", {
+    credentials: "include",
+    params: {
+      path: {
+        threadId: payload.threadId
+      }
+    }
+  });
+
+  if (result.response.status >= 400) {
+    throw new Error(readApiErrorMessage(result.error, "Unable to delete chat thread."));
+  }
+
+  const parsed = AgentThreadDeleteResponseSchema.safeParse(result.data);
+  if (!parsed.success) {
+    throw new Error("Unable to delete chat thread.");
+  }
+
+  return parsed.data;
 }
 
 export async function switchAgentThreadMode(
@@ -251,8 +382,7 @@ export async function listAgentThreadEventsClient(payload: {
   limit?: number;
   baseUrl?: string;
 }): Promise<AgentEventsResult> {
-  const baseUrl = payload.baseUrl ?? window.location.origin;
-  const client = createBrowserClient(baseUrl);
+  const client = createBrowserClient(resolveBrowserBaseUrl(payload.baseUrl));
   const result = await client.GET("/v1/agent/threads/{threadId}/events", {
     credentials: "include",
     params: {
@@ -290,8 +420,7 @@ export async function appendAgentThreadEventsBatchClient(payload: {
   }>;
   baseUrl?: string;
 }): Promise<{ accepted: number }> {
-  const baseUrl = payload.baseUrl ?? window.location.origin;
-  const client = createBrowserClient(baseUrl);
+  const client = createBrowserClient(resolveBrowserBaseUrl(payload.baseUrl));
   const result = await client.POST("/v1/agent/threads/{threadId}/events:batch", {
     credentials: "include",
     params: {

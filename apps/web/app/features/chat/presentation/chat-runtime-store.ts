@@ -1,6 +1,5 @@
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { ChatTimelineItem, ChatTransportState } from "~/features/chat/agent-types";
-import type { ChatThreadHistoryItem } from "~/features/chat/chat-thread-history";
 
 export type ChatInspectTab = "activity" | "terminal" | "files" | "diff" | "raw";
 
@@ -18,7 +17,7 @@ export interface AssistantEventPartModel {
 }
 
 export interface AssistantThreadListItem {
-  status: "regular";
+  status: "regular" | "archived";
   id: string;
   title: string;
 }
@@ -221,10 +220,10 @@ export function convertAssistantStoreMessage(message: AssistantStoreMessage): Th
 }
 
 export function buildAssistantThreadListItems(
-  items: ChatThreadHistoryItem[]
+  items: Array<{ threadId: string; title: string; archived?: boolean }>
 ): AssistantThreadListItem[] {
   return items.map((item) => ({
-    status: "regular",
+    status: item.archived ? "archived" : "regular",
     id: item.threadId,
     title: item.title
   }));

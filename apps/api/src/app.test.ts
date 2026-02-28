@@ -366,6 +366,134 @@ describe("API app", () => {
     expect(createThread).toHaveBeenCalledTimes(1);
   });
 
+  it("lists agent threads when authenticated", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const listThreads = vi.fn(async () => [
+      {
+        threadId: "thread-1",
+        workspaceId: "workspace-1",
+        workspaceSlug: "acme",
+        executionMode: "cloud",
+        executionHost: "dynamic_sessions",
+        status: "idle",
+        cloudSessionIdentifier: "thr-thread-1",
+        title: "First thread",
+        archived: false,
+        createdAt: "2026-02-27T00:00:00.000Z",
+        updatedAt: "2026-02-27T00:00:00.000Z",
+        modeSwitchedAt: null
+      }
+    ]);
+
+    const app = buildApiApp({
+      authService,
+      agentService: {
+        listThreads
+      } as unknown as AgentService,
+      agentGatewayEnabled: true,
+      agentCloudModeEnabled: true
+    });
+
+    const response = await request(app)
+      .get("/v1/agent/threads")
+      .query({ workspaceSlug: "acme", state: "regular", limit: 25 });
+
+    expect(response.status).toBe(200);
+    expect(response.body.threads).toHaveLength(1);
+    expect(response.body.threads[0].threadId).toBe("thread-1");
+    expect(listThreads).toHaveBeenCalledTimes(1);
+    expect(listThreads).toHaveBeenCalledWith({
+      userId: "usr-1",
+      workspaceSlug: "acme",
+      state: "regular",
+      limit: 25
+    });
+  });
+
+  it("patches thread metadata when authenticated", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const updateThread = vi.fn(async () => ({
+      threadId: "thread-1",
+      workspaceId: "workspace-1",
+      workspaceSlug: "acme",
+      executionMode: "cloud",
+      executionHost: "dynamic_sessions",
+      status: "idle",
+      cloudSessionIdentifier: "thr-thread-1",
+      title: "Renamed thread",
+      archived: true,
+      createdAt: "2026-02-27T00:00:00.000Z",
+      updatedAt: "2026-02-27T00:05:00.000Z",
+      modeSwitchedAt: null
+    }));
+
+    const app = buildApiApp({
+      authService,
+      agentService: {
+        updateThread
+      } as unknown as AgentService,
+      agentGatewayEnabled: true,
+      agentCloudModeEnabled: true
+    });
+
+    const response = await request(app)
+      .patch("/v1/agent/threads/thread-1")
+      .send({ title: "Renamed thread", archived: true });
+
+    expect(response.status).toBe(200);
+    expect(response.body.thread.title).toBe("Renamed thread");
+    expect(response.body.thread.archived).toBe(true);
+    expect(updateThread).toHaveBeenCalledTimes(1);
+    expect(updateThread.mock.calls[0]?.[0]).toMatchObject({
+      userId: "usr-1",
+      threadId: "thread-1",
+      title: "Renamed thread",
+      archived: true
+    });
+  });
+
+  it("deletes a thread when authenticated", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const deleteThread = vi.fn(async () => ({ deleted: true as const }));
+
+    const app = buildApiApp({
+      authService,
+      agentService: {
+        deleteThread
+      } as unknown as AgentService,
+      agentGatewayEnabled: true,
+      agentCloudModeEnabled: true
+    });
+
+    const response = await request(app).delete("/v1/agent/threads/thread-1");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ deleted: true });
+    expect(deleteThread).toHaveBeenCalledTimes(1);
+    expect(deleteThread.mock.calls[0]?.[0]).toMatchObject({
+      userId: "usr-1",
+      threadId: "thread-1"
+    });
+  });
+
   it("returns explicit local mode not implemented error when starting local turns", async () => {
     const authService = {
       readAuthMe: vi.fn(async () => ({

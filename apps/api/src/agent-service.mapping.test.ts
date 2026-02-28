@@ -15,6 +15,7 @@ describe("agent service row mapping", () => {
       status: "idle",
       cloud_session_identifier: "thr-thread-1",
       title: "Smoke",
+      archived: true,
       created_at: createdAt,
       updated_at: updatedAt,
       mode_switched_at: null
@@ -22,6 +23,7 @@ describe("agent service row mapping", () => {
 
     expect(mapped.createdAt).toBe(createdAt.toISOString());
     expect(mapped.updatedAt).toBe(updatedAt.toISOString());
+    expect(mapped.archived).toBe(true);
   });
 
   it("maps turn rows that contain Date timestamp objects", () => {

@@ -91,7 +91,7 @@ function ChatThreadComposer() {
         </ComposerPrimitive.If>
 
         <Composer.Input />
-        <Composer.Action />
+        <Composer.Action aria-label="Send prompt" title="Send prompt" />
       </div>
 
       <ComposerPrimitive.If dictation>

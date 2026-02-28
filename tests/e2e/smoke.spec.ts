@@ -1,6 +1,6 @@
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
-import { test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const CHAT_LAYOUT_WIDTHS = [1280, 1440, 1728] as const;
 const CHAT_LAYOUT_TARGET_DELTA_PX = 4;
@@ -26,6 +26,31 @@ function parseJsonObject<T>(input: string): T | null {
 
 function centerX(box: { x: number; width: number }): number {
   return box.x + box.width / 2;
+}
+
+async function waitForComposerReady({
+  page,
+  composerInput,
+  sendButton,
+  timeoutMs = 5_000
+}: {
+  page: Page;
+  composerInput: ReturnType<Page["getByPlaceholder"]>;
+  sendButton: ReturnType<Page["getByLabel"]>;
+  timeoutMs?: number;
+}): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const composerVisible = await composerInput.isVisible().catch(() => false);
+    const sendVisible = await sendButton.isVisible().catch(() => false);
+    if (composerVisible && sendVisible) {
+      return true;
+    }
+
+    await page.waitForTimeout(200);
+  }
+
+  return false;
 }
 
 async function ensureSidebarState(
@@ -307,13 +332,17 @@ async function runFlow(
 
       const composerInput = page.getByPlaceholder("Ask Compass anything...").last();
       const sendButton = page.getByLabel("Send prompt").last();
-      let composerVisible = await composerInput.isVisible().catch(() => false);
-      let sendVisible = await sendButton.isVisible().catch(() => false);
+      let chatSurfaceAvailable = await waitForComposerReady({
+        page,
+        composerInput,
+        sendButton,
+        timeoutMs: 2_000
+      });
 
       const shouldAttemptSignInNavigation = requireAuthGateway || smokeChatSendMode === "required";
 
       if (
-        (!composerVisible || !sendVisible) &&
+        !chatSurfaceAvailable &&
         smokeChatSendMode !== "disabled" &&
         shouldAttemptSignInNavigation
       ) {
@@ -322,12 +351,15 @@ async function runFlow(
         if (signInVisible) {
           await signInLink.click();
           await page.waitForLoadState("networkidle");
-          composerVisible = await composerInput.isVisible().catch(() => false);
-          sendVisible = await sendButton.isVisible().catch(() => false);
+          chatSurfaceAvailable = await waitForComposerReady({
+            page,
+            composerInput,
+            sendButton,
+            timeoutMs: 10_000
+          });
         }
       }
 
-      const chatSurfaceAvailable = composerVisible && sendVisible;
       const requireChatSurface = smokeChatLayout || smokeChatSendMode === "required";
 
       flowAssertions.push({
@@ -354,13 +386,14 @@ async function runFlow(
         await page.goto(`${baseUrl}/chat`, { waitUntil: "networkidle" });
         await composerInput.fill("Smoke test prompt");
         await sendButton.click();
-        await page.waitForTimeout(1200);
 
-        const sentPromptVisible = await page
-          .getByText("Smoke test prompt")
-          .last()
-          .isVisible()
-          .catch(() => false);
+        const sentPromptLocator = page.getByText("Smoke test prompt").last();
+        let sentPromptVisible = true;
+        try {
+          await expect(sentPromptLocator).toBeVisible({ timeout: 10_000 });
+        } catch {
+          sentPromptVisible = false;
+        }
         flowAssertions.push({
           id: `${flowId}:chat-send-renders-user-prompt`,
           description: `[${flowId}] Chat send renders the user prompt in the timeline`,

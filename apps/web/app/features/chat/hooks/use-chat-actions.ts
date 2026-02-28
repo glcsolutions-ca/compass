@@ -14,6 +14,13 @@ interface UseChatActionsInput {
   onExecutionModeChange: (mode: AgentExecutionMode) => void;
 }
 
+function resolveActiveThreadId(input: {
+  loaderThreadId: string | null;
+  submitResultThreadId: string | null | undefined;
+}): string | null {
+  return input.loaderThreadId ?? input.submitResultThreadId ?? null;
+}
+
 export interface ChatActionsController {
   submitFetcher: ReturnType<typeof useFetcher<ChatActionData>>;
   modeFetcher: ReturnType<typeof useFetcher<ChatActionData>>;
@@ -36,7 +43,10 @@ export function useChatActions({
   const modeFetcher = useFetcher<ChatActionData>();
   const interruptFetcher = useFetcher<ChatActionData>();
 
-  const activeThreadId = submitFetcher.data?.threadId ?? loaderThreadId;
+  const activeThreadId = resolveActiveThreadId({
+    loaderThreadId,
+    submitResultThreadId: submitFetcher.data?.threadId
+  });
 
   useEffect(() => {
     const actionResult = submitFetcher.data;
@@ -136,3 +146,7 @@ export function useChatActions({
     handleModeChange
   };
 }
+
+export const __private__ = {
+  resolveActiveThreadId
+};

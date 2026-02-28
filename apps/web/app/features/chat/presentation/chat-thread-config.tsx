@@ -3,7 +3,9 @@ import { ComposerPrimitive } from "@assistant-ui/react";
 import { Composer, type ThreadConfig } from "@assistant-ui/react-ui";
 import { Mic, MicOff } from "lucide-react";
 import type { AgentExecutionMode } from "~/features/chat/agent-types";
+import { ChatMarkdownText } from "~/features/chat/presentation/chat-markdown-text";
 import type { ChatSurfaceState } from "~/features/chat/presentation/chat-runtime-store";
+import { ChatToolFallback } from "~/features/chat/presentation/chat-tool-fallback";
 import { cn } from "~/lib/utils/cn";
 
 export interface ChatThreadConfigInput {
@@ -91,7 +93,7 @@ function ChatThreadComposer() {
         </ComposerPrimitive.If>
 
         <Composer.Input />
-        <Composer.Action />
+        <Composer.Action aria-label="Send prompt" title="Send prompt" />
       </div>
 
       <ComposerPrimitive.If dictation>
@@ -112,7 +114,11 @@ export function createChatThreadConfig(input: ChatThreadConfigInput): ThreadConf
       allowReload: true,
       allowSpeak: true,
       allowFeedbackNegative: true,
-      allowFeedbackPositive: true
+      allowFeedbackPositive: true,
+      components: {
+        Text: ChatMarkdownText,
+        ToolFallback: ChatToolFallback
+      }
     },
     branchPicker: {
       allowBranchPicker: true
@@ -125,6 +131,13 @@ export function createChatThreadConfig(input: ChatThreadConfigInput): ThreadConf
       MessagesFooter
     },
     strings: {
+      code: {
+        header: {
+          copy: {
+            tooltip: "Copy code snippet"
+          }
+        }
+      },
       composer: {
         cancel: {
           tooltip: "Interrupt active turn"

@@ -3,7 +3,7 @@ import {
   type ThreadMessageLike,
   useExternalStoreRuntime
 } from "@assistant-ui/react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useMemo, useState } from "react";
 import { beforeAll, describe, expect, it } from "vitest";
 import { ChatCanvas } from "~/features/chat/presentation/chat-canvas";
@@ -196,6 +196,123 @@ function ChatCanvasMultipartAssistantHarness() {
   );
 }
 
+function ChatCanvasMarkdownAssistantHarness() {
+  const store = useMemo<ExternalStoreAdapter>(
+    () => ({
+      isRunning: false,
+      messages: [
+        {
+          id: "assistant-markdown",
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: `## Deployment Plan
+
+| Step | Status |
+| --- | --- |
+| Build | Done |
+
+\`\`\`ts
+const value = 1;
+\`\`\`
+
+\`\`\`mermaid
+graph TD
+  A[User] --> B[Compass]
+\`\`\``
+            }
+          ],
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+          status: {
+            type: "complete",
+            reason: "stop"
+          },
+          metadata: {}
+        } satisfies ThreadMessageLike
+      ],
+      onNew: async (_message) => undefined
+    }),
+    []
+  );
+  const runtime = useExternalStoreRuntime(store);
+
+  return (
+    <ChatCanvas
+      executionMode="cloud"
+      localModeAvailable={false}
+      onExecutionModeChange={() => undefined}
+      runtime={runtime}
+      surfaceState={{
+        transportLifecycle: "open",
+        transportLabel: "Live",
+        actionError: null,
+        transportError: null
+      }}
+      switchingMode={false}
+    />
+  );
+}
+
+function ChatCanvasToolFallbackHarness() {
+  const store = useMemo<ExternalStoreAdapter>(
+    () => ({
+      isRunning: false,
+      messages: [
+        {
+          id: "assistant-tool",
+          role: "assistant",
+          content: [
+            {
+              type: "tool-call",
+              toolCallId: "tool-call-1",
+              toolName: "read_file",
+              args: {
+                path: "README.md"
+              },
+              argsText: JSON.stringify(
+                {
+                  path: "README.md"
+                },
+                null,
+                2
+              ),
+              result: {
+                lines: 42
+              }
+            }
+          ],
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+          status: {
+            type: "complete",
+            reason: "stop"
+          },
+          metadata: {}
+        } satisfies ThreadMessageLike
+      ],
+      onNew: async (_message) => undefined
+    }),
+    []
+  );
+  const runtime = useExternalStoreRuntime(store);
+
+  return (
+    <ChatCanvas
+      executionMode="cloud"
+      localModeAvailable={false}
+      onExecutionModeChange={() => undefined}
+      runtime={runtime}
+      surfaceState={{
+        transportLifecycle: "open",
+        transportLabel: "Live",
+        actionError: null,
+        transportError: null
+      }}
+      switchingMode={false}
+    />
+  );
+}
+
 describe("chat canvas", () => {
   it("renders welcome state without crashing on empty runtime", () => {
     render(<ChatCanvasHarness />);
@@ -228,5 +345,28 @@ describe("chat canvas", () => {
 
     expect(screen.queryByText("First assistant part")).not.toBeNull();
     expect(screen.queryByText("Second assistant part")).not.toBeNull();
+  });
+
+  it("renders markdown content with GFM and mermaid output container", async () => {
+    const renderResult = render(<ChatCanvasMarkdownAssistantHarness />);
+
+    expect(await screen.findByText("Deployment Plan")).not.toBeNull();
+    expect(screen.queryByText("Build")).not.toBeNull();
+    expect(renderResult.container.textContent).toContain("const value = 1;");
+
+    await waitFor(() => {
+      const mermaidContainer = renderResult.container.querySelector(
+        ".aui-md-mermaid, .aui-md-mermaid-fallback"
+      );
+      expect(mermaidContainer).not.toBeNull();
+    });
+  });
+
+  it("renders tool fallback cards for unregistered tool calls", async () => {
+    render(<ChatCanvasToolFallbackHarness />);
+
+    expect(await screen.findByText("Tool")).not.toBeNull();
+    expect(screen.queryByText("read_file")).not.toBeNull();
+    expect(screen.queryByText("Arguments")).not.toBeNull();
   });
 });

@@ -363,11 +363,6 @@ export async function resolveLocalEnvValues({
   }
 
   const existingViteApiBaseUrl = getExistingValue(state, "apps/web/.env", "VITE_API_BASE_URL");
-  const existingRuntimeEndpoint = getExistingValue(
-    state,
-    "apps/api/.env",
-    "AGENT_RUNTIME_ENDPOINT"
-  );
   const existingRuntimeEngine = getExistingValue(
     state,
     "apps/codex-session-runtime/.env",
@@ -389,7 +384,6 @@ export async function resolveLocalEnvValues({
     `compass-${getWorktreeSeed(rootDir).shortSeed}`;
   const runtimeEndpoint =
     normalizeValue(env.AGENT_RUNTIME_ENDPOINT) ??
-    existingRuntimeEndpoint ??
     `http://127.0.0.1:${resolvedPorts.SESSION_RUNTIME_PORT}`;
   const runtimeEngine =
     normalizeValue(env.SESSION_RUNTIME_ENGINE) ?? existingRuntimeEngine ?? "codex";

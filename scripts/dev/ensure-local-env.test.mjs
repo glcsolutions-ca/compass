@@ -240,4 +240,48 @@ describe("ensure-local-env", () => {
       expect(apiEnv.AGENT_RUNTIME_ENDPOINT).toBe(`http://127.0.0.1:${runtimeEnv.PORT}`);
     });
   });
+
+  it("overwrites stale AGENT_RUNTIME_ENDPOINT with managed runtime port by default", async () => {
+    await withTempRepo(async (repoDir) => {
+      await writeFileWithParents(
+        path.join(repoDir, "apps/api/.env"),
+        "API_PORT=49991\nAGENT_RUNTIME_ENDPOINT=http://127.0.0.1:59999\n"
+      );
+      await writeFileWithParents(
+        path.join(repoDir, "apps/codex-session-runtime/.env"),
+        "HOST=127.0.0.1\nPORT=55444\nSESSION_RUNTIME_ENGINE=codex\nCODEX_APP_SERVER_COMMAND=codex\nCODEX_APP_SERVER_ARGS=app-server\n"
+      );
+
+      await ensureLocalEnv({
+        rootDir: repoDir,
+        env: {},
+        isPortAvailableFn: async () => true,
+        logger: () => {}
+      });
+
+      const apiEnv = parseEnvFile(await readFile(path.join(repoDir, "apps/api/.env"), "utf8"));
+      const runtimeEnv = parseEnvFile(
+        await readFile(path.join(repoDir, "apps/codex-session-runtime/.env"), "utf8")
+      );
+
+      expect(apiEnv.AGENT_RUNTIME_ENDPOINT).toBe(`http://127.0.0.1:${runtimeEnv.PORT}`);
+      expect(apiEnv.AGENT_RUNTIME_ENDPOINT).not.toBe("http://127.0.0.1:59999");
+    });
+  });
+
+  it("respects explicit AGENT_RUNTIME_ENDPOINT env override", async () => {
+    await withTempRepo(async (repoDir) => {
+      await ensureLocalEnv({
+        rootDir: repoDir,
+        env: {
+          AGENT_RUNTIME_ENDPOINT: "http://127.0.0.1:58888"
+        },
+        isPortAvailableFn: async () => true,
+        logger: () => {}
+      });
+
+      const apiEnv = parseEnvFile(await readFile(path.join(repoDir, "apps/api/.env"), "utf8"));
+      expect(apiEnv.AGENT_RUNTIME_ENDPOINT).toBe("http://127.0.0.1:58888");
+    });
+  });
 });

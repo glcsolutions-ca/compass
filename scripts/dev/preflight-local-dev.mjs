@@ -76,6 +76,7 @@ async function main() {
   const rootDir = process.cwd();
   const apiEnv = await readEnvFile(path.resolve(rootDir, "apps/api/.env"));
   const dbEnv = await readEnvFile(path.resolve(rootDir, "db/postgres/.env"));
+  const runtimeEnv = await readEnvFile(path.resolve(rootDir, "apps/codex-session-runtime/.env"));
 
   const databaseUrl =
     normalize(process.env.DATABASE_URL) ??
@@ -96,9 +97,11 @@ async function main() {
   const runtimeProvider =
     normalize(process.env.AGENT_RUNTIME_PROVIDER ?? apiEnv.AGENT_RUNTIME_PROVIDER) ??
     "dynamic_sessions";
-  const runtimeEndpoint = normalize(
-    process.env.AGENT_RUNTIME_ENDPOINT ?? apiEnv.AGENT_RUNTIME_ENDPOINT
-  );
+  const runtimeHost = normalize(process.env.HOST ?? runtimeEnv.HOST) ?? "127.0.0.1";
+  const runtimePort = normalize(process.env.SESSION_RUNTIME_PORT ?? runtimeEnv.PORT);
+  const runtimeEndpoint =
+    normalize(process.env.AGENT_RUNTIME_ENDPOINT ?? apiEnv.AGENT_RUNTIME_ENDPOINT) ??
+    (runtimePort ? `http://${runtimeHost}:${runtimePort}` : undefined);
 
   const requiresLocalRuntime =
     agentGatewayEnabled &&

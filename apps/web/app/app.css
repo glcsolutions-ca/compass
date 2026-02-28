@@ -153,11 +153,12 @@
 /* Keep assistant-ui overrides outside Tailwind layers to avoid JIT pruning. */
 .aui-thread-root {
   @apply flex h-full min-h-0 w-full flex-col bg-transparent;
+  margin-inline: auto;
+  max-width: var(--aui-thread-max-width);
 }
 
 .aui-thread-viewport {
   @apply w-full px-4 pt-6 md:px-6;
-  align-items: center;
   scrollbar-gutter: stable both-edges;
 }
 

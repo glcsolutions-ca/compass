@@ -139,20 +139,89 @@ export function subscribeRuntimeStream(onEvent: (event: RuntimeNotification) => 
   }
 
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const ws = new WebSocket(`${protocol}//${window.location.host}/v1/agent/runtime/stream`);
+  let websocket: WebSocket | null = null;
+  let reconnectTimer: number | null = null;
+  let reconnectAttempts = 0;
+  let closed = false;
+  let cursor = 0;
 
-  ws.onmessage = (event) => {
-    try {
-      const payload = RuntimeNotificationSchema.safeParse(JSON.parse(String(event.data ?? "")));
-      if (payload.success) {
-        onEvent(payload.data);
-      }
-    } catch {
-      // ignore malformed runtime stream events
+  const clearReconnectTimer = () => {
+    if (reconnectTimer === null) {
+      return;
     }
+
+    window.clearTimeout(reconnectTimer);
+    reconnectTimer = null;
   };
 
+  const scheduleReconnect = () => {
+    if (closed) {
+      return;
+    }
+
+    clearReconnectTimer();
+    const delay = Math.min(5_000, 250 * 2 ** reconnectAttempts);
+    reconnectAttempts += 1;
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, delay);
+  };
+
+  const connect = () => {
+    if (closed) {
+      return;
+    }
+
+    const endpoint = new URL("/v1/agent/runtime/stream", window.location.origin);
+    endpoint.protocol = protocol;
+    if (cursor > 0) {
+      endpoint.searchParams.set("cursor", String(cursor));
+    }
+
+    try {
+      websocket = new WebSocket(endpoint.toString());
+    } catch {
+      scheduleReconnect();
+      return;
+    }
+
+    websocket.onopen = () => {
+      reconnectAttempts = 0;
+    };
+
+    websocket.onmessage = (event) => {
+      try {
+        const payload = RuntimeNotificationSchema.safeParse(JSON.parse(String(event.data ?? "")));
+        if (!payload.success) {
+          return;
+        }
+
+        cursor = Math.max(cursor, payload.data.cursor ?? 0);
+        onEvent(payload.data);
+      } catch {
+        // ignore malformed runtime stream events
+      }
+    };
+
+    websocket.onerror = () => {
+      scheduleReconnect();
+    };
+
+    websocket.onclose = () => {
+      websocket = null;
+      scheduleReconnect();
+    };
+  };
+
+  connect();
+
   return () => {
-    ws.close();
+    closed = true;
+    clearReconnectTimer();
+    if (websocket) {
+      websocket.close();
+      websocket = null;
+    }
   };
 }

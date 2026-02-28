@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  RuntimeRateLimitSnapshotSchema,
+  type RuntimeNotification,
+  type RuntimeRateLimitSnapshot
+} from "@compass/contracts";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchRuntimeAccountRead,
   normalizeRequestError,
@@ -37,6 +42,61 @@ export interface RuntimeAccountController {
   disconnect: () => Promise<void>;
 }
 
+function readLoginCompletion(
+  notification: RuntimeNotification
+): { loginId: string | null; success: boolean; error: string | null } | null {
+  if (notification.method !== "account/login/completed") {
+    return null;
+  }
+
+  const params = notification.params;
+  if (!params || typeof params !== "object") {
+    return {
+      loginId: null,
+      success: false,
+      error: "Runtime login completed with an invalid payload."
+    };
+  }
+
+  const candidate = params as { loginId?: unknown; success?: unknown; error?: unknown };
+  return {
+    loginId: typeof candidate.loginId === "string" ? candidate.loginId : null,
+    success: candidate.success === true,
+    error:
+      typeof candidate.error === "string" && candidate.error.trim().length > 0
+        ? candidate.error
+        : null
+  };
+}
+
+function applyRateLimitUpdate(
+  current: RuntimeRateLimitsState | null,
+  notification: RuntimeNotification
+): RuntimeRateLimitsState | null {
+  if (notification.method !== "account/rateLimits/updated") {
+    return current;
+  }
+
+  const params = notification.params;
+  const paramsRecord =
+    params && typeof params === "object" ? (params as { rateLimits?: unknown }) : null;
+  const snapshotParse = RuntimeRateLimitSnapshotSchema.safeParse(paramsRecord?.rateLimits ?? null);
+  if (!snapshotParse.success || snapshotParse.data === null) {
+    return current;
+  }
+
+  const snapshot: RuntimeRateLimitSnapshot = snapshotParse.data;
+  const nextByLimitId = { ...(current?.rateLimitsByLimitId ?? {}) };
+  if (snapshot.limitId) {
+    nextByLimitId[snapshot.limitId] = snapshot;
+  }
+
+  return {
+    rateLimits: snapshot,
+    rateLimitsByLimitId: Object.keys(nextByLimitId).length > 0 ? nextByLimitId : null
+  };
+}
+
 export function useRuntimeAccount(): RuntimeAccountController {
   const desktopApi = useMemo(() => readDesktopRuntimeApi(), []);
   const [state, setState] = useState<RuntimeAccountState | null>(null);
@@ -45,6 +105,7 @@ export function useRuntimeAccount(): RuntimeAccountController {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
 
   const refreshState = useCallback(async () => {
     setLoading(true);
@@ -54,6 +115,9 @@ export function useRuntimeAccount(): RuntimeAccountController {
       if (desktopApi) {
         const desktopStatus = await desktopApi.localAuthStatus();
         setState(desktopStatus);
+        if (desktopStatus.authMode || !desktopStatus.requiresOpenaiAuth) {
+          setPendingLoginId(null);
+        }
 
         if (desktopApi.localRateLimitsRead) {
           setRateLimits(await desktopApi.localRateLimitsRead());
@@ -63,6 +127,9 @@ export function useRuntimeAccount(): RuntimeAccountController {
       } else {
         const nextState = await fetchRuntimeAccountRead(false);
         setState(nextState);
+        if (nextState.authMode || !nextState.requiresOpenaiAuth) {
+          setPendingLoginId(null);
+        }
         if (nextState.capabilities.supportsRateLimits) {
           setRateLimits(await postRuntimeRateLimitsRead());
         } else {
@@ -79,14 +146,81 @@ export function useRuntimeAccount(): RuntimeAccountController {
     }
   }, [desktopApi]);
 
+  const scheduleRefresh = useCallback(
+    (delayMs = 150) => {
+      if (refreshTimerRef.current !== null) {
+        return;
+      }
+
+      refreshTimerRef.current = window.setTimeout(() => {
+        refreshTimerRef.current = null;
+        void refreshState();
+      }, delayMs);
+    },
+    [refreshState]
+  );
+
   useEffect(() => {
     void refreshState();
   }, [refreshState]);
 
   useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current !== null) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleRuntimeNotification = useCallback(
+    (notification: RuntimeNotification) => {
+      const loginCompletion = readLoginCompletion(notification);
+      if (loginCompletion) {
+        setPendingLoginId(null);
+        if (!loginCompletion.success && loginCompletion.error) {
+          setErrorMessage(loginCompletion.error);
+        }
+        scheduleRefresh(60);
+        return;
+      }
+
+      if (notification.method === "account/updated") {
+        setState((current) => {
+          if (!current) {
+            return current;
+          }
+
+          const params =
+            notification.params && typeof notification.params === "object"
+              ? (notification.params as { authMode?: unknown })
+              : null;
+          const authMode =
+            params?.authMode === "apikey" ||
+            params?.authMode === "chatgpt" ||
+            params?.authMode === "chatgptAuthTokens"
+              ? params.authMode
+              : params?.authMode === null
+                ? null
+                : current.authMode;
+          return {
+            ...current,
+            authMode
+          };
+        });
+        scheduleRefresh(120);
+        return;
+      }
+
+      setRateLimits((current) => applyRateLimitUpdate(current, notification));
+    },
+    [scheduleRefresh]
+  );
+
+  useEffect(() => {
     if (desktopApi && typeof desktopApi.onRuntimeNotification === "function") {
-      return desktopApi.onRuntimeNotification(() => {
-        void refreshState();
+      return desktopApi.onRuntimeNotification((notification) => {
+        handleRuntimeNotification(notification);
       });
     }
 
@@ -94,11 +228,11 @@ export function useRuntimeAccount(): RuntimeAccountController {
       return;
     }
 
-    const unsubscribe = subscribeRuntimeStream(() => {
-      void refreshState();
+    const unsubscribe = subscribeRuntimeStream((notification) => {
+      handleRuntimeNotification(notification);
     });
     return unsubscribe;
-  }, [desktopApi, refreshState, state?.capabilities.supportsRuntimeStream]);
+  }, [desktopApi, handleRuntimeNotification, state?.capabilities.supportsRuntimeStream]);
 
   const startChatgptLogin = useCallback(async () => {
     setBusy(true);
@@ -248,3 +382,8 @@ export function useRuntimeAccount(): RuntimeAccountController {
     disconnect
   };
 }
+
+export const __private__ = {
+  readLoginCompletion,
+  applyRateLimitUpdate
+};

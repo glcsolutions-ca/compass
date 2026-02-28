@@ -61,6 +61,37 @@ describe("CodexJsonRpcClient startup ordering", () => {
     expect(ensureAccountAuthSpy).toHaveBeenCalledTimes(1);
     expect(ensureAccountAuthSpy).toHaveBeenCalledWith("sk-test");
     expect(client.initialized).toBe(true);
+    expect(client.state).toBe("initialized");
+
+    await client.stop();
+    expect(client.state).toBe("stopped");
+  });
+
+  it("reuses a single startup promise for concurrent ensureStarted calls", async () => {
+    spawnMock.mockImplementation(() => createFakeChildProcess());
+    const client = new CodexJsonRpcClient({
+      command: "codex",
+      args: ["app-server"]
+    });
+
+    vi.spyOn(client, "requestRaw").mockResolvedValue({});
+    vi.spyOn(client, "notify").mockResolvedValue(undefined);
+
+    await Promise.all([client.ensureStarted(), client.ensureStarted(), client.ensureStarted()]);
+
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    expect(client.state).toBe("initialized");
+    expect(client.initialized).toBe(true);
+
+    await client.forceRestart({
+      nextState: "recovering"
+    });
+    expect(client.state).toBe("recovering");
+    expect(client.initialized).toBe(false);
+
+    await client.ensureStarted();
+    expect(spawnMock).toHaveBeenCalledTimes(2);
+    expect(client.state).toBe("initialized");
 
     await client.stop();
   });

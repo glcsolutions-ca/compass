@@ -13,6 +13,9 @@ const REQUIRED_PATHS = [
   "apps/web/app/features/chat/agent-event-store.ts",
   "apps/web/app/features/chat/agent-event-normalizer.ts",
   "apps/web/app/features/chat/agent-transport.ts",
+  "apps/web/app/features/chat/hooks/use-chat-actions.ts",
+  "apps/web/app/features/chat/hooks/use-chat-timeline.ts",
+  "apps/web/app/features/chat/hooks/use-chat-transport.ts",
   "apps/web/app/features/chat/new-thread-routing.ts",
   "apps/web/app/features/chat/presentation/chat-canvas.tsx",
   "apps/web/app/features/chat/presentation/chat-composer-footer.tsx",
@@ -278,6 +281,11 @@ function validateRouteMap(cwd, violations) {
 function validateChatExperienceCutover(cwd, violations) {
   const chatRoutePath = path.join(cwd, "apps/web/app/routes/app/chat/route.tsx");
   const transportPath = path.join(cwd, "apps/web/app/features/chat/agent-transport.ts");
+  const transportHookPath = path.join(
+    cwd,
+    "apps/web/app/features/chat/hooks/use-chat-transport.ts"
+  );
+  const timelineHookPath = path.join(cwd, "apps/web/app/features/chat/hooks/use-chat-timeline.ts");
   const chatCanvasPath = path.join(cwd, "apps/web/app/features/chat/presentation/chat-canvas.tsx");
   const chatThreadRailPath = path.join(cwd, "apps/web/app/components/shell/chat-thread-rail.tsx");
   const runtimeStorePath = path.join(
@@ -289,6 +297,8 @@ function validateChatExperienceCutover(cwd, violations) {
   if (
     !existsSync(chatRoutePath) ||
     !existsSync(transportPath) ||
+    !existsSync(transportHookPath) ||
+    !existsSync(timelineHookPath) ||
     !existsSync(chatCanvasPath) ||
     !existsSync(chatThreadRailPath) ||
     !existsSync(runtimeStorePath) ||
@@ -299,17 +309,23 @@ function validateChatExperienceCutover(cwd, violations) {
 
   const chatRouteSource = readFileSync(chatRoutePath, "utf8");
   const transportSource = readFileSync(transportPath, "utf8");
+  const transportHookSource = readFileSync(transportHookPath, "utf8");
+  const timelineHookSource = readFileSync(timelineHookPath, "utf8");
   const chatCanvasSource = readFileSync(chatCanvasPath, "utf8");
   const chatThreadRailSource = readFileSync(chatThreadRailPath, "utf8");
   const runtimeStoreSource = readFileSync(runtimeStorePath, "utf8");
   const chatContextSource = readFileSync(chatContextPath, "utf8");
 
-  if (!chatRouteSource.includes("startAgentTransport")) {
-    violations.push("chat route must use startAgentTransport() for live thread streaming.");
+  if (!transportHookSource.includes("startAgentTransport")) {
+    violations.push(
+      "chat transport hook must use startAgentTransport() for live thread streaming."
+    );
   }
 
-  if (!chatRouteSource.includes("normalizeAgentEvents")) {
-    violations.push("chat route must normalize backend agent events before rendering timeline.");
+  if (!timelineHookSource.includes("normalizeAgentEvents")) {
+    violations.push(
+      "chat timeline hook must normalize backend agent events before rendering timeline."
+    );
   }
 
   if (!chatRouteSource.includes("ChatCanvas")) {

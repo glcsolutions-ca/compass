@@ -1,4 +1,16 @@
 import { createApiClient } from "@compass/sdk";
+import {
+  AgentEventSchema,
+  AgentEventsListResponseSchema,
+  AgentThreadCreateResponseSchema,
+  AgentThreadModePatchResponseSchema,
+  AgentThreadReadResponseSchema,
+  AgentTurnInterruptResponseSchema,
+  AgentTurnStartResponseSchema,
+  type AgentTurnInterruptResponse,
+  type AgentTurnStartResponse
+} from "@compass/contracts";
+import type { ZodType } from "zod";
 import { createCompassClient, readApiErrorMessage } from "~/lib/api/compass-client";
 import type {
   AgentEvent,
@@ -27,180 +39,6 @@ interface ApiResult<T> {
   message: string | null;
 }
 
-function readString(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : null;
-}
-
-function readIsoDate(value: unknown): string | null {
-  const candidate = readString(value);
-  if (!candidate) {
-    return null;
-  }
-
-  const parsed = Date.parse(candidate);
-  return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
-}
-
-function normalizeExecutionMode(value: unknown): AgentExecutionMode {
-  return value === "local" ? "local" : "cloud";
-}
-
-function normalizeExecutionHost(value: unknown): AgentThread["executionHost"] {
-  if (value === "desktop_local") {
-    return "desktop_local";
-  }
-
-  return "dynamic_sessions";
-}
-
-function normalizeThreadStatus(value: unknown): AgentThread["status"] {
-  if (
-    value === "idle" ||
-    value === "inProgress" ||
-    value === "completed" ||
-    value === "interrupted" ||
-    value === "error"
-  ) {
-    return value;
-  }
-
-  return "idle";
-}
-
-function parseAgentThreadPayload(data: unknown): AgentThread | null {
-  if (!data || typeof data !== "object") {
-    return null;
-  }
-
-  const rawThread = (data as { thread?: unknown }).thread;
-  if (!rawThread || typeof rawThread !== "object") {
-    return null;
-  }
-
-  const threadId = readString((rawThread as { threadId?: unknown }).threadId);
-  if (!threadId) {
-    return null;
-  }
-
-  return {
-    threadId,
-    workspaceId: readString((rawThread as { workspaceId?: unknown }).workspaceId),
-    workspaceSlug: readString((rawThread as { workspaceSlug?: unknown }).workspaceSlug),
-    executionMode: normalizeExecutionMode((rawThread as { executionMode?: unknown }).executionMode),
-    executionHost: normalizeExecutionHost((rawThread as { executionHost?: unknown }).executionHost),
-    status: normalizeThreadStatus((rawThread as { status?: unknown }).status),
-    cloudSessionIdentifier: readString(
-      (rawThread as { cloudSessionIdentifier?: unknown }).cloudSessionIdentifier
-    ),
-    title: readString((rawThread as { title?: unknown }).title),
-    createdAt: readIsoDate((rawThread as { createdAt?: unknown }).createdAt),
-    updatedAt: readIsoDate((rawThread as { updatedAt?: unknown }).updatedAt),
-    modeSwitchedAt: readIsoDate((rawThread as { modeSwitchedAt?: unknown }).modeSwitchedAt)
-  };
-}
-
-function parseTurnPayload(data: unknown): AgentTurn | null {
-  if (!data || typeof data !== "object") {
-    return null;
-  }
-
-  const rawTurn = (data as { turn?: unknown }).turn;
-  if (!rawTurn || typeof rawTurn !== "object") {
-    return null;
-  }
-
-  const threadId = readString((rawTurn as { threadId?: unknown }).threadId);
-  const turnId = readString((rawTurn as { turnId?: unknown }).turnId);
-  if (!threadId || !turnId) {
-    return null;
-  }
-
-  const rawOutputText = (data as { outputText?: unknown }).outputText;
-  const outputText = typeof rawOutputText === "string" ? rawOutputText : null;
-
-  return {
-    turnId,
-    threadId,
-    status: normalizeThreadStatus((rawTurn as { status?: unknown }).status),
-    executionMode: normalizeExecutionMode((rawTurn as { executionMode?: unknown }).executionMode),
-    executionHost: normalizeExecutionHost((rawTurn as { executionHost?: unknown }).executionHost),
-    input: (rawTurn as { input?: unknown }).input ?? null,
-    output: (rawTurn as { output?: unknown }).output ?? null,
-    error: (rawTurn as { error?: unknown }).error ?? null,
-    startedAt: readIsoDate((rawTurn as { startedAt?: unknown }).startedAt),
-    completedAt: readIsoDate((rawTurn as { completedAt?: unknown }).completedAt),
-    outputText
-  };
-}
-
-function parseAgentEvent(eventCandidate: unknown): AgentEvent | null {
-  if (!eventCandidate || typeof eventCandidate !== "object") {
-    return null;
-  }
-
-  const cursor = Number((eventCandidate as { cursor?: unknown }).cursor);
-  const threadId = readString((eventCandidate as { threadId?: unknown }).threadId);
-  const method = readString((eventCandidate as { method?: unknown }).method);
-  const createdAt = readIsoDate((eventCandidate as { createdAt?: unknown }).createdAt);
-
-  if (!Number.isInteger(cursor) || cursor < 0 || !threadId || !method || !createdAt) {
-    return null;
-  }
-
-  return {
-    cursor,
-    threadId,
-    turnId: readString((eventCandidate as { turnId?: unknown }).turnId),
-    method,
-    payload: (eventCandidate as { payload?: unknown }).payload ?? null,
-    createdAt
-  };
-}
-
-function parseEventsPayload(data: unknown): AgentEventsResult {
-  if (!data || typeof data !== "object") {
-    return {
-      events: [],
-      nextCursor: 0
-    };
-  }
-
-  const rawEvents = (data as { events?: unknown }).events;
-  if (!Array.isArray(rawEvents)) {
-    return {
-      events: [],
-      nextCursor: 0
-    };
-  }
-
-  const events = rawEvents.map((event) => parseAgentEvent(event)).filter((event) => event !== null);
-  const nextCursor = events.reduce((cursor, event) => Math.max(cursor, event.cursor), 0);
-  return {
-    events,
-    nextCursor
-  };
-}
-
-function normalizeApiResult<T>({
-  result,
-  parser
-}: {
-  result: RawClientResult;
-  parser: (data: unknown) => T | null;
-}): ApiResult<T> {
-  return {
-    status: result.response.status,
-    data: parser(result.data),
-    error: result.error ?? null,
-    message: readApiErrorMessage(result.error, "")
-  };
-}
-
 function createRouteClient(request: Request): UntypedApiClient {
   return createCompassClient(request) as unknown as UntypedApiClient;
 }
@@ -210,6 +48,47 @@ function createBrowserClient(baseUrl: string): UntypedApiClient {
     baseUrl,
     fetch: globalThis.fetch.bind(globalThis)
   }) as unknown as UntypedApiClient;
+}
+
+function normalizeApiResult<TPayload, TResult>({
+  result,
+  schema,
+  select
+}: {
+  result: RawClientResult;
+  schema: ZodType<TPayload>;
+  select: (payload: TPayload) => TResult;
+}): ApiResult<TResult> {
+  const parsed = schema.safeParse(result.data);
+
+  return {
+    status: result.response.status,
+    data: parsed.success ? select(parsed.data) : null,
+    error: result.error ?? null,
+    message: readApiErrorMessage(result.error, "")
+  };
+}
+
+function toTurnWithOutputText(payload: AgentTurnStartResponse): AgentTurn {
+  return {
+    ...payload.turn,
+    outputText: payload.outputText ?? null
+  };
+}
+
+function toInterruptTurnWithOutputText(payload: AgentTurnInterruptResponse): AgentTurn {
+  return {
+    ...payload.turn,
+    outputText: null
+  };
+}
+
+function toEventsResult(payload: { events: AgentEvent[] }): AgentEventsResult {
+  const nextCursor = payload.events.reduce((cursor, event) => Math.max(cursor, event.cursor), 0);
+  return {
+    events: payload.events,
+    nextCursor
+  };
 }
 
 export async function createAgentThread(
@@ -232,7 +111,8 @@ export async function createAgentThread(
 
   return normalizeApiResult({
     result,
-    parser: parseAgentThreadPayload
+    schema: AgentThreadCreateResponseSchema,
+    select: (parsed) => parsed.thread
   });
 }
 
@@ -252,7 +132,8 @@ export async function getAgentThread(
 
   return normalizeApiResult({
     result,
-    parser: parseAgentThreadPayload
+    schema: AgentThreadReadResponseSchema,
+    select: (parsed) => parsed.thread
   });
 }
 
@@ -278,7 +159,8 @@ export async function switchAgentThreadMode(
 
   return normalizeApiResult({
     result,
-    parser: parseAgentThreadPayload
+    schema: AgentThreadModePatchResponseSchema,
+    select: (parsed) => parsed.thread
   });
 }
 
@@ -306,7 +188,8 @@ export async function startAgentTurn(
 
   return normalizeApiResult({
     result,
-    parser: parseTurnPayload
+    schema: AgentTurnStartResponseSchema,
+    select: (parsed) => toTurnWithOutputText(parsed)
   });
 }
 
@@ -327,7 +210,8 @@ export async function interruptAgentTurn(
 
   return normalizeApiResult({
     result,
-    parser: parseTurnPayload
+    schema: AgentTurnInterruptResponseSchema,
+    select: (parsed) => toInterruptTurnWithOutputText(parsed)
   });
 }
 
@@ -355,7 +239,8 @@ export async function listAgentThreadEvents(
 
   return normalizeApiResult({
     result,
-    parser: (data) => parseEventsPayload(data)
+    schema: AgentEventsListResponseSchema,
+    select: (parsed) => toEventsResult(parsed)
   });
 }
 
@@ -384,9 +269,18 @@ export async function listAgentThreadEventsClient(payload: {
     throw new Error(readApiErrorMessage(result.error, "Unable to load chat events."));
   }
 
-  return parseEventsPayload(result.data);
+  const parsed = AgentEventsListResponseSchema.safeParse(result.data);
+  if (!parsed.success) {
+    return {
+      events: [],
+      nextCursor: 0
+    };
+  }
+
+  return toEventsResult(parsed.data);
 }
 
 export function parseStreamEventPayload(payload: unknown): AgentEvent | null {
-  return parseAgentEvent(payload);
+  const parsed = AgentEventSchema.safeParse(payload);
+  return parsed.success ? parsed.data : null;
 }

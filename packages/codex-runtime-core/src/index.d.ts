@@ -14,6 +14,7 @@ import type {
 } from "@compass/codex-protocol";
 
 export type CodexInteractiveAuthMode = "chatgpt" | "apiKey" | "chatgptAuthTokens";
+export type RuntimeClientState = "stopped" | "starting" | "initialized" | "recovering" | "failed";
 
 export interface CodexRpcClientOptions {
   command?: string;
@@ -112,6 +113,7 @@ export interface CodexInterruptResult {
 export interface CodexProcessHealth {
   command: string;
   args: string[];
+  state: RuntimeClientState;
   running: boolean;
   initialized: boolean;
   pid: number | null;

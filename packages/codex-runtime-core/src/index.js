@@ -1,5 +1,17 @@
 import { spawn } from "node:child_process";
 
+const RUNTIME_CLIENT_STATES = new Set([
+  "stopped",
+  "starting",
+  "initialized",
+  "recovering",
+  "failed"
+]);
+
+function normalizeRuntimeClientState(value) {
+  return RUNTIME_CLIENT_STATES.has(value) ? value : "stopped";
+}
+
 function readNonEmptyString(value) {
   if (typeof value !== "string") {
     return null;
@@ -208,6 +220,7 @@ export class CodexJsonRpcClient {
     this.buffer = "";
     this.stderrTail = [];
     this.initialized = false;
+    this.state = "stopped";
     this.restartCount = 0;
     this.lastError = "";
     this.readyAt = null;
@@ -216,7 +229,7 @@ export class CodexJsonRpcClient {
   }
 
   async ensureStarted() {
-    if (this.child && !this.child.killed && this.initialized) {
+    if (this.child && !this.child.killed && this.state === "initialized") {
       return;
     }
 
@@ -225,6 +238,7 @@ export class CodexJsonRpcClient {
       return;
     }
 
+    this.state = this.state === "failed" || this.state === "recovering" ? "recovering" : "starting";
     this.startPromise = this.startInternal();
     try {
       await this.startPromise;
@@ -242,6 +256,7 @@ export class CodexJsonRpcClient {
 
     this.child = child;
     this.initialized = false;
+    this.state = "starting";
     this.buffer = "";
 
     child.stderr.on("data", (chunk) => {
@@ -262,6 +277,7 @@ export class CodexJsonRpcClient {
 
     child.on("error", (error) => {
       this.lastError = `RPC_TRANSPORT_STARTUP_FAILED: ${error.message}`;
+      this.state = "failed";
       this.rejectAllPending(new Error(this.lastError));
     });
 
@@ -269,6 +285,7 @@ export class CodexJsonRpcClient {
       const message = `RPC_TRANSPORT_DISCONNECTED: codex app server exited (code=${String(code)}, signal=${String(signal)})`;
       this.lastError = message;
       this.initialized = false;
+      this.state = this.state === "stopped" ? "stopped" : "failed";
       this.child = null;
       this.rejectAllPending(new Error(message));
       if (this.onStderr) {
@@ -296,6 +313,7 @@ export class CodexJsonRpcClient {
       // Mark initialized before optional auth bootstrap so recursive request
       // paths do not deadlock on ensureStarted/startPromise.
       this.initialized = true;
+      this.state = "initialized";
 
       if (this.autoLoginApiKey) {
         await this.ensureAccountAuth(this.autoLoginApiKey);
@@ -304,7 +322,9 @@ export class CodexJsonRpcClient {
       this.readyAt = new Date().toISOString();
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
-      await this.forceRestart();
+      await this.forceRestart({
+        nextState: "failed"
+      });
       throw error;
     }
   }
@@ -458,7 +478,9 @@ export class CodexJsonRpcClient {
         attempt += 1;
         this.restartCount += 1;
         this.lastError = error instanceof Error ? error.message : String(error);
-        await this.forceRestart();
+        await this.forceRestart({
+          nextState: "recovering"
+        });
       }
     }
   }
@@ -924,12 +946,14 @@ export class CodexJsonRpcClient {
     };
   }
 
-  async forceRestart() {
+  async forceRestart(input = {}) {
+    const nextState = normalizeRuntimeClientState(input.nextState);
     const child = this.child;
     this.initialized = false;
     this.child = null;
 
     if (!child || child.killed) {
+      this.state = nextState;
       return;
     }
 
@@ -945,12 +969,15 @@ export class CodexJsonRpcClient {
 
       child.kill("SIGTERM");
     });
+
+    this.state = nextState;
   }
 
   health() {
     return {
       command: this.command,
       args: this.args,
+      state: this.state,
       running: Boolean(this.child && !this.child.killed),
       initialized: this.initialized,
       pid: this.child?.pid || null,
@@ -964,6 +991,8 @@ export class CodexJsonRpcClient {
   }
 
   async stop() {
-    await this.forceRestart();
+    await this.forceRestart({
+      nextState: "stopped"
+    });
   }
 }

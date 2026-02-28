@@ -57,7 +57,8 @@ export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelin
 
   for (const event of sorted) {
     const method = event.method;
-    const turnId = event.turnId;
+    const turnId = event.turnId ?? null;
+    const createdAt = event.createdAt ?? null;
     const label = formatEventLabel(method);
 
     if (method === "turn.started") {
@@ -73,7 +74,7 @@ export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelin
           turnId,
           cursor: event.cursor,
           streaming: false,
-          createdAt: event.createdAt
+          createdAt
         });
       }
       continue;
@@ -94,7 +95,7 @@ export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelin
             ...previous,
             text: `${previous.text}${deltaText}`,
             cursor: event.cursor,
-            createdAt: event.createdAt,
+            createdAt,
             streaming: true
           };
           continue;
@@ -110,7 +111,7 @@ export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelin
         turnId,
         cursor: event.cursor,
         streaming: true,
-        createdAt: event.createdAt
+        createdAt
       });
       assistantMessageByTurnId.set(assistantTurnKey, nextIndex);
       continue;
@@ -126,7 +127,7 @@ export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelin
               ...previous,
               streaming: false,
               cursor: event.cursor,
-              createdAt: event.createdAt
+              createdAt
             };
           }
         }
@@ -142,7 +143,7 @@ export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelin
         detail: null,
         turnId,
         cursor: event.cursor,
-        createdAt: event.createdAt
+        createdAt
       });
       continue;
     }
@@ -163,7 +164,7 @@ export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelin
         detail: readText(readPayloadObject(event.payload)?.message),
         turnId,
         cursor: event.cursor,
-        createdAt: event.createdAt
+        createdAt
       });
       continue;
     }
@@ -175,7 +176,7 @@ export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelin
       payload: event.payload,
       turnId,
       cursor: event.cursor,
-      createdAt: event.createdAt
+      createdAt
     });
   }
 

@@ -1,43 +1,20 @@
-export type AgentExecutionMode = "cloud" | "local";
-export type AgentExecutionHost = "dynamic_sessions" | "desktop_local";
-export type AgentThreadStatus = "idle" | "inProgress" | "completed" | "interrupted" | "error";
+import type {
+  AgentEvent as ContractAgentEvent,
+  AgentExecutionHost as ContractAgentExecutionHost,
+  AgentExecutionMode as ContractAgentExecutionMode,
+  AgentThread as ContractAgentThread,
+  AgentThreadStatus as ContractAgentThreadStatus,
+  AgentTurn as ContractAgentTurn
+} from "@compass/contracts";
 
-export interface AgentThread {
-  threadId: string;
-  workspaceId: string | null;
-  workspaceSlug: string | null;
-  executionMode: AgentExecutionMode;
-  executionHost: AgentExecutionHost;
-  status: AgentThreadStatus;
-  title: string | null;
-  cloudSessionIdentifier: string | null;
-  createdAt: string | null;
-  updatedAt: string | null;
-  modeSwitchedAt: string | null;
-}
-
-export interface AgentTurn {
-  turnId: string;
-  threadId: string;
-  status: AgentThreadStatus;
-  executionMode: AgentExecutionMode;
-  executionHost: AgentExecutionHost;
-  input: unknown;
-  output: unknown;
-  error: unknown;
-  startedAt: string | null;
-  completedAt: string | null;
+export type AgentExecutionMode = ContractAgentExecutionMode;
+export type AgentExecutionHost = ContractAgentExecutionHost;
+export type AgentThreadStatus = ContractAgentThreadStatus;
+export type AgentThread = ContractAgentThread;
+export type AgentTurn = ContractAgentTurn & {
   outputText: string | null;
-}
-
-export interface AgentEvent {
-  cursor: number;
-  threadId: string;
-  turnId: string | null;
-  method: string;
-  payload: unknown;
-  createdAt: string;
-}
+};
+export type AgentEvent = ContractAgentEvent;
 
 export interface ChatParticipant {
   id: string;

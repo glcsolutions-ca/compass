@@ -1,218 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AlertCircle, KeyRound, Link2, Loader2, LogOut, RefreshCw, Shield } from "lucide-react";
-import {
-  RuntimeAccountLoginStartRequestSchema,
-  RuntimeAccountLoginStartResponseSchema,
-  RuntimeAccountRateLimitsReadResponseSchema,
-  RuntimeAccountReadResponseSchema,
-  RuntimeNotificationSchema,
-  type RuntimeAccountLoginCancelResponse,
-  type RuntimeAccountLoginStartRequest,
-  type RuntimeAccountLoginStartResponse,
-  type RuntimeAccountLogoutResponse,
-  type RuntimeAccountRateLimitsReadResponse,
-  type RuntimeAccountReadResponse,
-  type RuntimeNotification,
-  type RuntimeRateLimitSnapshot
-} from "@compass/contracts";
+import type { RuntimeRateLimitSnapshot } from "@compass/contracts";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { useRuntimeAccount } from "~/components/shell/use-runtime-account";
 import { cn } from "~/lib/utils/cn";
 
-type RuntimeAccountState = RuntimeAccountReadResponse;
-type RuntimeRateLimitsState = RuntimeAccountRateLimitsReadResponse;
-type RuntimeLoginStartResponse = RuntimeAccountLoginStartResponse;
-
-class RuntimeAccountRequestError extends Error {
-  code: string;
-
-  constructor(code: string, message: string) {
-    super(message);
-    this.name = "RuntimeAccountRequestError";
-    this.code = code;
-  }
-}
-
-interface DesktopRuntimeApi {
-  localAuthStart: (input: {
-    mode: "chatgpt" | "apiKey";
-    apiKey?: string;
-  }) => Promise<RuntimeLoginStartResponse>;
-  localAuthStatus: () => Promise<RuntimeAccountState>;
-  localAuthLogout: () => Promise<RuntimeAccountLogoutResponse>;
-  localAuthCancel?: (input: { loginId: string }) => Promise<RuntimeAccountLoginCancelResponse>;
-  localRateLimitsRead?: () => Promise<RuntimeRateLimitsState>;
-  onRuntimeNotification?: (listener: (event: RuntimeNotification) => void) => () => void;
-  openExternal?: (url: string) => Promise<void>;
-}
-
-const LOCAL_DEFAULT_STATE: RuntimeAccountState = {
-  provider: "local_process",
-  capabilities: {
-    interactiveAuth: true,
-    supportsChatgptManaged: true,
-    supportsApiKey: true,
-    supportsChatgptAuthTokens: false,
-    supportsRateLimits: false,
-    supportsRuntimeStream: false
-  },
-  authMode: null,
-  requiresOpenaiAuth: true,
-  account: null
-};
-
-function readDesktopRuntimeApi(): DesktopRuntimeApi | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const candidate = (window as { compassDesktop?: unknown }).compassDesktop;
-  if (!candidate || typeof candidate !== "object") {
-    return null;
-  }
-
-  const desktopApi = candidate as DesktopRuntimeApi;
-  if (
-    typeof desktopApi.localAuthStart !== "function" ||
-    typeof desktopApi.localAuthStatus !== "function" ||
-    typeof desktopApi.localAuthLogout !== "function"
-  ) {
-    return null;
-  }
-
-  return desktopApi;
-}
-
-function normalizeRequestError(error: unknown, fallback: string): RuntimeAccountRequestError {
-  if (error instanceof RuntimeAccountRequestError) {
-    return error;
-  }
-
-  if (error instanceof Error) {
-    const codeCandidate = (error as { code?: unknown }).code;
-    const code = typeof codeCandidate === "string" ? codeCandidate : "UNKNOWN_ERROR";
-    return new RuntimeAccountRequestError(code, error.message || fallback);
-  }
-
-  if (!error || typeof error !== "object") {
-    return new RuntimeAccountRequestError("UNKNOWN_ERROR", fallback);
-  }
-
-  const candidate = error as { code?: unknown; message?: unknown };
-  const code = typeof candidate.code === "string" ? candidate.code : "UNKNOWN_ERROR";
-  const message =
-    typeof candidate.message === "string" && candidate.message.trim().length > 0
-      ? candidate.message
-      : fallback;
-  return new RuntimeAccountRequestError(code, message);
-}
-
-async function readResponseJson(response: Response): Promise<unknown> {
-  try {
-    return (await response.json()) as unknown;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchRuntimeAccountRead(refreshToken = false): Promise<RuntimeAccountState> {
-  const response = await fetch("/v1/agent/runtime/account/read", {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({ refreshToken })
-  });
-  const payload = await readResponseJson(response);
-  if (!response.ok) {
-    throw normalizeRequestError(payload, "Unable to load runtime account state.");
-  }
-  return RuntimeAccountReadResponseSchema.parse(payload);
-}
-
-async function postRuntimeLoginStart(
-  payload: RuntimeAccountLoginStartRequest
-): Promise<RuntimeLoginStartResponse> {
-  const requestPayload = RuntimeAccountLoginStartRequestSchema.parse(payload);
-  const response = await fetch("/v1/agent/runtime/account/login/start", {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      "content-type": "application/json"
-    },
-    body: JSON.stringify(requestPayload)
-  });
-  const body = await readResponseJson(response);
-  if (!response.ok) {
-    throw normalizeRequestError(body, "Unable to start runtime login.");
-  }
-  return RuntimeAccountLoginStartResponseSchema.parse(body);
-}
-
-async function postRuntimeLoginCancel(loginId: string): Promise<void> {
-  const response = await fetch("/v1/agent/runtime/account/login/cancel", {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({ loginId })
-  });
-  const payload = await readResponseJson(response);
-  if (!response.ok) {
-    throw normalizeRequestError(payload, "Unable to cancel runtime login.");
-  }
-}
-
-async function postRuntimeLogout(): Promise<void> {
-  const response = await fetch("/v1/agent/runtime/account/logout", {
-    method: "POST",
-    credentials: "include"
-  });
-  const payload = await readResponseJson(response);
-  if (!response.ok) {
-    throw normalizeRequestError(payload, "Unable to logout runtime account.");
-  }
-}
-
-async function postRuntimeRateLimitsRead(): Promise<RuntimeRateLimitsState> {
-  const response = await fetch("/v1/agent/runtime/account/rate-limits/read", {
-    method: "POST",
-    credentials: "include"
-  });
-  const payload = await readResponseJson(response);
-  if (!response.ok) {
-    throw normalizeRequestError(payload, "Unable to read runtime rate limits.");
-  }
-  return RuntimeAccountRateLimitsReadResponseSchema.parse(payload);
-}
-
-function subscribeRuntimeStream(onEvent: (event: RuntimeNotification) => void): () => void {
-  if (typeof window === "undefined") {
-    return () => {};
-  }
-
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const ws = new WebSocket(`${protocol}//${window.location.host}/v1/agent/runtime/stream`);
-
-  ws.onmessage = (event) => {
-    try {
-      const payload = RuntimeNotificationSchema.safeParse(JSON.parse(String(event.data ?? "")));
-      if (payload.success) {
-        onEvent(payload.data);
-      }
-    } catch {
-      // ignore malformed runtime stream events
-    }
-  };
-
-  return () => {
-    ws.close();
-  };
-}
-
-function resolveConnectedLabel(state: RuntimeAccountState | null): string {
+function resolveConnectedLabel(state: ReturnType<typeof useRuntimeAccount>["state"]): string {
   if (!state) {
     return "Checking runtime account...";
   }
@@ -262,221 +56,42 @@ function RateLimitCard({ label, snapshot }: { label: string; snapshot: RuntimeRa
 }
 
 export function RuntimeAccountControls() {
-  const desktopApi = useMemo(() => readDesktopRuntimeApi(), []);
-  const [state, setState] = useState<RuntimeAccountState | null>(null);
-  const [rateLimits, setRateLimits] = useState<RuntimeRateLimitsState | null>(null);
-  const [pendingLoginId, setPendingLoginId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const runtimeAccount = useRuntimeAccount();
   const [apiKey, setApiKey] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [chatgptAccountId, setChatgptAccountId] = useState("");
   const [chatgptPlanType, setChatgptPlanType] = useState("");
 
-  const providerManaged = state?.provider === "dynamic_sessions";
-  const interactiveAuthEnabled = state?.capabilities.interactiveAuth === true;
-  const canUseApiKey = state?.capabilities.supportsApiKey === true;
-  const canUseChatgpt = state?.capabilities.supportsChatgptManaged === true;
-  const canUseExternalTokens = state?.capabilities.supportsChatgptAuthTokens === true;
+  const providerManaged = runtimeAccount.state?.provider === "dynamic_sessions";
+  const interactiveAuthEnabled = runtimeAccount.state?.capabilities.interactiveAuth === true;
+  const canUseApiKey = runtimeAccount.state?.capabilities.supportsApiKey === true;
+  const canUseChatgpt = runtimeAccount.state?.capabilities.supportsChatgptManaged === true;
+  const canUseExternalTokens =
+    runtimeAccount.state?.capabilities.supportsChatgptAuthTokens === true;
 
-  const refreshState = useCallback(async () => {
-    setLoading(true);
-    setErrorMessage(null);
+  const connected =
+    Boolean(runtimeAccount.state?.authMode) ||
+    (!runtimeAccount.state?.requiresOpenaiAuth && !!runtimeAccount.state);
+  const connectedLabel = resolveConnectedLabel(runtimeAccount.state);
 
-    try {
-      if (desktopApi) {
-        const desktopStatus = await desktopApi.localAuthStatus();
-        setState(desktopStatus);
-
-        if (desktopApi.localRateLimitsRead) {
-          setRateLimits(await desktopApi.localRateLimitsRead());
-        } else {
-          setRateLimits(null);
-        }
-      } else {
-        const nextState = await fetchRuntimeAccountRead(false);
-        setState(nextState);
-        if (nextState.capabilities.supportsRateLimits) {
-          setRateLimits(await postRuntimeRateLimitsRead());
-        } else {
-          setRateLimits(null);
-        }
-      }
-    } catch (error) {
-      const normalized = normalizeRequestError(error, "Unable to load runtime account state.");
-      setErrorMessage(normalized.message);
-      setState(LOCAL_DEFAULT_STATE);
-      setRateLimits(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [desktopApi]);
-
-  useEffect(() => {
-    void refreshState();
-  }, [refreshState]);
-
-  useEffect(() => {
-    if (desktopApi && typeof desktopApi.onRuntimeNotification === "function") {
-      return desktopApi.onRuntimeNotification(() => {
-        void refreshState();
-      });
-    }
-
-    if (!state?.capabilities.supportsRuntimeStream) {
-      return;
-    }
-
-    const unsubscribe = subscribeRuntimeStream(() => {
-      void refreshState();
-    });
-    return unsubscribe;
-  }, [desktopApi, refreshState, state?.capabilities.supportsRuntimeStream]);
-
-  const startChatgptLogin = async () => {
-    setBusy(true);
-    setErrorMessage(null);
-    try {
-      if (desktopApi) {
-        const status = await desktopApi.localAuthStart({ mode: "chatgpt" });
-        setPendingLoginId(null);
-        if (status.authUrl && desktopApi.openExternal) {
-          await desktopApi.openExternal(status.authUrl);
-        }
-        await refreshState();
-        return;
-      }
-
-      const result = await postRuntimeLoginStart({ type: "chatgpt" });
-      setPendingLoginId(result.loginId ?? null);
-      if (result.authUrl) {
-        window.open(result.authUrl, "_blank", "noopener,noreferrer");
-      }
-      await refreshState();
-    } catch (error) {
-      setErrorMessage(normalizeRequestError(error, "Unable to start ChatGPT login.").message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const startApiKeyLogin = async () => {
-    const trimmed = apiKey.trim();
-    if (!trimmed) {
-      setErrorMessage("Enter an API key first.");
-      return;
-    }
-
-    setBusy(true);
-    setErrorMessage(null);
-    try {
-      if (desktopApi) {
-        await desktopApi.localAuthStart({ mode: "apiKey", apiKey: trimmed });
-      } else {
-        await postRuntimeLoginStart({ type: "apiKey", apiKey: trimmed });
-      }
-      setApiKey("");
-      setPendingLoginId(null);
-      await refreshState();
-    } catch (error) {
-      setErrorMessage(normalizeRequestError(error, "Unable to authenticate with API key.").message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const startExternalTokenLogin = async () => {
-    const token = accessToken.trim();
-    const accountId = chatgptAccountId.trim();
-    if (!token || !accountId) {
-      setErrorMessage("Access token and ChatGPT account id are required.");
-      return;
-    }
-
-    setBusy(true);
-    setErrorMessage(null);
-    try {
-      await postRuntimeLoginStart({
-        type: "chatgptAuthTokens",
-        accessToken: token,
-        chatgptAccountId: accountId,
-        chatgptPlanType: chatgptPlanType.trim() || null
-      });
-      setAccessToken("");
-      setChatgptAccountId("");
-      setChatgptPlanType("");
-      setPendingLoginId(null);
-      await refreshState();
-    } catch (error) {
-      setErrorMessage(normalizeRequestError(error, "Unable to apply external tokens.").message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const cancelLogin = async () => {
-    if (!pendingLoginId) {
-      return;
-    }
-
-    setBusy(true);
-    setErrorMessage(null);
-    try {
-      if (desktopApi?.localAuthCancel) {
-        await desktopApi.localAuthCancel({ loginId: pendingLoginId });
-      } else {
-        await postRuntimeLoginCancel(pendingLoginId);
-      }
-      setPendingLoginId(null);
-      await refreshState();
-    } catch (error) {
-      setErrorMessage(normalizeRequestError(error, "Unable to cancel runtime login.").message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const disconnect = async () => {
-    setBusy(true);
-    setErrorMessage(null);
-    try {
-      if (desktopApi) {
-        await desktopApi.localAuthLogout();
-      } else {
-        await postRuntimeLogout();
-      }
-      setPendingLoginId(null);
-      await refreshState();
-    } catch (error) {
-      setErrorMessage(
-        normalizeRequestError(error, "Unable to disconnect runtime account.").message
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const connected = Boolean(state?.authMode) || (!state?.requiresOpenaiAuth && !!state);
-  const connectedLabel = resolveConnectedLabel(state);
   const rateLimitEntries = useMemo(() => {
-    if (!rateLimits) {
+    if (!runtimeAccount.rateLimits) {
       return [];
     }
 
-    if (rateLimits.rateLimitsByLimitId) {
-      return Object.entries(rateLimits.rateLimitsByLimitId)
+    if (runtimeAccount.rateLimits.rateLimitsByLimitId) {
+      return Object.entries(runtimeAccount.rateLimits.rateLimitsByLimitId)
         .filter(([, snapshot]) => Boolean(snapshot))
         .map(([key, snapshot]) => [key, snapshot as RuntimeRateLimitSnapshot] as const);
     }
 
-    if (rateLimits.rateLimits) {
-      const key = rateLimits.rateLimits.limitId || "primary";
-      return [[key, rateLimits.rateLimits] as const];
+    if (runtimeAccount.rateLimits.rateLimits) {
+      const key = runtimeAccount.rateLimits.rateLimits.limitId || "primary";
+      return [[key, runtimeAccount.rateLimits.rateLimits] as const];
     }
 
     return [];
-  }, [rateLimits]);
+  }, [runtimeAccount.rateLimits]);
 
   return (
     <section
@@ -493,10 +108,10 @@ export function RuntimeAccountControls() {
       <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background/60 px-3 py-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-foreground">
-            {loading ? "Checking runtime state..." : connectedLabel}
+            {runtimeAccount.loading ? "Checking runtime state..." : connectedLabel}
           </p>
           <p className="truncate text-xs text-muted-foreground">
-            Provider: {state?.provider ?? "unknown"}
+            Provider: {runtimeAccount.state?.provider ?? "unknown"}
           </p>
         </div>
         <span
@@ -518,13 +133,13 @@ export function RuntimeAccountControls() {
         </div>
       ) : null}
 
-      {pendingLoginId ? (
+      {runtimeAccount.pendingLoginId ? (
         <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
           <span>ChatGPT login is in progress.</span>
           <Button
-            disabled={busy}
+            disabled={runtimeAccount.busy}
             onClick={() => {
-              void cancelLogin();
+              void runtimeAccount.cancelLogin();
             }}
             size="sm"
             type="button"
@@ -535,18 +150,23 @@ export function RuntimeAccountControls() {
         </div>
       ) : null}
 
-      {errorMessage ? (
+      {runtimeAccount.errorMessage ? (
         <div className="flex items-start gap-2 rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>{errorMessage}</p>
+          <p>{runtimeAccount.errorMessage}</p>
         </div>
       ) : null}
 
       <div className="flex flex-wrap gap-2">
         <Button
-          disabled={busy || loading || !interactiveAuthEnabled || !canUseChatgpt}
+          disabled={
+            runtimeAccount.busy ||
+            runtimeAccount.loading ||
+            !interactiveAuthEnabled ||
+            !canUseChatgpt
+          }
           onClick={() => {
-            void startChatgptLogin();
+            void runtimeAccount.startChatgptLogin();
           }}
           size="sm"
           type="button"
@@ -557,9 +177,9 @@ export function RuntimeAccountControls() {
         </Button>
 
         <Button
-          disabled={busy || loading || !connected}
+          disabled={runtimeAccount.busy || runtimeAccount.loading || !connected}
           onClick={() => {
-            void disconnect();
+            void runtimeAccount.disconnect();
           }}
           size="sm"
           type="button"
@@ -570,15 +190,15 @@ export function RuntimeAccountControls() {
         </Button>
 
         <Button
-          disabled={busy}
+          disabled={runtimeAccount.busy}
           onClick={() => {
-            void refreshState();
+            void runtimeAccount.refreshState();
           }}
           size="sm"
           type="button"
           variant="ghost"
         >
-          {busy ? (
+          {runtimeAccount.busy ? (
             <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
           ) : (
             <RefreshCw className="mr-1.5 h-4 w-4" />
@@ -600,6 +220,7 @@ export function RuntimeAccountControls() {
             id="runtime-api-key"
             onChange={(event) => {
               setApiKey(event.target.value);
+              runtimeAccount.clearError();
             }}
             placeholder="sk-..."
             type="password"
@@ -607,9 +228,15 @@ export function RuntimeAccountControls() {
           />
           <Button
             className="sm:w-auto"
-            disabled={busy || loading || !interactiveAuthEnabled || !canUseApiKey}
+            disabled={
+              runtimeAccount.busy ||
+              runtimeAccount.loading ||
+              !interactiveAuthEnabled ||
+              !canUseApiKey
+            }
             onClick={() => {
-              void startApiKeyLogin();
+              void runtimeAccount.startApiKeyLogin(apiKey);
+              setApiKey("");
             }}
             size="sm"
             type="button"
@@ -630,6 +257,7 @@ export function RuntimeAccountControls() {
             autoComplete="off"
             onChange={(event) => {
               setAccessToken(event.target.value);
+              runtimeAccount.clearError();
             }}
             placeholder="Access token"
             type="password"
@@ -639,6 +267,7 @@ export function RuntimeAccountControls() {
             autoComplete="off"
             onChange={(event) => {
               setChatgptAccountId(event.target.value);
+              runtimeAccount.clearError();
             }}
             placeholder="ChatGPT account id"
             value={chatgptAccountId}
@@ -647,14 +276,22 @@ export function RuntimeAccountControls() {
             autoComplete="off"
             onChange={(event) => {
               setChatgptPlanType(event.target.value);
+              runtimeAccount.clearError();
             }}
             placeholder="Plan type (optional)"
             value={chatgptPlanType}
           />
           <Button
-            disabled={busy || loading || !interactiveAuthEnabled}
+            disabled={runtimeAccount.busy || runtimeAccount.loading || !interactiveAuthEnabled}
             onClick={() => {
-              void startExternalTokenLogin();
+              void runtimeAccount.startExternalTokenLogin({
+                accessToken,
+                chatgptAccountId,
+                chatgptPlanType
+              });
+              setAccessToken("");
+              setChatgptAccountId("");
+              setChatgptPlanType("");
             }}
             size="sm"
             type="button"

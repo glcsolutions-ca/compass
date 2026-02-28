@@ -3,6 +3,7 @@ import cors from "cors";
 import express, { type ErrorRequestHandler, type Express, type Response } from "express";
 import {
   AgentEventsBatchRequestSchema,
+  type AgentExecutionMode,
   RuntimeAccountLoginCancelRequestSchema,
   RuntimeAccountLoginStartRequestSchema,
   RuntimeAccountReadRequestSchema,
@@ -842,6 +843,41 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
     }
   }
 
+  function ensureExecutionModeEnabled(
+    response: express.Response,
+    executionMode: AgentExecutionMode | undefined
+  ): boolean {
+    if (executionMode === "cloud" && !agentCloudModeEnabled) {
+      response.status(503).json({
+        code: "AGENT_CLOUD_MODE_DISABLED",
+        message: "Cloud mode is disabled"
+      });
+      return false;
+    }
+
+    if (executionMode === "local" && !agentLocalModeEnabledDesktop) {
+      response.status(503).json({
+        code: "AGENT_LOCAL_MODE_DISABLED",
+        message: "Local mode is disabled"
+      });
+      return false;
+    }
+
+    return true;
+  }
+
+  function ensureModeSwitchEnabled(response: express.Response): boolean {
+    if (agentModeSwitchEnabled) {
+      return true;
+    }
+
+    response.status(503).json({
+      code: "AGENT_MODE_SWITCH_DISABLED",
+      message: "Mode switching is disabled"
+    });
+    return false;
+  }
+
   app.post("/v1/agent/runtime/account/read", async (request, response) => {
     const actor = await requireAgentUser(request, response);
     if (!actor || !agentService) {
@@ -951,19 +987,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       return;
     }
 
-    if (body.executionMode === "cloud" && !agentCloudModeEnabled) {
-      response.status(503).json({
-        code: "AGENT_CLOUD_MODE_DISABLED",
-        message: "Cloud mode is disabled"
-      });
-      return;
-    }
-
-    if (body.executionMode === "local" && !agentLocalModeEnabledDesktop) {
-      response.status(503).json({
-        code: "AGENT_LOCAL_MODE_DISABLED",
-        message: "Local mode is disabled"
-      });
+    if (!ensureExecutionModeEnabled(response, body.executionMode)) {
       return;
     }
 
@@ -1020,27 +1044,11 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       return;
     }
 
-    if (!agentModeSwitchEnabled) {
-      response.status(503).json({
-        code: "AGENT_MODE_SWITCH_DISABLED",
-        message: "Mode switching is disabled"
-      });
+    if (!ensureModeSwitchEnabled(response)) {
       return;
     }
 
-    if (body.executionMode === "cloud" && !agentCloudModeEnabled) {
-      response.status(503).json({
-        code: "AGENT_CLOUD_MODE_DISABLED",
-        message: "Cloud mode is disabled"
-      });
-      return;
-    }
-
-    if (body.executionMode === "local" && !agentLocalModeEnabledDesktop) {
-      response.status(503).json({
-        code: "AGENT_LOCAL_MODE_DISABLED",
-        message: "Local mode is disabled"
-      });
+    if (!ensureExecutionModeEnabled(response, body.executionMode)) {
       return;
     }
 
@@ -1074,19 +1082,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       return;
     }
 
-    if (body.executionMode === "cloud" && !agentCloudModeEnabled) {
-      response.status(503).json({
-        code: "AGENT_CLOUD_MODE_DISABLED",
-        message: "Cloud mode is disabled"
-      });
-      return;
-    }
-
-    if (body.executionMode === "local" && !agentLocalModeEnabledDesktop) {
-      response.status(503).json({
-        code: "AGENT_LOCAL_MODE_DISABLED",
-        message: "Local mode is disabled"
-      });
+    if (!ensureExecutionModeEnabled(response, body.executionMode)) {
       return;
     }
 

@@ -209,7 +209,7 @@ describe("chat canvas", () => {
     expect(screen.queryByText("Plain assistant reply")).not.toBeNull();
 
     const input = screen.getAllByPlaceholderText("Ask Compass anything...").at(-1);
-    const sendButton = screen.getAllByLabelText("Send prompt").at(-1);
+    const sendButton = document.querySelector<HTMLButtonElement>(".aui-composer-send");
     expect(input).toBeDefined();
     expect(sendButton).toBeDefined();
 

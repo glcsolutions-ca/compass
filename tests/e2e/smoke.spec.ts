@@ -469,11 +469,11 @@ async function runFlow(
   });
 }
 
-test("compass smoke flow", async ({ page }) => {
+test("compass smoke flow", async ({ page, baseURL }) => {
   const headSha = process.env.HEAD_SHA ?? "local";
   const testedSha = process.env.TESTED_SHA ?? headSha;
   const prNumber = Number(process.env.PR_NUMBER ?? "0");
-  const baseUrl = process.env.WEB_BASE_URL ?? "http://localhost:3000";
+  const baseUrl = baseURL ?? process.env.WEB_BASE_URL ?? "http://localhost:3000";
   const expectedEntrypoint = process.env.EXPECTED_ENTRYPOINT ?? "/";
   const requireAuthGateway = process.env.REQUIRE_AUTH_GATEWAY?.trim().toLowerCase() === "true";
   const smokeChatSendMode = parseSmokeChatSendMode(process.env.SMOKE_CHAT_SEND);

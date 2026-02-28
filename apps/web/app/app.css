@@ -212,11 +212,13 @@
 }
 
 .aui-selection-toolbar {
-  @apply z-30 rounded-md border border-border/80 bg-popover px-1 py-1 shadow-md;
+  @apply z-30 rounded-md border border-border/80 px-1 py-1 shadow-md;
+  background-color: hsl(var(--popover));
 }
 
 .aui-selection-toolbar-quote {
-  @apply rounded px-2 py-1 text-xs font-medium text-popover-foreground hover:bg-accent;
+  @apply rounded px-2 py-1 text-xs font-medium hover:bg-accent;
+  color: hsl(var(--popover-foreground));
 }
 
 @layer utilities {

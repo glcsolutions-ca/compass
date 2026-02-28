@@ -70,6 +70,11 @@ export default defineConfig({
     ? {
         command: "pnpm dev",
         url: baseURL,
+        env: {
+          ...process.env,
+          AGENT_GATEWAY_ENABLED: process.env.AGENT_GATEWAY_ENABLED ?? "false",
+          AGENT_RUNTIME_PROVIDER: process.env.AGENT_RUNTIME_PROVIDER ?? "mock"
+        },
         reuseExistingServer: !process.env.CI,
         timeout: 120_000
       }

@@ -29,6 +29,17 @@ function main({ cwd = process.cwd() } = {}) {
     return;
   }
 
+  const codexCliVersionRaw =
+    manifest && typeof manifest.codexCliVersion === "string" ? manifest.codexCliVersion.trim() : "";
+  const codexCliVersionMatch = /^codex-cli\s+([0-9]+\.[0-9]+\.[0-9]+)$/u.exec(codexCliVersionRaw);
+  if (!codexCliVersionMatch) {
+    fail(
+      "CODP008 codex protocol manifest must include codexCliVersion in format 'codex-cli X.Y.Z'"
+    );
+    return;
+  }
+  const codexCliVersion = codexCliVersionMatch[1];
+
   const versionRoot = path.join(cwd, "packages/codex-protocol/generated", generatedTag);
   const tsRoot = path.join(versionRoot, "ts");
   const jsonRoot = path.join(versionRoot, "json");
@@ -62,7 +73,24 @@ function main({ cwd = process.cwd() } = {}) {
     }
   }
 
-  console.info(`Codex protocol policy passed (CODP000) [${generatedTag}]`);
+  const runtimeDockerfilePath = path.join(cwd, "apps/codex-session-runtime/Dockerfile");
+  if (!existsSync(runtimeDockerfilePath)) {
+    fail("CODP009 missing apps/codex-session-runtime/Dockerfile");
+    return;
+  }
+
+  const runtimeDockerfile = readFileSync(runtimeDockerfilePath, "utf8");
+  const expectedDockerfileVersionToken = `@openai/codex@${codexCliVersion}`;
+  if (!runtimeDockerfile.includes(expectedDockerfileVersionToken)) {
+    fail(
+      `CODP010 runtime Dockerfile Codex version drift detected (expected ${expectedDockerfileVersionToken})`
+    );
+    return;
+  }
+
+  console.info(
+    `Codex protocol policy passed (CODP000) [${generatedTag}, codex=${codexCliVersion}]`
+  );
 }
 
 const isDirectExecution =

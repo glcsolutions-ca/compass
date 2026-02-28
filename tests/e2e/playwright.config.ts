@@ -44,16 +44,16 @@ function resolveBaseUrl(): string {
   }
 
   if (process.env.WEB_PORT) {
-    return `http://localhost:${process.env.WEB_PORT}`;
+    return `http://127.0.0.1:${process.env.WEB_PORT}`;
   }
 
   const webEnvPath = path.resolve(REPO_ROOT, "apps/web/.env");
   const webEnv = parseEnvFile(webEnvPath);
   if (webEnv.WEB_PORT) {
-    return `http://localhost:${webEnv.WEB_PORT}`;
+    return `http://127.0.0.1:${webEnv.WEB_PORT}`;
   }
 
-  return "http://localhost:3000";
+  return "http://127.0.0.1:3000";
 }
 
 const baseURL = resolveBaseUrl();

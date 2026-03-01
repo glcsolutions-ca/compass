@@ -26,11 +26,11 @@ import {
 } from "~/features/chat/presentation/chat-inspect-drawer";
 import {
   convertAssistantStoreMessage,
-  type ChatInspectState,
-  type ChatSurfaceState
+  type ChatInspectState
 } from "~/features/chat/presentation/chat-runtime-store";
 import type { ChatLoaderData } from "~/features/chat/chat-loader";
 import { loadChatData } from "~/features/chat/chat-loader";
+import { cn } from "~/lib/utils/cn";
 
 interface TransportSummary {
   lifecycle: ChatTransportState["lifecycle"];
@@ -163,6 +163,9 @@ export default function ChatRoute() {
   }, [chatActions.submitFetcher.data, registerSubmittedPrompt]);
 
   const transportSummary = readTransportSummary(transportState);
+  const hasSurfaceError = Boolean(chatActions.actionError || transportState.lastError);
+  const surfaceStatusLabel =
+    chatActions.actionError || transportState.lastError || transportSummary.label;
 
   const handleAssistantCancel = useCallback(async (): Promise<void> => {
     chatActions.submitInterruptTurn(activeTurnId);
@@ -292,26 +295,45 @@ export default function ChatRoute() {
     [location.hash, location.pathname, location.search, navigate]
   );
 
-  const surfaceState: ChatSurfaceState = {
-    transportLifecycle: transportSummary.lifecycle,
-    transportLabel: transportSummary.label,
-    actionError: chatActions.actionError,
-    transportError: transportState.lastError
-  };
-
-  const surfaceProps = {
-    executionMode,
-    localModeAvailable,
-    onExecutionModeChange: chatActions.handleModeChange,
-    runtime: assistantRuntime,
-    surfaceState,
-    switchingMode: chatActions.modeFetcher.state !== "idle"
-  } as const;
-
   return (
     <section className="flex h-full min-h-0 w-full flex-col">
+      <div className="mx-auto flex w-full max-w-[var(--aui-thread-max-width)] flex-wrap items-center justify-between gap-2 px-4 pb-2 pt-2 text-xs md:flex-nowrap md:px-6">
+        <div className="flex min-w-0 items-center gap-2">
+          <label
+            className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+            htmlFor="chat-route-mode"
+          >
+            Mode
+          </label>
+          <select
+            className="h-7 rounded-md border border-border/70 bg-background px-2 text-xs text-foreground"
+            disabled={chatActions.modeFetcher.state !== "idle"}
+            id="chat-route-mode"
+            onChange={(event) =>
+              chatActions.handleModeChange(event.target.value === "local" ? "local" : "cloud")
+            }
+            value={executionMode}
+          >
+            <option value="cloud">Cloud</option>
+            <option disabled={!localModeAvailable} value="local">
+              Local{localModeAvailable ? "" : " (desktop only)"}
+            </option>
+          </select>
+        </div>
+
+        <span
+          className={cn(
+            "w-full truncate text-[11px] text-muted-foreground md:w-auto",
+            hasSurfaceError && "text-destructive"
+          )}
+          role={hasSurfaceError ? "alert" : "status"}
+        >
+          {surfaceStatusLabel}
+        </span>
+      </div>
+
       <div className="flex min-h-0 flex-1">
-        <ChatCanvas {...surfaceProps} />
+        <ChatCanvas runtime={assistantRuntime} />
       </div>
 
       <ChatInspectDrawer

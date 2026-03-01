@@ -1,13 +1,15 @@
 # Commit Stage Policy Contract
 
+Purpose: contract for how commit-stage and integration-gate decide pass/fail.
+
 Canonical model: `development-pipeline.md`.
 
 ## Source Of Truth
 
 - Policy: `.github/policy/pipeline-policy.json`
-- Commit gate implementation: `.github/workflows/commit-stage.yml`
-- Integration gate implementation: `.github/workflows/integration-gate.yml`
-- Final decision scripts:
+- Commit gate workflow: `.github/workflows/commit-stage.yml`
+- Integration gate workflow: `.github/workflows/integration-gate.yml`
+- Decision scripts:
   - `scripts/pipeline/commit/decide-commit-stage.mjs`
   - `scripts/pipeline/commit/decide-integration-gate.mjs`
 
@@ -16,43 +18,22 @@ Canonical model: `development-pipeline.md`.
 - `commit-stage`
 - `integration-gate`
 
-## Commit Stage Contract
+## Decision Inputs
 
-`commit-stage` final decision is based on scope + required check outcomes + docs-drift state.
+- scope classification
+- required check outcomes
+- docs drift status
+- timing/SLO mode where configured
 
-Required check set (policy-driven):
+## Policy Rules
 
-- `determine-scope`
-- `commit-test-suite`
-- `desktop-commit-test-suite`
-- `commit-stage`
+- `HR001` blocks high-risk direct commits to `main`.
+- docs drift blocks docs-critical changes without required doc updates.
+- artifacts are written under `.artifacts/**` for each gate.
 
-## Integration Gate Contract
+## Artifacts
 
-`integration-gate` final decision is based on scope + required check outcomes + docs-drift state.
-
-Required check set (policy-driven):
-
-- `determine-scope`
-- `build-compile`
-- `migration-safety`
-- `runtime-contract-smoke`
-- `minimal-integration-smoke`
-- `integration-gate`
-
-## Docs Drift Contract
-
-- Blocking when docs-critical paths change without required doc target updates.
-- Advisory for deployment-pipeline-config drift without required doc target updates.
-- Artifact: `.artifacts/docs-drift/<sha>/result.json`
-
-## High-Risk Mainline Policy (`HR001`)
-
-- Blocks direct `main` commits for policy-defined high-risk path categories.
-- Routes high-risk changes to PR + CODEOWNER review.
-
-## Timing And Recovery
-
-- Commit-stage timing artifact: `.artifacts/commit-stage/<sha>/timing.json`
-- Integration timing artifact: `.artifacts/integration-gate/<sha>/timing.json`
-- Main red recovery artifact: `.artifacts/main-recovery/<sha>/result.json`
+- `.artifacts/commit-stage/<sha>/result.json`
+- `.artifacts/integration-gate/<sha>/result.json`
+- `.artifacts/docs-drift/<sha>/result.json`
+- `.artifacts/main-recovery/<sha>/result.json`

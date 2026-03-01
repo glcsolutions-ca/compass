@@ -1,24 +1,29 @@
 # Troubleshooting
 
+Purpose: fast diagnosis for common pipeline failures.
+
 Canonical model: `../development-pipeline.md`.
 
 ## `docs-drift` Failure
 
-- Cause: docs-critical path changed without required docs updates.
-- Fix: update `docs/development-pipeline.md`, `docs/commit-stage-policy.md`, `.github/workflows/README.md`, or another configured doc target.
+- Cause: docs-critical path changed without required docs update.
+- Check: `.artifacts/docs-drift/<sha>/result.json`.
+- Fix: update `docs/development-pipeline.md`, `docs/commit-stage-policy.md`, `.github/workflows/README.md`, or another configured target.
 
 ## `commit-stage` Failure
 
-- Cause: required fast checks failed or docs drift blocked.
-- Fix: review `.artifacts/commit-stage/<sha>/result.json`, fix forward, push.
+- Cause: fast checks failed or docs drift blocked.
+- Check: `.artifacts/commit-stage/<sha>/result.json`.
+- Fix: correct the issue and push.
 
 ## `integration-gate` Failure
 
 - Cause: integration checks failed.
-- Fix: review `.artifacts/integration-gate/<sha>/result.json`, fix forward, push.
+- Check: `.artifacts/integration-gate/<sha>/result.json`.
+- Fix: correct the issue and push.
 
 ## Cloud Pipeline Failure
 
-- Cause: evidence verification, deploy, smoke, or release-decision step failed.
-- Fix: review `.artifacts/infra/<sha>/deployment.json`, `.artifacts/deploy/<sha>/api-smoke.json`, and `.artifacts/release/<sha>/decision.json`.
-- Replay option: rerun `cloud-deployment-pipeline-replay.yml` with `release_candidate_sha`.
+- Cause: evidence verification, deploy, smoke, or release decision step failed.
+- Check: `.artifacts/infra/<sha>/deployment.json`, `.artifacts/deploy/<sha>/api-smoke.json`, `.artifacts/release/<sha>/decision.json`.
+- Fix: correct and rerun, or replay with `release_candidate_sha`.

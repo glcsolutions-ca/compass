@@ -1,18 +1,12 @@
 # Cloud Pipeline Scripts
 
-## Purpose
+Purpose: scripts used by cloud deployment workflows.
 
-`scripts/pipeline/cloud/` contains cloud-only deployment pipeline logic.
-Desktop pipeline code is intentionally kept in `scripts/pipeline/desktop/`.
+## Start Here
 
-## Stage Split
+- `deployment-stage/README.md`
 
-- `automated-acceptance-test-gate/`: non-mutating acceptance checks and YES/NO decision logic for cloud release candidates.
-- `deployment-stage/`: guarded production mutation helpers and deployment-stage decision logic.
+## Source Of Truth
 
-## References
-
-- Cloud push workflow: `.github/workflows/cloud-deployment-pipeline.yml`
-- Cloud replay workflow: `.github/workflows/cloud-deployment-pipeline-replay.yml`
-- Automated acceptance test gate scripts: [`scripts/pipeline/cloud/automated-acceptance-test-gate/README.md`](./automated-acceptance-test-gate/README.md)
-- Deployment stage scripts: [`scripts/pipeline/cloud/deployment-stage/README.md`](./deployment-stage/README.md)
+- `.github/workflows/cloud-deployment-pipeline.yml`
+- `docs/runbooks/cloud-deployment-pipeline-setup.md`

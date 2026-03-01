@@ -1,11 +1,14 @@
 # Architecture Docs
 
-This directory contains system architecture and boundary documents.
+Purpose: current architecture references for product/runtime/security decisions.
 
-## Documents
+## Start Here
 
 - `foundation-baseline.md`
-- `brand-architecture.md`
-- `auth-threat-model-v1.md`
-- `frontend-constitution.md` (Frontend Constitution v2)
 - `dual-mode-agent-runtime.md`
+- `frontend-constitution.md`
+
+## Other References
+
+- `auth-threat-model-v1.md`
+- `brand-architecture.md`

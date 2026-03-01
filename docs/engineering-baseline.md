@@ -1,5 +1,5 @@
 # Engineering Baseline
 
-The normative engineering baseline now lives in `/README.md`.
+Purpose: compatibility pointer.
 
-Use this doc only for historical context while architecture records remain under `docs/`.
+Use `/README.md` as the active engineering baseline.

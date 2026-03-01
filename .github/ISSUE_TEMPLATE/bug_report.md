@@ -1,24 +1,28 @@
----
-name: Bug report
-about: Something isn't working
-title: "Bug: "
-labels: bug
-assignees: ""
----
-
 ## Summary
 
-<What happened?>
+What failed and where.
 
 ## Expected
 
-<What you expected to happen?>
+What should have happened.
 
 ## Actual
 
-<What actually happened?>
+What happened instead.
 
-## Context
+## Reproduction
 
-- Environment:
-- Steps to reproduce:
+1. command(s) run
+2. input/context
+3. observed output
+
+## Evidence
+
+- logs:
+- artifacts:
+- commit SHA:
+- environment (local/CI):
+
+## Impact
+
+Who is blocked and severity.

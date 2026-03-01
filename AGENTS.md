@@ -1,85 +1,53 @@
 # AGENTS.md
 
-## Repo map
+Purpose: default working contract for coding agents in this repository.
+
+## Repo Map
 
 ```text
 compass/
 ├─ .github/{policy,workflows}
-├─ apps/{api,web,worker}
+├─ apps/{api,web,worker,desktop,codex-session-runtime}
 ├─ db/{migrations,postgres,scripts,seeds}
-├─ docs/{agents,runbooks,architecture,adr}
+├─ docs/{runbooks,contracts,architecture,adr,agents}
 ├─ infra/{azure,identity}
-├─ packages/{contracts,sdk}
-├─ scripts/{ci,deploy}
-└─ tests/{e2e,system}
+├─ packages/{contracts,sdk,codex-protocol,testkit}
+├─ scripts/pipeline/**
+└─ tests/{e2e,system,policy}
 ```
 
-## Main commands
+## Core Commands
 
-Agents can run these locally when needed.
+- `pnpm install`
+- `pnpm dev`
+- `pnpm build`
+- `pnpm test:quick`
+- `pnpm test:full`
 
-- `pnpm install` — install workspace dependencies
-- `pnpm dev` — run local apps/services
-- `pnpm build` — build all apps/packages
+Integration prerequisites:
 
-### Testing
-
-- `pnpm test:quick` — **commit-stage** checks (policy + formatting + lint + typecheck + unit/component + contract)
-- `pnpm test` — alias for `pnpm test:quick`
-- `pnpm test:full` — quick gate + integration tests + Playwright smoke
-- `pnpm test:integration` — integration tests only (requires local Postgres)
-- `pnpm test:e2e` — Playwright smoke flow only
-
-Local hook behavior:
-
-- pre-commit: `pnpm exec lint-staged` then `pnpm test:quick`
-- pre-push: `pnpm test:full`
-
-### Local Postgres (for integration)
-
-- `pnpm db:postgres:up` — start local Postgres, apply migrations, seed data
-- `pnpm db:postgres:down` — stop local Postgres
-
-Example (integration run):
-
-```sh
+```bash
 pnpm db:postgres:up
 pnpm test:integration
 pnpm db:postgres:down
 ```
 
-## Trunk-based CD (Dave Farley style)
+## Trunk-Based CD Rules
 
-- **Trunk = `main`**. `main` must stay **green and releasable** at all times.
-- **Integrate in small batches**. Prefer **small, reversible** changes and frequent evidence-driven commits.
-- **Pipeline = release evidence**. A change is “done” only when the `main` pipeline is green. If `main` goes red: **fix forward or revert immediately**.
+- `main` is trunk and must stay releasable.
+- Integrate in small, reversible batches.
+- Required quality gates are `commit-stage` and `integration-gate`.
+- If `main` goes red, fix forward or revert immediately.
 
-### Agent workflow (direct-to-main)
+## Direct-To-Main Loop
 
-```sh
-# Worktrees: run these commands from the worktree where `main` is checked out.
-# Confirm: git branch --show-current  # should print: main
-
+```bash
 git pull --rebase
-
-# While iterating:
-# git commit triggers: pnpm exec lint-staged && pnpm test:quick
-# pnpm test:quick
-# Before pushing to main:
+pnpm test:quick
 pnpm test:full
-
 git add -A
 git commit -m "<small change>"
 git push origin main
-
-# If push is rejected (main moved):
-#   git pull --rebase
-#   <resolve conflicts>
-#   pnpm test:full
-#   git push origin main
-
-# If the main pipeline is red:
-#   fix forward, or:
-#   git revert <bad_sha>
-#   git push origin main
 ```
+
+If push is rejected, rebase and rerun `pnpm test:full` before pushing again.

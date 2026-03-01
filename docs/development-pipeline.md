@@ -1,11 +1,11 @@
 # Development Pipeline (Trunk-Based CD)
 
-This pipeline exists to keep `main` releasable.
+Purpose: keep `main` releasable through deterministic quality gates and immutable promotion.
 
 ## Core Idea
 
-- Every `main` commit must pass two quality gates: `commit-stage` and `integration-gate`.
-- After both gates pass, build once and publish one release candidate manifest.
+- Every push to `main` must pass `commit-stage` and `integration-gate`.
+- Build once and publish one immutable release candidate manifest.
 - Deploy and verify that same release candidate.
 - Record a final release decision.
 - If `main` goes red, fix forward or revert immediately.
@@ -23,12 +23,12 @@ flowchart TD
     E -. "Replay (no rebuild)" .-> F
 ```
 
-## In Plain Terms
+## Terms
 
-- `main` is trunk.
-- `commit-stage` and `integration-gate` are the required status checks.
-- A `release candidate` is immutable (`.artifacts/release-candidate/<sha>/manifest.json`).
-- `replay` redeploys an existing release candidate SHA without rebuilding images.
+- `trunk`: `main`
+- `quality gate`: required status contexts
+- `release candidate`: `.artifacts/release-candidate/<sha>/manifest.json`
+- `replay`: redeploy existing release candidate SHA without rebuild
 
 ## Evidence
 

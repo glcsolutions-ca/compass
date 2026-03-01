@@ -1,18 +1,32 @@
 # Contributing
 
-We use **trunk-first Continuous Delivery (Dave Farley style)**: keep `main` **green and releasable**.  
-Make changes **small, testable, and reversible**. CI stage gates are the source of truth.
+Purpose: standard local workflow for safe trunk integration.
 
-## Prereqs
+## Start Here
 
-- Node.js `22.x` (see `.nvmrc`, enforced by `engines`)
-- `pnpm` `10.30.1` (see `packageManager`)
-- Docker (only for local Postgres)
+- Read `README.md` for local setup.
+- Read `docs/development-pipeline.md` for delivery rules.
+- Read `AGENTS.md` for execution defaults.
 
-## Quick start
+## Local Workflow
 
 ```bash
 pnpm install
-pnpm db:postgres:up   # optional (API/data work)
-pnpm dev
+pnpm test:quick
+pnpm test:full
+pnpm build
 ```
+
+If database work is involved:
+
+```bash
+pnpm db:postgres:up
+pnpm test:integration
+pnpm db:postgres:down
+```
+
+## Commit And Push
+
+- Keep commits small and reversible.
+- Push to `main` unless `HR001` routes the change to PR flow.
+- Treat CI gate results as release evidence.

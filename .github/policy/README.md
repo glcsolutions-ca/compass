@@ -1,42 +1,25 @@
 # Pipeline Policy Contract
 
-This directory is the machine source of truth for delivery policy.
+Purpose: machine source of truth for delivery policy.
 
-- Canonical contract: `.github/policy/pipeline-policy.json`
-- Enforced by workflows:
-  - `.github/workflows/commit-stage.yml`
-  - `.github/workflows/integration-gate.yml`
-  - `.github/workflows/cloud-deployment-pipeline.yml`
-  - `.github/workflows/cloud-deployment-pipeline-replay.yml`
-- `.github/workflows/desktop-deployment-pipeline.yml`
-- Required gate contexts: `commit-stage`, `integration-gate`
+## Policy File
 
-Trunk-first default is direct integration to `main` with fast automated gates on push. `pull_request` runs remain optional preview signals.
-Automated acceptance test gate and deployment stage are post-push gates.
+- `.github/policy/pipeline-policy.json`
 
-## Policy Sections
+## What It Controls
 
-- `scopeRules`: file-to-scope classification (`runtime`, `desktop`, `infra`, `identity`, `docsOnly`, rollout flags)
-- `commitStage`: required commit-stage checks + commit SLO policy (`targetSeconds`, `mode`)
-- `highRiskMainlinePolicy`: local static `HR001` rule config (`mainBranch`, `codeOwners`, `categories`, `requirePullRequestOnMain`)
-- `integrationGate`: required integration checks
-- `automatedAcceptanceTestGate`: required acceptance jobs by scope
-- `deploymentStage`: production promotion safety toggles
-- `cloudDeploymentPipeline`: cloud deployment timing SLO targets (`acceptance`, `production`)
-- `desktopDeploymentPipeline`: desktop delivery checks, artifact contracts, and stage timing SLOs
-- `docsDriftRules`: deployment-pipeline-config/docs-critical drift rules
+- change scope rules
+- required gate checks
+- docs drift rules
+- high-risk mainline policy (`HR001`)
+- commit-stage and deployment SLO settings
 
-## Commit-Stage SLO Mode
+## Editing Rule
 
-`commitStage.slo.mode` values:
+When behavior changes in workflows or pipeline scripts, update this policy in the same change.
 
-- `observe`: timing breaches warn only
-- `enforce`: timing breaches fail `commit-stage`
+## Verification
 
-## High-Risk Coverage
-
-`pipeline-policy.json` defines high-risk mainline categories for `HR001`:
-
-- `infra-mutation`: `infra/azure/**`, `infra/identity/**`
-- `data-mutation`: `db/migrations/**`, `db/scripts/**`
-- `pipeline-governance-mutation`: `.github/workflows/**`, `.github/policy/**`, `scripts/pipeline/**`
+- `pnpm ci:scope`
+- `pnpm ci:docs-drift`
+- `pnpm test:quick`

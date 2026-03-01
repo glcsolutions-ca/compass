@@ -1,91 +1,31 @@
-# Entra SSO and App Auth Contracts
+# Entra SSO And Gateway Auth Contract
 
-This document records the v1 Entra-only auth contract for Compass API and web entry flows.
-
-See also [Agent Runtime and Chat Contract](./agent-runtime-and-chat-contract.md) for `/v1/agent/**` runtime/thread surfaces.
+Purpose: contract for Entra login, callback handling, token/session behavior, and gateway auth boundaries.
 
 ## Scope
 
-- API auth endpoints in `apps/api`
-- Organization/workspace membership and invite endpoints in `apps/api`
-- Web front-door and workspace routes in `apps/web`
-- OpenAPI + SDK contract generation in `packages/contracts` and `packages/sdk`
+- Entra redirect/callback paths
+- API auth expectations
+- secret and identity wiring expectations
 
-## Web Contract
+## Contract Rules
 
-Routes:
+- callback and token exchange behavior must remain compatible
+- secrets are sourced from Key Vault contracts
+- auth-facing schema changes require contract regeneration
 
-- `GET /`
-- `GET /login`
-- `GET /chat`
-- `GET /w/:workspaceSlug/chat`
-- `GET /w/:workspaceSlug/chat/:threadId`
-- `GET /workspaces`
+## Validation
 
-Expected behavior:
+```bash
+pnpm contract:check
+```
 
-- `/` redirects to `/chat` for authenticated users and `/login` for unauthenticated users.
-- `/login` renders “Sign in with Microsoft” and redirects authenticated users to `/chat`.
-- `/chat` resolves to `/w/:workspaceSlug/chat` (personal-first by default).
-- `/w/:workspaceSlug/chat` is available for authenticated users with active workspace membership.
-- `/workspaces` provides optional workspace management and invite flows.
+## Failure Mode
 
-## Auth API Contract
+- incompatible auth changes block release until contract and runtime behavior align
 
-Routes:
+## Source
 
-- `GET /v1/auth/entra/start?returnTo=...&client=browser|desktop`
-- `GET /v1/auth/entra/callback`
-- `GET /v1/auth/entra/admin-consent/start?tenantHint=...&returnTo=...&client=browser|desktop`
-- `GET /v1/auth/desktop/complete?handoff=...`
-- `GET /v1/auth/me`
-- `POST /v1/auth/logout`
-
-Behavior:
-
-- Start route generates `state`, `nonce`, and PKCE verifier/challenge and persists short-lived request state.
-- Callback route validates state, exchanges code, validates ID token, links/creates user identity, and issues session cookie.
-- Desktop callback mode (`client=desktop`) returns a custom deep-link redirect with one-time handoff token instead of directly issuing browser session cookie.
-- Desktop handoff completion route (`/v1/auth/desktop/complete`) consumes the one-time handoff and then issues the normal session cookie within the app session.
-- Successful callback defaults to `/chat` when `returnTo` is absent or legacy tenant-scoped.
-- Successful login and `/v1/auth/me` reads enforce personal workspace auto-provisioning, ensuring at least one active membership.
-- Callback route enforces optional Entra tenant allow-listing (`ENTRA_ALLOWED_TENANT_IDS`).
-- Session cookie is `__Host-compass_session`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`.
-- Auth endpoints are rate limited per client IP.
-- Cookie-authenticated state-changing endpoints enforce same-origin CSRF checks using `Origin`/`Referer`.
-- Desktop deep-link scheme defaults to reverse-domain format (`ca.glsolutions.compass`) and must be consistent between API and desktop shell.
-
-## Workspace and Invite API Contract
-
-Routes:
-
-- `POST /v1/workspaces`
-- `GET /v1/workspaces/:workspaceSlug`
-- `GET /v1/workspaces/:workspaceSlug/members`
-- `POST /v1/workspaces/:workspaceSlug/invites`
-- `POST /v1/workspaces/:workspaceSlug/invites/:token/accept`
-
-Behavior:
-
-- Workspace context comes from URL slug only.
-- Membership checks are server-side and default deny.
-- Invite creation is restricted to workspace `admin` role.
-- Invite acceptance validates token, expiry, and authenticated email match.
-
-## OpenAPI Metadata Contract
-
-`packages/contracts/openapi/openapi.json` includes:
-
-- all routes listed above
-- `sessionCookieAuth` security scheme (cookie `__Host-compass_session`)
-- operation-level security for protected routes (`/v1/auth/me`, `/v1/auth/logout`, `/v1/workspaces/**`)
-- desktop completion metadata for `GET /v1/auth/desktop/complete`
-
-Validation command:
-
-- `pnpm contract:check`
-
-## API Auth Identity Rules
-
-- Entra identity linkage is immutable and based on `tid + oid`.
-- Authorization decisions do not rely on mutable claims (`email`, `upn`, `name`).
+- `packages/contracts/**`
+- `apps/api/**`
+- `docs/runbooks/entra-sso-setup.md`

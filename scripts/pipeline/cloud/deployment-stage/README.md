@@ -1,61 +1,15 @@
 # Cloud Deployment Stage Scripts
 
-## Purpose
+Purpose: deployment-stage mutation and verification helpers for cloud runtime delivery.
 
-`scripts/pipeline/cloud/deployment-stage/` contains helpers used by production deploy and verification jobs.
+## Start Here
 
-## Script Map
+- apply infra
+- validate key vault secrets
+- run smoke and compatibility checks
+- record release evidence
 
-- `apply-infra.mjs`: validates/applies Bicep and writes infra artifacts.
-- `custom-domain-dns.mjs`: emits DNS records for optional custom-domain cut-in.
-- `start-migration-job.mjs`: starts ACA migration job execution.
-- `wait-migration-job.mjs`: waits for migration completion and captures status/log metadata.
-- `verify-api-smoke.mjs`: validates API health, OpenAPI, allowed/denied auth behavior.
-- `verify-dynamic-sessions-convergence.mjs`: verifies session-pool control-plane convergence (image digest, endpoint, role scope, network mode).
-- `verify-agent-runtime-compatibility.mjs`: verifies runtime endpoint compatibility (`/agent/session/bootstrap`, `/agent/turns/start`, interrupt) plus identifier stickiness/isolation invariants through the Dynamic Sessions management endpoint.
-- `record-release.mjs`: records successful deployment in GitHub Deployments.
-- `decide-deployment-stage.mjs`: computes production YES/NO decision artifact.
-- `utils.mjs`: shared execution/env/artifact helpers.
+## Source Of Truth
 
-## Environment Contract
-
-### Azure runtime context
-
-- `AZURE_RESOURCE_GROUP`
-- `ACA_API_APP_NAME`
-- `ACA_WEB_APP_NAME`
-- `ACA_MIGRATE_JOB_NAME`
-- `ACR_NAME`
-- `DYNAMIC_SESSIONS_POOL_NAME`
-
-### Release context
-
-- `HEAD_SHA`
-- `CHANGE_CLASS`
-- `TARGET_API_BASE_URL`
-
-### API smoke auth inputs
-
-- `API_IDENTIFIER_URI` (scope defaults to `${API_IDENTIFIER_URI}/.default`)
-- `API_SMOKE_ALLOWED_TENANT_ID`
-- `API_SMOKE_ALLOWED_CLIENT_ID`
-- `API_SMOKE_ALLOWED_CLIENT_SECRET`
-- `API_SMOKE_DENIED_TENANT_ID`
-- `API_SMOKE_DENIED_CLIENT_ID`
-- `API_SMOKE_DENIED_CLIENT_SECRET`
-
-### Deployment record inputs
-
-- `GITHUB_TOKEN`
-- `GITHUB_REPOSITORY`
-- `TARGET_ENVIRONMENT` (defaults to `production`)
-
-## Artifact Paths
-
-- `.artifacts/deployment-stage/<sha>/*.json`
-- `.artifacts/deploy/<sha>/*.json`
-- `.artifacts/infra/<sha>/*`
-
-## Safety
-
-These scripts are on production mutation/verification paths. Keep fail-closed behavior and preserve artifact diagnostics.
+- `.github/workflows/cloud-deployment-pipeline.yml`
+- `docs/development-pipeline.md`

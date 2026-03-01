@@ -1,68 +1,31 @@
 # Agent Runtime Groundwork Runbook
 
-## Purpose
+Purpose: verify baseline runtime behavior for cloud/local agent execution.
 
-Operate and verify the dual-mode groundwork (`cloud` + `local`) without changing tenant-facing product contracts.
+## When To Use
 
-## Preconditions
+- validating runtime groundwork changes
+- confirming feature-flag wiring
 
-1. Database has migration `1772161000000_agent_runtime_groundwork.mjs` applied.
-2. API is running with agent feature flags enabled as needed.
-3. Dynamic Sessions runtime image is deployed for cloud mode execution.
-4. Desktop app is running for local mode validation.
+## Inputs
 
-## Migration Notes
+- local env configured
+- DB available for API/runtime checks
 
-1. Migration `1772161000000_agent_runtime_groundwork.mjs` renames legacy `codex_*` tables to `agent_*` and adds execution metadata fields.
-2. Index renames use raw SQL (`alter index if exists ... rename to ...`) for compatibility with `node-pg-migrate`; avoid `pgm.renameIndex` in this repo.
-3. If a migration file must be edited before production apply, update `db/migrations/checksums.json` with `pnpm db:migrate:checksums:update`.
-4. Keep migration edits forward-only after production apply: add a new migration for follow-up fixes instead of modifying an applied migration.
+## Steps
 
-## Required Environment Flags
+1. Run targeted unit tests for changed runtime surfaces.
+2. Run `pnpm typecheck:refs`.
+3. Run `pnpm test:quick`.
+4. If integration behavior changed, run `pnpm test:full`.
 
-1. `AGENT_GATEWAY_ENABLED=true`
-2. `AGENT_CLOUD_MODE_ENABLED=true`
-3. `AGENT_LOCAL_MODE_ENABLED_DESKTOP=true`
-4. `AGENT_MODE_SWITCH_ENABLED=true`
+## Verify
 
-## Smoke Validation (Cloud)
+- required tests pass
+- no contract drift
+- no docs drift
 
-1. Create thread:
-   - `POST /v1/agent/threads` with `{ tenantSlug, executionMode:"cloud" }`
-2. Start turn:
-   - `POST /v1/agent/threads/{threadId}/turns` with `{ text }`
-3. Read event timeline:
-   - `GET /v1/agent/threads/{threadId}/events`
-4. Optional websocket stream:
-   - `GET /v1/agent/threads/{threadId}/stream` (upgrade)
+## Failure Handling
 
-Expected: turn lifecycle events persist in `agent_events` and are streamable in order.
-
-## Smoke Validation (Local Desktop)
-
-1. In desktop app, select `Local` mode for a chat thread.
-2. Submit a prompt.
-3. Confirm renderer receives local response from preload IPC.
-4. Confirm local turn events are uplinked via `events:batch` and visible in API event timeline.
-
-Expected: local mode uses same `threadId`, emits `turn.started -> item.delta -> turn.completed`, and persists those events in API store.
-
-## Mode Switch Rules
-
-1. Switches are only allowed when no turn is `inProgress`.
-2. Switches update `agent_threads.execution_mode` and append `thread.modeSwitched` event.
-3. Attempted switch during active turn returns `409` with `AGENT_THREAD_BUSY`.
-
-## Local Credential Storage
-
-1. Local credentials/auth state are persisted only from Electron main process.
-2. Storage uses Electron `safeStorage` (OS-backed encrypted blob).
-3. Renderer must never read/write secrets directly.
-
-## Verification Commands
-
-1. `pnpm --filter @compass/api test`
-2. `pnpm --filter @compass/web test`
-3. `pnpm --filter @compass/desktop test`
-4. `pnpm --filter @compass/codex-session-runtime test`
-5. `pnpm typecheck:refs`
+- fix forward on `main`
+- revert if deterministic break cannot be corrected quickly

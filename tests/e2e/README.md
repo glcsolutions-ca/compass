@@ -1,43 +1,14 @@
-# E2E Browser Evidence
+# E2E Tests
 
-## Scope
+Purpose: browser smoke evidence for key product flows.
 
-`tests/e2e/` contains Playwright browser smoke evidence for the web baseline flow.
-
-## Run Command
+## Run
 
 ```bash
 pnpm test:e2e
 ```
 
-Equivalent direct command:
+## Source Of Truth
 
-```bash
-playwright test tests/e2e/smoke.spec.ts --config tests/e2e/playwright.config.ts --reporter=line --workers=1
-```
-
-## Environment Variables
-
-### Optional (defaults provided)
-
-- `WEB_BASE_URL` (default `http://127.0.0.1:3000`)
-- `REQUIRED_FLOW_IDS_JSON` (JSON array override for required flow IDs)
-- `EVIDENCE_FLOW_ID` (fallback comma-separated flow ID list, default `compass-smoke`)
-- `EXPECTED_ENTRYPOINT` (default `/`)
-- `HEAD_SHA` (default `local`)
-- `TESTED_SHA` (default `HEAD_SHA`)
-- `PR_NUMBER` (default `0`)
-
-### Required
-
-No variable is strictly required for local execution, but CI normally supplies SHA metadata for evidence traceability.
-
-## Output Artifact
-
-Primary artifact:
-
-- `.artifacts/browser-evidence/<sha>/manifest.json`
-
-Related screenshots:
-
-- `.artifacts/browser-evidence/<sha>/<flow-id>.png`
+- `tests/e2e/smoke.spec.ts`
+- `tests/e2e/playwright.config.ts`

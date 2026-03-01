@@ -1,16 +1,8 @@
 # Desktop Pipeline Scripts
 
-## Purpose
+Purpose: scripts used by desktop deployment workflow stages.
 
-`scripts/pipeline/desktop/` contains desktop deployment pipeline helpers.
-This folder is intentionally separated from cloud pipeline scripts so desktop acceptance/deployment behavior stays easy to reason about.
+## Source Of Truth
 
-## Current Scope
-
-- `acceptance/run-desktop-backend-contract-acceptance.mjs`
-  - Verifies desktop release candidate compatibility with the current backend contract (`/api/v1/health`, `/api/v1/openapi.json`).
-
-## Safety Notes
-
-- Desktop scripts are non-mutating unless explicitly used in desktop production publish steps.
-- Keep desktop script changes decoupled from cloud mutation logic.
+- `.github/workflows/desktop-deployment-pipeline.yml`
+- `docs/runbooks/desktop-deployment-pipeline.md`

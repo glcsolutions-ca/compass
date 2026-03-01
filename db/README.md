@@ -1,30 +1,24 @@
 # Database
 
-All database concerns live under this directory.
+Purpose: migrations, local Postgres runtime, and seed workflow.
 
-## Structure
+## Start Here
 
-- `migrations/`: schema and migration files.
-- `scripts/`: migration/seed helper scripts used by local workflows and deploy jobs.
-- `seeds/`: optional local development seed SQL files.
-- `postgres/docker-compose.yml`: local PostgreSQL service definition.
+- migrations: `db/migrations/**`
+- migration scripts: `db/scripts/**`
+- local runtime: `db/postgres/**`
 
-## Baseline Behavior
+## Run
 
-- Migration and seed tooling remain active by default.
-- Seed execution is generic and no-ops when no `.sql` seed files exist.
-- Product/domain tables should be introduced only through explicit migrations.
-- Current schema baseline is migration `1772083000000_initial_schema.mjs`.
-- Migration filenames are strict: `^\\d{13}_[a-z0-9_]+\\.mjs$`.
-- `db/migrations/checksums.json` is immutable for historical migration files and enforced by policy checks.
+```bash
+pnpm db:postgres:up
+pnpm db:migrate:check
+pnpm db:migrate:up
+pnpm db:migrate:status
+pnpm db:postgres:down
+```
 
-## Common Commands
+## Source Of Truth
 
-- `pnpm db:postgres:up`
-- `pnpm db:postgres:down`
-- `pnpm db:migrate:create -- <migration_name>`
-- `pnpm db:migrate:check`
-- `pnpm db:migrate:checksums:update`
-- `pnpm db:migrate:up`
-- `pnpm db:migrate:status`
-- `pnpm db:seed`
+- `docs/runbooks/postgres-local.md`
+- `docs/runbooks/migration-runbook.md`

@@ -1,15 +1,17 @@
 # Workflows
 
+Purpose: workflow file contract for delivery automation.
+
 Canonical model: `docs/development-pipeline.md`.
 
 ## Workflow Files
 
-- `commit-stage.yml`: push to `main` (+ optional PR preview)
-- `integration-gate.yml`: push to `main` (+ optional PR preview)
-- `cloud-deployment-pipeline.yml`: push to `main`
-- `cloud-deployment-pipeline-replay.yml`: manual replay by `release_candidate_sha`
-- `dynamic-sessions-acceptance-rehearsal.yml`: manual acceptance rehearsal by SHA
-- `desktop-deployment-pipeline.yml`: desktop release path
+- `commit-stage.yml`: push to `main`, optional PR preview.
+- `integration-gate.yml`: push to `main`, optional PR preview.
+- `cloud-deployment-pipeline.yml`: push to `main`.
+- `cloud-deployment-pipeline-replay.yml`: manual replay by `release_candidate_sha`.
+- `dynamic-sessions-acceptance-rehearsal.yml`: manual acceptance rehearsal by SHA.
+- `desktop-deployment-pipeline.yml`: desktop release path.
 
 ## Required Status Contexts
 
@@ -24,21 +26,8 @@ Canonical model: `docs/development-pipeline.md`.
 - `.artifacts/release/<sha>/decision.json`
 - `.artifacts/pipeline/<sha>/timing.json`
 
-## Cloud Environment Contract
-
-Required production variables:
-
-- `AZURE_TENANT_ID`
-- `AZURE_SUBSCRIPTION_ID`
-- `AZURE_RESOURCE_GROUP`
-- `AZURE_GITHUB_CLIENT_ID`
-- `ACR_NAME`
-- `KEY_VAULT_NAME`
-- `DYNAMIC_SESSIONS_POOL_NAME`
-- `DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME`
-
-## References
+## Source Of Truth
 
 - `.github/policy/pipeline-policy.json`
+- `docs/commit-stage-policy.md`
 - `docs/runbooks/cloud-deployment-pipeline-setup.md`
-- `infra/azure/README.md`

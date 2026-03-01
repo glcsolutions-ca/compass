@@ -1,4 +1,6 @@
-# Agent Workflow Playbook
+# Agent Workflow
+
+Purpose: command-level local loop.
 
 Canonical model: `../development-pipeline.md`.
 
@@ -10,7 +12,7 @@ pnpm test:full
 pnpm build
 ```
 
-`git commit` runs:
+Commit hook path:
 
 ```bash
 pnpm exec lint-staged
@@ -29,12 +31,11 @@ If `FMT001` appears:
 
 ```bash
 pnpm exec lint-staged
-# or full repo
 pnpm format
 pnpm test:quick
 ```
 
-For deployment-pipeline-config changes, also run:
+For pipeline config changes:
 
 ```bash
 pnpm ci:scope
@@ -43,7 +44,3 @@ pnpm ci:docs-drift
 pnpm ci:terminology-policy
 pnpm ci:doc-quality
 ```
-
-## High-Risk Paths
-
-`HR001` blocks high-risk direct commits to `main` and routes them to PR + CODEOWNER review.

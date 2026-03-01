@@ -1,68 +1,19 @@
 # Desktop App
 
-## Purpose
+Purpose: local runtime host and desktop packaging target.
 
-`apps/desktop` provides the Electron shell for Compass desktop delivery on macOS and Windows.
-The renderer is the existing web app loaded from `COMPASS_DESKTOP_START_URL` in packaged builds.
+## Start Here
 
-## Security Model
+- source: `apps/desktop/src`
+- packaging workflow: `.github/workflows/desktop-deployment-pipeline.yml`
 
-- `contextIsolation: true`
-- `sandbox: true`
-- `nodeIntegration: false`
-- preload-only API via `window.compassDesktop`
-
-The main process blocks in-app navigation to unknown origins and only allows `https:`/`mailto:`
-for external URL opens.
-Desktop auth callbacks return through the custom `ca.glsolutions.compass://auth/callback` deep link, then
-the app completes auth via `/v1/auth/desktop/complete` inside the Electron session.
-
-## Runtime Configuration
-
-Required for installer builds:
-
-- `COMPASS_DESKTOP_START_URL`: HTTPS base URL loaded by the packaged app.
-
-macOS signing/notarization is enabled only when Apple signing env vars are present (`APPLE_TEAM_ID`, key id/issuer/path).
-Windows signing is handled in CI by Azure Trusted Signing. Without signing credentials, packaging still produces unsigned installers suitable for temporary local testing.
-
-Optional:
-
-- `COMPASS_DESKTOP_ALLOWED_ORIGINS`: comma-separated list of allowed HTTP(S) origins.
-
-`make:*` scripts write a generated runtime file at `dist/desktop-runtime.json` that is embedded
-in packaged artifacts.
-
-## Packaging Dependency Note
-
-Repo-level pnpm policy limits install-time build scripts. Desktop make scripts run `prepack:deps`
-to rebuild required native modules (`electron`, `fs-xattr`, `macos-alias`) before packaging.
-
-The Windows icon extraction helper (`@bitdisaster/exe-icon-extractor`) is optional in
-`electron-wix-msi`; package builds continue if that optional dependency is unavailable.
-
-## Unsigned Installer Testing
-
-Unsigned macOS apps downloaded from GitHub Releases are quarantined by Gatekeeper. After copying
-`Compass.app` to `/Applications`, remove quarantine before first launch:
+## Run And Test
 
 ```bash
-xattr -dr com.apple.quarantine "/Applications/Compass.app"
+pnpm --filter @compass/desktop dev:run
+pnpm --filter @compass/desktop test
 ```
 
-## Desktop API (preload)
+## Source Of Truth
 
-- `window.compassDesktop.getAppVersion(): string`
-- `window.compassDesktop.openExternal(url: string): Promise<void>`
-- `window.compassDesktop.isDesktop(): true`
-
-## Commands
-
-- `pnpm --filter @compass/desktop build`
-- `pnpm --filter @compass/desktop prepack:deps`
-- `pnpm --filter @compass/desktop dev:run`
-- `pnpm --filter @compass/desktop lint`
-- `pnpm --filter @compass/desktop test`
-- `pnpm --filter @compass/desktop typecheck`
-- `pnpm --filter @compass/desktop make:mac`
-- `pnpm --filter @compass/desktop make:win`
+- `docs/runbooks/desktop-deployment-pipeline.md`

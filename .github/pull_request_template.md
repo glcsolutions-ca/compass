@@ -1,39 +1,31 @@
-## Summary of Change
+## Summary
 
-Describe what changed and where.
+What changed.
 
-## Why This Change
+## Why
 
-Explain the problem and why this approach was chosen.
+Why this approach was chosen.
 
-## Testing Evidence
+## Testing
 
-List the commands you ran and any important outputs.
+List commands and key outputs.
 
-## Commit Stage Evidence (If Applicable)
+## Pipeline Evidence (if applicable)
 
 - Change class:
-- Commit scope artifact path:
-- Docs-drift artifact path:
-- Testing policy artifact path:
-- Commit-stage gate artifact path:
+- Scope artifact:
+- Docs-drift artifact:
+- Gate artifact:
 
-## Baseline Checklist
+## Checklist
 
-- [ ] `pnpm check` passes locally.
-- [ ] `pnpm build` passes locally.
-- [ ] Naming and import conventions match the baseline.
-- [ ] Frontend constitution rules are followed for web changes (`docs/architecture/frontend-constitution.md`).
-- [ ] Web route modules use `clientLoader`/`clientAction` in `ssr:false` mode (no `loader`/`action` exports).
-- [ ] Web route modules do not use raw `fetch`, route-to-route imports, or parent-relative route imports.
-- [ ] Web route structure matches v2 (`app/routes/root-redirect`, `public/login`, `app/layout`, `app/workspaces`, `app/chat`).
-- [ ] Auth shell navigation follows sidebar standard (shadcn sidebar primitives + sidebar footer profile/workspace controls).
-- [ ] Theme and component changes use shadcn tokens/primitives (`app/app.css`, `app/components/ui`).
-- [ ] Contract artifacts are generated and committed when schemas change (`pnpm contract:check`).
-- [ ] If deployment-pipeline-config files changed, pipeline docs were updated (`docs/development-pipeline.md`, `docs/commit-stage-policy.md`, and `.github/workflows/README.md`).
-- [ ] No unrelated files or generated noise are included.
+- [ ] `pnpm test:quick` passes.
+- [ ] `pnpm build` passes when required.
+- [ ] Contract outputs are updated when schemas change (`pnpm contract:check`).
+- [ ] Pipeline docs are updated when pipeline config changes (`docs/development-pipeline.md`, `docs/commit-stage-policy.md`, `.github/workflows/README.md`).
+- [ ] No unrelated changes are included.
 
-## Risk and Rollback
+## Risk And Rollback
 
 - Risk level:
 - Rollback plan:

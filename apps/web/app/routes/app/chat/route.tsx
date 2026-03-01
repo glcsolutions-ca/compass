@@ -20,10 +20,6 @@ import { useChatTimeline } from "~/features/chat/hooks/use-chat-timeline";
 import { useChatTransport } from "~/features/chat/hooks/use-chat-transport";
 import { ChatCanvas } from "~/features/chat/presentation/chat-canvas";
 import {
-  ChatModalVariant,
-  ChatSidebarVariant
-} from "~/features/chat/presentation/chat-surface-variants";
-import {
   buildChatInspectSearchParams,
   ChatInspectDrawer,
   parseChatInspectState
@@ -40,25 +36,6 @@ interface TransportSummary {
   lifecycle: ChatTransportState["lifecycle"];
   label: string;
 }
-
-type ChatSurfaceVariant = "canvas" | "sidebar" | "modal";
-
-const CHAT_SURFACE_VARIANT_STORAGE_KEY = "compass-chat-surface-variant";
-
-const CHAT_SURFACE_VARIANT_OPTIONS: Array<{ value: ChatSurfaceVariant; label: string }> = [
-  {
-    value: "canvas",
-    label: "Canvas"
-  },
-  {
-    value: "sidebar",
-    label: "Sidebar"
-  },
-  {
-    value: "modal",
-    label: "Modal"
-  }
-];
 
 function readTransportSummary(state: ChatTransportState): TransportSummary {
   if (state.lifecycle === "polling") {
@@ -93,27 +70,6 @@ function readTransportSummary(state: ChatTransportState): TransportSummary {
     lifecycle: state.lifecycle,
     label: "Idle"
   };
-}
-
-function readInitialChatSurfaceVariant(): ChatSurfaceVariant {
-  if (typeof window === "undefined") {
-    return "canvas";
-  }
-
-  const persisted = window.localStorage.getItem(CHAT_SURFACE_VARIANT_STORAGE_KEY);
-  if (persisted === "sidebar" || persisted === "modal" || persisted === "canvas") {
-    return persisted;
-  }
-
-  return "canvas";
-}
-
-function persistChatSurfaceVariant(variant: ChatSurfaceVariant): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(CHAT_SURFACE_VARIANT_STORAGE_KEY, variant);
 }
 
 export const meta: MetaFunction<typeof clientLoader> = ({ params }) => {
@@ -160,9 +116,6 @@ export default function ChatRoute() {
   const location = useLocation();
   const navigate = useNavigate();
   const [executionMode, setExecutionMode] = useState<AgentExecutionMode>(loaderData.executionMode);
-  const [surfaceVariant, setSurfaceVariant] = useState<ChatSurfaceVariant>(() =>
-    readInitialChatSurfaceVariant()
-  );
   const localModeAvailable = false;
 
   useEffect(() => {
@@ -357,42 +310,8 @@ export default function ChatRoute() {
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col">
-      <div className="flex items-center justify-between border-b border-border/70 px-4 py-2">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Surface
-        </p>
-        <div className="inline-flex items-center gap-1 rounded-lg border border-border/70 bg-background/90 p-1">
-          {CHAT_SURFACE_VARIANT_OPTIONS.map((option) => {
-            const active = surfaceVariant === option.value;
-            return (
-              <button
-                aria-pressed={active}
-                className={
-                  active
-                    ? "rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground"
-                    : "rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                }
-                key={option.value}
-                onClick={() => {
-                  setSurfaceVariant(option.value);
-                  persistChatSurfaceVariant(option.value);
-                }}
-                type="button"
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
       <div className="flex min-h-0 flex-1">
-        {surfaceVariant === "sidebar" ? (
-          <ChatSidebarVariant {...surfaceProps} />
-        ) : surfaceVariant === "modal" ? (
-          <ChatModalVariant {...surfaceProps} />
-        ) : (
-          <ChatCanvas {...surfaceProps} />
-        )}
+        <ChatCanvas {...surfaceProps} />
       </div>
 
       <ChatInspectDrawer

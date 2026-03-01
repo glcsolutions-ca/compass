@@ -159,7 +159,6 @@
 
 .aui-thread-viewport {
   @apply w-full px-4 pt-6 md:px-6;
-  scrollbar-gutter: stable both-edges;
 }
 
 .aui-thread-viewport-footer {
@@ -177,6 +176,34 @@
 
 .aui-composer-input {
   @apply text-sm leading-relaxed;
+}
+
+@media (min-width: 768px) {
+  .aui-thread-viewport {
+    scrollbar-gutter: stable both-edges;
+  }
+}
+
+@media (max-width: 767px) {
+  .aui-thread-viewport {
+    @apply px-3 pt-4;
+  }
+
+  .aui-thread-viewport-footer {
+    @apply px-3 pb-3;
+  }
+
+  .aui-thread-followup-suggestions {
+    @apply grid grid-cols-1 gap-2;
+  }
+
+  .aui-thread-followup-suggestions > * {
+    width: 100%;
+  }
+
+  .aui-composer-root {
+    @apply rounded-xl;
+  }
 }
 
 .aui-md-mermaid {

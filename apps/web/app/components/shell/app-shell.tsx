@@ -101,7 +101,7 @@ export function AppShell({ auth, children }: { auth: AuthShellLoaderData; childr
           className={cn(
             "relative flex-1",
             shellLayout === "immersive"
-              ? "flex min-h-0 overflow-hidden"
+              ? "flex min-h-0 w-full min-w-0 max-w-full overflow-x-hidden overflow-y-hidden"
               : "px-4 py-6 md:px-8 md:py-8"
           )}
         >

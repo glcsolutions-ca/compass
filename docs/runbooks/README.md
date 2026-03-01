@@ -1,5 +1,7 @@
 # Runbooks
 
+Canonical pipeline explanation: `../development-pipeline.md`.
+
 ## Runbook Index
 
 - [`azure-service-bus-one-pager.md`](./azure-service-bus-one-pager.md): concise Service Bus topology, security, and operations playbook.

@@ -1,46 +1,21 @@
 # Docs
 
-General documentation and architecture records live here.
+## Start Here
 
-## Engineering Baseline
+- `development-pipeline.md` (canonical delivery model)
+- `commit-stage-policy.md` (gate contract details)
+- `runbooks/README.md` (operational procedures)
 
-- The normative baseline is in `/README.md`.
-- Agent contribution workflow and PR checklist are in `/CONTRIBUTING.md`.
-- Root agent index is in `/AGENTS.md`.
-- `engineering-baseline.md` is retained as a short pointer.
-- Commit-stage policy documentation is in `commit-stage-policy.md`.
-- Console Contract Steering guidance is in `ccs.md`.
-- Branch protection setup is in `branch-protection.md`.
-- Agent playbooks and troubleshooting are in `agents/README.md`.
+## Structure
 
-## Architecture Records
+- Concepts: `docs/*.md`
+- Procedures: `docs/runbooks/*.md`
+- Architecture: `docs/architecture/*.md`
+- Decisions: `docs/adr/*.md`
+- Contracts: `docs/contracts/*.md`
 
-- `architecture/README.md`
-- `architecture/foundation-baseline.md`
-- `architecture/brand-architecture.md`
-- `architecture/auth-threat-model-v1.md`
-- `architecture/frontend-constitution.md` (v2)
-- `adr/README.md`
-- `adr/TDR-001-initial-stack-baseline.md`
-- `adr/TDR-002-production-container-registry-strategy.md`
-- `adr/TDR-003-cloud-deployment-pipeline-visualization-model.md`
-- `adr/TDR-004-cloud-deployment-pipeline-and-desktop-naming-followup.md`
-- `adr/TDR-005-entra-only-auth-v1-baseline.md`
-- `adr/TDR-006-frontend-constitution-v1.md` (v2 cutover decision record)
+## Other Entrypoints
 
-## Runbooks
-
-- `runbooks/README.md`
-- `runbooks/cloud-deployment-pipeline-setup.md`
-- `runbooks/entra-sso-setup.md`
-- `runbooks/migration-playbook.md`
-- `runbooks/postgres-local.md`
-- `runbooks/desktop-deployment-pipeline.md`
-- `runbooks/migration-safety.md`
-- `runbooks/auth-v1-cutover.md`
-
-## Infrastructure Docs
-
-- `../infra/README.md`
-- `../infra/azure/README.md`
-- `../infra/identity/README.md`
+- `/README.md`
+- `/CONTRIBUTING.md`
+- `/AGENTS.md`

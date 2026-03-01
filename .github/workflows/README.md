@@ -1,27 +1,22 @@
 # Workflows
 
-## Delivery Model
+Canonical model: `docs/development-pipeline.md`.
 
-1. `commit-stage.yml` runs on push to `main` (and optional PR preview).
-2. `integration-gate.yml` runs on push to `main` (and optional PR preview).
-3. `cloud-deployment-pipeline.yml` runs on push to `main`.
-4. `cloud-deployment-pipeline-replay.yml` is manual (`workflow_dispatch`) and redeploys by release-candidate SHA.
-5. `dynamic-sessions-acceptance-rehearsal.yml` is manual (`workflow_dispatch`) and rehearses infra convergence for a release-candidate SHA in the acceptance environment.
-6. `desktop-deployment-pipeline.yml` is independent of cloud runtime delivery.
+## Workflow Files
 
-## Cloud Runtime Path
+- `commit-stage.yml`: push to `main` (+ optional PR preview)
+- `integration-gate.yml`: push to `main` (+ optional PR preview)
+- `cloud-deployment-pipeline.yml`: push to `main`
+- `cloud-deployment-pipeline-replay.yml`: manual replay by `release_candidate_sha`
+- `dynamic-sessions-acceptance-rehearsal.yml`: manual acceptance rehearsal by SHA
+- `desktop-deployment-pipeline.yml`: desktop release path
 
-`cloud-deployment-pipeline.yml`:
+## Required Status Contexts
 
-1. Verify commit-stage evidence.
-2. Verify integration-gate evidence.
-3. Build API/Web/Worker/Dynamic Sessions runtime images once.
-4. Publish release-candidate digest manifest.
-5. Deploy cloud infra/runtime with those digests.
-6. Run production smoke checks.
-7. Publish release decision.
+- `commit-stage`
+- `integration-gate`
 
-Key artifacts:
+## Cloud Artifact Contract
 
 - `.artifacts/release-candidate/<sha>/manifest.json`
 - `.artifacts/infra/<sha>/deployment.json`
@@ -29,43 +24,21 @@ Key artifacts:
 - `.artifacts/release/<sha>/decision.json`
 - `.artifacts/pipeline/<sha>/timing.json`
 
-## Replay Path
+## Cloud Environment Contract
 
-`cloud-deployment-pipeline-replay.yml`:
+Required production variables:
 
-1. Resolve source run for the provided SHA.
-2. Load prior release-candidate manifest artifact.
-3. Redeploy using the same digest refs (no rebuild).
-4. Run smoke + release decision evidence again.
-
-## Environment Contract (Cloud)
-
-- One runtime environment: `production`.
-- Runtime secrets come from Key Vault only.
-- Required production vars:
-  - `AZURE_TENANT_ID`
-  - `AZURE_SUBSCRIPTION_ID`
-  - `AZURE_RESOURCE_GROUP`
-  - `AZURE_GITHUB_CLIENT_ID`
-  - `ACR_NAME`
-  - `KEY_VAULT_NAME`
-  - `DYNAMIC_SESSIONS_POOL_NAME`
-  - `DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME`
-- Optional identity convergence is disabled by default and only runs when:
-  - `IDENTITY_CONVERGE_ENABLED=true`
-  - required identity backend vars are present.
-
-## Acceptance Rehearsal
-
-`dynamic-sessions-acceptance-rehearsal.yml` reuses a previously published release-candidate manifest (no image rebuild), applies infra, and runs:
-
-1. `verify-dynamic-sessions-convergence.mjs`
-2. `verify-agent-runtime-compatibility.mjs`
-
-Release evidence for production remains push-to-main cloud deployment plus manual replay.
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
+- `AZURE_RESOURCE_GROUP`
+- `AZURE_GITHUB_CLIENT_ID`
+- `ACR_NAME`
+- `KEY_VAULT_NAME`
+- `DYNAMIC_SESSIONS_POOL_NAME`
+- `DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME`
 
 ## References
 
-- Policy contract: `.github/policy/pipeline-policy.json`
-- Cloud setup runbook: `docs/runbooks/cloud-deployment-pipeline-setup.md`
-- Infra contract: `infra/azure/README.md`
+- `.github/policy/pipeline-policy.json`
+- `docs/runbooks/cloud-deployment-pipeline-setup.md`
+- `infra/azure/README.md`

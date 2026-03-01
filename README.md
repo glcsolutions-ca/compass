@@ -128,6 +128,7 @@ pnpm test:pipeline-contract -- --reporter=default
 - Script index: `scripts/README.md`
 - Testing philosophy: `tests/README.md`
 - Testing policy and enforcement (layers 1-3): `tests/policy/README.md`
+- Development pipeline (canonical): `docs/development-pipeline.md`
 - Commit-stage policy (human): `docs/commit-stage-policy.md`
 - Branch protection: `docs/branch-protection.md`
 - Machine policy: `.github/policy/pipeline-policy.json`

@@ -144,6 +144,7 @@
       "packages/contracts/openapi/**"
     ],
     "docTargets": [
+      "docs/development-pipeline.md",
       "docs/commit-stage-policy.md",
       "docs/branch-protection.md",
       ".github/policy/README.md",

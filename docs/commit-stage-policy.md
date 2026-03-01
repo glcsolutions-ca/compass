@@ -1,103 +1,58 @@
 # Commit Stage Policy Contract
 
-This repository enforces deterministic trunk-first quality controls with policy in `.github/policy/pipeline-policy.json`.
+Canonical model: `development-pipeline.md`.
 
-## Objective
+## Source Of Truth
 
-Every push to `main` must produce fast, deterministic gate evidence:
+- Policy: `.github/policy/pipeline-policy.json`
+- Commit gate implementation: `.github/workflows/commit-stage.yml`
+- Integration gate implementation: `.github/workflows/integration-gate.yml`
+- Final decision scripts:
+  - `scripts/pipeline/commit/decide-commit-stage.mjs`
+  - `scripts/pipeline/commit/decide-integration-gate.mjs`
 
-1. Change scope is resolved (`runtime`, `desktop`, `infra`, `identity`, `migration`, `docsOnly`).
-2. Scope-required checks run and report.
-3. `commit-stage` and `integration-gate` both pass before downstream release promotion.
-
-`pull_request` runs remain optional preview signals.
-
-## Source of Truth Precedence
-
-When docs and implementation differ, implementation wins:
-
-- Policy truth: `.github/policy/pipeline-policy.json`
-- Commit-stage truth: `.github/workflows/commit-stage.yml` and `scripts/pipeline/commit/decide-commit-stage.mjs`
-- Integration-gate truth: `.github/workflows/integration-gate.yml` and `scripts/pipeline/commit/decide-integration-gate.mjs`
-
-## Required Gate Contexts
+## Required Status Contexts
 
 - `commit-stage`
 - `integration-gate`
 
-## Trigger Contract
+## Commit Stage Contract
 
-- `commit-stage.yml`
-  - `push` to `main`
-  - optional `pull_request` types: `opened`, `synchronize`, `reopened`, `ready_for_review`
-- `integration-gate.yml`
-  - `push` to `main`
-  - optional `pull_request` types: `opened`, `synchronize`, `reopened`, `ready_for_review`
+`commit-stage` final decision is based on scope + required check outcomes + docs-drift state.
 
-## Commit-Stage Checks
+Required check set (policy-driven):
 
-- `determine-scope` (always)
-- `commit-test-suite` (runtime/infra/identity/deployment-pipeline-config changes)
-- `desktop-commit-test-suite` (desktop changes when not docs-only)
-- `infra-static-check` (infra changes)
-- `identity-static-check` (identity changes)
-- `commit-stage` final decision (deterministic reason codes + timing SLO evaluation)
+- `determine-scope`
+- `commit-test-suite`
+- `desktop-commit-test-suite`
+- `commit-stage`
 
-## High-Risk Local Policy
+## Integration Gate Contract
 
-High-risk changes are enforced by local static policy `HR001`:
+`integration-gate` final decision is based on scope + required check outcomes + docs-drift state.
 
-- high-risk path categories are defined in `highRiskMainlinePolicy` within `.github/policy/pipeline-policy.json`
-- commits on `main` that touch high-risk paths are blocked locally and routed to PR + CODEOWNER review
-- CODEOWNER target is policy-driven (`highRiskMainlinePolicy.codeOwners`)
+Required check set (policy-driven):
 
-## Integration-Gate Checks
+- `determine-scope`
+- `build-compile`
+- `migration-safety`
+- `runtime-contract-smoke`
+- `minimal-integration-smoke`
+- `integration-gate`
 
-- `determine-scope` (always)
-- `build-compile` (runtime/infra/identity/deployment-pipeline-config changes on push)
-- `migration-safety` (migration changes on push)
-- `runtime-contract-smoke` (runtime/infra/identity/deployment-pipeline-config changes on push)
-- `minimal-integration-smoke` (runtime changes on push)
-- `integration-gate` final decision
+## Docs Drift Contract
 
-## Docs Drift
+- Blocking when docs-critical paths change without required doc target updates.
+- Advisory for deployment-pipeline-config drift without required doc target updates.
+- Artifact: `.artifacts/docs-drift/<sha>/result.json`
 
-`docs-drift` is always evaluated in commit-stage and integration-gate:
+## High-Risk Mainline Policy (`HR001`)
 
-- blocking when docs-critical paths change without required doc target updates
-- advisory for deployment-pipeline-config drift without doc target updates
+- Blocks direct `main` commits for policy-defined high-risk path categories.
+- Routes high-risk changes to PR + CODEOWNER review.
 
-Artifact:
+## Timing And Recovery
 
-- `.artifacts/docs-drift/<testedSha>/result.json`
-
-## Commit-Stage Timing SLO
-
-Policy fields:
-
-- `commitStage.slo.targetSeconds` (current: `300`)
-- `commitStage.slo.mode` (`observe` or `enforce`)
-
-Artifact:
-
-- `.artifacts/commit-stage/<testedSha>/timing.json`
-
-When mode is `enforce`, over-target runs fail `commit-stage`.
-
-## Integration-Gate Throughput Telemetry
-
-Integration-gate emits throughput telemetry on push runs:
-
-- `.artifacts/integration-gate/<testedSha>/timing.json`
-
-## Mainline Red Recovery
-
-`main-red-recovery.yml` listens for failed `Integration Gate` push runs on `main`:
-
-- first hard deterministic failure: rerun failed jobs once
-- repeated hard deterministic failure: auto-revert head commit
-- successful integration-gate runs may still show a `Main Red Recovery` run as `skipped`; this is expected for `workflow_run`-triggered workflows
-
-Artifact:
-
-- `.artifacts/main-recovery/<sha>/result.json`
+- Commit-stage timing artifact: `.artifacts/commit-stage/<sha>/timing.json`
+- Integration timing artifact: `.artifacts/integration-gate/<sha>/timing.json`
+- Main red recovery artifact: `.artifacts/main-recovery/<sha>/result.json`

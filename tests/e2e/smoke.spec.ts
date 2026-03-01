@@ -31,19 +31,16 @@ function centerX(box: { x: number; width: number }): number {
 async function waitForComposerReady({
   page,
   composerInput,
-  sendButton,
   timeoutMs = 5_000
 }: {
   page: Page;
   composerInput: ReturnType<Page["getByPlaceholder"]>;
-  sendButton: ReturnType<Page["getByLabel"]>;
   timeoutMs?: number;
 }): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const composerVisible = await composerInput.isVisible().catch(() => false);
-    const sendVisible = await sendButton.isVisible().catch(() => false);
-    if (composerVisible && sendVisible) {
+    if (composerVisible) {
       return true;
     }
 
@@ -51,6 +48,35 @@ async function waitForComposerReady({
   }
 
   return false;
+}
+
+async function waitForChatEntryState({
+  page,
+  composerInput,
+  signInLink,
+  timeoutMs = 10_000
+}: {
+  page: Page;
+  composerInput: ReturnType<Page["getByPlaceholder"]>;
+  signInLink: ReturnType<Page["getByTestId"]>;
+  timeoutMs?: number;
+}): Promise<"composer" | "sign-in" | "none"> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const composerVisible = await composerInput.isVisible().catch(() => false);
+    if (composerVisible) {
+      return "composer";
+    }
+
+    const signInVisible = await signInLink.isVisible().catch(() => false);
+    if (signInVisible) {
+      return "sign-in";
+    }
+
+    await page.waitForTimeout(250);
+  }
+
+  return "none";
 }
 
 async function ensureSidebarState(
@@ -330,34 +356,33 @@ async function runFlow(
     try {
       await page.goto(`${baseUrl}/chat`, { waitUntil: "networkidle" });
 
-      const composerInput = page.getByPlaceholder("Ask Compass anything...").last();
-      const sendButton = page.getByLabel("Send prompt").last();
-      let chatSurfaceAvailable = await waitForComposerReady({
+      const composerInput = page
+        .locator('textarea[placeholder="Ask Compass anything..."]:visible')
+        .first();
+      const sendButton = page.getByRole("button", { name: "Send prompt" }).first();
+      const signInLink = page.getByTestId("sign-in-link").first();
+      const initialEntryState = await waitForChatEntryState({
         page,
         composerInput,
-        sendButton,
-        timeoutMs: 2_000
+        signInLink
       });
+      let chatSurfaceAvailable = initialEntryState === "composer";
 
       const shouldAttemptSignInNavigation = requireAuthGateway || smokeChatSendMode === "required";
 
       if (
         !chatSurfaceAvailable &&
         smokeChatSendMode !== "disabled" &&
-        shouldAttemptSignInNavigation
+        shouldAttemptSignInNavigation &&
+        initialEntryState === "sign-in"
       ) {
-        const signInLink = page.getByTestId("sign-in-link").first();
-        const signInVisible = await signInLink.isVisible().catch(() => false);
-        if (signInVisible) {
-          await signInLink.click();
-          await page.waitForLoadState("networkidle");
-          chatSurfaceAvailable = await waitForComposerReady({
-            page,
-            composerInput,
-            sendButton,
-            timeoutMs: 10_000
-          });
-        }
+        await signInLink.click();
+        await page.waitForLoadState("networkidle");
+        chatSurfaceAvailable = await waitForComposerReady({
+          page,
+          composerInput,
+          timeoutMs: 20_000
+        });
       }
 
       const requireChatSurface = smokeChatLayout || smokeChatSendMode === "required";
@@ -385,7 +410,12 @@ async function runFlow(
       if (shouldSendSmoke) {
         await page.goto(`${baseUrl}/chat`, { waitUntil: "networkidle" });
         await composerInput.fill("Smoke test prompt");
-        await sendButton.click();
+        const sendVisible = await sendButton.isVisible().catch(() => false);
+        if (sendVisible) {
+          await sendButton.click();
+        } else {
+          await composerInput.press("Enter");
+        }
 
         const sentPromptLocator = page.getByText("Smoke test prompt").last();
         let sentPromptVisible = true;

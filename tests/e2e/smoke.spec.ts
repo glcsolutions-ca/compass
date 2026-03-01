@@ -6,6 +6,10 @@ const CHAT_LAYOUT_WIDTHS = [1280, 1440, 1728] as const;
 const CHAT_LAYOUT_TARGET_DELTA_PX = 4;
 const CHAT_LAYOUT_MIN_WIDTH_PX = 832;
 const CHAT_LAYOUT_MAX_WIDTH_PX = 932;
+const MOBILE_CHAT_VIEWPORTS = [
+  { width: 390, height: 844 },
+  { width: 430, height: 932 }
+] as const;
 type SmokeChatSendMode = "required" | "disabled" | "auto";
 
 function readErrorCode(value: unknown): string {
@@ -227,6 +231,101 @@ async function captureChatLayoutBaselines({
   }
 }
 
+async function assertMobileComposerGuardrails({
+  page,
+  flowId,
+  flowAssertions
+}: {
+  page: Page;
+  flowId: string;
+  flowAssertions: Array<{
+    id: string;
+    description: string;
+    pass: boolean;
+    details?: string;
+  }>;
+}) {
+  const originalViewport = page.viewportSize();
+
+  for (const viewport of MOBILE_CHAT_VIEWPORTS) {
+    await page.setViewportSize(viewport);
+    await page.waitForTimeout(200);
+
+    const metrics = await page.evaluate(() => {
+      const composer = document.querySelector(".aui-composer-root");
+      const composerRect = composer?.getBoundingClientRect() ?? null;
+      const composerButtons = composer
+        ? Array.from(composer.querySelectorAll<HTMLButtonElement>("button"))
+        : [];
+      const unlabeledButtons = composerButtons
+        .map((button, index) => {
+          const label = (
+            button.getAttribute("aria-label") ??
+            button.getAttribute("title") ??
+            button.textContent ??
+            ""
+          ).trim();
+          return {
+            index,
+            label
+          };
+        })
+        .filter((entry) => entry.label.length === 0)
+        .map((entry) => entry.index);
+
+      return {
+        scrollWidth: document.documentElement.scrollWidth,
+        bodyScrollWidth: document.body?.scrollWidth ?? 0,
+        innerWidth: window.innerWidth,
+        composerWidth: composerRect?.width ?? 0,
+        composerPresent: composerRect !== null,
+        composerButtonCount: composerButtons.length,
+        unlabeledButtons
+      };
+    });
+
+    const viewportLabel = `${viewport.width.toString()}x${viewport.height.toString()}`;
+    const noHorizontalOverflow =
+      metrics.scrollWidth <= metrics.innerWidth && metrics.bodyScrollWidth <= metrics.innerWidth;
+    const composerFitsViewport =
+      !metrics.composerPresent || metrics.composerWidth <= metrics.innerWidth + 1;
+    const noUnlabeledComposerButtons = metrics.unlabeledButtons.length === 0;
+    const sendButtonVisible = await page
+      .getByRole("button", { name: "Send prompt" })
+      .first()
+      .isVisible()
+      .catch(() => false);
+
+    flowAssertions.push({
+      id: `${flowId}:chat-mobile-no-horizontal-overflow-${viewportLabel}`,
+      description: `[${flowId}] Mobile chat has no horizontal overflow at ${viewportLabel}`,
+      pass: noHorizontalOverflow,
+      details: `scrollWidth=${metrics.scrollWidth.toString()}, bodyScrollWidth=${metrics.bodyScrollWidth.toString()}, innerWidth=${metrics.innerWidth.toString()}`
+    });
+    flowAssertions.push({
+      id: `${flowId}:chat-mobile-composer-fits-${viewportLabel}`,
+      description: `[${flowId}] Mobile composer width fits viewport at ${viewportLabel}`,
+      pass: composerFitsViewport,
+      details: `composerPresent=${metrics.composerPresent.toString()}, composerWidth=${metrics.composerWidth.toFixed(2)}, innerWidth=${metrics.innerWidth.toString()}`
+    });
+    flowAssertions.push({
+      id: `${flowId}:chat-mobile-composer-controls-labeled-${viewportLabel}`,
+      description: `[${flowId}] Mobile composer controls expose non-empty labels at ${viewportLabel}`,
+      pass: noUnlabeledComposerButtons,
+      details: `buttonCount=${metrics.composerButtonCount.toString()}, unlabeledIndexes=${metrics.unlabeledButtons.join(",") || "none"}`
+    });
+    flowAssertions.push({
+      id: `${flowId}:chat-mobile-send-control-accessible-${viewportLabel}`,
+      description: `[${flowId}] Mobile composer exposes a role-named Send prompt control at ${viewportLabel}`,
+      pass: sendButtonVisible
+    });
+  }
+
+  if (originalViewport) {
+    await page.setViewportSize(originalViewport);
+  }
+}
+
 function parseRequiredFlowIds() {
   const requiredFlowIdsJson = process.env.REQUIRED_FLOW_IDS_JSON?.trim();
   if (requiredFlowIdsJson && requiredFlowIdsJson.length > 0) {
@@ -428,6 +527,13 @@ async function runFlow(
         flowId,
         flowAssertions
       });
+      if (chatSurfaceAvailable) {
+        await assertMobileComposerGuardrails({
+          page,
+          flowId,
+          flowAssertions
+        });
+      }
 
       if (smokeChatLayout && chatSurfaceAvailable) {
         await captureChatLayoutBaselines({

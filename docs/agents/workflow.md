@@ -8,18 +8,31 @@ Canonical model: `../development-pipeline.md`.
 
 ```bash
 pnpm test:quick
-pnpm test:full
 pnpm build
 ```
 
-Commit hook path:
+Before push (default):
 
 ```bash
-pnpm exec lint-staged
 pnpm test:quick
 ```
 
-If `FULL001` appears:
+Run deeper suites when risk requires it:
+
+```bash
+pnpm test:integration
+pnpm test:e2e
+pnpm test:full
+```
+
+Hook path (enforced):
+
+```bash
+pnpm hooks:precommit
+pnpm hooks:prepush
+```
+
+If `FULL001` appears while running `pnpm test:full`:
 
 ```bash
 pnpm db:postgres:up

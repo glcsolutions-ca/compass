@@ -22,7 +22,7 @@ compass/
 
 ### Testing
 
-- `pnpm test:quick` — **commit-stage** checks (policy + formatting + lint + typecheck + unit/component + contract)
+- `pnpm test:quick` — **commit-stage** checks (policy + doc quality + formatting + lint + typecheck + unit/component + contract)
 - `pnpm test` — alias for `pnpm test:quick`
 - `pnpm test:full` — quick gate + integration tests + Playwright smoke
 - `pnpm test:integration` — integration tests only (requires local Postgres)
@@ -71,8 +71,8 @@ wait_main() {
 
 # Repeat for each tiny, reversible step. Commit and push each step. No batching. No --no-verify.
 git add -A
-git commit -m "<small, specific change>"   # pre-commit runs lint-staged + pnpm test:quick
-git push origin HEAD:main                  # pre-push runs pnpm test:full
+git commit -m "<small, specific change>"   # pre-commit runs lint-staged + pnpm check:commit-fast
+git push origin HEAD:main                  # pre-push runs pnpm test:quick
 wait_main
 
 # If origin/main moved: rebase, resolve conflicts if needed, push, then wait_main again.
@@ -85,3 +85,9 @@ git revert <bad_sha>
 git push origin HEAD:main
 wait_main
 ```
+
+Default local loop before push is `pnpm test:quick`.
+Run deeper suites when risk requires it:
+
+- `pnpm test:integration` for DB/API changes (with local Postgres up)
+- `pnpm test:e2e` or `pnpm test:full` for higher-risk UI/integration changes

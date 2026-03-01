@@ -13,8 +13,9 @@ Canonical model: `../development-pipeline.md`.
 ## Fast Path
 
 - iterate: `pnpm test:quick`
-- before push: `pnpm test:full`
-- install hooks: `pnpm git-hooks:install`
+- before push (default): `pnpm test:quick`
+- risk-based depth: `pnpm test:integration`, `pnpm test:e2e`, or `pnpm test:full`
+- install hooks: `pnpm hooks:install`
 
 ## Source Of Truth
 

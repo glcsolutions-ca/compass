@@ -101,6 +101,23 @@ const policy = loadPipelinePolicyObject({
       "integration-gate"
     ]
   },
+  stagingGate: {
+    requiredChecks: [
+      "determine-scope",
+      "staging-build-release-candidate-api-image",
+      "staging-build-release-candidate-web-image",
+      "staging-build-release-candidate-worker-image",
+      "staging-build-release-candidate-dynamic-sessions-runtime-image",
+      "staging-publish-release-candidate",
+      "staging-deploy-cloud",
+      "staging-smoke",
+      "staging-gate"
+    ],
+    slo: {
+      mode: "observe",
+      targetSeconds: 900
+    }
+  },
   deploymentStage: {
     requireFreshHeadOnAuto: true
   },
@@ -402,5 +419,30 @@ describe("high risk mainline policy schema", () => {
         }
       })
     ).toThrowError("highRiskMainlinePolicy.codeOwners entries must be GitHub handles");
+  });
+
+  it("validates optional staging gate schema", () => {
+    expect(() =>
+      loadPipelinePolicyObject({
+        ...policy,
+        stagingGate: {
+          ...policy.stagingGate,
+          requiredChecks: []
+        }
+      })
+    ).toThrowError("stagingGate.requiredChecks must be a non-empty array");
+
+    expect(() =>
+      loadPipelinePolicyObject({
+        ...policy,
+        stagingGate: {
+          ...policy.stagingGate,
+          slo: {
+            mode: "invalid",
+            targetSeconds: 900
+          }
+        }
+      })
+    ).toThrowError("stagingGate.slo.mode must be one of: observe, enforce");
   });
 });

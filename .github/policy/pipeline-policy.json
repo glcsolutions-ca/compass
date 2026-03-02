@@ -78,6 +78,27 @@
       }
     ]
   },
+  "mainlineGovernance": {
+    "integrationMode": "pull-request-merge-queue",
+    "requiredStatusContexts": ["commit-stage", "integration-gate", "staging-gate"]
+  },
+  "stagingGate": {
+    "requiredChecks": [
+      "determine-scope",
+      "staging-build-release-candidate-api-image",
+      "staging-build-release-candidate-web-image",
+      "staging-build-release-candidate-worker-image",
+      "staging-build-release-candidate-dynamic-sessions-runtime-image",
+      "staging-publish-release-candidate",
+      "staging-deploy-cloud",
+      "staging-smoke",
+      "staging-gate"
+    ],
+    "slo": {
+      "mode": "observe",
+      "targetSeconds": 900
+    }
+  },
   "deploymentStage": {
     "requireFreshHeadOnAuto": true
   },

@@ -1,9 +1,9 @@
-name: Cloud Deployment Pipeline
+name: Staging Gate
 
 on:
-  push:
-    branches:
-      - main
+  merge_group:
+    types:
+      - checks_requested
 
 permissions:
   actions: read
@@ -12,83 +12,84 @@ permissions:
   id-token: write
   pull-requests: read
 
+env:
+  EXPECTED_ENTRYPOINT: /
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  verify_commit_stage_evidence:
-    name: verify-commit-stage-evidence
+  determine_scope:
+    name: determine-scope
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      commit_stage_run_id: ${{ steps.verify.outputs.commit_stage_run_id }}
-      commit_stage_evidence_path: ${{ steps.verify.outputs.commit_stage_evidence_path }}
+      scope_path: ${{ steps.scope.outputs.scope_path }}
+      base_sha: ${{ steps.scope.outputs.base_sha }}
+      head_sha: ${{ steps.scope.outputs.head_sha }}
+      tested_sha: ${{ steps.scope.outputs.tested_sha }}
+      change_class: ${{ steps.scope.outputs.change_class }}
+      runtime_changed: ${{ steps.scope.outputs.runtime_changed }}
+      desktop_changed: ${{ steps.scope.outputs.desktop_changed }}
+      infra_changed: ${{ steps.scope.outputs.infra_changed }}
+      identity_changed: ${{ steps.scope.outputs.identity_changed }}
+      migration_changed: ${{ steps.scope.outputs.migration_changed }}
+      docs_only_changed: ${{ steps.scope.outputs.docs_only_changed }}
+      deployment_pipeline_config_changed: ${{ steps.scope.outputs.deployment_pipeline_config_changed }}
+      docs_drift_blocking: ${{ steps.scope.outputs.docs_drift_blocking }}
+      docs_drift_status: ${{ steps.docs_drift.outputs.docs_drift_status }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
 
-      - name: Verify commit-stage evidence for release SHA
-        id: verify
+      - name: Resolve commit scope
+        id: scope
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          HEAD_SHA: ${{ github.sha }}
-          COMMIT_STAGE_WORKFLOW_FILE: commit-stage.yml
-          COMMIT_STAGE_EVENT: push
-        run: node scripts/pipeline/shared/verify-commit-stage-evidence.mjs
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          GITHUB_TESTED_SHA: ${{ github.sha }}
+        run: node scripts/pipeline/commit/resolve-scope.mjs
 
-      - name: Upload commit-stage evidence artifact
+      - name: Upload scope artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: commit-stage-evidence-${{ github.sha }}
-          path: .artifacts/commit-stage/${{ github.sha }}/evidence.json
+          name: staging-gate-scope-${{ steps.scope.outputs.tested_sha }}
+          path: ${{ steps.scope.outputs.scope_path }}
           if-no-files-found: warn
 
-  verify_integration_gate_evidence:
-    name: verify-integration-gate-evidence
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      integration_gate_run_id: ${{ steps.verify.outputs.integration_gate_run_id }}
-      integration_gate_evidence_path: ${{ steps.verify.outputs.integration_gate_evidence_path }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-
-      - name: Verify integration gate evidence for release SHA
-        id: verify
+      - name: Evaluate docs drift
+        id: docs_drift
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          HEAD_SHA: ${{ github.sha }}
-          INTEGRATION_GATE_WORKFLOW_FILE: integration-gate.yml
-          INTEGRATION_GATE_EVENT: push
-        run: node scripts/pipeline/shared/verify-integration-gate-evidence.mjs
+          HEAD_SHA: ${{ steps.scope.outputs.head_sha }}
+          TESTED_SHA: ${{ steps.scope.outputs.tested_sha }}
+          CHANGED_FILES_JSON: ${{ steps.scope.outputs.changed_files_json }}
+        run: node scripts/pipeline/commit/check-docs-drift.mjs
 
-      - name: Upload integration gate evidence artifact
+      - name: Upload docs-drift artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: integration-gate-evidence-${{ github.sha }}
-          path: .artifacts/integration-gate/${{ github.sha }}/evidence.json
+          name: staging-gate-docs-drift-${{ steps.scope.outputs.tested_sha }}
+          path: .artifacts/docs-drift/${{ steps.scope.outputs.tested_sha }}/result.json
           if-no-files-found: warn
 
   build_release_candidate_images:
-    name: build-release-candidate-${{ matrix.service.name }}-image
+    name: staging-build-release-candidate-${{ matrix.service.name }}-image
     needs:
-      - verify_commit_stage_evidence
-      - verify_integration_gate_evidence
+      - determine_scope
+    if: ${{ needs.determine_scope.outputs.tested_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    environment: production
+    environment: staging
     strategy:
       fail-fast: false
       matrix:
@@ -106,7 +107,7 @@ jobs:
             image_name: compass-codex-session-runtime
             dockerfile: apps/codex-session-runtime/Dockerfile
     env:
-      HEAD_SHA: ${{ github.sha }}
+      HEAD_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
       ACR_NAME: ${{ vars.ACR_NAME }}
       ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
     steps:
@@ -146,30 +147,28 @@ jobs:
       - name: Upload release candidate ref artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-candidate-ref-${{ matrix.service.name }}-${{ github.sha }}
+          name: staging-release-candidate-ref-${{ matrix.service.name }}-${{ env.HEAD_SHA }}
           path: .artifacts/release-candidate/${{ env.HEAD_SHA }}/${{ matrix.service.name }}.ref
           if-no-files-found: error
 
   publish_release_candidate:
-    name: publish-release-candidate
+    name: staging-publish-release-candidate
     needs:
-      - verify_commit_stage_evidence
-      - verify_integration_gate_evidence
+      - determine_scope
       - build_release_candidate_images
+    if: ${{ needs.determine_scope.outputs.tested_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
       head_sha: ${{ steps.publish.outputs.head_sha }}
       manifest_path: ${{ steps.publish.outputs.manifest_path }}
     env:
-      HEAD_SHA: ${{ github.sha }}
-      COMMIT_STAGE_RUN_ID: ${{ needs.verify_commit_stage_evidence.outputs.commit_stage_run_id }}
-      INTEGRATION_GATE_RUN_ID: ${{ needs.verify_integration_gate_evidence.outputs.integration_gate_run_id }}
+      HEAD_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
     steps:
       - name: Download release candidate ref artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: release-candidate-ref-*-${{ github.sha }}
+          pattern: staging-release-candidate-ref-*-${{ env.HEAD_SHA }}
           path: .artifacts/release-candidate/${{ env.HEAD_SHA }}
           merge-multiple: true
 
@@ -197,8 +196,6 @@ jobs:
             "schemaVersion": "1",
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "headSha": "$HEAD_SHA",
-            "commitStageRunId": "$COMMIT_STAGE_RUN_ID",
-            "integrationGateRunId": "$INTEGRATION_GATE_RUN_ID",
             "buildRunId": "${GITHUB_RUN_ID}",
             "releaseCandidate": {
               "apiRef": "$api_ref",
@@ -215,24 +212,26 @@ jobs:
       - name: Upload release candidate artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-candidate-${{ env.HEAD_SHA }}
+          name: staging-release-candidate-${{ env.HEAD_SHA }}
           path: .artifacts/release-candidate/${{ env.HEAD_SHA }}/manifest.json
           if-no-files-found: error
 
-  deploy_cloud:
-    name: deploy-cloud
+  deploy_staging:
+    name: staging-deploy-cloud
     needs:
+      - determine_scope
       - publish_release_candidate
+    if: ${{ needs.determine_scope.outputs.tested_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    environment: production
+    environment: staging
     concurrency:
-      group: production-cloud-mutation
+      group: staging-cloud-mutation
       cancel-in-progress: false
     outputs:
       head_sha: ${{ steps.set_head.outputs.head_sha }}
-      api_prod_url: ${{ steps.resolve_urls.outputs.api_prod_url }}
-      web_prod_url: ${{ steps.resolve_urls.outputs.web_prod_url }}
+      api_staging_url: ${{ steps.resolve_urls.outputs.api_staging_url }}
+      web_staging_url: ${{ steps.resolve_urls.outputs.web_staging_url }}
     env:
       HEAD_SHA: ${{ needs.publish_release_candidate.outputs.head_sha }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
@@ -249,6 +248,8 @@ jobs:
       IDENTITY_CONVERGE_ENABLED: ${{ vars.IDENTITY_CONVERGE_ENABLED || 'false' }}
       MIGRATION_TIMEOUT_SECONDS: ${{ vars.MIGRATION_TIMEOUT_SECONDS || '900' }}
       MIGRATION_CONTAINER_NAME: ${{ vars.MIGRATION_CONTAINER_NAME || 'migrate' }}
+      STAGING_ARM_PARAMETERS_FILE: ${{ vars.STAGING_ARM_PARAMETERS_FILE || 'infra/azure/environments/cloud.bicepparam' }}
+      STAGING_DEPLOYMENT_NAME_PREFIX: ${{ vars.STAGING_DEPLOYMENT_NAME_PREFIX || 'staging' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -265,7 +266,7 @@ jobs:
       - name: Download release candidate artifact
         uses: actions/download-artifact@v4
         with:
-          name: release-candidate-${{ env.HEAD_SHA }}
+          name: staging-release-candidate-${{ env.HEAD_SHA }}
           path: .artifacts/release-candidate/${{ env.HEAD_SHA }}
 
       - name: Parse release candidate manifest
@@ -347,7 +348,7 @@ jobs:
             -var-file=env/prod.tfvars \
             -var "github_organization=${gh_organization}" \
             -var "github_repository=${gh_repository}" \
-            -var "github_environment_name=production" \
+            -var "github_environment_name=staging" \
             -var "api_identifier_uri=${API_IDENTIFIER_URI}" \
             -var "owners=${IDENTITY_OWNER_OBJECT_IDS_JSON}" \
             -var "web_custom_domain=${ACA_WEB_CUSTOM_DOMAIN}"
@@ -360,9 +361,9 @@ jobs:
           set -euo pipefail
 
           export ARM_TEMPLATE_FILE="infra/azure/main.bicep"
-          export ARM_PARAMETERS_FILE="infra/azure/environments/cloud.bicepparam"
+          export ARM_PARAMETERS_FILE="$STAGING_ARM_PARAMETERS_FILE"
           export ARM_ARTIFACT_DIR=".artifacts/infra/$HEAD_SHA"
-          export ARM_DEPLOYMENT_NAME_PREFIX="main"
+          export ARM_DEPLOYMENT_NAME_PREFIX="$STAGING_DEPLOYMENT_NAME_PREFIX"
           export ARM_PARAMETERS_OVERRIDES="$(cat <<PARAMS
           apiImage=$API_IMAGE
           webImage=$WEB_IMAGE
@@ -381,7 +382,6 @@ jobs:
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Resolve deployed resource names
-        id: resolve_runtime
         run: |
           set -euo pipefail
 
@@ -457,40 +457,42 @@ jobs:
           resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
           disableTelemetry: true
 
-      - name: Resolve production URLs
+      - name: Resolve staging URLs
         id: resolve_urls
         run: |
           set -euo pipefail
 
           deployment_json=".artifacts/infra/$HEAD_SHA/deployment.json"
-          api_prod_url="$(jq -er '.properties.outputs.apiBaseUrlOutput.value' "$deployment_json")"
-          web_prod_url="$(jq -er '.properties.outputs.webBaseUrlOutput.value' "$deployment_json")"
+          api_staging_url="$(jq -er '.properties.outputs.apiBaseUrlOutput.value' "$deployment_json")"
+          web_staging_url="$(jq -er '.properties.outputs.webBaseUrlOutput.value' "$deployment_json")"
 
-          echo "api_prod_url=$api_prod_url" >> "$GITHUB_OUTPUT"
-          echo "web_prod_url=$web_prod_url" >> "$GITHUB_OUTPUT"
+          echo "api_staging_url=$api_staging_url" >> "$GITHUB_OUTPUT"
+          echo "web_staging_url=$web_staging_url" >> "$GITHUB_OUTPUT"
 
-      - name: Upload deployment artifacts
+      - name: Upload staging deployment artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: deploy-cloud-${{ env.HEAD_SHA }}
+          name: staging-deploy-cloud-${{ env.HEAD_SHA }}
           path: |
             .artifacts/infra/${{ env.HEAD_SHA }}
             .artifacts/identity/${{ env.HEAD_SHA }}
             .artifacts/deploy/${{ env.HEAD_SHA }}
           if-no-files-found: warn
 
-  production_smoke:
-    name: production-smoke
+  staging_smoke:
+    name: staging-smoke
     needs:
-      - deploy_cloud
+      - determine_scope
+      - deploy_staging
+    if: ${{ needs.determine_scope.outputs.tested_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: production
+    environment: staging
     env:
-      HEAD_SHA: ${{ needs.deploy_cloud.outputs.head_sha }}
-      TARGET_API_BASE_URL: ${{ needs.deploy_cloud.outputs.api_prod_url }}
-      EXPECTED_ENTRA_REDIRECT_URI: ${{ needs.deploy_cloud.outputs.web_prod_url }}/v1/auth/entra/callback
+      HEAD_SHA: ${{ needs.deploy_staging.outputs.head_sha }}
+      TARGET_API_BASE_URL: ${{ needs.deploy_staging.outputs.api_staging_url }}
+      EXPECTED_ENTRA_REDIRECT_URI: ${{ needs.deploy_staging.outputs.web_staging_url }}/v1/auth/entra/callback
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -503,124 +505,100 @@ jobs:
       - name: API smoke verification
         run: node scripts/pipeline/cloud/deployment-stage/verify-api-smoke.mjs
 
-      - name: Upload smoke artifacts
+      - name: Upload staging smoke artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: production-smoke-${{ env.HEAD_SHA }}
+          name: staging-smoke-${{ env.HEAD_SHA }}
           path: .artifacts/deploy/${{ env.HEAD_SHA }}/api-smoke.json
           if-no-files-found: warn
 
-  release_decision:
-    name: release-decision
-    needs:
-      - verify_commit_stage_evidence
-      - verify_integration_gate_evidence
-      - publish_release_candidate
-      - deploy_cloud
-      - production_smoke
+  staging_gate:
+    name: staging-gate
     if: ${{ always() }}
+    needs:
+      - determine_scope
+      - build_release_candidate_images
+      - publish_release_candidate
+      - deploy_staging
+      - staging_smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
-      HEAD_SHA: ${{ needs.publish_release_candidate.outputs.head_sha || github.sha }}
+      TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha || github.sha }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-
-      - name: Collect cloud deployment pipeline stage timing
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          HEAD_SHA: ${{ env.HEAD_SHA }}
-        run: node scripts/pipeline/shared/collect-cloud-deployment-stage-timing.mjs
-
-      - name: Upload cloud deployment timing artifact
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: cloud-deployment-pipeline-timing-${{ env.HEAD_SHA }}
-          path: .artifacts/pipeline/${{ env.HEAD_SHA }}/timing.json
-          if-no-files-found: warn
-
-      - name: Write release decision artifact
+      - name: Write staging gate result
         id: decision
         run: |
           set -euo pipefail
 
-          mkdir -p ".artifacts/release/$HEAD_SHA"
+          mkdir -p ".artifacts/staging-gate/$TESTED_SHA"
 
-          releasable="false"
-          reason_codes='[]'
-          promotion_halted="false"
-          post_merge_verification_failed="false"
-
-          if [ "${{ needs.verify_commit_stage_evidence.result }}" = "success" ] && \
-             [ "${{ needs.verify_integration_gate_evidence.result }}" = "success" ] && \
-             [ "${{ needs.publish_release_candidate.result }}" = "success" ] && \
-             [ "${{ needs.deploy_cloud.result }}" = "success" ] && \
-             [ "${{ needs.production_smoke.result }}" = "success" ]; then
-            releasable="true"
-          else
-            promotion_halted="true"
-            reason_codes='["CLOUD_DEPLOYMENT_PIPELINE_FAILED","PROMOTION_HALTED"]'
-
-            if [ "${{ needs.deploy_cloud.result }}" != "success" ] || \
-               [ "${{ needs.production_smoke.result }}" != "success" ]; then
-              post_merge_verification_failed="true"
-              reason_codes='["CLOUD_DEPLOYMENT_PIPELINE_FAILED","PROMOTION_HALTED","PRODUCTION_VERIFICATION_FAILED_NO_REVERT"]'
-            fi
+          staging_required="false"
+          if [ "${{ needs.determine_scope.outputs.runtime_changed }}" = "true" ] || \
+             [ "${{ needs.determine_scope.outputs.infra_changed }}" = "true" ] || \
+             [ "${{ needs.determine_scope.outputs.identity_changed }}" = "true" ] || \
+             [ "${{ needs.determine_scope.outputs.deployment_pipeline_config_changed }}" = "true" ]; then
+            staging_required="true"
           fi
 
-          cat > ".artifacts/release/$HEAD_SHA/decision.json" <<JSON
+          pass="true"
+          reason_codes='[]'
+
+          if [ "$staging_required" = "true" ]; then
+            if [ "${{ needs.build_release_candidate_images.result }}" = "success" ] && \
+               [ "${{ needs.publish_release_candidate.result }}" = "success" ] && \
+               [ "${{ needs.deploy_staging.result }}" = "success" ] && \
+               [ "${{ needs.staging_smoke.result }}" = "success" ]; then
+              pass="true"
+            else
+              pass="false"
+              reason_codes='["STAGING_GATE_FAILED","STAGING_DEPLOYMENT_VERIFICATION_FAILED"]'
+            fi
+          else
+            reason_codes='["STAGING_GATE_NOT_REQUIRED"]'
+          fi
+
+          if [ "$pass" != "true" ]; then
+            {
+              echo "## Staging Gate Failed"
+              echo ""
+              echo "Promotion is blocked at merge-queue time."
+              echo ""
+              echo "Required action: fix forward on the PR branch and rerun queue checks."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          cat > ".artifacts/staging-gate/$TESTED_SHA/result.json" <<JSON
           {
             "schemaVersion": "1",
             "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-            "headSha": "$HEAD_SHA",
-            "releasable": ${releasable},
-            "promotionHalted": ${promotion_halted},
-            "postMergeVerificationFailed": ${post_merge_verification_failed},
-            "autoRevertAttempted": false,
-            "reasonCodes": ${reason_codes},
+            "testedSha": "$TESTED_SHA",
+            "stagingRequired": $staging_required,
+            "pass": $pass,
+            "reasonCodes": $reason_codes,
             "stages": {
-              "verifyCommitStageEvidence": "${{ needs.verify_commit_stage_evidence.result }}",
-              "verifyIntegrationGateEvidence": "${{ needs.verify_integration_gate_evidence.result }}",
+              "determineScope": "${{ needs.determine_scope.result }}",
+              "buildReleaseCandidateImages": "${{ needs.build_release_candidate_images.result }}",
               "publishReleaseCandidate": "${{ needs.publish_release_candidate.result }}",
-              "deployCloud": "${{ needs.deploy_cloud.result }}",
-              "productionSmoke": "${{ needs.production_smoke.result }}"
+              "deployStaging": "${{ needs.deploy_staging.result }}",
+              "stagingSmoke": "${{ needs.staging_smoke.result }}"
             }
           }
           JSON
 
-          if [ "$releasable" != "true" ]; then
-            {
-              echo "## Promotion Halted"
-              echo ""
-              echo "This run did not attempt an automatic Git revert."
-              echo ""
-              echo "Required action: fix forward, or push an explicit human-authored revert commit when necessary."
-              echo ""
-              echo "Reason codes: ${reason_codes}"
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
+          echo "gate_pass=$pass" >> "$GITHUB_OUTPUT"
 
-          echo "releasable=$releasable" >> "$GITHUB_OUTPUT"
-
-      - name: Upload release decision artifact
+      - name: Upload staging gate artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: release-decision-${{ env.HEAD_SHA }}
-          path: .artifacts/release/${{ env.HEAD_SHA }}/decision.json
+          name: staging-gate-${{ env.TESTED_SHA }}
+          path: .artifacts/staging-gate/${{ env.TESTED_SHA }}/result.json
           if-no-files-found: warn
 
-      - name: Fail when release decision is NO
-        if: ${{ steps.decision.outputs.releasable != 'true' }}
+      - name: Fail when staging gate decision is NO
+        if: ${{ steps.decision.outputs.gate_pass != 'true' }}
         run: |
-          echo "Release decision is NO" >&2
+          echo "Staging gate decision is NO" >&2
           exit 1

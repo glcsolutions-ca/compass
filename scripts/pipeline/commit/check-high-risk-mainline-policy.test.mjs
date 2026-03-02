@@ -117,6 +117,58 @@ describe("runHighRiskMainlinePolicyCheck", () => {
     });
   });
 
+  it("uses HIGH_RISK_MAINLINE_TARGET_BRANCH and changed files from workflow scope", async () => {
+    const result = await runHighRiskMainlinePolicyCheck({
+      policy: highRiskPolicyFixture,
+      env: {
+        HIGH_RISK_MAINLINE_TARGET_BRANCH: "main",
+        HIGH_RISK_MAINLINE_CHANGED_FILES_JSON: JSON.stringify([
+          "infra/azure/main.bicep",
+          ".github/workflows/commit-stage.yml"
+        ])
+      },
+      resolveCurrentBranchFn: async () => "feature/queue-model",
+      listStagedFilesFn: async () => ["docs/README.md"]
+    });
+
+    expect(result.status).toBe("fail");
+    expect(result.reasonCode).toBe("HIGH_RISK_MAINLINE_PR_REQUIRED");
+    expect(result.branch).toBe("main");
+    expect(result.fileSource).toBe("changed-files-json");
+    expect(result.matches).toEqual([
+      {
+        id: "infra-mutation",
+        rationale: "production infrastructure and identity control-plane mutation risk",
+        matchedFiles: ["infra/azure/main.bicep"]
+      },
+      {
+        id: "pipeline-governance-mutation",
+        rationale: "deployment pipeline config and release/deploy decision behavior risk",
+        matchedFiles: [".github/workflows/commit-stage.yml"]
+      }
+    ]);
+  });
+
+  it("returns NO_CHANGED_FILES when workflow scope is empty", async () => {
+    const result = await runHighRiskMainlinePolicyCheck({
+      policy: highRiskPolicyFixture,
+      env: {
+        HIGH_RISK_MAINLINE_TARGET_BRANCH: "main",
+        HIGH_RISK_MAINLINE_CHANGED_FILES_JSON: "[]"
+      },
+      resolveCurrentBranchFn: async () => "feature/queue-model",
+      listStagedFilesFn: async () => ["infra/identity/main.bicep"]
+    });
+
+    expect(result).toMatchObject({
+      status: "pass",
+      reasonCode: "NO_CHANGED_FILES",
+      branch: "main",
+      fileSource: "changed-files-json",
+      matches: []
+    });
+  });
+
   it("reports only matched high-risk files when staged set is mixed", async () => {
     const result = await runHighRiskMainlinePolicyCheck({
       policy: highRiskPolicyFixture,

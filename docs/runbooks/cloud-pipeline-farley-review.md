@@ -33,7 +33,7 @@ Primary artifacts:
 3. Build once, promote immutable release candidates.
 4. Wide and fast pipeline with risk-appropriate evidence.
 5. Deployment and release decision decoupled.
-6. Fail-closed gates with rapid red-main recovery.
+6. Fail-closed gates with no post-merge history mutation.
 7. Evidence over opinion (machine-verifiable artifacts).
 
 ## Stage Tracker
@@ -81,7 +81,7 @@ Primary artifacts:
 | Build once/promote immutable artifact   | n/a    | Not a Stage A concern.                                                  | Evaluated in Stage D.                                       |
 | Wide and fast risk-appropriate evidence | pass   | `test:full` adds integration and e2e depth at pre-push boundary.        | Deep evidence preserved while inner loop stays simpler.     |
 | Deploy/release decoupling               | n/a    | Not a Stage A concern.                                                  | Evaluated in Stage F/G.                                     |
-| Fail-closed gates and recovery          | pass   | Hook gates fail closed and enforce quality before push.                 | Red-main recovery evaluated in Stage G.                     |
+| Fail-closed gates and recovery          | pass   | Hook gates fail closed and enforce quality before push.                 | Post-merge failures halt promotion; no auto-revert.         |
 | Evidence over opinion                   | pass   | Policy + test contracts remain machine-enforced in the quick/full path. | Maintains evidence discipline with fewer command surfaces.  |
 
 ### A3. Stage A Recommendation Resolution

@@ -55,7 +55,7 @@ The desired operating model is:
 
 5. Keep branch protection explicit for both mainline gates:
 
-- required contexts are `commit-stage` and `integration-gate`
+- required contexts are `commit-stage`, `integration-gate`, and `staging-gate`
 
 ## Consequences
 

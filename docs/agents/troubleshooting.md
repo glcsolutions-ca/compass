@@ -26,4 +26,5 @@ Canonical model: `../development-pipeline.md`.
 
 - Cause: evidence verification, deploy, smoke, or release decision step failed.
 - Check: `.artifacts/infra/<sha>/deployment.json`, `.artifacts/deploy/<sha>/api-smoke.json`, `.artifacts/release/<sha>/decision.json`.
-- Fix: correct and rerun, or replay with `release_candidate_sha`.
+- Fix: promotion is halted automatically; fix forward and rerun, or replay with `release_candidate_sha`.
+- Rule: do not expect automatic Git revert. Use an explicit human-authored revert commit only when needed.

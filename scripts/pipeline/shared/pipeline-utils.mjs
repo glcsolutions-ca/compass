@@ -319,6 +319,34 @@ export function assertPipelinePolicyShape(policy) {
     }
   }
 
+  const stagingGate = policy.stagingGate;
+  if (stagingGate !== undefined) {
+    if (!stagingGate || typeof stagingGate !== "object") {
+      throw new Error("stagingGate must be an object when provided");
+    }
+
+    if (!Array.isArray(stagingGate.requiredChecks) || stagingGate.requiredChecks.length === 0) {
+      throw new Error("stagingGate.requiredChecks must be a non-empty array");
+    }
+
+    if (stagingGate.slo !== undefined) {
+      if (!stagingGate.slo || typeof stagingGate.slo !== "object") {
+        throw new Error("stagingGate.slo must be an object when provided");
+      }
+
+      if (!["observe", "enforce"].includes(String(stagingGate.slo.mode || "").trim())) {
+        throw new Error("stagingGate.slo.mode must be one of: observe, enforce");
+      }
+
+      if (
+        !Number.isInteger(stagingGate.slo.targetSeconds) ||
+        Number(stagingGate.slo.targetSeconds) <= 0
+      ) {
+        throw new Error("stagingGate.slo.targetSeconds must be a positive integer");
+      }
+    }
+  }
+
   if (typeof policy.deploymentStage?.requireFreshHeadOnAuto !== "boolean") {
     throw new Error("deploymentStage.requireFreshHeadOnAuto must be a boolean");
   }

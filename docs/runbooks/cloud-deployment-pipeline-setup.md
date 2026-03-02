@@ -55,5 +55,7 @@ gh variable set KEY_VAULT_NAME -e production --body "<kv-name>"
 
 ## Failure Handling
 
-- if `main` is red, fix forward or revert
+- if release decision is NO, promotion is halted (no auto-revert)
+- fix forward by default, then rerun/replay
+- if emergency rollback is needed, roll back deployment first; use an explicit human-authored revert commit only when necessary
 - never bypass failed gates

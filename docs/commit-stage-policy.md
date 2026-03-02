@@ -17,6 +17,7 @@ Canonical model: `development-pipeline.md`.
 
 - `commit-stage`
 - `integration-gate`
+- `staging-gate`
 
 ## Decision Inputs
 
@@ -35,5 +36,6 @@ Canonical model: `development-pipeline.md`.
 
 - `.artifacts/commit-stage/<sha>/result.json`
 - `.artifacts/integration-gate/<sha>/result.json`
+- `.artifacts/staging-gate/<sha>/result.json`
 - `.artifacts/docs-drift/<sha>/result.json`
-- `.artifacts/main-recovery/<sha>/result.json`
+- `.artifacts/main-recovery/<sha>/result.json` (legacy only; no longer authoritative)

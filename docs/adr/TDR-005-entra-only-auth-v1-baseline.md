@@ -61,4 +61,4 @@ Tradeoffs:
 
 - Run destructive reset before rollout in prelaunch environments.
 - Regenerate migration checksums in lockstep with baseline migration replacement.
-- Verify `commit-stage` and `integration-gate` after each checkpoint merge to `main`.
+- Verify `commit-stage`, `integration-gate`, and `staging-gate` after each checkpoint merge to `main`.

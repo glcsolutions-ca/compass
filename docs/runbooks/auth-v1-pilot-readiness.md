@@ -22,7 +22,7 @@ Purpose: verify readiness and operate limited pilot rollout.
 
 ## Verify
 
-- `commit-stage` and `integration-gate` pass
+- `commit-stage`, `integration-gate`, and `staging-gate` pass
 - cloud release decision is YES
 - pilot tenant auth paths succeed
 

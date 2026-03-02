@@ -6,8 +6,9 @@ Canonical model: `docs/development-pipeline.md`.
 
 ## Workflow Files
 
-- `commit-stage.yml`: push to `main`, optional PR preview.
-- `integration-gate.yml`: push to `main`, optional PR preview.
+- `commit-stage.yml`: push to `main`, PR preview, and merge queue (`merge_group`) required check.
+- `integration-gate.yml`: push to `main`, PR preview, and merge queue (`merge_group`) required check.
+- `staging-gate.yml`: merge queue (`merge_group`) staging deployment rehearsal required check.
 - `cloud-deployment-pipeline.yml`: push to `main`.
 - `cloud-deployment-pipeline-replay.yml`: manual replay by `release_candidate_sha`.
 - `dynamic-sessions-acceptance-rehearsal.yml`: manual acceptance rehearsal by SHA.
@@ -17,6 +18,7 @@ Canonical model: `docs/development-pipeline.md`.
 
 - `commit-stage`
 - `integration-gate`
+- `staging-gate`
 
 ## Cloud Artifact Contract
 

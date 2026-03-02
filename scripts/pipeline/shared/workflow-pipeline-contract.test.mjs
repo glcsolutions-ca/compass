@@ -1,22 +1,22 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const commitStageWorkflowPath = ".github/workflows/commit-stage.yml";
 const integrationGateWorkflowPath = ".github/workflows/integration-gate.yml";
+const stagingGateWorkflowPath = ".github/workflows/staging-gate.yml";
 const cloudDeploymentPipelineWorkflowPath = ".github/workflows/cloud-deployment-pipeline.yml";
 const cloudDeploymentPipelineReplayWorkflowPath =
   ".github/workflows/cloud-deployment-pipeline-replay.yml";
 const dynamicSessionsAcceptanceRehearsalWorkflowPath =
   ".github/workflows/dynamic-sessions-acceptance-rehearsal.yml";
 const mainRedRecoveryWorkflowPath = ".github/workflows/main-red-recovery.yml";
-const legacyMergeGroupToken = ["merge", "group"].join("_");
 
 function readUtf8(filePath) {
   return readFileSync(filePath, "utf8");
 }
 
 describe("workflow pipeline contract", () => {
-  it("keeps commit and integration-gate checks as explicit mainline gates", () => {
+  it("keeps commit and integration-gate checks as explicit merge-queue-ready mainline gates", () => {
     const commitStage = readUtf8(commitStageWorkflowPath);
     const integrationGate = readUtf8(integrationGateWorkflowPath);
 
@@ -24,13 +24,27 @@ describe("workflow pipeline contract", () => {
     expect(commitStage).toContain("push:");
     expect(commitStage).toContain("- main");
     expect(commitStage).toContain("pull_request:");
-    expect(commitStage).not.toContain(`${legacyMergeGroupToken}:`);
+    expect(commitStage).toContain("merge_group:");
+    expect(commitStage).toContain("checks_requested");
 
     expect(integrationGate).toContain("name: integration-gate");
     expect(integrationGate).toContain("push:");
     expect(integrationGate).toContain("- main");
     expect(integrationGate).toContain("pull_request:");
-    expect(integrationGate).not.toContain(`${legacyMergeGroupToken}:`);
+    expect(integrationGate).toContain("merge_group:");
+    expect(integrationGate).toContain("checks_requested");
+  });
+
+  it("keeps staging gate merge-group only and fail-closed", () => {
+    const stagingGate = readUtf8(stagingGateWorkflowPath);
+
+    expect(stagingGate).toContain("name: Staging Gate");
+    expect(stagingGate).toContain("merge_group:");
+    expect(stagingGate).toContain("checks_requested");
+    expect(stagingGate).not.toContain("\n  push:");
+    expect(stagingGate).not.toContain("\n  pull_request:");
+    expect(stagingGate).toContain("name: staging-gate");
+    expect(stagingGate).toContain(".artifacts/staging-gate/${{ env.TESTED_SHA }}/result.json");
   });
 
   it("keeps cloud deployment push-only and replay manual-only", () => {
@@ -152,14 +166,7 @@ describe("workflow pipeline contract", () => {
     expect(replay).toContain(".artifacts/release/$HEAD_SHA/decision.json");
   });
 
-  it("keeps main red recovery wired to integration-gate push failures only", () => {
-    const workflow = readUtf8(mainRedRecoveryWorkflowPath);
-
-    expect(workflow).toContain("workflow_run:");
-    expect(workflow).toContain("- Integration Gate");
-    expect(workflow).toContain("github.event.workflow_run.event == 'push'");
-    expect(workflow).toContain("github.event.workflow_run.head_branch == 'main'");
-    expect(workflow).toContain("github.event.workflow_run.conclusion == 'failure'");
-    expect(workflow).toContain("main-red-recovery-${{ github.event.workflow_run.head_sha }}");
+  it("removes main red recovery auto-revert workflow", () => {
+    expect(existsSync(mainRedRecoveryWorkflowPath)).toBe(false);
   });
 });

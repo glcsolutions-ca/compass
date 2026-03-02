@@ -79,7 +79,6 @@ describe("chat runtime store mapping", () => {
           toolCallId: "tool_1",
           toolName: "read_file",
           argsText: '{"path":"README.md"}',
-          args: { path: "README.md" },
           result: { lines: 42 },
           isError: false
         },
@@ -108,7 +107,6 @@ describe("chat runtime store mapping", () => {
           toolCallId: "tool_1",
           toolName: "read_file",
           argsText: '{"path":"README.md"}',
-          args: { path: "README.md" },
           result: { lines: 42 },
           isError: false
         },

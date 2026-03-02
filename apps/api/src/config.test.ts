@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { loadApiConfig } from "./config.js";
 
 describe("loadApiConfig", () => {
-  it("uses baseline defaults", () => {
+  it("uses baseline defaults (queue canary)", () => {
     const config = loadApiConfig({});
     expect(config).toEqual({
       host: "0.0.0.0",

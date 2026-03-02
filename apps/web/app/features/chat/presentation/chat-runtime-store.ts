@@ -63,7 +63,6 @@ function toThreadMessagePart(part: AssistantStoreMessagePart): ThreadMessagePart
       type: "tool-call",
       toolCallId: part.toolCallId,
       toolName: part.toolName,
-      args: part.args,
       argsText: part.argsText,
       result: part.result,
       isError: part.isError,

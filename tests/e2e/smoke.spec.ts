@@ -782,6 +782,60 @@ async function runFlow(
           pass: !applicationErrorVisible
         });
 
+        const threadIdMatch = /\/chat\/([^/?#]+)/u.exec(page.url());
+        const threadId = threadIdMatch?.[1] ? decodeURIComponent(threadIdMatch[1]) : null;
+        let runtimeEventMethod: string | null = null;
+        let runtimeEventCursor: number | null = null;
+        let runtimeInlineHintVisible = false;
+
+        if (threadId) {
+          const eventsResponse = await page.request.get(
+            `${baseUrl}/v1/agent/threads/${encodeURIComponent(threadId)}/events?limit=200`
+          );
+          const eventsPayload = parseJsonObject<{
+            events?: Array<{
+              cursor?: number;
+              method?: string;
+            }>;
+          }>(await eventsResponse.text());
+          const runtimeEvent = eventsPayload?.events?.find(
+            (event) =>
+              typeof event?.method === "string" &&
+              event.method.startsWith("runtime.") &&
+              typeof event.cursor === "number"
+          );
+
+          if (runtimeEvent?.method && typeof runtimeEvent.cursor === "number") {
+            runtimeEventMethod = runtimeEvent.method;
+            runtimeEventCursor = runtimeEvent.cursor;
+            const inspectUrl = new URL(page.url());
+            inspectUrl.searchParams.set("inspect", runtimeEvent.cursor.toString());
+            inspectUrl.searchParams.set("inspectTab", "activity");
+            await page.goto(inspectUrl.toString(), { waitUntil: "networkidle" });
+            const runtimeRow = page.getByRole("button", { name: runtimeEvent.method }).first();
+            const runtimeRowVisible = await runtimeRow.isVisible().catch(() => false);
+            const inlineBadgeVisible = runtimeRowVisible
+              ? await runtimeRow
+                  .getByText("Inline", { exact: true })
+                  .isVisible()
+                  .catch(() => false)
+              : false;
+            runtimeInlineHintVisible = runtimeRowVisible && inlineBadgeVisible;
+          }
+        }
+
+        flowAssertions.push({
+          id: `${flowId}:chat-runtime-event-inline-hint`,
+          description: `[${flowId}] Runtime activity rows that render inline are marked with an Inline hint`,
+          pass: runtimeInlineHintVisible,
+          details:
+            runtimeEventMethod && runtimeEventCursor !== null
+              ? `method=${runtimeEventMethod}, cursor=${runtimeEventCursor.toString()}`
+              : threadId
+                ? "No runtime.* event was returned for the active thread."
+                : "Thread id was not present in the chat route URL."
+        });
+
         if (smokeChatForbiddenCreate) {
           await runForbiddenCreateThreadScenario({
             page,
@@ -1005,6 +1059,18 @@ test("compass smoke flow", async ({ page, baseURL }) => {
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
   if (hasFailedFlow) {
+    const failedAssertions = assertions.filter((assertion) => !assertion.pass);
+    const failureSummary = failedAssertions
+      .map(
+        (assertion) =>
+          `${assertion.id}: ${assertion.description}${assertion.details ? ` (${assertion.details})` : ""}`
+      )
+      .join("\n");
+
+    if (failureSummary.length > 0) {
+      console.error(`Browser evidence assertion failures:\n${failureSummary}`);
+    }
+
     throw new Error(`Browser evidence failed. See ${manifestPath}`);
   }
 });

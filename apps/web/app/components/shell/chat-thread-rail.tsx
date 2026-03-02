@@ -8,10 +8,23 @@ import {
   type ExternalStoreAdapter
 } from "@assistant-ui/react";
 import { ThreadList } from "@assistant-ui/react-ui";
-import { ArchiveIcon, ArchiveRestoreIcon, PencilIcon, Trash2Icon } from "lucide-react";
+import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
+  EllipsisIcon,
+  PencilIcon,
+  Trash2Icon
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { SidebarGroup, SidebarGroupContent, SidebarGroupLabel } from "~/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "~/components/ui/dropdown-menu";
 import {
   deleteAgentThreadClient,
   listAgentThreadsClient,
@@ -68,61 +81,69 @@ function ThreadListItemActions() {
     aui.threadListItem().rename(nextTitle);
   }, [aui, title]);
 
-  if (status === "archived") {
-    return (
-      <div className="aui-thread-list-item-actions">
-        <ThreadListItemPrimitive.Unarchive asChild>
-          <button
-            aria-label="Unarchive thread"
-            className="aui-thread-list-item-action"
-            title="Unarchive thread"
-            type="button"
-          >
-            <ArchiveRestoreIcon className="h-3.5 w-3.5" />
-          </button>
-        </ThreadListItemPrimitive.Unarchive>
-        <ThreadListItemPrimitive.Delete asChild>
-          <button
-            aria-label="Delete thread"
-            className="aui-thread-list-item-action aui-thread-list-item-action-danger"
-            title="Delete thread"
-            type="button"
-          >
-            <Trash2Icon className="h-3.5 w-3.5" />
-          </button>
-        </ThreadListItemPrimitive.Delete>
-      </div>
-    );
-  }
-
   return (
-    <div className="aui-thread-list-item-actions">
-      <button
-        aria-label="Rename thread"
-        className="aui-thread-list-item-action"
-        onClick={handleRename}
-        title="Rename thread"
-        type="button"
-      >
-        <PencilIcon className="h-3.5 w-3.5" />
-      </button>
-      <ThreadListItemPrimitive.Archive asChild>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
         <button
-          aria-label="Archive thread"
-          className="aui-thread-list-item-action"
-          title="Archive thread"
+          aria-label="Thread actions"
+          className="aui-thread-list-item-more-trigger"
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
           type="button"
         >
-          <ArchiveIcon className="h-3.5 w-3.5" />
+          <EllipsisIcon className="h-3.5 w-3.5" />
         </button>
-      </ThreadListItemPrimitive.Archive>
-    </div>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[11rem]" sideOffset={6}>
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
+            handleRename();
+          }}
+        >
+          <PencilIcon className="mr-2 h-3.5 w-3.5" />
+          Rename
+        </DropdownMenuItem>
+
+        {status === "archived" ? (
+          <>
+            <ThreadListItemPrimitive.Unarchive asChild>
+              <DropdownMenuItem onSelect={(event) => event.stopPropagation()}>
+                <ArchiveRestoreIcon className="mr-2 h-3.5 w-3.5" />
+                Unarchive
+              </DropdownMenuItem>
+            </ThreadListItemPrimitive.Unarchive>
+            <DropdownMenuSeparator />
+            <ThreadListItemPrimitive.Delete asChild>
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={(event) => event.stopPropagation()}
+              >
+                <Trash2Icon className="mr-2 h-3.5 w-3.5" />
+                Delete
+              </DropdownMenuItem>
+            </ThreadListItemPrimitive.Delete>
+          </>
+        ) : (
+          <ThreadListItemPrimitive.Archive asChild>
+            <DropdownMenuItem onSelect={(event) => event.stopPropagation()}>
+              <ArchiveIcon className="mr-2 h-3.5 w-3.5" />
+              Archive
+            </DropdownMenuItem>
+          </ThreadListItemPrimitive.Archive>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
 function SidebarThreadListItem() {
   return (
-    <ThreadListItemPrimitive.Root className="aui-thread-list-item">
+    <ThreadListItemPrimitive.Root className="group aui-thread-list-item">
       <ThreadListItemPrimitive.Trigger className="aui-thread-list-item-trigger">
         <p className="aui-thread-list-item-title">
           <ThreadListItemPrimitive.Title fallback="Untitled thread" />

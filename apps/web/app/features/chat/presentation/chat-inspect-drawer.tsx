@@ -12,6 +12,7 @@ import type {
   ChatInspectState,
   ChatInspectTab
 } from "~/features/chat/presentation/chat-runtime-store";
+import { eventRendersInline } from "~/features/chat/runtime-part-parser";
 import { cn } from "~/lib/utils/cn";
 
 const INSPECT_CURSOR_QUERY_PARAM = "inspect";
@@ -239,33 +240,44 @@ export function ChatInspectDrawer({
                   Runtime events will appear here once a turn starts.
                 </li>
               ) : (
-                events.map((event) => (
-                  <li key={event.cursor}>
-                    <button
-                      className={cn(
-                        "w-full rounded-lg border px-3 py-2 text-left text-xs transition-colors",
-                        inspectState.cursor === event.cursor
-                          ? "border-primary/40 bg-primary/10"
-                          : "border-border/70 bg-card/70 hover:bg-accent"
-                      )}
-                      onClick={() =>
-                        onInspectStateChange(
-                          {
-                            cursor: event.cursor,
-                            tab: inspectState.tab
-                          },
-                          { replace: true }
-                        )
-                      }
-                      type="button"
-                    >
-                      <p className="font-medium text-foreground">{event.method}</p>
-                      <p className="mt-1 text-muted-foreground">
-                        cursor {event.cursor} · {new Date(event.createdAt).toLocaleTimeString()}
-                      </p>
-                    </button>
-                  </li>
-                ))
+                events.map((event) => {
+                  const renderedInline = eventRendersInline(event);
+
+                  return (
+                    <li key={event.cursor}>
+                      <button
+                        className={cn(
+                          "w-full rounded-lg border px-3 py-2 text-left text-xs transition-colors",
+                          inspectState.cursor === event.cursor
+                            ? "border-primary/40 bg-primary/10"
+                            : "border-border/70 bg-card/70 hover:bg-accent"
+                        )}
+                        onClick={() =>
+                          onInspectStateChange(
+                            {
+                              cursor: event.cursor,
+                              tab: inspectState.tab
+                            },
+                            { replace: true }
+                          )
+                        }
+                        type="button"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-medium text-foreground">{event.method}</p>
+                          {renderedInline ? (
+                            <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                              Inline
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-muted-foreground">
+                          cursor {event.cursor} · {new Date(event.createdAt).toLocaleTimeString()}
+                        </p>
+                      </button>
+                    </li>
+                  );
+                })
               )}
             </ul>
           </TabsContent>

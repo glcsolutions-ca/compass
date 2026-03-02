@@ -3,7 +3,7 @@ import { normalizeAgentEvents } from "~/features/chat/agent-event-normalizer";
 import type { AgentEvent } from "~/features/chat/agent-types";
 
 describe("chat event normalizer", () => {
-  it("maps turn and delta events into stable user and assistant timeline messages", () => {
+  it("maps known agent methods into timeline items", () => {
     const events: AgentEvent[] = [
       {
         cursor: 1,
@@ -46,26 +46,25 @@ describe("chat event normalizer", () => {
         expect.objectContaining({
           kind: "message",
           role: "user",
-          text: "hello",
-          parts: [{ type: "text", text: "hello" }]
+          text: "hello"
         }),
         expect.objectContaining({
           kind: "message",
           role: "assistant",
           text: "Hi there",
-          parts: [{ type: "text", text: "Hi there" }],
           streaming: false
         })
       ])
     );
+    expect(timeline.some((item) => item.kind === "status")).toBe(false);
   });
 
-  it("converts runtime methods into assistant data parts", () => {
+  it("maps runtime events into runtime timeline entries", () => {
     const timeline = normalizeAgentEvents([
       {
         cursor: 9,
         threadId: "thread_1",
-        turnId: "turn_1",
+        turnId: null,
         method: "runtime.customEvent",
         payload: { detail: "ok" },
         createdAt: "2026-01-01T00:00:00.000Z"
@@ -74,76 +73,17 @@ describe("chat event normalizer", () => {
 
     expect(timeline).toEqual([
       expect.objectContaining({
-        kind: "message",
-        role: "assistant",
-        parts: [
-          {
-            type: "data",
-            name: "runtime.customEvent",
-            data: { detail: "ok" }
-          }
-        ]
+        kind: "runtime",
+        label: "Runtime customEvent",
+        payload: { detail: "ok" }
       })
     ]);
   });
 
-  it("parses tool-call and reasoning shaped item deltas into structured parts", () => {
+  it("maps item lifecycle events into runtime timeline entries", () => {
     const timeline = normalizeAgentEvents([
       {
         cursor: 11,
-        threadId: "thread_1",
-        turnId: "turn_1",
-        method: "item.delta",
-        payload: {
-          type: "reasoning",
-          text: "Thinking through options"
-        },
-        createdAt: "2026-01-01T00:00:01.000Z"
-      },
-      {
-        cursor: 12,
-        threadId: "thread_1",
-        turnId: "turn_1",
-        method: "item.delta",
-        payload: {
-          type: "tool_call",
-          toolCallId: "call_1",
-          toolName: "read_file",
-          argsText: '{"path":"README.md"}',
-          result: { lines: 42 }
-        },
-        createdAt: "2026-01-01T00:00:02.000Z"
-      }
-    ]);
-
-    expect(timeline).toEqual([
-      expect.objectContaining({
-        kind: "message",
-        role: "assistant",
-        parts: [
-          {
-            type: "reasoning",
-            text: "Thinking through options"
-          },
-          {
-            type: "tool-call",
-            toolCallId: "call_1",
-            toolName: "read_file",
-            argsText: '{"path":"README.md"}',
-            args: { path: "README.md" },
-            result: { lines: 42 },
-            isError: false,
-            parentId: undefined
-          }
-        ]
-      })
-    ]);
-  });
-
-  it("keeps item lifecycle events in runtime timeline entries", () => {
-    const timeline = normalizeAgentEvents([
-      {
-        cursor: 13,
         threadId: "thread_1",
         turnId: "turn_1",
         method: "item.started",
@@ -151,7 +91,7 @@ describe("chat event normalizer", () => {
         createdAt: "2026-01-01T00:00:01.000Z"
       },
       {
-        cursor: 14,
+        cursor: 12,
         threadId: "thread_1",
         turnId: "turn_1",
         method: "item.completed",
@@ -174,31 +114,10 @@ describe("chat event normalizer", () => {
     ]);
   });
 
-  it("maps unsupported item deltas into runtime fallback entries", () => {
-    const timeline = normalizeAgentEvents([
-      {
-        cursor: 15,
-        threadId: "thread_1",
-        turnId: "turn_1",
-        method: "item.delta",
-        payload: { value: 123 },
-        createdAt: "2026-01-01T00:00:03.000Z"
-      }
-    ]);
-
-    expect(timeline).toEqual([
-      expect.objectContaining({
-        kind: "runtime",
-        label: "Item delta",
-        payload: { value: 123 }
-      })
-    ]);
-  });
-
   it("keeps unknown methods as generic timeline events", () => {
     const timeline = normalizeAgentEvents([
       {
-        cursor: 16,
+        cursor: 10,
         threadId: "thread_1",
         turnId: null,
         method: "custom.newMethod",

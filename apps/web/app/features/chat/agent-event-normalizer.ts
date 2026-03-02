@@ -1,14 +1,4 @@
-import type {
-  AgentEvent,
-  ChatTimelineItem,
-  ChatTimelineMessagePart
-} from "~/features/chat/agent-types";
-import {
-  mergeTimelineMessageParts,
-  parseItemDeltaParts,
-  parseRuntimeDataPart,
-  readTimelineMessageText
-} from "~/features/chat/runtime-part-parser";
+import type { AgentEvent, ChatTimelineItem } from "~/features/chat/agent-types";
 
 function readPayloadObject(payload: unknown): Record<string, unknown> | null {
   return payload && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
@@ -21,6 +11,34 @@ function readText(value: unknown): string | null {
 
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
+}
+
+function readDeltaText(payload: unknown): string | null {
+  const data = readPayloadObject(payload);
+  if (!data) {
+    return null;
+  }
+
+  if (typeof data.text === "string" && data.text.length > 0) {
+    return data.text;
+  }
+
+  const content = data.content;
+  if (Array.isArray(content)) {
+    const segments = content
+      .map((segment) => {
+        if (!segment || typeof segment !== "object") {
+          return "";
+        }
+
+        const segmentText = (segment as { text?: unknown }).text;
+        return typeof segmentText === "string" ? segmentText : "";
+      })
+      .join("");
+    return segments.length > 0 ? segments : null;
+  }
+
+  return null;
 }
 
 function readRuntimeDetail(payload: unknown): string | null {
@@ -71,57 +89,10 @@ function formatEventLabel(method: string): string {
   return `${scope[0]?.toUpperCase() ?? ""}${scope.slice(1)} ${action}`;
 }
 
-function buildAssistantTurnKey(turnId: string | null, cursor: number): string {
-  return turnId ?? `cursor:${cursor.toString()}`;
-}
-
-function upsertAssistantMessage(input: {
-  timeline: ChatTimelineItem[];
-  assistantMessageByTurn: Map<string, number>;
-  turnId: string | null;
-  cursor: number;
-  createdAt: string | null;
-  parts: ChatTimelineMessagePart[];
-  streaming?: boolean;
-}): void {
-  const turnKey = buildAssistantTurnKey(input.turnId, input.cursor);
-  const priorIndex = input.assistantMessageByTurn.get(turnKey);
-
-  if (priorIndex !== undefined) {
-    const previous = input.timeline[priorIndex];
-    if (previous && previous.kind === "message" && previous.role === "assistant") {
-      const mergedParts = mergeTimelineMessageParts(previous.parts, input.parts);
-      input.timeline[priorIndex] = {
-        ...previous,
-        parts: mergedParts,
-        text: readTimelineMessageText(mergedParts),
-        cursor: input.cursor,
-        createdAt: input.createdAt,
-        streaming: input.streaming ?? previous.streaming
-      };
-      return;
-    }
-  }
-
-  const nextIndex = input.timeline.length;
-  input.timeline.push({
-    id: `evt-${input.cursor}`,
-    kind: "message",
-    role: "assistant",
-    text: readTimelineMessageText(input.parts),
-    parts: input.parts,
-    turnId: input.turnId,
-    cursor: input.cursor,
-    streaming: input.streaming ?? false,
-    createdAt: input.createdAt
-  });
-  input.assistantMessageByTurn.set(turnKey, nextIndex);
-}
-
 export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelineItem[] {
   const sorted = [...events].sort((left, right) => left.cursor - right.cursor);
   const timeline: ChatTimelineItem[] = [];
-  const assistantMessageByTurn = new Map<string, number>();
+  const assistantMessageByTurnId = new Map<string, number>();
 
   for (const event of sorted) {
     const method = event.method;
@@ -139,12 +110,6 @@ export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelin
           kind: "message",
           role: "user",
           text: promptText,
-          parts: [
-            {
-              type: "text",
-              text: promptText
-            }
-          ],
           turnId,
           cursor: event.cursor,
           streaming: false,
@@ -155,40 +120,45 @@ export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelin
     }
 
     if (method === "item.delta") {
-      const deltaParts = parseItemDeltaParts({
-        cursor: event.cursor,
-        payload: event.payload
-      });
-
-      if (deltaParts.length < 1) {
-        timeline.push({
-          id: `evt-${event.cursor}`,
-          kind: "runtime",
-          label: "Item delta",
-          detail: readRuntimeDetail(event.payload),
-          payload: event.payload,
-          turnId,
-          cursor: event.cursor,
-          createdAt
-        });
+      const deltaText = readDeltaText(event.payload);
+      if (!deltaText) {
         continue;
       }
 
-      upsertAssistantMessage({
-        timeline,
-        assistantMessageByTurn,
+      const assistantTurnKey = turnId ?? `cursor:${event.cursor.toString()}`;
+      const priorIndex = assistantMessageByTurnId.get(assistantTurnKey);
+      if (priorIndex !== undefined) {
+        const previous = timeline[priorIndex];
+        if (previous && previous.kind === "message" && previous.role === "assistant") {
+          timeline[priorIndex] = {
+            ...previous,
+            text: `${previous.text}${deltaText}`,
+            cursor: event.cursor,
+            createdAt,
+            streaming: true
+          };
+          continue;
+        }
+      }
+
+      const nextIndex = timeline.length;
+      timeline.push({
+        id: `evt-${event.cursor}`,
+        kind: "message",
+        role: "assistant",
+        text: deltaText,
         turnId,
         cursor: event.cursor,
-        createdAt,
-        parts: deltaParts,
-        streaming: true
+        streaming: true,
+        createdAt
       });
+      assistantMessageByTurnId.set(assistantTurnKey, nextIndex);
       continue;
     }
 
     if (method === "turn.completed") {
       if (turnId) {
-        const priorIndex = assistantMessageByTurn.get(turnId);
+        const priorIndex = assistantMessageByTurnId.get(turnId);
         if (priorIndex !== undefined) {
           const previous = timeline[priorIndex];
           if (previous && previous.kind === "message" && previous.role === "assistant") {
@@ -231,18 +201,16 @@ export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelin
       continue;
     }
 
-    const runtimeDataPart = parseRuntimeDataPart({
-      method,
-      payload: event.payload
-    });
-    if (runtimeDataPart) {
-      upsertAssistantMessage({
-        timeline,
-        assistantMessageByTurn,
+    if (method === "runtime.metadata" || method.startsWith("runtime.")) {
+      timeline.push({
+        id: `evt-${event.cursor}`,
+        kind: "runtime",
+        label: method === "runtime.metadata" ? "Runtime metadata" : label,
+        detail: readRuntimeDetail(event.payload),
+        payload: event.payload,
         turnId,
         cursor: event.cursor,
-        createdAt,
-        parts: [runtimeDataPart]
+        createdAt
       });
       continue;
     }

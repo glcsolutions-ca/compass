@@ -22,48 +22,12 @@ export interface ChatParticipant {
   role: "user" | "assistant" | "system";
 }
 
-export type ChatTimelineTextPart = {
-  type: "text";
-  text: string;
-  parentId?: string;
-};
-
-export type ChatTimelineReasoningPart = {
-  type: "reasoning";
-  text: string;
-  parentId?: string;
-};
-
-export type ChatTimelineToolCallPart = {
-  type: "tool-call";
-  toolCallId: string;
-  toolName: string;
-  argsText: string;
-  args: Record<string, unknown>;
-  result?: unknown;
-  isError?: boolean;
-  parentId?: string;
-};
-
-export type ChatTimelineDataPart = {
-  type: "data";
-  name: string;
-  data: unknown;
-};
-
-export type ChatTimelineMessagePart =
-  | ChatTimelineTextPart
-  | ChatTimelineReasoningPart
-  | ChatTimelineToolCallPart
-  | ChatTimelineDataPart;
-
 export type ChatTimelineItem =
   | {
       id: string;
       kind: "message";
       role: "user" | "assistant";
       text: string;
-      parts: ChatTimelineMessagePart[];
       turnId: string | null;
       cursor: number | null;
       streaming: boolean;

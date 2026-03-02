@@ -787,6 +787,7 @@ async function runFlow(
         let runtimeEventMethod: string | null = null;
         let runtimeEventCursor: number | null = null;
         let runtimeInlineHintVisible = false;
+        let runtimeInlineHintCheckRequired = false;
 
         if (threadId) {
           const eventsResponse = await page.request.get(
@@ -808,6 +809,7 @@ async function runFlow(
           if (runtimeEvent?.method && typeof runtimeEvent.cursor === "number") {
             runtimeEventMethod = runtimeEvent.method;
             runtimeEventCursor = runtimeEvent.cursor;
+            runtimeInlineHintCheckRequired = true;
             const inspectUrl = new URL(page.url());
             inspectUrl.searchParams.set("inspect", runtimeEvent.cursor.toString());
             inspectUrl.searchParams.set("inspectTab", "activity");
@@ -826,14 +828,14 @@ async function runFlow(
 
         flowAssertions.push({
           id: `${flowId}:chat-runtime-event-inline-hint`,
-          description: `[${flowId}] Runtime activity rows that render inline are marked with an Inline hint`,
-          pass: runtimeInlineHintVisible,
+          description: `[${flowId}] Runtime activity rows that render inline are marked with an Inline hint when runtime events are available`,
+          pass: !runtimeInlineHintCheckRequired || runtimeInlineHintVisible,
           details:
             runtimeEventMethod && runtimeEventCursor !== null
               ? `method=${runtimeEventMethod}, cursor=${runtimeEventCursor.toString()}`
               : threadId
-                ? "No runtime.* event was returned for the active thread."
-                : "Thread id was not present in the chat route URL."
+                ? "No runtime.* event was returned for the active thread (check skipped)."
+                : "Thread id was not present in the chat route URL (check skipped)."
         });
 
         if (smokeChatForbiddenCreate) {

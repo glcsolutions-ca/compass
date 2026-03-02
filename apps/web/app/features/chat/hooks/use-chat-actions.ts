@@ -1,5 +1,5 @@
 import type { AppendMessage } from "@assistant-ui/react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useFetcher, useNavigate } from "react-router";
 import type { AgentExecutionMode } from "~/features/chat/agent-types";
 import type { ChatActionData } from "~/features/chat/chat-action";
@@ -27,6 +27,29 @@ function resolveActiveThreadId(input: {
   submitResultThreadId: string | null | undefined;
 }): string | null {
   return input.loaderThreadId ?? input.submitResultThreadId ?? null;
+}
+
+interface SubmitPromptIntentInput {
+  intent: "sendMessage" | "editMessage" | "reloadMessage";
+  prompt: string;
+  sourceMessageId?: string | null;
+  parentMessageId?: string | null;
+}
+
+function areSubmitPromptIntentsEqual(
+  left: SubmitPromptIntentInput | null,
+  right: SubmitPromptIntentInput
+): boolean {
+  if (!left) {
+    return false;
+  }
+
+  return (
+    left.intent === right.intent &&
+    left.prompt === right.prompt &&
+    (left.sourceMessageId ?? null) === (right.sourceMessageId ?? null) &&
+    (left.parentMessageId ?? null) === (right.parentMessageId ?? null)
+  );
 }
 
 export interface ChatActionsController {
@@ -57,6 +80,8 @@ export function useChatActions({
   const submitFetcher = useFetcher<ChatActionData>();
   const modeFetcher = useFetcher<ChatActionData>();
   const interruptFetcher = useFetcher<ChatActionData>();
+  const pendingSubmitRef = useRef<SubmitPromptIntentInput | null>(null);
+  const inFlightSubmitRef = useRef<SubmitPromptIntentInput | null>(null);
 
   const activeThreadId = resolveActiveThreadId({
     loaderThreadId,
@@ -94,28 +119,14 @@ export function useChatActions({
     }
   }, [loaderThreadId, navigate, submitFetcher.data, workspaceSlug]);
 
-  const submitPromptIntent = useCallback(
-    (input: {
-      intent: "sendMessage" | "editMessage" | "reloadMessage";
-      prompt: string;
-      sourceMessageId?: string | null;
-      parentMessageId?: string | null;
-    }) => {
-      if (submitFetcher.state !== "idle") {
-        return;
-      }
-
-      const prompt = input.prompt.trim();
-      if (!prompt) {
-        return;
-      }
-
+  const submitPromptIntentNow = useCallback(
+    (input: SubmitPromptIntentInput): void => {
       const formData = new FormData();
       const clientRequestId = createClientRequestId();
       formData.set("intent", input.intent);
       formData.set("threadId", activeThreadId ?? "");
       formData.set("executionMode", executionMode);
-      formData.set("prompt", prompt);
+      formData.set("prompt", input.prompt);
       formData.set("clientRequestId", clientRequestId);
 
       if (input.sourceMessageId) {
@@ -126,9 +137,55 @@ export function useChatActions({
         formData.set("parentMessageId", input.parentMessageId);
       }
 
+      inFlightSubmitRef.current = input;
       void submitFetcher.submit(formData, { method: "post" });
     },
     [activeThreadId, executionMode, submitFetcher]
+  );
+
+  useEffect(() => {
+    if (submitFetcher.state !== "idle") {
+      return;
+    }
+
+    const queuedSubmit = pendingSubmitRef.current;
+    if (queuedSubmit) {
+      pendingSubmitRef.current = null;
+      submitPromptIntentNow(queuedSubmit);
+      return;
+    }
+
+    inFlightSubmitRef.current = null;
+  }, [submitFetcher.state, submitPromptIntentNow]);
+
+  const submitPromptIntent = useCallback(
+    (input: SubmitPromptIntentInput) => {
+      const prompt = input.prompt.trim();
+      if (!prompt) {
+        return;
+      }
+
+      const normalizedInput: SubmitPromptIntentInput = {
+        ...input,
+        prompt
+      };
+      const submitBusy = submitFetcher.state !== "idle" || inFlightSubmitRef.current !== null;
+
+      if (submitBusy) {
+        if (
+          areSubmitPromptIntentsEqual(inFlightSubmitRef.current, normalizedInput) ||
+          areSubmitPromptIntentsEqual(pendingSubmitRef.current, normalizedInput)
+        ) {
+          return;
+        }
+
+        pendingSubmitRef.current = normalizedInput;
+        return;
+      }
+
+      submitPromptIntentNow(normalizedInput);
+    },
+    [submitFetcher.state, submitPromptIntentNow]
   );
 
   const handleAssistantSend = useCallback(

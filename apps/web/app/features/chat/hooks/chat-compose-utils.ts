@@ -14,20 +14,6 @@ export function readSubmittingPromptValue(formData: FormData | undefined): strin
   return normalized.length > 0 ? normalized : null;
 }
 
-export function readSubmittingClientRequestId(formData: FormData | undefined): string | null {
-  if (!formData) {
-    return null;
-  }
-
-  const clientRequestId = formData.get("clientRequestId");
-  if (typeof clientRequestId !== "string") {
-    return null;
-  }
-
-  const normalized = clientRequestId.trim();
-  return normalized.length > 0 ? normalized : null;
-}
-
 function readAttachmentPromptLines(message: AppendMessage): string[] {
   const attachments = message.attachments ?? [];
   return attachments

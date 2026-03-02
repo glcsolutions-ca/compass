@@ -59,7 +59,7 @@ describe("chat event normalizer", () => {
     expect(timeline.some((item) => item.kind === "status")).toBe(false);
   });
 
-  it("maps runtime events into runtime timeline entries", () => {
+  it("hides runtime lifecycle events from the primary timeline", () => {
     const timeline = normalizeAgentEvents([
       {
         cursor: 9,
@@ -71,47 +71,7 @@ describe("chat event normalizer", () => {
       }
     ]);
 
-    expect(timeline).toEqual([
-      expect.objectContaining({
-        kind: "runtime",
-        label: "Runtime customEvent",
-        payload: { detail: "ok" }
-      })
-    ]);
-  });
-
-  it("maps item lifecycle events into runtime timeline entries", () => {
-    const timeline = normalizeAgentEvents([
-      {
-        cursor: 11,
-        threadId: "thread_1",
-        turnId: "turn_1",
-        method: "item.started",
-        payload: { type: "assistant_message" },
-        createdAt: "2026-01-01T00:00:01.000Z"
-      },
-      {
-        cursor: 12,
-        threadId: "thread_1",
-        turnId: "turn_1",
-        method: "item.completed",
-        payload: { type: "assistant_message" },
-        createdAt: "2026-01-01T00:00:02.000Z"
-      }
-    ]);
-
-    expect(timeline).toEqual([
-      expect.objectContaining({
-        kind: "runtime",
-        label: "Item started",
-        detail: "assistant_message"
-      }),
-      expect.objectContaining({
-        kind: "runtime",
-        label: "Item completed",
-        detail: "assistant_message"
-      })
-    ]);
+    expect(timeline).toHaveLength(0);
   });
 
   it("keeps unknown methods as generic timeline events", () => {

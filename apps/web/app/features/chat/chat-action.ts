@@ -8,7 +8,6 @@ import {
 } from "~/features/chat/agent-client";
 import { resolveThreadCreateWorkspaceSlug } from "~/features/chat/chat-context";
 import {
-  ChatClientRequestIdSchema,
   ChatExecutionModeSchema,
   ChatIntentSchema,
   ChatMessageIdSchema,
@@ -33,7 +32,6 @@ export interface ChatActionData {
   executionMode: AgentExecutionMode;
   prompt: string | null;
   answer: string | null;
-  clientRequestId?: string | null;
   sourceMessageId?: string | null;
   parentMessageId?: string | null;
 }
@@ -45,7 +43,6 @@ function createErrorAction(input: {
   threadId?: string | null;
   turnId?: string | null;
   prompt?: string | null;
-  clientRequestId?: string | null;
   sourceMessageId?: string | null;
   parentMessageId?: string | null;
 }): ChatActionData {
@@ -62,10 +59,6 @@ function createErrorAction(input: {
 
   if (input.sourceMessageId !== undefined) {
     result.sourceMessageId = input.sourceMessageId;
-  }
-
-  if (input.clientRequestId !== undefined) {
-    result.clientRequestId = input.clientRequestId;
   }
 
   if (input.parentMessageId !== undefined) {
@@ -191,10 +184,6 @@ export async function submitChatAction({
   const sourceMessageId = sourceMessageIdResult.success
     ? (sourceMessageIdResult.data ?? null)
     : null;
-  const clientRequestIdResult = ChatClientRequestIdSchema.safeParse(
-    formData.get("clientRequestId")
-  );
-  const clientRequestId = clientRequestIdResult.success ? clientRequestIdResult.data : undefined;
   const parentMessageIdResult = ChatMessageIdSchema.safeParse(formData.get("parentMessageId"));
   const parentMessageId = parentMessageIdResult.success
     ? (parentMessageIdResult.data ?? null)
@@ -208,7 +197,6 @@ export async function submitChatAction({
       intent,
       executionMode,
       threadId: targetThreadId,
-      clientRequestId,
       error: parsedPrompt.error.issues[0]?.message ?? "Prompt is required."
     });
   }
@@ -222,7 +210,6 @@ export async function submitChatAction({
       intent,
       executionMode,
       prompt,
-      clientRequestId,
       error: "Select a thread before editing or reloading."
     });
   }
@@ -243,7 +230,6 @@ export async function submitChatAction({
         intent,
         executionMode,
         prompt,
-        clientRequestId,
         error: message
       });
     }
@@ -259,7 +245,6 @@ export async function submitChatAction({
         intent,
         executionMode,
         prompt,
-        clientRequestId,
         error: createThreadResult.message || "Unable to create a new chat thread."
       });
     }
@@ -279,7 +264,6 @@ export async function submitChatAction({
       executionMode,
       threadId: resolvedThreadId,
       prompt,
-      clientRequestId,
       error: startTurnResult.message || "Unable to submit this prompt."
     });
   }
@@ -294,10 +278,6 @@ export async function submitChatAction({
     prompt,
     answer: startTurnResult.data.outputText
   };
-
-  if (clientRequestId !== undefined) {
-    result.clientRequestId = clientRequestId;
-  }
 
   if (sourceMessageId) {
     result.sourceMessageId = sourceMessageId;

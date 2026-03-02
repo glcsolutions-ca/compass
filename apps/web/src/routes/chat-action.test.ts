@@ -125,7 +125,6 @@ describe("chat action", () => {
     const formData = new FormData();
     formData.set("intent", "sendMessage");
     formData.set("prompt", "hello");
-    formData.set("clientRequestId", "req_hello_1");
 
     const result = await chatAction({
       request: new Request("http://web.test/chat", {
@@ -154,8 +153,7 @@ describe("chat action", () => {
       turnId: "turn_1",
       executionMode: "cloud",
       prompt: "hello",
-      answer: "response",
-      clientRequestId: "req_hello_1"
+      answer: "response"
     });
   });
 
@@ -258,74 +256,6 @@ describe("chat action", () => {
       executionMode: "cloud",
       prompt: "hello from chat",
       answer: "response"
-    });
-  });
-
-  it("preserves client request id when thread creation fails", async () => {
-    vi.mocked(loadAuthShellData).mockResolvedValue({
-      authenticated: true,
-      user: {
-        id: "user_1",
-        primaryEmail: "user@example.com",
-        displayName: "User"
-      },
-      organizations: [
-        {
-          organizationId: "org_personal",
-          organizationSlug: "personal-org",
-          organizationName: "Personal Organization",
-          role: "member",
-          status: "active"
-        }
-      ],
-      workspaces: [
-        {
-          id: "ws_personal",
-          organizationId: "org_personal",
-          organizationSlug: "personal-org",
-          organizationName: "Personal Organization",
-          slug: "personal-user-1",
-          name: "User Personal Workspace",
-          isPersonal: true,
-          role: "admin",
-          status: "active"
-        }
-      ],
-      activeWorkspaceSlug: "personal-user-1",
-      personalWorkspaceSlug: "personal-user-1"
-    });
-
-    vi.mocked(createAgentThread).mockResolvedValue({
-      status: 403,
-      data: null,
-      error: "FORBIDDEN",
-      message: "Forbidden."
-    });
-
-    const formData = new FormData();
-    formData.set("intent", "sendMessage");
-    formData.set("prompt", "blocked prompt");
-    formData.set("clientRequestId", "req-blocked-1");
-
-    const result = await chatAction({
-      request: new Request("http://web.test/chat", {
-        method: "POST",
-        body: formData
-      }),
-      params: { workspaceSlug: "personal-user-1" }
-    });
-
-    expect(startAgentTurn).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      intent: "sendMessage",
-      ok: false,
-      error: "Forbidden.",
-      threadId: null,
-      turnId: null,
-      executionMode: "cloud",
-      prompt: "blocked prompt",
-      answer: null,
-      clientRequestId: "req-blocked-1"
     });
   });
 

@@ -41,45 +41,6 @@ function readDeltaText(payload: unknown): string | null {
   return null;
 }
 
-function readRuntimeDetail(payload: unknown): string | null {
-  const data = readPayloadObject(payload);
-  if (!data) {
-    return null;
-  }
-
-  const directText =
-    readText(data.message) ??
-    readText(data.status) ??
-    readText(data.type) ??
-    readText(data.text) ??
-    readText(data.operation);
-  if (directText) {
-    return directText;
-  }
-
-  const keys = Object.keys(data);
-  if (keys.length < 1) {
-    return null;
-  }
-
-  return `Payload keys: ${keys.join(", ")}`;
-}
-
-function readItemLifecycleDetail(payload: unknown): string | null {
-  const data = readPayloadObject(payload);
-  if (!data) {
-    return null;
-  }
-
-  return (
-    readText(data.type) ??
-    readText(data.itemType) ??
-    readText(data.status) ??
-    readText(data.name) ??
-    readText(data.role)
-  );
-}
-
 function formatEventLabel(method: string): string {
   const [scope, action] = method.split(".");
   if (!scope || !action) {
@@ -187,31 +148,7 @@ export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelin
       continue;
     }
 
-    if (method === "item.started" || method === "item.completed") {
-      timeline.push({
-        id: `evt-${event.cursor}`,
-        kind: "runtime",
-        label: method === "item.started" ? "Item started" : "Item completed",
-        detail: readItemLifecycleDetail(event.payload),
-        payload: event.payload,
-        turnId,
-        cursor: event.cursor,
-        createdAt
-      });
-      continue;
-    }
-
     if (method === "runtime.metadata" || method.startsWith("runtime.")) {
-      timeline.push({
-        id: `evt-${event.cursor}`,
-        kind: "runtime",
-        label: method === "runtime.metadata" ? "Runtime metadata" : label,
-        detail: readRuntimeDetail(event.payload),
-        payload: event.payload,
-        turnId,
-        cursor: event.cursor,
-        createdAt
-      });
       continue;
     }
 

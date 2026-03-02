@@ -37,14 +37,6 @@ export const ChatMessageIdSchema = z
   .regex(/^[A-Za-z0-9_:-]+$/u)
   .optional();
 
-export const ChatClientRequestIdSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(128)
-  .regex(/^[A-Za-z0-9_:-]+$/u)
-  .optional();
-
 export const ChatExecutionModeSchema = z.enum(["cloud", "local"]);
 
 export type ChatIntent = z.infer<typeof ChatIntentSchema>;

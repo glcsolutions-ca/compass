@@ -30,10 +30,11 @@ describe("chat runtime store mapping", () => {
           cursor: 2,
           createdAt: "2026-01-01T00:00:01.000Z"
         }
-      ]
+      ],
+      pendingPrompt: "pending"
     });
 
-    expect(mapped).toHaveLength(2);
+    expect(mapped).toHaveLength(3);
     expect(mapped[1]).toMatchObject({
       role: "assistant",
       text: "Turn completed",
@@ -43,6 +44,10 @@ describe("chat runtime store mapping", () => {
         defaultTab: "activity"
       }
     });
+    expect(mapped[2]).toMatchObject({
+      role: "user",
+      text: "pending"
+    });
   });
 
   it("converts assistant store messages into assistant-ui thread messages", () => {
@@ -50,9 +55,6 @@ describe("chat runtime store mapping", () => {
       kind: "runtime" as const,
       label: "Runtime metadata",
       detail: null,
-      payload: {
-        runId: "run_1"
-      },
       cursor: 10,
       defaultTab: "activity" as const
     };

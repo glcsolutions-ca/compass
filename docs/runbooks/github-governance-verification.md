@@ -32,6 +32,7 @@ gh api repos/glcsolutions-ca/compass/rulesets --paginate
 - governance matches `docs/branch-protection.md`
 - required contexts match policy/workflows
 - merge queue is enabled and required on `main`
+- periodic canary PRs confirm `merge_group` checks execute before merge
 
 ## Failure Handling
 

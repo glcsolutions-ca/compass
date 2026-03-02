@@ -35,14 +35,16 @@ describe("workflow pipeline contract", () => {
     expect(integrationGate).toContain("checks_requested");
   });
 
-  it("keeps staging gate merge-group only and fail-closed", () => {
+  it("keeps staging gate queue-ready on PR and fail-closed on merge-group", () => {
     const stagingGate = readUtf8(stagingGateWorkflowPath);
 
     expect(stagingGate).toContain("name: Staging Gate");
+    expect(stagingGate).toContain("pull_request:");
     expect(stagingGate).toContain("merge_group:");
     expect(stagingGate).toContain("checks_requested");
     expect(stagingGate).not.toContain("\n  push:");
-    expect(stagingGate).not.toContain("\n  pull_request:");
+    expect(stagingGate).toContain("if: ${{ github.event_name == 'merge_group'");
+    expect(stagingGate).toContain("reason_codes='[\"STAGING_GATE_PR_PREVIEW_ONLY\"]'");
     expect(stagingGate).toContain("name: staging-gate");
     expect(stagingGate).toContain(".artifacts/staging-gate/${{ env.TESTED_SHA }}/result.json");
   });

@@ -1,6 +1,9 @@
 name: Staging Gate
 
 on:
+  pull_request:
+    branches:
+      - main
   merge_group:
     types:
       - checks_requested
@@ -86,7 +89,7 @@ jobs:
     name: staging-build-release-candidate-${{ matrix.service.name }}-image
     needs:
       - determine_scope
-    if: ${{ needs.determine_scope.outputs.tested_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
+    if: ${{ github.event_name == 'merge_group' && needs.determine_scope.outputs.tested_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: staging
@@ -156,7 +159,7 @@ jobs:
     needs:
       - determine_scope
       - build_release_candidate_images
-    if: ${{ needs.determine_scope.outputs.tested_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
+    if: ${{ github.event_name == 'merge_group' && needs.determine_scope.outputs.tested_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -221,7 +224,7 @@ jobs:
     needs:
       - determine_scope
       - publish_release_candidate
-    if: ${{ needs.determine_scope.outputs.tested_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
+    if: ${{ github.event_name == 'merge_group' && needs.determine_scope.outputs.tested_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: staging
@@ -485,7 +488,7 @@ jobs:
     needs:
       - determine_scope
       - deploy_staging
-    if: ${{ needs.determine_scope.outputs.tested_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
+    if: ${{ github.event_name == 'merge_group' && needs.determine_scope.outputs.tested_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: staging
@@ -545,7 +548,10 @@ jobs:
           pass="true"
           reason_codes='[]'
 
-          if [ "$staging_required" = "true" ]; then
+          if [ "${{ github.event_name }}" != "merge_group" ]; then
+            pass="true"
+            reason_codes='["STAGING_GATE_PR_PREVIEW_ONLY"]'
+          elif [ "$staging_required" = "true" ]; then
             if [ "${{ needs.build_release_candidate_images.result }}" = "success" ] && \
                [ "${{ needs.publish_release_candidate.result }}" = "success" ] && \
                [ "${{ needs.deploy_staging.result }}" = "success" ] && \

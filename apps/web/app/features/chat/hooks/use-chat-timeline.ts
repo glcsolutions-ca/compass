@@ -148,6 +148,12 @@ export function useChatTimeline({
         kind: "message",
         role: "user",
         text: record.text,
+        parts: [
+          {
+            type: "text",
+            text: record.text
+          }
+        ],
         turnId: record.turnId,
         cursor: null,
         streaming: false,

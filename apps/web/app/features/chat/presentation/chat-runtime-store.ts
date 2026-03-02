@@ -12,6 +12,7 @@ export interface AssistantEventPartModel {
   kind: "status" | "runtime" | "approval" | "unknown";
   label: string;
   detail: string | null;
+  payload?: unknown;
   cursor: number | null;
   defaultTab: ChatInspectTab;
 }
@@ -65,11 +66,13 @@ function buildEventPartModel(
   item: Exclude<ChatTimelineItem, { kind: "message" }>
 ): AssistantEventPartModel {
   const detail = "detail" in item ? (item.detail ?? null) : null;
+  const payload = "payload" in item ? item.payload : undefined;
 
   return {
     kind: item.kind,
     label: item.label,
     detail,
+    payload,
     cursor: item.cursor,
     defaultTab: resolveInspectTab(item)
   };
@@ -128,11 +131,9 @@ export function readAssistantEventPartFromMetadata(
 }
 
 export function buildAssistantStoreMessages({
-  timeline,
-  pendingPrompt
+  timeline
 }: {
   timeline: ChatTimelineItem[];
-  pendingPrompt: string | null;
 }): AssistantStoreMessage[] {
   const assistantMessages = timeline.map((item) => {
     if (item.kind === "message") {
@@ -161,19 +162,6 @@ export function buildAssistantStoreMessages({
       eventPart
     } satisfies AssistantStoreMessage;
   });
-
-  if (pendingPrompt) {
-    assistantMessages.push({
-      id: "pending-submit",
-      role: "user",
-      text: pendingPrompt,
-      turnId: null,
-      cursor: null,
-      createdAt: new Date().toISOString(),
-      streaming: false,
-      eventPart: null
-    });
-  }
 
   return assistantMessages;
 }

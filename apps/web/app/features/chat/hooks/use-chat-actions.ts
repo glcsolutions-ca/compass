@@ -14,6 +14,14 @@ interface UseChatActionsInput {
   onExecutionModeChange: (mode: AgentExecutionMode) => void;
 }
 
+function createClientRequestId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function resolveActiveThreadId(input: {
   loaderThreadId: string | null;
   submitResultThreadId: string | null | undefined;
@@ -103,10 +111,12 @@ export function useChatActions({
       }
 
       const formData = new FormData();
+      const clientRequestId = createClientRequestId();
       formData.set("intent", input.intent);
       formData.set("threadId", activeThreadId ?? "");
       formData.set("executionMode", executionMode);
       formData.set("prompt", prompt);
+      formData.set("clientRequestId", clientRequestId);
 
       if (input.sourceMessageId) {
         formData.set("sourceMessageId", input.sourceMessageId);

@@ -11,7 +11,7 @@ import { useLoaderData, useLocation, useNavigate } from "react-router";
 import type { MetaFunction } from "react-router";
 import type { ShellRouteHandle } from "~/features/auth/types";
 import { appendAgentThreadEventsBatchClient } from "~/features/chat/agent-client";
-import type { AgentExecutionMode, ChatTransportState } from "~/features/chat/agent-types";
+import type { AgentExecutionMode } from "~/features/chat/agent-types";
 import type { ChatActionData } from "~/features/chat/chat-action";
 import { submitChatAction } from "~/features/chat/chat-action";
 import { resolveReloadPrompt } from "~/features/chat/hooks/chat-compose-utils";
@@ -30,47 +30,6 @@ import {
 } from "~/features/chat/presentation/chat-runtime-store";
 import type { ChatLoaderData } from "~/features/chat/chat-loader";
 import { loadChatData } from "~/features/chat/chat-loader";
-import { cn } from "~/lib/utils/cn";
-
-interface TransportSummary {
-  lifecycle: ChatTransportState["lifecycle"];
-  label: string;
-}
-
-function readTransportSummary(state: ChatTransportState): TransportSummary {
-  if (state.lifecycle === "polling") {
-    return {
-      lifecycle: state.lifecycle,
-      label: "Polling"
-    };
-  }
-
-  if (state.lifecycle === "open") {
-    return {
-      lifecycle: state.lifecycle,
-      label: "Live"
-    };
-  }
-
-  if (state.lifecycle === "connecting") {
-    return {
-      lifecycle: state.lifecycle,
-      label: "Connecting"
-    };
-  }
-
-  if (state.lifecycle === "error") {
-    return {
-      lifecycle: state.lifecycle,
-      label: "Error"
-    };
-  }
-
-  return {
-    lifecycle: state.lifecycle,
-    label: "Idle"
-  };
-}
 
 export const meta: MetaFunction<typeof clientLoader> = ({ params }) => {
   const threadId = params.threadId?.trim();
@@ -116,7 +75,6 @@ export default function ChatRoute() {
   const location = useLocation();
   const navigate = useNavigate();
   const [executionMode, setExecutionMode] = useState<AgentExecutionMode>(loaderData.executionMode);
-  const localModeAvailable = false;
 
   useEffect(() => {
     setExecutionMode(loaderData.executionMode);
@@ -129,43 +87,19 @@ export default function ChatRoute() {
     onExecutionModeChange: setExecutionMode
   });
 
-  const { eventState, transportState } = useChatTransport({
+  const { eventState } = useChatTransport({
     activeThreadId: chatActions.activeThreadId,
     initialCursor: loaderData.initialCursor,
     initialEvents: loaderData.initialEvents
   });
 
-  const { activeTurnId, assistantMessages, registerSubmittedPrompt } = useChatTimeline({
+  const { activeTurnId, assistantMessages } = useChatTimeline({
     resetKey: `${loaderData.workspaceSlug}:${loaderData.threadId ?? "new"}`,
     events: eventState.events,
     submitState: chatActions.submitFetcher.state,
-    submitFormData: chatActions.submitFetcher.formData
+    submitFormData: chatActions.submitFetcher.formData,
+    submitResult: chatActions.submitFetcher.data
   });
-
-  useEffect(() => {
-    const actionResult = chatActions.submitFetcher.data;
-    if (
-      !actionResult ||
-      (actionResult.intent !== "sendMessage" &&
-        actionResult.intent !== "editMessage" &&
-        actionResult.intent !== "reloadMessage") ||
-      !actionResult.ok
-    ) {
-      return;
-    }
-
-    if (actionResult.prompt) {
-      registerSubmittedPrompt({
-        turnId: actionResult.turnId,
-        prompt: actionResult.prompt
-      });
-    }
-  }, [chatActions.submitFetcher.data, registerSubmittedPrompt]);
-
-  const transportSummary = readTransportSummary(transportState);
-  const hasSurfaceError = Boolean(chatActions.actionError || transportState.lastError);
-  const surfaceStatusLabel =
-    chatActions.actionError || transportState.lastError || transportSummary.label;
 
   const handleAssistantCancel = useCallback(async (): Promise<void> => {
     chatActions.submitInterruptTurn(activeTurnId);
@@ -297,41 +231,6 @@ export default function ChatRoute() {
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col">
-      <div className="mx-auto flex w-full max-w-[var(--aui-thread-max-width)] flex-wrap items-center justify-between gap-2 px-4 pb-2 pt-2 text-xs md:flex-nowrap md:px-6">
-        <div className="flex min-w-0 items-center gap-2">
-          <label
-            className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
-            htmlFor="chat-route-mode"
-          >
-            Mode
-          </label>
-          <select
-            className="h-7 rounded-md border border-border/70 bg-background px-2 text-xs text-foreground"
-            disabled={chatActions.modeFetcher.state !== "idle"}
-            id="chat-route-mode"
-            onChange={(event) =>
-              chatActions.handleModeChange(event.target.value === "local" ? "local" : "cloud")
-            }
-            value={executionMode}
-          >
-            <option value="cloud">Cloud</option>
-            <option disabled={!localModeAvailable} value="local">
-              Local{localModeAvailable ? "" : " (desktop only)"}
-            </option>
-          </select>
-        </div>
-
-        <span
-          className={cn(
-            "w-full truncate text-[11px] text-muted-foreground md:w-auto",
-            hasSurfaceError && "text-destructive"
-          )}
-          role={hasSurfaceError ? "alert" : "status"}
-        >
-          {surfaceStatusLabel}
-        </span>
-      </div>
-
       <div className="flex min-h-0 flex-1">
         <ChatCanvas runtime={assistantRuntime} />
       </div>

@@ -6,10 +6,6 @@ import {
   buildAssistantStoreMessages,
   type AssistantStoreMessage
 } from "~/features/chat/presentation/chat-runtime-store";
-import {
-  readSubmittingClientRequestId,
-  readSubmittingPromptValue
-} from "~/features/chat/hooks/chat-compose-utils";
 
 export interface TimelinePromptRecord {
   id: string;
@@ -24,8 +20,6 @@ export interface TimelinePromptRecord {
 interface UseChatTimelineInput {
   resetKey: string;
   events: readonly AgentEvent[];
-  submitState: "idle" | "submitting" | "loading";
-  submitFormData: FormData | undefined;
   submitResult: ChatActionData | undefined;
 }
 
@@ -103,8 +97,6 @@ function readActiveTurnId(events: readonly AgentEvent[]): string | null {
 export function useChatTimeline({
   resetKey,
   events,
-  submitState,
-  submitFormData,
   submitResult
 }: UseChatTimelineInput): UseChatTimelineOutput {
   const [timelinePrompts, setTimelinePrompts] = useState<TimelinePromptRecord[]>([]);
@@ -116,35 +108,6 @@ export function useChatTimeline({
   const upsertTimelinePrompt = useCallback((nextRecord: TimelinePromptRecord) => {
     setTimelinePrompts((current) => upsertTimelinePromptRecords(current, nextRecord));
   }, []);
-
-  const submittingPromptValue = useMemo(
-    () => readSubmittingPromptValue(submitFormData),
-    [submitFormData]
-  );
-  const submittingClientRequestId = useMemo(
-    () => readSubmittingClientRequestId(submitFormData),
-    [submitFormData]
-  );
-
-  useEffect(() => {
-    if (submitState === "idle") {
-      return;
-    }
-
-    if (!submittingClientRequestId || !submittingPromptValue) {
-      return;
-    }
-
-    upsertTimelinePrompt({
-      id: `prompt-${submittingClientRequestId}`,
-      clientRequestId: submittingClientRequestId,
-      turnId: null,
-      text: submittingPromptValue,
-      state: "pending",
-      error: null,
-      createdAt: new Date().toISOString()
-    });
-  }, [submitState, submittingClientRequestId, submittingPromptValue, upsertTimelinePrompt]);
 
   useEffect(() => {
     if (
@@ -162,48 +125,24 @@ export function useChatTimeline({
       return;
     }
 
+    if (submitResult.ok) {
+      return;
+    }
+
     upsertTimelinePrompt({
       id: `prompt-${clientRequestId}`,
       clientRequestId,
       turnId: submitResult.turnId,
       text: prompt,
-      state: submitResult.ok ? "confirmed" : "failed",
-      error: submitResult.ok ? null : (submitResult.error ?? "Unable to submit this prompt."),
+      state: "failed",
+      error: submitResult.error ?? "Unable to submit this prompt.",
       createdAt: new Date().toISOString()
     });
   }, [submitResult, upsertTimelinePrompt]);
 
   const timeline = useMemo(() => {
     const normalized = normalizeAgentEvents(events);
-    const userMessagesFromEvents: Array<{
-      turnId: string | null;
-      text: string;
-    }> = [];
-    const userTurnsFromEvents = new Set<string>();
-    for (const item of normalized) {
-      if (item.kind !== "message" || item.role !== "user") {
-        continue;
-      }
-
-      userMessagesFromEvents.push({
-        turnId: item.turnId,
-        text: item.text
-      });
-      if (item.turnId) {
-        userTurnsFromEvents.add(item.turnId);
-      }
-    }
-
     const promptFallbackItems: ChatTimelineItem[] = timelinePrompts.flatMap((record) => {
-      const turnSeen = record.turnId ? userTurnsFromEvents.has(record.turnId) : false;
-      const promptSeen =
-        record.state === "pending" || record.state === "confirmed"
-          ? userMessagesFromEvents.some((item) => item.text === record.text)
-          : false;
-      if (turnSeen || promptSeen) {
-        return [];
-      }
-
       const baseMessage: ChatTimelineItem = {
         id: record.id,
         kind: "message",
@@ -214,10 +153,6 @@ export function useChatTimeline({
         streaming: false,
         createdAt: record.createdAt
       };
-
-      if (record.state !== "failed") {
-        return [baseMessage];
-      }
 
       return [
         baseMessage,

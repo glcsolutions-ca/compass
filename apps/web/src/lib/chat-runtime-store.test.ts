@@ -2,13 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildAssistantStoreMessages,
   buildAssistantThreadListItems,
-  convertAssistantStoreMessage,
-  isAssistantEventPartModel,
-  readAssistantEventPartFromMetadata
+  convertAssistantStoreMessage
 } from "~/features/chat/presentation/chat-runtime-store";
 
 describe("chat runtime store mapping", () => {
-  it("maps timeline messages and event cards into assistant store messages", () => {
+  it("maps timeline messages and status entries into assistant store messages", () => {
     const mapped = buildAssistantStoreMessages({
       timeline: [
         {
@@ -36,27 +34,30 @@ describe("chat runtime store mapping", () => {
     expect(mapped).toHaveLength(2);
     expect(mapped[1]).toMatchObject({
       role: "assistant",
-      text: "Turn completed",
-      eventPart: {
-        kind: "status",
-        cursor: 2,
-        defaultTab: "activity"
-      }
+      text: "Turn completed"
     });
   });
 
-  it("converts assistant store messages into assistant-ui thread messages", () => {
-    const eventPayload = {
-      kind: "runtime" as const,
-      label: "Runtime metadata",
-      detail: null,
-      payload: {
-        runId: "run_1"
-      },
-      cursor: 10,
-      defaultTab: "activity" as const
-    };
+  it("filters non-message runtime entries from the primary assistant timeline", () => {
+    const mapped = buildAssistantStoreMessages({
+      timeline: [
+        {
+          id: "runtime-1",
+          kind: "runtime",
+          label: "Runtime metadata",
+          detail: "Payload keys: driver, turnId",
+          payload: { driver: "mock", turnId: "turn_1" },
+          turnId: "turn_1",
+          cursor: 5,
+          createdAt: "2026-01-01T00:00:01.000Z"
+        }
+      ]
+    });
 
+    expect(mapped).toEqual([]);
+  });
+
+  it("converts assistant store messages into assistant-ui thread messages", () => {
     const converted = convertAssistantStoreMessage({
       id: "evt-1",
       role: "assistant",
@@ -64,8 +65,7 @@ describe("chat runtime store mapping", () => {
       turnId: "turn_1",
       cursor: 10,
       createdAt: "2026-01-01T00:00:02.000Z",
-      streaming: true,
-      eventPart: eventPayload
+      streaming: true
     });
 
     expect(converted).toMatchObject({
@@ -81,32 +81,10 @@ describe("chat runtime store mapping", () => {
       metadata: {
         custom: {
           cursor: 10,
-          turnId: "turn_1",
-          eventPart: eventPayload
+          turnId: "turn_1"
         }
       }
     });
-  });
-
-  it("reads event part metadata safely", () => {
-    const metadata = {
-      custom: {
-        eventPart: {
-          kind: "status",
-          label: "Turn completed",
-          detail: null,
-          cursor: 3,
-          defaultTab: "activity"
-        }
-      }
-    };
-
-    expect(readAssistantEventPartFromMetadata(metadata)).toMatchObject({
-      kind: "status",
-      cursor: 3
-    });
-    expect(readAssistantEventPartFromMetadata(null)).toBeNull();
-    expect(readAssistantEventPartFromMetadata({ custom: { eventPart: "bad" } })).toBeNull();
   });
 
   it("maps local thread history to assistant-ui thread list items", () => {
@@ -127,25 +105,5 @@ describe("chat runtime store mapping", () => {
         title: "First thread"
       }
     ]);
-  });
-
-  it("validates assistant event part metadata shape", () => {
-    expect(
-      isAssistantEventPartModel({
-        kind: "approval",
-        label: "Approval requested",
-        detail: "Needs confirmation",
-        cursor: 7,
-        defaultTab: "activity"
-      })
-    ).toBe(true);
-
-    expect(
-      isAssistantEventPartModel({
-        kind: "approval",
-        label: "Approval requested",
-        defaultTab: "bogus"
-      })
-    ).toBe(false);
   });
 });

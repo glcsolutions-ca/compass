@@ -96,8 +96,6 @@ export default function ChatRoute() {
   const { activeTurnId, assistantMessages } = useChatTimeline({
     resetKey: `${loaderData.workspaceSlug}:${loaderData.threadId ?? "new"}`,
     events: eventState.events,
-    submitState: chatActions.submitFetcher.state,
-    submitFormData: chatActions.submitFetcher.formData,
     submitResult: chatActions.submitFetcher.data
   });
 

@@ -8,15 +8,6 @@ export interface ChatInspectState {
   tab: ChatInspectTab;
 }
 
-export interface AssistantEventPartModel {
-  kind: "status" | "runtime" | "approval" | "unknown";
-  label: string;
-  detail: string | null;
-  payload?: unknown;
-  cursor: number | null;
-  defaultTab: ChatInspectTab;
-}
-
 export interface AssistantThreadListItem {
   status: "regular" | "archived";
   id: string;
@@ -31,7 +22,6 @@ export interface AssistantStoreMessage {
   cursor: number | null;
   createdAt: string | null;
   streaming: boolean;
-  eventPart: AssistantEventPartModel | null;
 }
 
 export interface ChatSurfaceState {
@@ -50,128 +40,43 @@ function readDateFromIso(value: string | null): Date {
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 }
 
-function resolveInspectTab(item: Exclude<ChatTimelineItem, { kind: "message" }>): ChatInspectTab {
-  if (item.kind === "runtime") {
-    return "activity";
-  }
-
-  if (item.kind === "unknown") {
-    return "raw";
-  }
-
-  return "activity";
-}
-
-function buildEventPartModel(
-  item: Exclude<ChatTimelineItem, { kind: "message" }>
-): AssistantEventPartModel {
-  const detail = "detail" in item ? (item.detail ?? null) : null;
-  const payload = "payload" in item ? item.payload : undefined;
-
-  return {
-    kind: item.kind,
-    label: item.label,
-    detail,
-    payload,
-    cursor: item.cursor,
-    defaultTab: resolveInspectTab(item)
-  };
-}
-
-function buildEventMessageText(eventPart: AssistantEventPartModel): string {
-  return [eventPart.label, eventPart.detail]
-    .filter((value): value is string => Boolean(value))
-    .join("\n");
-}
-
-export function isAssistantEventPartModel(value: unknown): value is AssistantEventPartModel {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as Record<string, unknown>;
-  const kind = candidate.kind;
-  const defaultTab = candidate.defaultTab;
-
-  if (kind !== "status" && kind !== "runtime" && kind !== "approval" && kind !== "unknown") {
-    return false;
-  }
-
-  if (
-    defaultTab !== "activity" &&
-    defaultTab !== "terminal" &&
-    defaultTab !== "files" &&
-    defaultTab !== "diff" &&
-    defaultTab !== "raw"
-  ) {
-    return false;
-  }
-
-  if (typeof candidate.label !== "string") {
-    return false;
-  }
-
-  return true;
-}
-
-export function readAssistantEventPartFromMetadata(
-  metadata: unknown
-): AssistantEventPartModel | null {
-  if (!metadata || typeof metadata !== "object") {
-    return null;
-  }
-
-  const custom = (metadata as { custom?: unknown }).custom;
-  if (!custom || typeof custom !== "object") {
-    return null;
-  }
-
-  const eventPart = (custom as { eventPart?: unknown }).eventPart;
-  return isAssistantEventPartModel(eventPart) ? eventPart : null;
-}
-
 export function buildAssistantStoreMessages({
   timeline
 }: {
   timeline: ChatTimelineItem[];
 }): AssistantStoreMessage[] {
-  const assistantMessages = timeline.map((item) => {
-    if (item.kind === "message") {
+  return timeline
+    .filter((item) => item.kind === "message" || item.kind === "status")
+    .map((item) => {
+      if (item.kind === "message") {
+        return {
+          id: item.id,
+          role: item.role,
+          text: item.text,
+          turnId: item.turnId,
+          cursor: item.cursor,
+          createdAt: item.createdAt,
+          streaming: item.streaming
+        } satisfies AssistantStoreMessage;
+      }
+
       return {
         id: item.id,
-        role: item.role,
-        text: item.text,
+        role: "assistant",
+        text: [item.label, item.detail].filter(Boolean).join("\n"),
         turnId: item.turnId,
         cursor: item.cursor,
         createdAt: item.createdAt,
-        streaming: item.streaming,
-        eventPart: null
+        streaming: false
       } satisfies AssistantStoreMessage;
-    }
-
-    const eventPart = buildEventPartModel(item);
-
-    return {
-      id: item.id,
-      role: "assistant",
-      text: buildEventMessageText(eventPart),
-      turnId: item.turnId,
-      cursor: item.cursor,
-      createdAt: item.createdAt,
-      streaming: false,
-      eventPart
-    } satisfies AssistantStoreMessage;
-  });
-
-  return assistantMessages;
+    });
 }
 
 export function convertAssistantStoreMessage(message: AssistantStoreMessage): ThreadMessageLike {
   const metadata = {
     custom: {
       cursor: message.cursor,
-      turnId: message.turnId,
-      eventPart: message.eventPart
+      turnId: message.turnId
     }
   };
 

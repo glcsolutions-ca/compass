@@ -1,6 +1,6 @@
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 
 const CHAT_LAYOUT_WIDTHS = [1280, 1440, 1728] as const;
 const CHAT_LAYOUT_TARGET_DELTA_PX = 4;
@@ -364,6 +364,19 @@ function parseSmokeChatSendMode(rawValue: string | undefined): SmokeChatSendMode
   return "auto";
 }
 
+function parseFlag(rawValue: string | undefined, defaultValue: boolean): boolean {
+  const normalized = rawValue?.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1" || normalized === "yes") {
+    return true;
+  }
+
+  if (normalized === "false" || normalized === "0" || normalized === "no") {
+    return false;
+  }
+
+  return defaultValue;
+}
+
 async function assertLegacySurfaceSwitcherAbsent({
   page,
   flowId,
@@ -391,6 +404,180 @@ async function assertLegacySurfaceSwitcherAbsent({
       description: `[${flowId}] Canonical chat route does not render legacy ${label} surface switch control`,
       pass: !visible
     });
+  }
+}
+
+function resolveWorkspaceChatPath(currentUrl: string): string {
+  try {
+    const parsed = new URL(currentUrl);
+    const pathSegments = parsed.pathname.split("/").filter((segment) => segment.length > 0);
+    if (pathSegments[0] === "w" && pathSegments[1]) {
+      return `/w/${encodeURIComponent(pathSegments[1])}/chat`;
+    }
+  } catch {
+    // Ignore parse failures and fall back to the canonical chat route.
+  }
+
+  return "/chat";
+}
+
+async function runForbiddenCreateThreadScenario({
+  page,
+  flowId,
+  baseUrl,
+  flowAssertions,
+  artifacts,
+  outputDir
+}: {
+  page: Page;
+  flowId: string;
+  baseUrl: string;
+  outputDir: string;
+  flowAssertions: Array<{
+    id: string;
+    description: string;
+    pass: boolean;
+    details?: string;
+  }>;
+  artifacts: Array<{
+    type: string;
+    path: string;
+    createdAt: string;
+  }>;
+}) {
+  const forbiddenPage = await page.context().newPage();
+  const chatPath = resolveWorkspaceChatPath(page.url());
+  let interceptedCreateCount = 0;
+  const pageErrors: string[] = [];
+  const onPageError = (error: Error) => {
+    pageErrors.push(error.message);
+  };
+
+  const threadCreateBlocker = async (route: Route) => {
+    const request = route.request();
+    const requestUrl = new URL(request.url());
+    if (request.method() === "POST" && requestUrl.pathname === "/v1/agent/threads") {
+      interceptedCreateCount += 1;
+      await route.fulfill({
+        status: 403,
+        contentType: "application/json",
+        body: JSON.stringify({
+          code: "FORBIDDEN",
+          message: "Forbidden by smoke test create-thread route block."
+        })
+      });
+      return;
+    }
+
+    await route.continue();
+  };
+
+  await forbiddenPage.route("**/v1/agent/threads*", threadCreateBlocker);
+  forbiddenPage.on("pageerror", onPageError);
+
+  try {
+    await forbiddenPage.goto(`${baseUrl}${chatPath}`, { waitUntil: "networkidle" });
+
+    const composerInput = forbiddenPage
+      .locator('textarea[placeholder="Ask Compass anything..."]:visible')
+      .first();
+    const sendButton = forbiddenPage.getByRole("button", { name: "Send prompt" }).first();
+    const signInLink = forbiddenPage.getByTestId("sign-in-link").first();
+    const initialEntryState = await waitForChatEntryState({
+      page: forbiddenPage,
+      composerInput,
+      signInLink
+    });
+    let chatSurfaceAvailable = initialEntryState === "composer";
+
+    if (!chatSurfaceAvailable && initialEntryState === "sign-in") {
+      await signInLink.click();
+      await forbiddenPage.waitForLoadState("networkidle");
+      chatSurfaceAvailable = await waitForComposerReady({
+        page: forbiddenPage,
+        composerInput,
+        timeoutMs: 20_000
+      });
+    }
+
+    flowAssertions.push({
+      id: `${flowId}:chat-create-thread-forbidden-composer-visible`,
+      description: `[${flowId}] Forbidden create-thread branch has a visible composer`,
+      pass: chatSurfaceAvailable
+    });
+    if (!chatSurfaceAvailable) {
+      return;
+    }
+
+    const blockedPrompt = "Smoke forbidden create-thread prompt";
+    await composerInput.fill(blockedPrompt);
+    const sendVisible = await sendButton.isVisible().catch(() => false);
+    if (sendVisible) {
+      await sendButton.click();
+    } else {
+      await composerInput.press("Enter");
+    }
+
+    const blockedPromptVisible = await forbiddenPage
+      .getByText(blockedPrompt, { exact: true })
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const blockedPromptCount = await forbiddenPage
+      .getByText(blockedPrompt, { exact: true })
+      .count();
+    const sendFailedVisible = await forbiddenPage
+      .getByText("Send failed", { exact: true })
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const applicationErrorVisible = await forbiddenPage
+      .getByText("Application Error", { exact: true })
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const tapLookupErrors = pageErrors.filter((message) => message.includes("tapClientLookup"));
+
+    flowAssertions.push({
+      id: `${flowId}:chat-create-thread-forbidden-intercepted`,
+      description: `[${flowId}] Forbidden create-thread branch intercepts POST /v1/agent/threads`,
+      pass: interceptedCreateCount > 0,
+      details: `interceptedCreateCount=${interceptedCreateCount.toString()}`
+    });
+    flowAssertions.push({
+      id: `${flowId}:chat-create-thread-forbidden-renders-prompt`,
+      description: `[${flowId}] Forbidden create-thread branch keeps the blocked prompt visible`,
+      pass: blockedPromptVisible && blockedPromptCount === 1,
+      details: `visible=${blockedPromptVisible.toString()}, count=${blockedPromptCount.toString()}`
+    });
+    flowAssertions.push({
+      id: `${flowId}:chat-create-thread-forbidden-shows-inline-failure`,
+      description: `[${flowId}] Forbidden create-thread branch shows an inline send failure state`,
+      pass: sendFailedVisible
+    });
+    flowAssertions.push({
+      id: `${flowId}:chat-create-thread-forbidden-no-application-error-overlay`,
+      description: `[${flowId}] Forbidden create-thread branch does not trigger the application error overlay`,
+      pass: !applicationErrorVisible
+    });
+    flowAssertions.push({
+      id: `${flowId}:chat-create-thread-forbidden-no-runtime-index-errors`,
+      description: `[${flowId}] Forbidden create-thread branch does not trigger runtime index errors`,
+      pass: tapLookupErrors.length === 0,
+      details: tapLookupErrors.length > 0 ? tapLookupErrors.join(" | ") : undefined
+    });
+
+    const screenshotPath = path.join(outputDir, `${flowId}-chat-forbidden-create-thread.png`);
+    await forbiddenPage.screenshot({ path: screenshotPath, fullPage: true });
+    artifacts.push({
+      type: "screenshot",
+      path: screenshotPath,
+      createdAt: new Date().toISOString()
+    });
+  } finally {
+    forbiddenPage.off("pageerror", onPageError);
+    await forbiddenPage.unroute("**/v1/agent/threads*", threadCreateBlocker);
+    await forbiddenPage.close();
   }
 }
 
@@ -429,6 +616,7 @@ async function runFlow(
   baseUrl: string,
   requireAuthGateway: boolean,
   smokeChatSendMode: SmokeChatSendMode,
+  smokeChatForbiddenCreate: boolean,
   smokeChatLayout: boolean,
   outputDir: string,
   flowAssertions: Array<{
@@ -550,26 +738,38 @@ async function runFlow(
       const shouldSendSmoke = smokeChatSendMode !== "disabled" && chatSurfaceAvailable;
       if (shouldSendSmoke) {
         await page.goto(`${baseUrl}/chat`, { waitUntil: "networkidle" });
-        await composerInput.fill("Smoke test prompt");
-        const sendVisible = await sendButton.isVisible().catch(() => false);
-        if (sendVisible) {
-          await sendButton.click();
-        } else {
-          await composerInput.press("Enter");
-        }
+        const promptValues = ["Smoke test prompt 1", "Smoke test prompt 2"] as const;
 
-        const sentPromptLocator = page.getByText("Smoke test prompt").last();
-        let sentPromptVisible = true;
-        try {
-          await expect(sentPromptLocator).toBeVisible({ timeout: 10_000 });
-        } catch {
-          sentPromptVisible = false;
+        for (const [index, promptText] of promptValues.entries()) {
+          await composerInput.fill(promptText);
+          const sendVisible = await sendButton.isVisible().catch(() => false);
+          if (sendVisible) {
+            await sendButton.click();
+          } else {
+            await composerInput.press("Enter");
+          }
+
+          const sentPromptLocator = page.getByText(promptText, { exact: true }).last();
+          let sentPromptVisible = true;
+          try {
+            await expect(sentPromptLocator).toBeVisible({ timeout: 10_000 });
+          } catch {
+            sentPromptVisible = false;
+          }
+
+          const renderedPromptCount = await page.getByText(promptText, { exact: true }).count();
+          flowAssertions.push({
+            id: `${flowId}:chat-send-renders-user-prompt-${(index + 1).toString()}`,
+            description: `[${flowId}] Chat send ${(index + 1).toString()} renders the user prompt in the timeline`,
+            pass: sentPromptVisible
+          });
+          flowAssertions.push({
+            id: `${flowId}:chat-send-no-duplicate-user-prompt-${(index + 1).toString()}`,
+            description: `[${flowId}] Chat send ${(index + 1).toString()} does not duplicate the user prompt`,
+            pass: renderedPromptCount === 1,
+            details: `count=${renderedPromptCount.toString()}`
+          });
         }
-        flowAssertions.push({
-          id: `${flowId}:chat-send-renders-user-prompt`,
-          description: `[${flowId}] Chat send renders the user prompt in the timeline`,
-          pass: sentPromptVisible
-        });
 
         const applicationErrorVisible = await page
           .getByText("Application Error", { exact: true })
@@ -581,6 +781,17 @@ async function runFlow(
           description: `[${flowId}] Chat send does not trigger the application error overlay`,
           pass: !applicationErrorVisible
         });
+
+        if (smokeChatForbiddenCreate) {
+          await runForbiddenCreateThreadScenario({
+            page,
+            flowId,
+            baseUrl,
+            outputDir,
+            flowAssertions,
+            artifacts
+          });
+        }
       }
 
       if (smokeChatLayout && chatSurfaceAvailable) {
@@ -681,6 +892,7 @@ test("compass smoke flow", async ({ page, baseURL }) => {
   const expectedEntrypoint = process.env.EXPECTED_ENTRYPOINT ?? "/";
   const requireAuthGateway = process.env.REQUIRE_AUTH_GATEWAY?.trim().toLowerCase() === "true";
   const smokeChatSendMode = parseSmokeChatSendMode(process.env.SMOKE_CHAT_SEND);
+  const smokeChatForbiddenCreate = parseFlag(process.env.SMOKE_CHAT_FORBIDDEN_CREATE, true);
   const smokeChatLayout = process.env.SMOKE_CHAT_LAYOUT?.trim().toLowerCase() === "true";
   const flowIds = parseRequiredFlowIds();
 
@@ -731,6 +943,7 @@ test("compass smoke flow", async ({ page, baseURL }) => {
         baseUrl,
         requireAuthGateway,
         smokeChatSendMode,
+        smokeChatForbiddenCreate,
         smokeChatLayout,
         outputDir,
         flowAssertions,

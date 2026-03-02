@@ -12,6 +12,12 @@ export function normalizePath(filePath) {
   return String(filePath || "").replaceAll("\\", "/");
 }
 
+function normalizeFileList(files) {
+  return [
+    ...new Set(files.map((filePath) => normalizePath(filePath.trim())).filter(Boolean))
+  ].sort();
+}
+
 async function execGit(args) {
   const { stdout } = await execFileAsync("git", args, { encoding: "utf8" });
   return stdout.trim();
@@ -37,11 +43,27 @@ export async function resolveCurrentBranch({ env = process.env, execGitFn = exec
 
 export async function listStagedFiles({ execGitFn = execGit } = {}) {
   const stdout = await execGitFn(["diff", "--cached", "--name-only", "--diff-filter=ACMR"]);
-  return stdout
-    .split("\n")
-    .map((line) => normalizePath(line.trim()))
-    .filter((line) => line.length > 0)
-    .sort();
+  return normalizeFileList(stdout.split("\n"));
+}
+
+export function resolveChangedFilesFromEnv({ env = process.env } = {}) {
+  const raw = String(env.HIGH_RISK_MAINLINE_CHANGED_FILES_JSON || "").trim();
+  if (raw.length === 0) {
+    return null;
+  }
+
+  const parsed = JSON.parse(raw);
+  if (!Array.isArray(parsed)) {
+    throw new Error("HIGH_RISK_MAINLINE_CHANGED_FILES_JSON must be a JSON array");
+  }
+
+  if (
+    parsed.some((entry) => typeof entry !== "string" || normalizePath(entry).trim().length === 0)
+  ) {
+    throw new Error("HIGH_RISK_MAINLINE_CHANGED_FILES_JSON entries must be non-empty strings");
+  }
+
+  return normalizeFileList(parsed);
 }
 
 export function mapHighRiskMatches({ stagedFiles, categories }) {
@@ -77,7 +99,7 @@ export function buildHighRiskMainlineFailureMessage({
   for (const match of matches) {
     lines.push(`- ${match.id}`);
     lines.push(`  Rationale: ${match.rationale}`);
-    lines.push("  Triggered staged files:");
+    lines.push("  Triggered files:");
     for (const filePath of match.matchedFiles) {
       lines.push(`  - ${filePath}`);
     }
@@ -119,12 +141,17 @@ export async function runHighRiskMainlinePolicyCheck({
   policy,
   env = process.env,
   resolveCurrentBranchFn = resolveCurrentBranch,
-  listStagedFilesFn = listStagedFiles
+  listStagedFilesFn = listStagedFiles,
+  resolveChangedFilesFromEnvFn = resolveChangedFilesFromEnv
 } = {}) {
   const loadedPolicy = policy ?? (await loadPipelinePolicy(policyPath));
   const highRiskPolicy = loadedPolicy.highRiskMainlinePolicy;
-  const branch = await resolveCurrentBranchFn({ env });
-  const stagedFiles = await listStagedFilesFn();
+  const branch =
+    String(env.HIGH_RISK_MAINLINE_TARGET_BRANCH || "").trim() ||
+    (await resolveCurrentBranchFn({ env }));
+  const changedFilesFromEnv = resolveChangedFilesFromEnvFn({ env });
+  const stagedFiles = changedFilesFromEnv ?? (await listStagedFilesFn());
+  const fileSource = changedFilesFromEnv ? "changed-files-json" : "staged-files";
 
   if (branch !== highRiskPolicy.mainBranch) {
     return {
@@ -139,8 +166,9 @@ export async function runHighRiskMainlinePolicyCheck({
   if (stagedFiles.length === 0) {
     return {
       status: "pass",
-      reasonCode: "NO_STAGED_FILES",
+      reasonCode: changedFilesFromEnv ? "NO_CHANGED_FILES" : "NO_STAGED_FILES",
       branch,
+      fileSource,
       stagedFiles,
       matches: []
     };
@@ -156,6 +184,7 @@ export async function runHighRiskMainlinePolicyCheck({
       status: "pass",
       reasonCode: "NO_HIGH_RISK_MATCHES",
       branch,
+      fileSource,
       stagedFiles,
       matches
     };
@@ -165,6 +194,7 @@ export async function runHighRiskMainlinePolicyCheck({
     status: "fail",
     reasonCode: "HIGH_RISK_MAINLINE_PR_REQUIRED",
     branch,
+    fileSource,
     stagedFiles,
     matches,
     message: buildHighRiskMainlineFailureMessage({

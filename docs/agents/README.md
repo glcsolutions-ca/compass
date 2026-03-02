@@ -22,3 +22,4 @@ Canonical model: `../development-pipeline.md`.
 - `.github/policy/pipeline-policy.json`
 - `.github/workflows/commit-stage.yml`
 - `.github/workflows/integration-gate.yml`
+- `.github/workflows/staging-gate.yml`

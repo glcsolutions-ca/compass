@@ -41,49 +41,32 @@ pnpm test:integration
 pnpm db:postgres:down
 ```
 
-## Direct to `main`
+## Trunk Via PR + Merge Queue
 
-`main` is trunk. Keep it green and releasable. Work in tiny, reversible steps. Commit and push each step directly to `origin/main`. A change is not done until the GitHub Actions runs for its SHA pass. If any run fails, fix forward or revert immediately.
+`main` is trunk. Keep it green and releasable. Work in tiny, reversible steps. Merge through PR + merge queue only. A change is not done until required merge-queue checks pass and the PR is merged. Do not rely on post-merge auto-revert.
 
 ```sh
 set -euo pipefail
 
-test "$(git branch --show-current)" = "main"
 gh auth status >/dev/null
 git pull --rebase origin main
+test "$(git branch --show-current)" != "main"
 
-wait_main() {
-  sha="$(git rev-parse HEAD)"
-  until [ "$(gh run list --commit "$sha" --event push --json databaseId --jq 'length')" -gt 0 ]; do sleep 3; done
-  while :; do
-    run_ids="$(gh run list --commit "$sha" --event push --json databaseId,status --jq '.[] | select(.status != "completed") | .databaseId')"
-    if [ -z "$run_ids" ]; then
-      sleep 3
-      run_ids="$(gh run list --commit "$sha" --event push --json databaseId,status --jq '.[] | select(.status != "completed") | .databaseId')"
-      [ -z "$run_ids" ] && break
-    fi
-    for run_id in $run_ids; do
-      gh run watch "$run_id" --compact --exit-status
-    done
-  done
-  test "$(gh run list --commit "$sha" --event push --json conclusion --jq 'map(select(.conclusion != "success")) | length')" -eq 0
-}
-
-# Repeat for each tiny, reversible step. Commit and push each step. No batching. No --no-verify.
+# Repeat for each tiny, reversible step. No batching. No --no-verify.
 git add -A
 git commit -m "<small, specific change>"   # pre-commit runs lint-staged + pnpm check:commit-fast
-git push origin HEAD:main                  # pre-push runs pnpm test:quick
-wait_main
+git push -u origin HEAD                    # pre-push runs pnpm test:quick
 
-# If origin/main moved: rebase, resolve conflicts if needed, push, then wait_main again.
-git pull --rebase origin main
-git push origin HEAD:main
-wait_main
+gh pr create --fill
+gh pr merge --auto --merge                 # enters merge queue when branch protection requires it
 
-# If any run fails: fix forward with another tiny commit and wait_main, or revert immediately.
-git revert <bad_sha>
-git push origin HEAD:main
-wait_main
+# Observe required checks for deterministic feedback:
+# - commit-stage
+# - integration-gate
+# - staging-gate
+gh pr checks --watch
+
+# If checks fail: fix forward on the same PR branch and push again.
 ```
 
 Default local loop before push is `pnpm test:quick`.

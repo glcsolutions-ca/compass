@@ -34,7 +34,7 @@ pnpm db:migrate:status
 
 ## Verify
 
-- `commit-stage` and `integration-gate` pass
+- `commit-stage`, `integration-gate`, and `staging-gate` pass
 - cloud deployment writes release decision artifact
 - auth callback flow succeeds
 

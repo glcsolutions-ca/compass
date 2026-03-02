@@ -10,6 +10,7 @@ Purpose: machine source of truth for delivery policy.
 
 - change scope rules
 - required gate checks
+- mainline merge-queue governance and required status contexts
 - docs drift rules
 - high-risk mainline policy (`HR001`)
 - commit-stage and deployment SLO settings

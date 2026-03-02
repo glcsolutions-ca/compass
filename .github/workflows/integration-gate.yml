@@ -17,6 +17,9 @@ on:
   push:
     branches:
       - main
+  merge_group:
+    types:
+      - checks_requested
   pull_request:
     branches:
       - main
@@ -60,8 +63,8 @@ jobs:
       - name: Resolve commit scope
         id: scope
         env:
-          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
           GITHUB_TESTED_SHA: ${{ github.sha }}
         run: node scripts/pipeline/commit/resolve-scope.mjs
 
@@ -93,7 +96,7 @@ jobs:
     name: build-compile
     needs:
       - determine_scope
-    if: ${{ github.event_name == 'push' && needs.determine_scope.outputs.head_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
+    if: ${{ (github.event_name == 'push' || github.event_name == 'merge_group') && needs.determine_scope.outputs.tested_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -110,7 +113,7 @@ jobs:
     name: migration-safety
     needs:
       - determine_scope
-    if: ${{ github.event_name == 'push' && needs.determine_scope.outputs.head_sha == github.sha && needs.determine_scope.outputs.migration_changed == 'true' }}
+    if: ${{ (github.event_name == 'push' || github.event_name == 'merge_group') && needs.determine_scope.outputs.tested_sha == github.sha && needs.determine_scope.outputs.migration_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -136,7 +139,7 @@ jobs:
     name: runtime-contract-smoke
     needs:
       - determine_scope
-    if: ${{ github.event_name == 'push' && needs.determine_scope.outputs.head_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
+    if: ${{ (github.event_name == 'push' || github.event_name == 'merge_group') && needs.determine_scope.outputs.tested_sha == github.sha && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -161,7 +164,7 @@ jobs:
     name: minimal-integration-smoke
     needs:
       - determine_scope
-    if: ${{ github.event_name == 'push' && needs.determine_scope.outputs.head_sha == github.sha && needs.determine_scope.outputs.runtime_changed == 'true' }}
+    if: ${{ (github.event_name == 'push' || github.event_name == 'merge_group') && needs.determine_scope.outputs.tested_sha == github.sha && needs.determine_scope.outputs.runtime_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -192,7 +195,7 @@ jobs:
     name: runtime-coverage-report
     needs:
       - determine_scope
-    if: ${{ github.event_name == 'push' && needs.determine_scope.outputs.head_sha == github.sha && needs.determine_scope.outputs.runtime_changed == 'true' }}
+    if: ${{ (github.event_name == 'push' || github.event_name == 'merge_group') && needs.determine_scope.outputs.tested_sha == github.sha && needs.determine_scope.outputs.runtime_changed == 'true' }}
     continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -257,10 +260,10 @@ jobs:
         env:
           HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
           TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
-          BUILD_REQUIRED: ${{ github.event_name == 'push' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
-          MIGRATION_REQUIRED: ${{ github.event_name == 'push' && needs.determine_scope.outputs.migration_changed == 'true' }}
-          RUNTIME_SMOKE_REQUIRED: ${{ github.event_name == 'push' && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
-          INTEGRATION_REQUIRED: ${{ github.event_name == 'push' && needs.determine_scope.outputs.runtime_changed == 'true' }}
+          BUILD_REQUIRED: ${{ (github.event_name == 'push' || github.event_name == 'merge_group') && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
+          MIGRATION_REQUIRED: ${{ (github.event_name == 'push' || github.event_name == 'merge_group') && needs.determine_scope.outputs.migration_changed == 'true' }}
+          RUNTIME_SMOKE_REQUIRED: ${{ (github.event_name == 'push' || github.event_name == 'merge_group') && (needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true') }}
+          INTEGRATION_REQUIRED: ${{ (github.event_name == 'push' || github.event_name == 'merge_group') && needs.determine_scope.outputs.runtime_changed == 'true' }}
           DOCS_DRIFT_BLOCKING: ${{ needs.determine_scope.outputs.docs_drift_blocking }}
           DOCS_DRIFT_STATUS: ${{ needs.determine_scope.outputs.docs_drift_status }}
           CHECK_RESULTS_JSON: ${{ format('{{"determine-scope":"{0}","build-compile":"{1}","migration-safety":"{2}","runtime-contract-smoke":"{3}","minimal-integration-smoke":"{4}"}}', needs.determine_scope.result, needs.build_compile.result, needs.migration_safety.result, needs.runtime_contract_smoke.result, needs.minimal_integration_smoke.result) }}

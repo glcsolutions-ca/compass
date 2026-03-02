@@ -749,15 +749,21 @@ async function runFlow(
             await composerInput.press("Enter");
           }
 
-          const sentPromptLocator = page.getByText(promptText, { exact: true }).last();
-          let sentPromptVisible = true;
+          const sentPromptLocator = page.getByText(promptText, { exact: true });
+          let sentPromptVisible = false;
+          let renderedPromptCount = 0;
           try {
-            await expect(sentPromptLocator).toBeVisible({ timeout: 10_000 });
+            await expect(sentPromptLocator.first()).toBeVisible({ timeout: 10_000 });
+            await expect
+              .poll(() => sentPromptLocator.count(), { timeout: 10_000 })
+              .toBeGreaterThan(0);
+            renderedPromptCount = await sentPromptLocator.count();
+            sentPromptVisible = true;
           } catch {
             sentPromptVisible = false;
+            renderedPromptCount = await sentPromptLocator.count();
           }
 
-          const renderedPromptCount = await page.getByText(promptText, { exact: true }).count();
           flowAssertions.push({
             id: `${flowId}:chat-send-renders-user-prompt-${(index + 1).toString()}`,
             description: `[${flowId}] Chat send ${(index + 1).toString()} renders the user prompt in the timeline`,
@@ -766,7 +772,7 @@ async function runFlow(
           flowAssertions.push({
             id: `${flowId}:chat-send-no-duplicate-user-prompt-${(index + 1).toString()}`,
             description: `[${flowId}] Chat send ${(index + 1).toString()} does not duplicate the user prompt`,
-            pass: renderedPromptCount === 1,
+            pass: !sentPromptVisible || renderedPromptCount === 1,
             details: `count=${renderedPromptCount.toString()}`
           });
         }

@@ -259,26 +259,6 @@
   @apply mt-2 text-xs text-destructive;
 }
 
-.aui-thread-list-root {
-  @apply flex flex-col gap-1;
-}
-
-.aui-thread-list-item {
-  @apply flex items-center gap-1 rounded-md;
-}
-
-.aui-thread-list-item-trigger {
-  @apply min-w-0 flex-1 rounded-md px-2 py-1.5 text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
-}
-
-.aui-thread-list-item-trigger[data-active="true"] {
-  @apply bg-sidebar-accent text-sidebar-accent-foreground;
-}
-
-.aui-thread-list-item-title {
-  @apply truncate text-xs;
-}
-
 .aui-thread-list-item-more-trigger {
   @apply mr-1 inline-flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground/65 opacity-0 transition-[opacity,background-color,color] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
 }

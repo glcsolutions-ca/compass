@@ -37,6 +37,9 @@ export interface AgentThreadRecord {
 export interface AgentTurnRecord {
   turnId: string;
   threadId: string;
+  parentTurnId: string | null;
+  sourceTurnId: string | null;
+  clientRequestId: string | null;
   status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
   executionMode: AgentExecutionMode;
   executionHost: AgentExecutionHost;
@@ -1138,6 +1141,9 @@ function mapTurnRow(row: Record<string, unknown>): AgentTurnRecord {
   return {
     turnId: readRecordString(row, "turn_id"),
     threadId: readRecordString(row, "thread_id"),
+    parentTurnId: readRecordNullableString(row, "parent_turn_id"),
+    sourceTurnId: readRecordNullableString(row, "source_turn_id"),
+    clientRequestId: readRecordNullableString(row, "client_request_id"),
     status: statusValue as AgentTurnRecord["status"],
     executionMode: parseExecutionMode(executionModeValue),
     executionHost: parseExecutionHost(executionHostValue),
@@ -1158,6 +1164,15 @@ function mapEventRow(row: Record<string, unknown>): AgentEventRecord {
     payload: row.payload ?? {},
     createdAt: readRecordIsoDate(row, "created_at")
   };
+}
+
+function readTurnOutputText(turn: AgentTurnRecord): string | null {
+  if (!turn.output || typeof turn.output !== "object") {
+    return null;
+  }
+
+  const outputText = (turn.output as { text?: unknown }).text;
+  return typeof outputText === "string" && outputText.length > 0 ? outputText : null;
 }
 
 export const __internalAgentServiceMapping = {
@@ -1249,6 +1264,9 @@ export interface AgentService {
     userId: string;
     threadId: string;
     text: string;
+    clientRequestId?: string;
+    parentTurnId?: string;
+    sourceTurnId?: string;
     executionMode?: AgentExecutionMode;
     executionHost?: AgentExecutionHost;
     now: Date;
@@ -1724,6 +1742,9 @@ class PostgresAgentService implements AgentService {
     userId: string;
     threadId: string;
     text: string;
+    clientRequestId?: string;
+    parentTurnId?: string;
+    sourceTurnId?: string;
     executionMode?: AgentExecutionMode;
     executionHost?: AgentExecutionHost;
     now: Date;
@@ -1742,11 +1763,82 @@ class PostgresAgentService implements AgentService {
         "Local mode turns are not implemented yet."
       );
     }
+    const clientRequestId = input.clientRequestId?.trim() || null;
+    const parentTurnId = input.parentTurnId?.trim() || null;
+    const sourceTurnId = input.sourceTurnId?.trim() || null;
     const turnId = randomUUID();
+    const userMessageId = randomUUID();
+    let assistantMessageId: string | null = null;
 
     const client = await this.pool.connect();
+    let startedEvent: AgentEventRecord;
     try {
       await client.query("begin");
+
+      if (clientRequestId) {
+        const existingTurnResult = await client.query(
+          `
+            select
+              turn_id,
+              thread_id,
+              parent_turn_id,
+              source_turn_id,
+              client_request_id,
+              status,
+              input,
+              output,
+              error,
+              started_at,
+              completed_at,
+              execution_mode,
+              execution_host
+            from agent_turns
+            where thread_id = $1 and client_request_id = $2
+            order by started_at desc
+            limit 1
+          `,
+          [input.threadId, clientRequestId]
+        );
+
+        if ((existingTurnResult.rowCount ?? 0) > 0) {
+          const existingTurn = mapTurnRow(existingTurnResult.rows[0] as Record<string, unknown>);
+          await client.query("commit");
+          return {
+            turn: existingTurn,
+            outputText: readTurnOutputText(existingTurn)
+          };
+        }
+      }
+
+      if (parentTurnId) {
+        const parentTurn = await client.query(
+          `
+            select 1
+            from agent_turns
+            where thread_id = $1 and turn_id = $2
+            limit 1
+          `,
+          [input.threadId, parentTurnId]
+        );
+        if ((parentTurn.rowCount ?? 0) < 1) {
+          throw new ApiError(404, "AGENT_PARENT_TURN_NOT_FOUND", "Parent turn not found");
+        }
+      }
+
+      if (sourceTurnId) {
+        const sourceTurn = await client.query(
+          `
+            select 1
+            from agent_turns
+            where thread_id = $1 and turn_id = $2
+            limit 1
+          `,
+          [input.threadId, sourceTurnId]
+        );
+        if ((sourceTurn.rowCount ?? 0) < 1) {
+          throw new ApiError(404, "AGENT_SOURCE_TURN_NOT_FOUND", "Source turn not found");
+        }
+      }
 
       const inProgress = await client.query(
         `
@@ -1762,11 +1854,14 @@ class PostgresAgentService implements AgentService {
         throw new ApiError(409, "AGENT_THREAD_BUSY", "A turn is already in progress");
       }
 
-      await client.query(
+      const insertTurn = await client.query(
         `
           insert into agent_turns (
             turn_id,
             thread_id,
+            parent_turn_id,
+            source_turn_id,
+            client_request_id,
             status,
             input,
             output,
@@ -1777,10 +1872,31 @@ class PostgresAgentService implements AgentService {
             execution_host,
             runtime_metadata
           )
-          values ($1, $2, 'inProgress', $3::jsonb, null, null, $4, null, $5, $6, '{}'::jsonb)
+          values (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            'inProgress',
+            $6::jsonb,
+            null,
+            null,
+            $7,
+            null,
+            $8,
+            $9,
+            '{}'::jsonb
+          )
+          on conflict (thread_id, client_request_id)
+          where client_request_id is not null
+          do nothing
           returning
             turn_id,
             thread_id,
+            parent_turn_id,
+            source_turn_id,
+            client_request_id,
             status,
             input,
             output,
@@ -1793,12 +1909,50 @@ class PostgresAgentService implements AgentService {
         [
           turnId,
           input.threadId,
+          parentTurnId,
+          sourceTurnId,
+          clientRequestId,
           JSON.stringify({ text: input.text }),
           input.now.toISOString(),
           executionMode,
           executionHost
         ]
       );
+
+      if ((insertTurn.rowCount ?? 0) < 1 && clientRequestId) {
+        const existingTurnResult = await client.query(
+          `
+            select
+              turn_id,
+              thread_id,
+              parent_turn_id,
+              source_turn_id,
+              client_request_id,
+              status,
+              input,
+              output,
+              error,
+              started_at,
+              completed_at,
+              execution_mode,
+              execution_host
+            from agent_turns
+            where thread_id = $1 and client_request_id = $2
+            order by started_at desc
+            limit 1
+          `,
+          [input.threadId, clientRequestId]
+        );
+
+        if ((existingTurnResult.rowCount ?? 0) > 0) {
+          const existingTurn = mapTurnRow(existingTurnResult.rows[0] as Record<string, unknown>);
+          await client.query("commit");
+          return {
+            turn: existingTurn,
+            outputText: readTurnOutputText(existingTurn)
+          };
+        }
+      }
 
       await client.query(
         `
@@ -1815,7 +1969,7 @@ class PostgresAgentService implements AgentService {
           values ($1, $2, $3, 'user_message', 'completed', $4::jsonb, $5, $5)
         `,
         [
-          randomUUID(),
+          userMessageId,
           input.threadId,
           turnId,
           JSON.stringify({ text: input.text }),
@@ -1823,7 +1977,7 @@ class PostgresAgentService implements AgentService {
         ]
       );
 
-      const startedEvent = await this.insertEvent(
+      startedEvent = await this.insertEvent(
         {
           threadId: input.threadId,
           turnId,
@@ -1831,6 +1985,10 @@ class PostgresAgentService implements AgentService {
           payload: {
             turnId,
             text: input.text,
+            userMessageId,
+            parentTurnId,
+            sourceTurnId,
+            clientRequestId,
             executionMode,
             executionHost
           },
@@ -1840,13 +1998,14 @@ class PostgresAgentService implements AgentService {
       );
 
       await client.query("commit");
-      this.publishEvent(startedEvent);
     } catch (error) {
       await client.query("rollback");
-      client.release();
       throw error;
+    } finally {
+      client.release();
     }
-    client.release();
+
+    this.publishEvent(startedEvent);
 
     let cloudResult: CloudTurnResult | null = null;
     let turnError: unknown = null;
@@ -1897,6 +2056,9 @@ class PostgresAgentService implements AgentService {
           returning
             turn_id,
             thread_id,
+            parent_turn_id,
+            source_turn_id,
+            client_request_id,
             status,
             input,
             output,
@@ -1920,6 +2082,7 @@ class PostgresAgentService implements AgentService {
       const updatedTurn = mapTurnRow(turnUpdate.rows[0] as Record<string, unknown>);
 
       if (!turnError && cloudResult) {
+        assistantMessageId = randomUUID();
         await completeClient.query(
           `
             insert into agent_items (
@@ -1935,7 +2098,7 @@ class PostgresAgentService implements AgentService {
             values ($1, $2, $3, 'assistant_message', 'completed', $4::jsonb, $5, $5)
           `,
           [
-            randomUUID(),
+            assistantMessageId,
             input.threadId,
             turnId,
             JSON.stringify({ text: cloudResult.outputText }),
@@ -1954,7 +2117,12 @@ class PostgresAgentService implements AgentService {
             method: "item.delta",
             payload: {
               type: turnError ? "error" : "assistant_message",
-              text: cloudResult.outputText
+              text: cloudResult.outputText,
+              userMessageId,
+              assistantMessageId,
+              parentTurnId,
+              sourceTurnId,
+              clientRequestId
             },
             now: completionNow
           },
@@ -1982,6 +2150,11 @@ class PostgresAgentService implements AgentService {
           method: "turn.completed",
           payload: {
             turnId,
+            userMessageId,
+            assistantMessageId,
+            parentTurnId,
+            sourceTurnId,
+            clientRequestId,
             status: updatedTurn.status,
             output: updatedTurn.output,
             error: updatedTurn.error
@@ -2046,6 +2219,9 @@ class PostgresAgentService implements AgentService {
           returning
             turn_id,
             thread_id,
+            parent_turn_id,
+            source_turn_id,
+            client_request_id,
             status,
             input,
             output,
@@ -2070,6 +2246,9 @@ class PostgresAgentService implements AgentService {
           method: "turn.completed",
           payload: {
             turnId: input.turnId,
+            parentTurnId: turn.parentTurnId,
+            sourceTurnId: turn.sourceTurnId,
+            clientRequestId: turn.clientRequestId,
             status: "interrupted"
           },
           now: input.now

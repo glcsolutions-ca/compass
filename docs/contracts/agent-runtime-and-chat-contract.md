@@ -16,6 +16,7 @@ Purpose: contract boundary for agent thread, turn, event, and chat integration b
 
 ## Turn Lineage And Idempotency
 
+- Mainline keeps turn lineage and idempotency active after any temporary rollback commits; follow-up commits must preserve these fields.
 - `POST /v1/agent/threads/{threadId}/turns` accepts optional lineage and idempotency fields:
   - `clientRequestId`
   - `parentTurnId`

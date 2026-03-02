@@ -1108,6 +1108,9 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
         userId,
         threadId: params.threadId,
         text: body.text,
+        clientRequestId: body.clientRequestId,
+        parentTurnId: body.parentTurnId,
+        sourceTurnId: body.sourceTurnId,
         executionMode: body.executionMode,
         executionHost: body.executionHost,
         now: now()

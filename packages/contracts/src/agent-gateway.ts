@@ -81,6 +81,9 @@ export const AgentThreadModePatchResponseSchema = z.object({
 export const AgentTurnSchema = z.object({
   turnId: z.string().min(1),
   threadId: z.string().min(1),
+  parentTurnId: z.string().min(1).nullish(),
+  sourceTurnId: z.string().min(1).nullish(),
+  clientRequestId: z.string().min(1).nullish(),
   status: AgentThreadStatusSchema,
   executionMode: AgentExecutionModeSchema,
   executionHost: AgentExecutionHostSchema,
@@ -93,6 +96,9 @@ export const AgentTurnSchema = z.object({
 
 export const AgentTurnStartRequestSchema = z.object({
   text: z.string().min(1),
+  clientRequestId: z.string().min(1).optional(),
+  parentTurnId: z.string().min(1).optional(),
+  sourceTurnId: z.string().min(1).optional(),
   executionMode: AgentExecutionModeSchema.optional(),
   executionHost: AgentExecutionHostSchema.optional(),
   model: z.string().min(1).optional(),

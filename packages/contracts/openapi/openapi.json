@@ -1114,18 +1114,6 @@
             "type": "string",
             "minLength": 1
           },
-          "clientRequestId": {
-            "type": "string",
-            "minLength": 1
-          },
-          "parentTurnId": {
-            "type": "string",
-            "minLength": 1
-          },
-          "sourceTurnId": {
-            "type": "string",
-            "minLength": 1
-          },
           "executionMode": {
             "type": "string",
             "enum": [
@@ -1174,27 +1162,6 @@
               },
               "threadId": {
                 "type": "string",
-                "minLength": 1
-              },
-              "parentTurnId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "minLength": 1
-              },
-              "sourceTurnId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "minLength": 1
-              },
-              "clientRequestId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
                 "minLength": 1
               },
               "status": {
@@ -1268,27 +1235,6 @@
               },
               "threadId": {
                 "type": "string",
-                "minLength": 1
-              },
-              "parentTurnId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "minLength": 1
-              },
-              "sourceTurnId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "minLength": 1
-              },
-              "clientRequestId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
                 "minLength": 1
               },
               "status": {
@@ -5605,18 +5551,6 @@
                     "type": "string",
                     "minLength": 1
                   },
-                  "clientRequestId": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "parentTurnId": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "sourceTurnId": {
-                    "type": "string",
-                    "minLength": 1
-                  },
                   "executionMode": {
                     "type": "string",
                     "enum": [
@@ -5673,27 +5607,6 @@
                         },
                         "threadId": {
                           "type": "string",
-                          "minLength": 1
-                        },
-                        "parentTurnId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
-                          "minLength": 1
-                        },
-                        "sourceTurnId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
-                          "minLength": 1
-                        },
-                        "clientRequestId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
                           "minLength": 1
                         },
                         "status": {
@@ -5930,27 +5843,6 @@
                         },
                         "threadId": {
                           "type": "string",
-                          "minLength": 1
-                        },
-                        "parentTurnId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
-                          "minLength": 1
-                        },
-                        "sourceTurnId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
-                          "minLength": 1
-                        },
-                        "clientRequestId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
                           "minLength": 1
                         },
                         "status": {

@@ -729,9 +729,6 @@ export interface components {
         };
         AgentTurnStartRequest: {
             text: string;
-            clientRequestId?: string;
-            parentTurnId?: string;
-            sourceTurnId?: string;
             /** @enum {string} */
             executionMode?: "cloud" | "local";
             /** @enum {string} */
@@ -746,9 +743,6 @@ export interface components {
             turn: {
                 turnId: string;
                 threadId: string;
-                parentTurnId?: string | null;
-                sourceTurnId?: string | null;
-                clientRequestId?: string | null;
                 /** @enum {string} */
                 status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
                 /** @enum {string} */
@@ -769,9 +763,6 @@ export interface components {
             turn: {
                 turnId: string;
                 threadId: string;
-                parentTurnId?: string | null;
-                sourceTurnId?: string | null;
-                clientRequestId?: string | null;
                 /** @enum {string} */
                 status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
                 /** @enum {string} */
@@ -2471,9 +2462,6 @@ export interface operations {
             content: {
                 "application/json": {
                     text: string;
-                    clientRequestId?: string;
-                    parentTurnId?: string;
-                    sourceTurnId?: string;
                     /** @enum {string} */
                     executionMode?: "cloud" | "local";
                     /** @enum {string} */
@@ -2497,9 +2485,6 @@ export interface operations {
                         turn: {
                             turnId: string;
                             threadId: string;
-                            parentTurnId?: string | null;
-                            sourceTurnId?: string | null;
-                            clientRequestId?: string | null;
                             /** @enum {string} */
                             status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
                             /** @enum {string} */
@@ -2602,9 +2587,6 @@ export interface operations {
                         turn: {
                             turnId: string;
                             threadId: string;
-                            parentTurnId?: string | null;
-                            sourceTurnId?: string | null;
-                            clientRequestId?: string | null;
                             /** @enum {string} */
                             status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
                             /** @enum {string} */

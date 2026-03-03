@@ -12,8 +12,3 @@ Purpose: Bicep-managed runtime infrastructure for cloud deployment.
 ```bash
 node scripts/infra/bootstrap-cloud-environment.mjs
 ```
-
-## Source Of Truth
-
-- `docs/runbooks/cloud-deployment-pipeline-setup.md`
-- `.github/workflows/cloud-deployment-pipeline.yml`

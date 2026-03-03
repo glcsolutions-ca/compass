@@ -1,7 +1,17 @@
-import {
-  DEFAULT_TEST_POLICY_PATH,
-  loadTestPolicySync
-} from "../../../scripts/pipeline/commit/testing-policy.mjs";
+const DEFAULT_RUNTIME_POLICY = {
+  commitStage: {
+    allowLoopbackOnly: true,
+    allowPostgres: false,
+    blockChildProcess: true,
+    blockedPorts: [5432]
+  },
+  integration: {
+    allowLoopbackOnly: true,
+    allowPostgres: true,
+    blockChildProcess: false,
+    blockedPorts: []
+  }
+};
 
 function normalizeModeKey(mode) {
   if (mode === "commit-stage") {
@@ -12,20 +22,15 @@ function normalizeModeKey(mode) {
 }
 
 export function resolveTestPolicyPath() {
-  const envPath = process.env.TEST_POLICY_PATH?.trim();
-  return envPath && envPath.length > 0 ? envPath : DEFAULT_TEST_POLICY_PATH;
+  return process.env.TEST_POLICY_PATH?.trim() || "embedded-default-policy";
 }
 
 export function loadRuntimeModePolicy(mode) {
   const normalizedMode = normalizeModeKey(mode);
-  const policyPath = resolveTestPolicyPath();
-  const policy = loadTestPolicySync(policyPath);
-  const runtimeMode = policy.runtime.modes[normalizedMode];
+  const runtimeMode = DEFAULT_RUNTIME_POLICY[normalizedMode];
 
   if (!runtimeMode) {
-    throw new Error(
-      `test policy runtime mode "${normalizedMode}" is not configured in ${policyPath}`
-    );
+    throw new Error(`test policy runtime mode "${normalizedMode}" is not configured`);
   }
 
   return {

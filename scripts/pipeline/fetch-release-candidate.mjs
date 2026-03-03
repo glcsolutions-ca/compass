@@ -34,13 +34,16 @@ async function resolvePulledManifestPath(directory) {
   }
 
   const entries = await readdir(directory, { withFileTypes: true });
-  const files = entries.filter((entry) => entry.isFile() && entry.name.endsWith(".json"));
+  const files = entries.filter((entry) => entry.isFile());
 
   if (files.length === 0) {
-    throw new Error(`No JSON files found in pulled artifact directory: ${directory}`);
+    throw new Error(`No files found in pulled artifact directory: ${directory}`);
   }
 
-  const manifest = files.find((entry) => entry.name === "manifest.json") || files[0];
+  const manifest =
+    files.find((entry) => entry.name === "manifest.json") ||
+    files.find((entry) => entry.name.endsWith(".json")) ||
+    files[0];
   return path.join(directory, manifest.name);
 }
 

@@ -50,6 +50,9 @@ jobs:
         run: pnpm lint
 
       - name: Typecheck
+        run: pnpm typecheck:refs
+
+      - name: Typecheck workspace
         run: pnpm typecheck
 
       - name: Unit tests

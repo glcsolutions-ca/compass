@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createAcceptanceEvidence } from "./record-acceptance-evidence.mjs";
+import { createAcceptanceEvidence } from "../scripts/record-acceptance-evidence.mjs";
 
 describe("record-acceptance-evidence", () => {
   it("creates valid acceptance evidence", () => {

@@ -5,7 +5,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 
 function schemaPath(relativePath) {
-  return path.resolve(fileURLToPath(new URL("../../", import.meta.url)), relativePath);
+  return path.resolve(fileURLToPath(new URL("../../../", import.meta.url)), relativePath);
 }
 
 function loadSchema(relativePath) {

@@ -2,7 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { verifyAcceptanceEvidence } from "./verify-acceptance-evidence.mjs";
+import { verifyAcceptanceEvidence } from "../scripts/verify-acceptance-evidence.mjs";
 
 async function writeJson(filePath, payload) {
   await mkdir(path.dirname(filePath), { recursive: true });

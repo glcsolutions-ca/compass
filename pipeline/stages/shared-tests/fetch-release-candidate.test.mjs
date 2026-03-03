@@ -2,7 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { resolvePulledManifestPath } from "./fetch-release-candidate.mjs";
+import { resolvePulledManifestPath } from "../../shared/scripts/fetch-release-candidate.mjs";
 
 function buildManifest() {
   return {

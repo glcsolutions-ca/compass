@@ -1,7 +1,7 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { parseCliArgs, optionalOption, requireOption } from "./cli-utils.mjs";
-import { writeJsonFile } from "./pipeline-contract-lib.mjs";
+import { parseCliArgs, optionalOption, requireOption } from "../../../shared/scripts/cli-utils.mjs";
+import { writeJsonFile } from "../../../shared/scripts/pipeline-contract-lib.mjs";
 
 function parsePositiveInteger(name, rawValue) {
   const parsed = Number.parseInt(rawValue, 10);

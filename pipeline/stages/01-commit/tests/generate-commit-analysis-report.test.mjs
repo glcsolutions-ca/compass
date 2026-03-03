@@ -2,7 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { createCommitAnalysisReport } from "./generate-commit-analysis-report.mjs";
+import { createCommitAnalysisReport } from "../scripts/generate-commit-analysis-report.mjs";
 
 async function writeJson(filePath, payload) {
   await mkdir(path.dirname(filePath), { recursive: true });
@@ -14,7 +14,10 @@ describe("generate-commit-analysis-report", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "commit-analysis-pass-"));
     const coveragePath = path.join(root, "apps/api/coverage/coverage-summary.json");
     const jscpdPath = path.join(root, ".artifacts/jscpd/jscpd-report.json");
-    const configPath = path.join(root, "pipeline/policies/commit-analysis.config.json");
+    const configPath = path.join(
+      root,
+      "pipeline/stages/01-commit/policies/commit-analysis.config.json"
+    );
 
     await writeJson(coveragePath, {
       total: {
@@ -58,7 +61,10 @@ describe("generate-commit-analysis-report", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "commit-analysis-fail-"));
     const coveragePath = path.join(root, "apps/api/coverage/coverage-summary.json");
     const jscpdPath = path.join(root, ".artifacts/jscpd/jscpd-report.json");
-    const configPath = path.join(root, "pipeline/policies/commit-analysis.config.json");
+    const configPath = path.join(
+      root,
+      "pipeline/stages/01-commit/policies/commit-analysis.config.json"
+    );
 
     await writeJson(coveragePath, {
       total: {

@@ -3,8 +3,8 @@ import {
   validateAcceptanceEvidenceDocument,
   validateReleaseCandidateDocument,
   validateReleaseEvidenceDocument
-} from "./pipeline-contract-lib.mjs";
-import { validateBySchema } from "./schema-validator.mjs";
+} from "../../shared/scripts/pipeline-contract-lib.mjs";
+import { validateBySchema } from "../../shared/scripts/schema-validator.mjs";
 
 describe("schema parity", () => {
   it("keeps release candidate helper verdict parity with schema validator", () => {

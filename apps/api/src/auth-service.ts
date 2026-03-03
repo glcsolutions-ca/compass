@@ -2650,6 +2650,30 @@ export class AuthService {
   }
 }
 
+export const __internalAuthService = {
+  normalizeEmail,
+  hashValue,
+  randomToken,
+  encodePkceChallenge,
+  asStringOrNull,
+  parseBooleanQueryFlag,
+  sanitizeUriScheme,
+  asValidEmailOrNull,
+  resolvePrimaryEmail,
+  buildPersonalTenantSlug,
+  buildPersonalTenantName,
+  parseOidcStateEncryptionKey,
+  encryptOidcRequestPayload,
+  decryptOidcRequestPayload,
+  sanitizeReturnTo,
+  normalizePostLoginReturnTo,
+  buildLoginRedirect,
+  nowPlusSeconds,
+  extractClientIp,
+  toOrganizationRole,
+  toWorkspaceRole
+};
+
 export function buildEntraAuthConfig(env: NodeJS.ProcessEnv): EntraAuthConfig {
   const rawAuthMode = asStringOrNull(env.AUTH_MODE)?.toLowerCase();
   if (rawAuthMode && rawAuthMode !== "mock" && rawAuthMode !== "entra") {

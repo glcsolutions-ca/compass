@@ -89,7 +89,7 @@ jobs:
           pnpm exec jscpd \
             --reporters json \
             --output .artifacts/jscpd \
-            --ignore "**/node_modules/**,**/dist/**,**/coverage/**,**/.next/**,**/.turbo/**,**/pnpm-lock.yaml,**/*.snap,**/packages/contracts/openapi/openapi.json" \
+            --ignore "**/node_modules/**,**/dist/**,**/dist-types/**,**/coverage/**,**/.next/**,**/.turbo/**,**/.react-router/**,**/.artifacts/**,**/pnpm-lock.yaml,**/*.snap,**/*.test.*,**/db/migrations/**,**/packages/codex-protocol/generated/**,**/packages/contracts/openapi/openapi.json" \
             --format "typescript,javascript,tsx,jsx,json,css,md,yaml,yml" \
             .
 

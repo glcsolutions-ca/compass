@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket, type RawData } from "ws";
 import { attachAgentWebSocketGateway, __internalAgentWebSocket } from "./agent-websocket.js";
 import type { AuthService } from "./auth-service.js";
-import type { AgentService, RuntimeNotificationRecord } from "./agent-service.js";
+import type { AgentEventRecord, AgentService, RuntimeNotificationRecord } from "./agent-service.js";
 
 function buildRuntimeNotification(
   input: Partial<RuntimeNotificationRecord> & {
@@ -246,7 +246,233 @@ describe("agent websocket runtime stream", () => {
   });
 });
 
+describe("agent websocket thread stream", () => {
+  const servers = new Set<Server>();
+  const sockets = new Set<WebSocket>();
+
+  afterEach(async () => {
+    for (const socket of sockets) {
+      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+        socket.terminate();
+      }
+    }
+    sockets.clear();
+
+    for (const server of servers) {
+      server.closeAllConnections?.();
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      });
+    }
+    servers.clear();
+  });
+
+  it("replays thread history and forwards live thread events", async () => {
+    let threadHandler:
+      | ((
+          event: Parameters<NonNullable<AgentService["subscribeThreadEvents"]>>[1] extends (
+            arg: infer T
+          ) => unknown
+            ? T
+            : never
+        ) => void)
+      | null = null;
+    const unsubscribe = vi.fn();
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+    const agentService = {
+      readThread: vi.fn(async () => ({
+        threadId: "thread-1"
+      })),
+      listThreadEvents: vi.fn(async () => [
+        {
+          cursor: 1,
+          threadId: "thread-1",
+          turnId: null,
+          method: "thread.started",
+          payload: { title: "first" },
+          createdAt: "2026-03-01T00:00:00.000Z"
+        }
+      ]),
+      subscribeThreadEvents: vi.fn(
+        (threadId: string, handler: (event: AgentEventRecord) => void) => {
+          if (threadId !== "thread-1") {
+            throw new Error("unexpected thread id");
+          }
+          threadHandler = handler;
+          return unsubscribe;
+        }
+      )
+    } as unknown as AgentService;
+
+    const server = createServer((_request, response) => {
+      response.statusCode = 404;
+      response.end();
+    });
+    servers.add(server);
+
+    attachAgentWebSocketGateway({
+      server,
+      authService,
+      agentService,
+      now: () => new Date("2026-03-01T00:00:00.000Z")
+    });
+
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Server did not expose numeric address");
+    }
+
+    const ws = new WebSocket(
+      `ws://127.0.0.1:${String(address.port)}/v1/agent/threads/thread-1/stream?cursor=0`,
+      {
+        headers: {
+          cookie: "__Host-compass_session=session-token"
+        }
+      }
+    );
+    sockets.add(ws);
+
+    const replayMessagePromise = nextJsonMessage(ws);
+    await once(ws, "open");
+    const replayMessage = await replayMessagePromise;
+    expect(replayMessage.method).toBe("thread.started");
+    expect(replayMessage.cursor).toBe(1);
+
+    if (!threadHandler) {
+      throw new Error("thread handler was not registered");
+    }
+
+    const liveMessagePromise = nextJsonMessage(ws);
+    threadHandler({
+      cursor: 2,
+      threadId: "thread-1",
+      turnId: "turn-1",
+      method: "turn.completed",
+      payload: { text: "done" },
+      createdAt: "2026-03-01T00:00:01.000Z"
+    });
+    const liveMessage = await liveMessagePromise;
+    expect(liveMessage.method).toBe("turn.completed");
+    expect(liveMessage.cursor).toBe(2);
+
+    ws.close();
+    await once(ws, "close");
+    expect(unsubscribe.mock.calls.length).toBeLessThanOrEqual(1);
+  });
+
+  it("rejects thread stream upgrades without a session cookie", async () => {
+    const server = createServer((_request, response) => {
+      response.statusCode = 404;
+      response.end();
+    });
+    servers.add(server);
+
+    attachAgentWebSocketGateway({
+      server,
+      authService: {
+        readAuthMe: vi.fn()
+      } as unknown as AuthService,
+      agentService: {
+        readThread: vi.fn()
+      } as unknown as AgentService,
+      now: () => new Date("2026-03-01T00:00:00.000Z")
+    });
+
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Server did not expose numeric address");
+    }
+
+    const ws = new WebSocket(
+      `ws://127.0.0.1:${String(address.port)}/v1/agent/threads/thread-1/stream?cursor=0`
+    );
+    sockets.add(ws);
+
+    const statusCode = await new Promise<number>((resolve, reject) => {
+      ws.once("unexpected-response", (_request, response) => {
+        resolve(response.statusCode ?? 0);
+      });
+      ws.once("error", reject);
+    });
+
+    expect(statusCode).toBe(401);
+  });
+
+  it("rejects thread stream when auth access fails", async () => {
+    const server = createServer((_request, response) => {
+      response.statusCode = 404;
+      response.end();
+    });
+    servers.add(server);
+
+    attachAgentWebSocketGateway({
+      server,
+      authService: {
+        readAuthMe: vi.fn(async () => {
+          throw new Error("forbidden");
+        })
+      } as unknown as AuthService,
+      agentService: {
+        readThread: vi.fn()
+      } as unknown as AgentService,
+      now: () => new Date("2026-03-01T00:00:00.000Z")
+    });
+
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Server did not expose numeric address");
+    }
+
+    const ws = new WebSocket(
+      `ws://127.0.0.1:${String(address.port)}/v1/agent/threads/thread-1/stream?cursor=0`,
+      {
+        headers: {
+          cookie: "__Host-compass_session=session-token"
+        }
+      }
+    );
+    sockets.add(ws);
+
+    const statusCode = await new Promise<number>((resolve, reject) => {
+      ws.once("unexpected-response", (_request, response) => {
+        resolve(response.statusCode ?? 0);
+      });
+      ws.once("error", reject);
+    });
+
+    expect(statusCode).toBe(403);
+  });
+});
+
 describe("agent websocket parser", () => {
+  it("parses valid thread stream requests", () => {
+    const parsed = __internalAgentWebSocket.parseThreadStreamRequest({
+      url: "/v1/agent/threads/thread-1/stream?cursor=5"
+    } as unknown as Parameters<typeof __internalAgentWebSocket.parseThreadStreamRequest>[0]);
+    expect(parsed).toEqual({
+      threadId: "thread-1",
+      cursor: 5
+    });
+  });
+
+  it("returns null for invalid thread stream urls", () => {
+    const parsed = __internalAgentWebSocket.parseThreadStreamRequest({
+      url: "/v1/agent/threads//stream"
+    } as unknown as Parameters<typeof __internalAgentWebSocket.parseThreadStreamRequest>[0]);
+    expect(parsed).toBeNull();
+  });
+
   it("parses runtime stream cursor as non-negative integer", () => {
     const withCursor = __internalAgentWebSocket.parseRuntimeStreamCursor({
       url: "/v1/agent/runtime/stream?cursor=25"
@@ -262,5 +488,18 @@ describe("agent websocket parser", () => {
       url: "/v1/agent/runtime/stream?cursor=-50"
     } as unknown as Parameters<typeof __internalAgentWebSocket.parseRuntimeStreamCursor>[0]);
     expect(withNegativeCursor).toBe(0);
+  });
+
+  it("detects runtime stream route correctly", () => {
+    expect(
+      __internalAgentWebSocket.parseRuntimeStreamRequest({
+        url: "/v1/agent/runtime/stream"
+      } as unknown as Parameters<typeof __internalAgentWebSocket.parseRuntimeStreamRequest>[0])
+    ).toBe(true);
+    expect(
+      __internalAgentWebSocket.parseRuntimeStreamRequest({
+        url: "/v1/agent/threads/thread-1/stream"
+      } as unknown as Parameters<typeof __internalAgentWebSocket.parseRuntimeStreamRequest>[0])
+    ).toBe(false);
   });
 });

@@ -113,6 +113,9 @@ jobs:
           TARGET_API_BASE_URL: http://127.0.0.1:3001
         run: pnpm test:acceptance:system
 
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: Browser acceptance tests
         env:
           WEB_BASE_URL: http://127.0.0.1:3000

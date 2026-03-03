@@ -8,6 +8,6 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test server.test.mjs"
+    "test": "vitest run --config vitest.config.mts"
   }
 }

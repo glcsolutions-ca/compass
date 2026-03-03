@@ -5,6 +5,8 @@
 Define the second major gate for release candidates.
 This stage proves customer-visible behavior and deployment viability in a production-like environment.
 
+Workflow: `.github/workflows/acceptance-stage.yml` (triggered by successful `commit-stage` on `main`).
+
 ## Entry Criteria
 
 1. Candidate manifest exists and validates against `rc.v1`.
@@ -19,20 +21,13 @@ This stage proves customer-visible behavior and deployment viability in a produc
 4. Acceptance must execute deployment verification plus acceptance suites.
 5. Evidence is recorded per `candidateId` with pass/fail verdict.
 6. Candidates failing acceptance are non-promotable.
+7. Acceptance requires repository variables:
+   - `ACCEPTANCE_DEPLOY_COMMAND`
+   - `ACCEPTANCE_VERIFY_COMMAND`
+   - `ACCEPTANCE_API_BASE_URL`
+   - `ACCEPTANCE_WEB_BASE_URL`
 
 ## Exit Criteria
 
 1. `pass`: candidate can progress to optional later stages and release decision.
 2. `fail`: candidate remains stored for audit but is blocked from release.
-
-## Placeholder State
-
-Current implementation uses a temporary placeholder acceptance pass.
-This is a short-term bridge and must be replaced with deploy, verify, system, and browser acceptance suites.
-
-## Exit Criteria For Placeholder Removal
-
-1. Acceptance deploy command is versioned in-repo.
-2. Acceptance verification is manifest-driven.
-3. System and browser suites run against acceptance endpoints.
-4. Evidence reflects real gate outcomes.

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApiClient, getHealth, getPing } from "./client.js";
+import * as sdk from "./index.js";
 
 describe("sdk client", () => {
   it("reads health and ping", async () => {
@@ -46,5 +47,27 @@ describe("sdk client", () => {
     });
 
     await expect(getPing(client)).resolves.toEqual({ ok: true, service: "api" });
+  });
+
+  it("throws when health payload is missing", async () => {
+    const client = {
+      GET: vi.fn(async () => ({ data: undefined }))
+    } as unknown as ReturnType<typeof createApiClient>;
+
+    await expect(getHealth(client)).rejects.toThrow("Health request returned no payload");
+  });
+
+  it("throws when ping payload is missing", async () => {
+    const client = {
+      GET: vi.fn(async () => ({ data: undefined }))
+    } as unknown as ReturnType<typeof createApiClient>;
+
+    await expect(getPing(client)).rejects.toThrow("Ping request returned no payload");
+  });
+
+  it("re-exports client constructors from index", () => {
+    expect(typeof sdk.createApiClient).toBe("function");
+    expect(typeof sdk.getHealth).toBe("function");
+    expect(typeof sdk.getPing).toBe("function");
   });
 });

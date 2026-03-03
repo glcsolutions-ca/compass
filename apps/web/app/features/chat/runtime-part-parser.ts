@@ -108,29 +108,35 @@ function readReasoningText(value: unknown): string | null {
   );
 }
 
-function maybeParseToolCallPart(
-  payload: unknown,
-  fallbackToolCallId: string
-): ChatTimelineToolCallPart | null {
-  const data = readPayloadObject(payload);
-  if (!data) {
-    return null;
-  }
+function readLowerTrimmedText(value: unknown): string | null {
+  const trimmed = readTrimmedText(value);
+  return trimmed ? trimmed.toLowerCase() : null;
+}
 
-  const typeName = readTrimmedText(data.type)?.toLowerCase();
-  const functionPayload = readPayloadObject(data.function);
-  const id = readTrimmedText(data.toolCallId) ?? readTrimmedText(data.callId) ?? fallbackToolCallId;
-  const toolName =
+function resolveToolCallId(data: Record<string, unknown>, fallbackToolCallId: string): string {
+  return readTrimmedText(data.toolCallId) ?? readTrimmedText(data.callId) ?? fallbackToolCallId;
+}
+
+function resolveToolName(input: {
+  data: Record<string, unknown>;
+  functionPayload: Record<string, unknown> | null;
+  typeName: string | null;
+}): string | null {
+  const { data, functionPayload, typeName } = input;
+  return (
     readTrimmedText(data.toolName) ??
     readTrimmedText(data.name) ??
     readTrimmedText(data.tool) ??
     readTrimmedText(functionPayload?.name) ??
-    (typeName?.includes("tool") ? "tool" : null);
+    (typeName?.includes("tool") ? "tool" : null)
+  );
+}
 
-  if (!toolName) {
-    return null;
-  }
-
+function resolveToolArgs(input: {
+  data: Record<string, unknown>;
+  functionPayload: Record<string, unknown> | null;
+}): { args: Record<string, unknown>; argsText: string } {
+  const { data, functionPayload } = input;
   const argsSource = data.args ?? data.input ?? functionPayload?.arguments ?? data.argsText;
   const args = parseArgsObject(argsSource);
   const argsTextFromPayload =
@@ -140,7 +146,37 @@ function maybeParseToolCallPart(
     readText(data.input);
   const argsText =
     argsTextFromPayload ?? (Object.keys(args).length > 0 ? JSON.stringify(args, null, 2) : "{}");
-  const status = readTrimmedText(data.status)?.toLowerCase();
+  return { args, argsText };
+}
+
+function isToolCallError(
+  data: Record<string, unknown>,
+  status: string | null,
+  errorValue: unknown
+): boolean {
+  return Boolean(data.isError) || Boolean(errorValue) || status === "error" || status === "failed";
+}
+
+function maybeParseToolCallPart(
+  payload: unknown,
+  fallbackToolCallId: string
+): ChatTimelineToolCallPart | null {
+  const data = readPayloadObject(payload);
+  if (!data) {
+    return null;
+  }
+
+  const typeName = readLowerTrimmedText(data.type);
+  const functionPayload = readPayloadObject(data.function);
+  const id = resolveToolCallId(data, fallbackToolCallId);
+  const toolName = resolveToolName({ data, functionPayload, typeName });
+
+  if (!toolName) {
+    return null;
+  }
+
+  const { args, argsText } = resolveToolArgs({ data, functionPayload });
+  const status = readLowerTrimmedText(data.status);
   const result = data.result ?? data.output ?? data.response;
   const error = data.error;
 
@@ -151,7 +187,7 @@ function maybeParseToolCallPart(
     argsText,
     args,
     result: result ?? error,
-    isError: Boolean(data.isError) || Boolean(error) || status === "error" || status === "failed",
+    isError: isToolCallError(data, status, error),
     parentId: readTrimmedText(data.parentId) ?? undefined
   };
 }

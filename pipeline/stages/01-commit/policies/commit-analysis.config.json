@@ -1,8 +1,8 @@
 {
   "schemaVersion": "commit-analysis-config.v1",
   "thresholds": {
-    "coverageLinePercentMin": 65,
-    "duplicationPercentMax": 3,
+    "coverageLinePercentMin": 85,
+    "duplicationPercentMax": 2,
     "lintWarningsMax": 0,
     "typecheckWarningsMax": 0
   },

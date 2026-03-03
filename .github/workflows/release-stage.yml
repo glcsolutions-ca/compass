@@ -87,24 +87,29 @@ jobs:
             --source-revision "${{ steps.source.outputs.source_revision }}"
 
       - name: Deploy exact candidate to production
-        env:
-          PRODUCTION_DEPLOY_COMMAND: ${{ vars.PRODUCTION_DEPLOY_COMMAND }}
         run: |
-          if [ -z "${PRODUCTION_DEPLOY_COMMAND:-}" ]; then
-            echo "Repository variable PRODUCTION_DEPLOY_COMMAND is required." >&2
-            exit 1
-          fi
-          MANIFEST_PATH="$RUNNER_TEMP/release-candidate.json" bash -lc "$PRODUCTION_DEPLOY_COMMAND"
+          node pipeline/stages/05-release/scripts/deploy-production-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json"
 
       - name: Production smoke checks
         env:
-          PRODUCTION_SMOKE_COMMAND: ${{ vars.PRODUCTION_SMOKE_COMMAND }}
+          PRODUCTION_API_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
+          PRODUCTION_WEB_BASE_URL: ${{ vars.PRODUCTION_WEB_BASE_URL }}
         run: |
-          if [ -z "${PRODUCTION_SMOKE_COMMAND:-}" ]; then
-            echo "Repository variable PRODUCTION_SMOKE_COMMAND is required." >&2
+          if [ -z "${PRODUCTION_API_BASE_URL:-}" ]; then
+            echo "Repository variable PRODUCTION_API_BASE_URL is required." >&2
             exit 1
           fi
-          MANIFEST_PATH="$RUNNER_TEMP/release-candidate.json" bash -lc "$PRODUCTION_SMOKE_COMMAND"
+
+          args=(
+            --manifest "$RUNNER_TEMP/release-candidate.json"
+            --api-base-url "$PRODUCTION_API_BASE_URL"
+          )
+          if [ -n "${PRODUCTION_WEB_BASE_URL:-}" ]; then
+            args+=(--web-base-url "$PRODUCTION_WEB_BASE_URL")
+          fi
+
+          node pipeline/stages/05-release/scripts/verify-production-candidate.mjs "${args[@]}"
 
       - name: Record and publish release evidence
         if: always()

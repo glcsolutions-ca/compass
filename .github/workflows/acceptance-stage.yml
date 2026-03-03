@@ -1,0 +1,175 @@
+name: acceptance-stage
+
+on:
+  workflow_run:
+    workflows:
+      - commit-stage
+    types:
+      - completed
+
+concurrency:
+  group: acceptance-environment
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  packages: write
+
+env:
+  RC_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-release-candidates
+  ACCEPTANCE_EVIDENCE_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-acceptance-evidence
+
+jobs:
+  acceptance_tests:
+    name: Automated acceptance tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+
+    steps:
+      - name: Capture acceptance stage start time
+        id: acceptance_start
+        run: echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Login to GHCR (ORAS)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Download commit-stage handoff artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: commit-stage-output
+          path: "$RUNNER_TEMP/commit-stage-output"
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read handoff payload
+        id: handoff
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const handoffPath = path.join(process.env.RUNNER_TEMP, 'commit-stage-output', 'commit-stage-output.json');
+          const handoff = JSON.parse(fs.readFileSync(handoffPath, 'utf8'));
+
+          const required = ['candidateId', 'sourceRevision', 'manifestRef', 'commitStageRunId'];
+          for (const key of required) {
+            if (!handoff[key] || String(handoff[key]).trim().length === 0) {
+              throw new Error(`Missing '${key}' in commit-stage handoff artifact`);
+            }
+          }
+
+          const output = process.env.GITHUB_OUTPUT;
+          fs.appendFileSync(output, `candidate_id=${handoff.candidateId}\n`);
+          fs.appendFileSync(output, `source_revision=${handoff.sourceRevision}\n`);
+          fs.appendFileSync(output, `manifest_ref=${handoff.manifestRef}\n`);
+          fs.appendFileSync(output, `commit_stage_run_id=${handoff.commitStageRunId}\n`);
+          NODE
+
+      - name: Verify handoff revision matches trigger revision
+        run: |
+          if [ "${{ steps.handoff.outputs.source_revision }}" != "${{ github.event.workflow_run.head_sha }}" ]; then
+            echo "Handoff source revision does not match triggering commit-stage head SHA" >&2
+            echo "handoff=${{ steps.handoff.outputs.source_revision }} trigger=${{ github.event.workflow_run.head_sha }}" >&2
+            exit 1
+          fi
+
+      - name: Fetch release candidate manifest
+        run: |
+          node pipeline/shared/scripts/fetch-release-candidate.mjs \
+            --candidate-id "${{ steps.handoff.outputs.candidate_id }}" \
+            --registry-repo "${{ env.RC_REGISTRY_REPO }}" \
+            --out "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Validate release candidate manifest
+        run: node pipeline/shared/scripts/validate-release-candidate.mjs --file "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Deploy exact candidate to acceptance
+        run: |
+          node pipeline/stages/02-acceptance/scripts/deploy-acceptance-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Verify acceptance deployment
+        env:
+          ACCEPTANCE_API_BASE_URL: ${{ vars.ACCEPTANCE_API_BASE_URL }}
+          ACCEPTANCE_WEB_BASE_URL: ${{ vars.ACCEPTANCE_WEB_BASE_URL }}
+        run: |
+          if [ -z "${ACCEPTANCE_API_BASE_URL:-}" ]; then
+            echo "Repository variable ACCEPTANCE_API_BASE_URL is required." >&2
+            exit 1
+          fi
+          if [ -z "${ACCEPTANCE_WEB_BASE_URL:-}" ]; then
+            echo "Repository variable ACCEPTANCE_WEB_BASE_URL is required." >&2
+            exit 1
+          fi
+
+          node pipeline/stages/02-acceptance/scripts/verify-acceptance-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
+            --api-base-url "$ACCEPTANCE_API_BASE_URL" \
+            --web-base-url "$ACCEPTANCE_WEB_BASE_URL"
+
+      - name: System acceptance tests
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          TESTED_SHA: ${{ steps.handoff.outputs.source_revision }}
+          TARGET_API_BASE_URL: ${{ vars.ACCEPTANCE_API_BASE_URL }}
+        run: pnpm test:acceptance:system
+
+      - name: Browser acceptance tests
+        env:
+          WEB_BASE_URL: ${{ vars.ACCEPTANCE_WEB_BASE_URL }}
+        run: pnpm test:acceptance:browser
+
+      - name: Record and publish acceptance evidence
+        if: always()
+        run: |
+          candidate_id="${{ steps.handoff.outputs.candidate_id }}"
+          source_revision="${{ steps.handoff.outputs.source_revision }}"
+          if [ -z "${candidate_id}" ] || [ -z "${source_revision}" ]; then
+            echo "Candidate identity unavailable. Skipping acceptance evidence publication." >&2
+            exit 0
+          fi
+
+          finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          verdict="fail"
+          if [ "${{ job.status }}" = "success" ]; then
+            verdict="pass"
+          fi
+
+          mkdir -p .artifacts/acceptance-evidence
+          node pipeline/stages/02-acceptance/scripts/record-acceptance-evidence.mjs \
+            --out .artifacts/acceptance-evidence/acceptance-evidence.json \
+            --candidate-id "${candidate_id}" \
+            --source-revision "${source_revision}" \
+            --workflow-run-id "${{ github.run_id }}" \
+            --verdict "${verdict}" \
+            --started-at "${{ steps.acceptance_start.outputs.started_at }}" \
+            --finished-at "${finished_at}" \
+            --summary "Acceptance ${verdict} for candidate ${candidate_id}"
+
+          cp .artifacts/acceptance-evidence/acceptance-evidence.json acceptance-evidence.json
+          oras push --artifact-type application/vnd.compass.acceptance-evidence.v1 \
+            "${ACCEPTANCE_EVIDENCE_REGISTRY_REPO}:${candidate_id}" \
+            "acceptance-evidence.json:application/vnd.compass.acceptance-evidence.v1+json"

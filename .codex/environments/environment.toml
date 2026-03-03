@@ -5,6 +5,117 @@ name = "compass"
 [setup]
 script = "pnpm install"
 
+[setup.darwin]
+script = '''
+set -eu
+
+export VOLTA_HOME="$HOME/.volta"
+export PATH="$VOLTA_HOME/bin:$PATH"
+
+if ! command -v node >/dev/null 2>&1; then
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "Node.js is missing and curl was not found. Install Node.js 22+ and rerun setup." >&2
+    exit 1
+  fi
+
+  if ! command -v volta >/dev/null 2>&1; then
+    curl -fsSL https://get.volta.sh | bash
+  fi
+
+  export PATH="$VOLTA_HOME/bin:$PATH"
+  volta install node@22
+fi
+
+npm install --global corepack@latest
+PNPM_SHIM_DIR="$(npm config get prefix)/bin"
+mkdir -p "$PNPM_SHIM_DIR"
+if ! corepack enable pnpm --install-directory "$PNPM_SHIM_DIR"; then
+  echo "Corepack could not write pnpm shims to $PNPM_SHIM_DIR." >&2
+  echo "Run in an elevated shell:" >&2
+  echo "sudo npm install --global corepack@latest && corepack enable pnpm --install-directory \"$PNPM_SHIM_DIR\" && corepack prepare pnpm@10.30.1 --activate && pnpm install" >&2
+  exit 1
+fi
+corepack prepare pnpm@10.30.1 --activate
+pnpm install
+'''
+
+[setup.linux]
+script = '''
+set -eu
+
+export VOLTA_HOME="$HOME/.volta"
+export PATH="$VOLTA_HOME/bin:$PATH"
+
+if ! command -v node >/dev/null 2>&1; then
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "Node.js is missing and curl was not found. Install Node.js 22+ and rerun setup." >&2
+    exit 1
+  fi
+
+  if ! command -v volta >/dev/null 2>&1; then
+    curl -fsSL https://get.volta.sh | bash
+  fi
+
+  export PATH="$VOLTA_HOME/bin:$PATH"
+  volta install node@22
+fi
+
+npm install --global corepack@latest
+PNPM_SHIM_DIR="$(npm config get prefix)/bin"
+mkdir -p "$PNPM_SHIM_DIR"
+if ! corepack enable pnpm --install-directory "$PNPM_SHIM_DIR"; then
+  echo "Corepack could not write pnpm shims to $PNPM_SHIM_DIR." >&2
+  echo "Run in an elevated shell:" >&2
+  echo "sudo npm install --global corepack@latest && corepack enable pnpm --install-directory \"$PNPM_SHIM_DIR\" && corepack prepare pnpm@10.30.1 --activate && pnpm install" >&2
+  exit 1
+fi
+corepack prepare pnpm@10.30.1 --activate
+pnpm install
+'''
+
+[setup.win32]
+script = '''
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+  if (-not (Get-Command volta -ErrorAction SilentlyContinue)) {
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+      Write-Error "Node.js is missing and winget was not found. Install Node.js 22+ and rerun setup."
+      exit 1
+    }
+
+    winget install --id Volta.Volta --exact --accept-package-agreements --accept-source-agreements
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = "$machinePath;$userPath"
+  }
+
+  volta install node@22
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
+npm install --global corepack@latest
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+$pnpmShimDir = Join-Path $env:APPDATA "npm"
+if (-not ($env:Path -split ";" | Where-Object { $_ -eq $pnpmShimDir })) {
+  $env:Path = "$pnpmShimDir;$env:Path"
+}
+
+corepack enable pnpm --install-directory "$pnpmShimDir"
+if ($LASTEXITCODE -ne 0) {
+  Write-Error "Corepack could not write pnpm shims to $pnpmShimDir."
+  Write-Host "Run in an elevated PowerShell prompt:"
+  Write-Host "npm install --global corepack@latest; corepack enable pnpm --install-directory `"$pnpmShimDir`"; corepack prepare pnpm@10.30.1 --activate; pnpm install"
+  exit $LASTEXITCODE
+}
+
+corepack prepare pnpm@10.30.1 --activate
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+pnpm install
+'''
+
 [[actions]]
 name = "Run Dev"
 icon = "run"

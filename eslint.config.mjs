@@ -1,11 +1,8 @@
 import js from "@eslint/js";
 import eslintConfigPrettier from "eslint-config-prettier";
 import tseslint from "typescript-eslint";
-import { loadTestPolicySync } from "./scripts/pipeline/commit/testing-policy.mjs";
 
-const testPolicy = loadTestPolicySync(process.env.TEST_POLICY_PATH?.trim() || undefined);
-const lintPolicy = testPolicy.lint;
-const commitStageGlobs = lintPolicy.commitStageGlobs;
+const commitStageGlobs = ["**/*.test.ts", "**/*.test.tsx", "**/test/**/*.ts", "**/test/**/*.tsx"];
 
 function createFocusedTestSelectors() {
   return [
@@ -36,58 +33,43 @@ function dbImportMessage(moduleName) {
   return "Commit-stage tests must not import DB clients directly. Move DB coverage to integration tests.";
 }
 
-const focusedTestSelectors = lintPolicy.focusedTests ? createFocusedTestSelectors() : [];
-const commitStageSyntaxSelectors = [];
-
-if (lintPolicy.disallowMathRandom) {
-  commitStageSyntaxSelectors.push({
+const focusedTestSelectors = createFocusedTestSelectors();
+const commitStageSyntaxSelectors = [
+  {
     selector: "CallExpression[callee.object.name='Math'][callee.property.name='random']",
     message: "Commit-stage tests must be deterministic. Avoid Math.random() or inject a seeded RNG."
-  });
-}
+  },
+  {
+    selector: "CallExpression[callee.name='setTimeout']",
+    message:
+      "Raw setTimeout in commit-stage tests is disallowed. Poll a readiness condition or use testkit helpers."
+  },
+  {
+    selector: "CallExpression[callee.object.name='globalThis'][callee.property.name='setTimeout']",
+    message:
+      "Raw setTimeout in commit-stage tests is disallowed. Poll a readiness condition or use testkit helpers."
+  },
+  ...createFocusedTestSelectors()
+];
 
-if (lintPolicy.disallowRawSetTimeout) {
-  commitStageSyntaxSelectors.push(
-    {
-      selector: "CallExpression[callee.name='setTimeout']",
-      message:
-        "Raw setTimeout in commit-stage tests is disallowed. Poll a readiness condition or use testkit helpers."
-    },
-    {
-      selector:
-        "CallExpression[callee.object.name='globalThis'][callee.property.name='setTimeout']",
-      message:
-        "Raw setTimeout in commit-stage tests is disallowed. Poll a readiness condition or use testkit helpers."
-    }
-  );
-}
-
-if (lintPolicy.focusedTests) {
-  commitStageSyntaxSelectors.push(...createFocusedTestSelectors());
-}
-
-const commitStageRestrictedImportPaths = [];
-if (lintPolicy.disallowDbImports) {
-  commitStageRestrictedImportPaths.push(
-    ...lintPolicy.dbModules.map((moduleName) => ({
-      name: moduleName,
-      message: dbImportMessage(moduleName)
-    }))
-  );
-}
-
-if (lintPolicy.disallowChildProcessImports) {
-  commitStageRestrictedImportPaths.push(
-    {
-      name: "child_process",
-      message: "Commit-stage tests must run in-process. Avoid child_process usage in this layer."
-    },
-    {
-      name: "node:child_process",
-      message: "Commit-stage tests must run in-process. Avoid child_process usage in this layer."
-    }
-  );
-}
+const commitStageRestrictedImportPaths = [
+  {
+    name: "pg",
+    message: dbImportMessage("pg")
+  },
+  {
+    name: "@prisma/client",
+    message: dbImportMessage("@prisma/client")
+  },
+  {
+    name: "child_process",
+    message: "Commit-stage tests must run in-process. Avoid child_process usage in this layer."
+  },
+  {
+    name: "node:child_process",
+    message: "Commit-stage tests must run in-process. Avoid child_process usage in this layer."
+  }
+];
 
 export default tseslint.config(
   {

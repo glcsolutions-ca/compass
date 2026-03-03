@@ -14,8 +14,3 @@ terraform -chdir=infra/identity init
 terraform -chdir=infra/identity plan
 terraform -chdir=infra/identity apply
 ```
-
-## Source Of Truth
-
-- `docs/runbooks/entra-sso-setup.md`
-- `.github/workflows/cloud-deployment-pipeline.yml`

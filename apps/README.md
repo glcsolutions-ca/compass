@@ -15,8 +15,3 @@ pnpm dev
 pnpm dev:all
 pnpm dev:worker
 ```
-
-## Source Of Truth
-
-- root `README.md`
-- `docs/development-pipeline.md`

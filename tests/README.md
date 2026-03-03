@@ -1,10 +1,9 @@
 # Testing
 
-Purpose: fast local confidence and deterministic CI evidence.
+Purpose: fast local confidence and deterministic behavior checks.
 
 ## Start Here
 
-- `policy/README.md`
 - `e2e/README.md`
 - `system/README.md`
 
@@ -16,8 +15,3 @@ pnpm test:full
 pnpm test:integration
 pnpm test:e2e
 ```
-
-## Source Of Truth
-
-- `.github/policy/pipeline-policy.json`
-- `docs/commit-stage-policy.md`

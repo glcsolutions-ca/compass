@@ -45,7 +45,7 @@
     "generate": "turbo run generate",
     "lint": "turbo run lint",
     "test": "pnpm test:quick",
-    "test:quick": "pnpm ci:high-risk-mainline-policy && pnpm ci:testing-policy && pnpm ci:web-constitution-policy && pnpm ci:codex-protocol-policy && pnpm ci:terminology-policy && pnpm ci:service-bus-auth-contract && pnpm ci:doc-quality && pnpm db:migrate:check && pnpm format:check && pnpm lint && pnpm typecheck:refs && pnpm typecheck && pnpm test:unit && pnpm contract:check",
+    "test:quick": "pnpm ci:testing-policy && pnpm ci:web-constitution-policy && pnpm ci:codex-protocol-policy && pnpm ci:terminology-policy && pnpm ci:service-bus-auth-contract && pnpm ci:doc-quality && pnpm db:migrate:check && pnpm format:check && pnpm lint && pnpm typecheck:refs && pnpm typecheck && pnpm test:unit && pnpm contract:check",
     "test:unit": "pnpm turbo run test --ui=stream --log-order=grouped -- --silent=passed-only --reporter=dot && pnpm test:pipeline-contract",
     "test:contracts": "pnpm --filter @compass/contracts test && pnpm --filter @compass/sdk test && pnpm contract:check",
     "test:runtime:unit": "pnpm --filter @compass/api test && pnpm --filter @compass/web test && pnpm --filter @compass/worker test && pnpm --filter @compass/contracts test && pnpm --filter @compass/sdk test",
@@ -62,13 +62,10 @@
     "contract:generate": "pnpm generate",
     "contract:check": "pnpm contract:generate && git diff --exit-code -- packages/contracts/openapi/openapi.json packages/sdk/src/generated/schema.ts",
     "hooks:install": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0; if git config --worktree core.hooksPath .githooks 2>/dev/null; then git config --local --unset-all core.hooksPath >/dev/null 2>&1 || true; else git config core.hooksPath .githooks; fi",
-    "check:commit-fast": "pnpm ci:high-risk-mainline-policy && pnpm ci:testing-policy && pnpm ci:web-constitution-policy && pnpm ci:codex-protocol-policy && pnpm ci:terminology-policy && pnpm ci:service-bus-auth-contract && pnpm db:migrate:check",
+    "check:commit-fast": "pnpm ci:testing-policy && pnpm ci:web-constitution-policy && pnpm ci:codex-protocol-policy && pnpm ci:terminology-policy && pnpm ci:service-bus-auth-contract && pnpm db:migrate:check",
     "hooks:precommit": "pnpm exec lint-staged && pnpm check:commit-fast",
     "hooks:prepush": "pnpm test:quick",
-    "ci:scope": "node scripts/pipeline/commit/resolve-scope.mjs",
-    "ci:docs-drift": "node scripts/pipeline/commit/check-docs-drift.mjs",
     "ci:doc-quality": "node scripts/pipeline/commit/check-doc-quality.mjs",
-    "ci:high-risk-mainline-policy": "node scripts/pipeline/commit/check-high-risk-mainline-policy.mjs",
     "ci:testing-policy": "node scripts/pipeline/commit/check-testing-policy.mjs",
     "ci:web-constitution-policy": "node scripts/pipeline/commit/check-web-constitution.mjs",
     "ci:codex-protocol-policy": "node scripts/pipeline/commit/check-codex-protocol.mjs",
@@ -81,7 +78,7 @@
     "desktop:dev": "pnpm --filter @compass/desktop dev:run",
     "desktop:make:mac": "pnpm --filter @compass/desktop make:mac",
     "desktop:make:win": "pnpm --filter @compass/desktop make:win",
-    "test:pipeline-contract": "vitest run db/scripts/migration-policy-lib.test.mjs db/scripts/constants.test.mjs db/scripts/initial-schema-migration.test.mjs db/scripts/agent-runtime-groundwork-migration.test.mjs db/scripts/personal-workspace-model-migration.test.mjs db/scripts/organization-workspace-reset-migration.test.mjs db/scripts/auth-audit-events-org-fk-migration.test.mjs scripts/dev/ensure-local-env.test.mjs scripts/dev/test-full-preflight.test.mjs scripts/pipeline/commit/check-format.test.mjs scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/resolve-scope-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/decide-integration-gate-lib.test.mjs scripts/pipeline/commit/auto-recover-main.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/check-high-risk-mainline-policy.test.mjs scripts/pipeline/commit/check-auth-openapi-metadata.test.mjs scripts/pipeline/commit/runtime-coverage-lib.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/cloud/deployment-stage/apply-infra.test.mjs scripts/pipeline/cloud/deployment-stage/entra-config-wiring.test.mjs scripts/pipeline/cloud/deployment-stage/verify-api-smoke.test.mjs --silent=passed-only --reporter=dot"
+    "test:pipeline-contract": "vitest run db/scripts/migration-policy-lib.test.mjs db/scripts/constants.test.mjs db/scripts/initial-schema-migration.test.mjs db/scripts/agent-runtime-groundwork-migration.test.mjs db/scripts/personal-workspace-model-migration.test.mjs db/scripts/organization-workspace-reset-migration.test.mjs db/scripts/auth-audit-events-org-fk-migration.test.mjs scripts/dev/ensure-local-env.test.mjs scripts/dev/test-full-preflight.test.mjs scripts/pipeline/commit/check-format.test.mjs scripts/pipeline/shared/pipeline-utils.test.mjs scripts/pipeline/shared/decide-release-outcome-lib.test.mjs scripts/pipeline/commit/decide-commit-stage-lib.test.mjs scripts/pipeline/commit/testing-policy.test.mjs scripts/pipeline/commit/check-testing-policy.test.mjs scripts/pipeline/commit/check-auth-openapi-metadata.test.mjs scripts/pipeline/commit/runtime-coverage-lib.test.mjs scripts/pipeline/commit/eslint-policy.test.mjs scripts/pipeline/shared/workflow-pipeline-contract.test.mjs scripts/pipeline/cloud/deployment-stage/apply-infra.test.mjs scripts/pipeline/cloud/deployment-stage/entra-config-wiring.test.mjs scripts/pipeline/cloud/deployment-stage/verify-api-smoke.test.mjs --silent=passed-only --reporter=dot"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

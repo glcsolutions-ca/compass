@@ -14,7 +14,7 @@ Refactor cloud deployment pipeline to plain language and Farley-aligned terms:
 
 - use `cloud-deployment-pipeline.yml` for push-to-main delivery
 - split replay into dedicated `cloud-deployment-pipeline-replay.yml`
-- add dedicated integration workflow `integration-gate.yml`
+- keep merge-queue acceptance workflow in `acceptance-stage.yml`
 - rename cloud artifact contract to `release candidate` terminology
 - rename cloud wording from `control-plane` to `deployment pipeline config`
 
@@ -53,9 +53,9 @@ The desired operating model is:
 
 - `control-plane` -> `deployment pipeline config` in cloud/commit docs and cloud outputs
 
-5. Keep branch protection explicit for both mainline gates:
+5. Keep branch protection explicit for required mainline checks:
 
-- required contexts are `commit-stage`, `integration-gate`, and `staging-gate`
+- required contexts are `commit-stage` and `acceptance-stage`
 
 ## Consequences
 
@@ -77,5 +77,5 @@ Track desktop naming migration as a separate ADR/change sequence:
 - `.github/workflows/cloud-deployment-pipeline.yml`
 - `.github/workflows/cloud-deployment-pipeline-replay.yml`
 - `.github/workflows/commit-stage.yml`
-- `.github/workflows/integration-gate.yml`
+- `.github/workflows/acceptance-stage.yml`
 - `docs/runbooks/cloud-deployment-pipeline-setup.md`

@@ -19,7 +19,6 @@ Canonical model: `../development-pipeline.md`.
 
 ## Source Of Truth
 
-- `.github/policy/pipeline-policy.json`
+- `docs/development-pipeline.md`
 - `.github/workflows/commit-stage.yml`
-- `.github/workflows/integration-gate.yml`
-- `.github/workflows/staging-gate.yml`
+- `.github/workflows/acceptance-stage.yml`

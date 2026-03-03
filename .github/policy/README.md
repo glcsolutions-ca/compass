@@ -1,26 +1,12 @@
-# Pipeline Policy Contract
+# Policy Files
 
-Purpose: machine source of truth for delivery policy.
+Purpose: repository policy contracts used by CI checks.
 
-## Policy File
+## Active policy files
 
-- `.github/policy/pipeline-policy.json`
-
-## What It Controls
-
-- change scope rules
-- required gate checks
-- mainline merge-queue governance and required status contexts
-- docs drift rules
-- high-risk mainline policy (`HR001`)
-- commit-stage and deployment SLO settings
-
-## Editing Rule
-
-When behavior changes in workflows or pipeline scripts, update this policy in the same change.
+- `.github/policy/terminology-policy.json`
 
 ## Verification
 
-- `pnpm ci:scope`
-- `pnpm ci:docs-drift`
+- `pnpm ci:terminology-policy`
 - `pnpm test:quick`

@@ -17,4 +17,4 @@ pnpm infra:cloud:bootstrap
 ## Source Of Truth
 
 - `.github/workflows/cloud-deployment-pipeline.yml`
-- `.github/policy/pipeline-policy.json`
+- `docs/development-pipeline.md`

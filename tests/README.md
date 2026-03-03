@@ -19,5 +19,5 @@ pnpm test:e2e
 
 ## Source Of Truth
 
-- `.github/policy/pipeline-policy.json`
+- `docs/development-pipeline.md`
 - `docs/commit-stage-policy.md`

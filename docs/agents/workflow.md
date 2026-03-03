@@ -51,9 +51,7 @@ pnpm test:quick
 For pipeline config changes:
 
 ```bash
-pnpm ci:scope
 pnpm ci:testing-policy
-pnpm ci:docs-drift
 pnpm ci:terminology-policy
 pnpm ci:doc-quality
 ```

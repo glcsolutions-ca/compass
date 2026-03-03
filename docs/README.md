@@ -20,4 +20,4 @@ Purpose: short, task-first documentation for operation and decision making.
 
 - `/README.md`
 - `/AGENTS.md`
-- `.github/policy/pipeline-policy.json`
+- `docs/development-pipeline.md`

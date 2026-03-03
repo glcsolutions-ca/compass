@@ -13,4 +13,3 @@ Purpose: script entrypoint for commit, integration, cloud deployment, desktop de
 
 - `docs/development-pipeline.md`
 - `.github/workflows/*.yml`
-- `.github/policy/pipeline-policy.json`

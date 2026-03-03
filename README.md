@@ -50,7 +50,6 @@ pnpm test:quick
 
 ## Source Of Truth
 
-- Pipeline policy: `.github/policy/pipeline-policy.json`
 - Workflows: `.github/workflows/*.yml`
 - Pipeline docs: `docs/development-pipeline.md`, `docs/commit-stage-policy.md`
 - Infra docs: `infra/README.md`, `infra/azure/README.md`, `infra/identity/README.md`

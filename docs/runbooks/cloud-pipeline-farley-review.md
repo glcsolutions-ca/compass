@@ -21,9 +21,9 @@ Primary artifacts:
 
 - `package.json`
 - `.github/workflows/commit-stage.yml`
-- `.github/workflows/integration-gate.yml`
+- `.github/workflows/acceptance-stage.yml`
 - `.github/workflows/cloud-deployment-pipeline.yml`
-- `.github/policy/pipeline-policy.json`
+- `docs/development-pipeline.md`
 - `tests/policy/test-policy.json`
 
 ## Farley Evaluation Criteria

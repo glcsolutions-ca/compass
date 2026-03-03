@@ -6,11 +6,10 @@ Purpose: high-level architecture baseline for current product runtime.
 
 - trunk-based delivery through required quality gates
 - contract-first API/SDK workflow
-- policy-driven pipeline behavior
+- workflow-native pipeline behavior (rulesets, merge queue, CODEOWNERS)
 - evidence-first release decisions
 
 ## Source Of Truth
 
 - `README.md`
 - `docs/development-pipeline.md`
-- `.github/policy/pipeline-policy.json`

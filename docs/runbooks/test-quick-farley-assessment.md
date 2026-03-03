@@ -28,7 +28,7 @@ Expected quick-gate impact:
 
 Baseline chain from [package.json](/Users/justinkropp/.codex/worktrees/9faf/compass/package.json):
 
-1. `ci:high-risk-mainline-policy`
+1. GitHub ruleset + CODEOWNERS
 2. `ci:testing-policy`
 3. `ci:terminology-policy`
 4. `ci:service-bus-auth-contract`
@@ -42,19 +42,19 @@ Baseline chain from [package.json](/Users/justinkropp/.codex/worktrees/9faf/comp
 
 ### Control Map (purpose, owner, CI overlap)
 
-| Check                          | Primary purpose                                                 | Owner implementation                                                                 | CI overlap (commit stage)                       | Avg runtime (s) |
-| ------------------------------ | --------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------- | --------------- |
-| `ci:high-risk-mainline-policy` | Block risky direct commits to `main` (`HR001`)                  | `scripts/pipeline/commit/check-high-risk-mainline-policy.mjs`                        | Indirect via `pnpm test` in `commit-test-suite` | 0.40            |
-| `ci:testing-policy`            | Enforce `TC001/010/011/020` placement/skip/tooling rules        | `scripts/pipeline/commit/check-testing-policy.mjs` + `tests/policy/test-policy.json` | Indirect via `pnpm test` in `commit-test-suite` | 0.40            |
-| `ci:terminology-policy`        | Enforce Farley terminology policy consistency                   | `scripts/pipeline/commit/check-terminology-policy.mjs`                               | Indirect via `pnpm test` in `commit-test-suite` | 0.46            |
-| `ci:service-bus-auth-contract` | Block forbidden Service Bus connection string patterns          | `scripts/pipeline/commit/check-service-bus-auth-contract.mjs`                        | Indirect via `pnpm test` in `commit-test-suite` | 0.39            |
-| `db:migrate:check`             | Migration filename/checksum policy validation                   | `db/scripts/check-migration-policy.mjs`                                              | Indirect via `pnpm test` in `commit-test-suite` | 0.37            |
-| `format:check`                 | Enforce formatting contract                                     | `prettier --check .`                                                                 | Indirect via `pnpm test` in `commit-test-suite` | 1.72            |
-| `lint`                         | Static lint + policy rules, including commit-stage test hygiene | `eslint.config.mjs` + `turbo run lint`                                               | Indirect via `pnpm test` in `commit-test-suite` | 1.00            |
-| `typecheck:refs`               | Root TS project-reference build graph validation                | `tsc -b --pretty false`                                                              | Indirect via `pnpm test` in `commit-test-suite` | 0.42            |
-| `typecheck`                    | Per-package type safety checks                                  | `turbo run typecheck`                                                                | Indirect via `pnpm test` in `commit-test-suite` | 1.01            |
-| `test:unit`                    | Unit/component tests + pipeline contract tests                  | `turbo run test && pnpm test:pipeline-contract`                                      | Indirect via `pnpm test` in `commit-test-suite` | 3.51            |
-| `contract:check`               | Generated contract drift guard                                  | `pnpm contract:generate && git diff --exit-code ...`                                 | Indirect via `pnpm test` in `commit-test-suite` | 1.34            |
+| Check                          | Primary purpose                                                         | Owner implementation                                                                 | CI overlap (commit stage)                       | Avg runtime (s) |
+| ------------------------------ | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------- | --------------- |
+| GitHub ruleset + CODEOWNERS    | Block risky direct commits to `main` (`GitHub-native high-risk review`) | `GitHub ruleset + CODEOWNERS`                                                        | Indirect via `pnpm test` in `commit-test-suite` | 0.40            |
+| `ci:testing-policy`            | Enforce `TC001/010/011/020` placement/skip/tooling rules                | `scripts/pipeline/commit/check-testing-policy.mjs` + `tests/policy/test-policy.json` | Indirect via `pnpm test` in `commit-test-suite` | 0.40            |
+| `ci:terminology-policy`        | Enforce Farley terminology policy consistency                           | `scripts/pipeline/commit/check-terminology-policy.mjs`                               | Indirect via `pnpm test` in `commit-test-suite` | 0.46            |
+| `ci:service-bus-auth-contract` | Block forbidden Service Bus connection string patterns                  | `scripts/pipeline/commit/check-service-bus-auth-contract.mjs`                        | Indirect via `pnpm test` in `commit-test-suite` | 0.39            |
+| `db:migrate:check`             | Migration filename/checksum policy validation                           | `db/scripts/check-migration-policy.mjs`                                              | Indirect via `pnpm test` in `commit-test-suite` | 0.37            |
+| `format:check`                 | Enforce formatting contract                                             | `prettier --check .`                                                                 | Indirect via `pnpm test` in `commit-test-suite` | 1.72            |
+| `lint`                         | Static lint + policy rules, including commit-stage test hygiene         | `eslint.config.mjs` + `turbo run lint`                                               | Indirect via `pnpm test` in `commit-test-suite` | 1.00            |
+| `typecheck:refs`               | Root TS project-reference build graph validation                        | `tsc -b --pretty false`                                                              | Indirect via `pnpm test` in `commit-test-suite` | 0.42            |
+| `typecheck`                    | Per-package type safety checks                                          | `turbo run typecheck`                                                                | Indirect via `pnpm test` in `commit-test-suite` | 1.01            |
+| `test:unit`                    | Unit/component tests + pipeline contract tests                          | `turbo run test && pnpm test:pipeline-contract`                                      | Indirect via `pnpm test` in `commit-test-suite` | 3.51            |
+| `contract:check`               | Generated contract drift guard                                          | `pnpm contract:generate && git diff --exit-code ...`                                 | Indirect via `pnpm test` in `commit-test-suite` | 1.34            |
 
 ### Local vs CI differences (important)
 
@@ -81,7 +81,7 @@ Measurement artifacts:
 | `lint`                         |    1.00 |    0.99 |    1.03 |      0.04 |               9.1% |
 | `ci:terminology-policy`        |    0.46 |    0.43 |    0.50 |      0.07 |               4.2% |
 | `typecheck:refs`               |    0.42 |    0.41 |    0.43 |      0.02 |               3.8% |
-| `ci:high-risk-mainline-policy` |    0.40 |    0.38 |    0.43 |      0.05 |               3.6% |
+| GitHub ruleset + CODEOWNERS    |    0.40 |    0.38 |    0.43 |      0.05 |               3.6% |
 | `ci:testing-policy`            |    0.40 |    0.40 |    0.41 |      0.01 |               3.7% |
 | `ci:service-bus-auth-contract` |    0.39 |    0.39 |    0.40 |      0.01 |               3.6% |
 | `db:migrate:check`             |    0.37 |    0.36 |    0.38 |      0.02 |               3.4% |
@@ -103,25 +103,25 @@ Interpretation:
 Across 5 unchanged-input `test:quick` runs:
 
 1. Exit code stable (`0/0/0/0/0`).
-2. All key pass markers repeated (`HR001`, `TC policy`, terminology, service-bus contract, migration policy, lint/typecheck/test/pipeline-contract/contract checks).
+2. All key pass markers repeated (`GitHub-native high-risk review`, `TC policy`, terminology, service-bus contract, migration policy, lint/typecheck/test/pipeline-contract/contract checks).
 3. No flaky outcomes observed.
 
 Determinism classification: **stable**.
 
 ### Failure UX audit (representative)
 
-| Check                          | Sample failure path                        | Actionability assessment                                                                                           |
-| ------------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `ci:high-risk-mainline-policy` | Simulated `HIGH_RISK_MAINLINE_PR_REQUIRED` | Excellent: reason code, matched files, rationale, explicit PR commands, CODEOWNER guidance.                        |
-| `ci:testing-policy`            | Missing `TEST_POLICY_PATH`                 | Good for config failures; violation-path formatter is strong (rule ID, why, fix, docs).                            |
-| `ci:terminology-policy`        | Missing policy path                        | Weak: raw Node stack trace on missing file; should emit structured user-level error.                               |
-| `contract:check`               | Drift path (by design)                     | Medium: enforcement is strong, but failure message is generic (`git diff --exit-code`) and can be more actionable. |
+| Check                       | Sample failure path                        | Actionability assessment                                                                                           |
+| --------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| GitHub ruleset + CODEOWNERS | Simulated `HIGH_RISK_MAINLINE_PR_REQUIRED` | Excellent: reason code, matched files, rationale, explicit PR commands, CODEOWNER guidance.                        |
+| `ci:testing-policy`         | Missing `TEST_POLICY_PATH`                 | Good for config failures; violation-path formatter is strong (rule ID, why, fix, docs).                            |
+| `ci:terminology-policy`     | Missing policy path                        | Weak: raw Node stack trace on missing file; should emit structured user-level error.                               |
+| `contract:check`            | Drift path (by design)                     | Medium: enforcement is strong, but failure message is generic (`git diff --exit-code`) and can be more actionable. |
 
 ## 4) Risk Coverage and Redundancy Matrix
 
 | Check                          | Unique risk covered                               | Overlap                                                | Replacement candidate                                                    | Confidence |
 | ------------------------------ | ------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------ | ---------- |
-| `ci:high-risk-mainline-policy` | Prevents risky direct-to-main mutations           | None meaningful                                        | None                                                                     | High       |
+| GitHub ruleset + CODEOWNERS    | Prevents risky direct-to-main mutations           | None meaningful                                        | None                                                                     | High       |
 | `ci:testing-policy`            | Test-layer policy contract (`TC001/010/011/020`)  | Some overlap with ESLint focused-test and import rules | Keep as canonical policy gate                                            | High       |
 | `ci:terminology-policy`        | Language governance consistency                   | Low overlap with lint/docs drift                       | Move to dedicated CI governance check                                    | Medium     |
 | `ci:service-bus-auth-contract` | Prevents insecure auth regression patterns        | Minimal overlap                                        | None                                                                     | High       |
@@ -146,7 +146,7 @@ Scoring dimensions (1-5 each):
 
 | Check                          | Total (/30) | Decision           | Rationale                                                                     |
 | ------------------------------ | ----------: | ------------------ | ----------------------------------------------------------------------------- |
-| `ci:high-risk-mainline-policy` |          29 | Keep               | Strong trunk safety; near-zero cost; excellent remediation UX.                |
+| GitHub ruleset + CODEOWNERS    |          29 | Keep               | Strong trunk safety; near-zero cost; excellent remediation UX.                |
 | `ci:testing-policy`            |          30 | Keep               | Core commit-stage policy evidence; low cost; explicit rule contracts.         |
 | `ci:terminology-policy`        |          21 | Move               | Good governance signal but lower release-safety relevance for quick gate.     |
 | `ci:service-bus-auth-contract` |          27 | Keep               | Security/safety critical, cheap, deterministic.                               |
@@ -163,8 +163,7 @@ Scoring dimensions (1-5 each):
 ### Target quick gate
 
 ```bash
-pnpm ci:high-risk-mainline-policy \
-  && pnpm ci:testing-policy \
+pnpm ci:testing-policy \
   && pnpm ci:service-bus-auth-contract \
   && pnpm db:migrate:check \
   && pnpm format:check \
@@ -206,7 +205,7 @@ Changes:
 
 1. Add `terminology-policy` job to [commit-stage.yml](/Users/justinkropp/.codex/worktrees/9faf/compass/.github/workflows/commit-stage.yml).
 2. Include it in `commit-stage` decision input map (`CHECK_RESULTS_JSON`).
-3. Update policy contract at [.github/policy/pipeline-policy.json](/Users/justinkropp/.codex/worktrees/9faf/compass/.github/policy/pipeline-policy.json) required checks.
+3. Update policy contract at [docs/development-pipeline.md](/Users/justinkropp/.codex/worktrees/9faf/compass/docs/development-pipeline.md) required checks.
 4. Update decision script tests for commit-stage decision behavior.
 
 Verify:

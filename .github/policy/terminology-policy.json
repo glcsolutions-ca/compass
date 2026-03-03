@@ -38,8 +38,11 @@
     "https://www.informit.com/articles/article.aspx"
   ],
   "canonicalDefinitions": {
-    "integration gate": "The integration validation gate that runs on merge-queue candidates and on push to main, and rejects insufficient changes before promotion.",
-    "staging gate": "A merge-queue-only deployment rehearsal that validates release-candidate build, staging deploy, migration, and smoke before merge to main.",
+    "commit stage": "The fast feedback stage that validates buildability and baseline quality on pull requests and merge-queue candidates.",
+    "acceptance stage": "The stage that verifies release readiness by running automated acceptance tests and then fanning out integration testing and staging rehearsal in parallel.",
+    "integration testing": "Automated tests that validate cross-component behavior and contracts in a realistic runtime path.",
+    "staging": "A production-like rehearsal environment used to validate deployment and smoke behavior before promotion.",
+    "production promotion": "The act of promoting an already tested release candidate to production without rebuilding artifacts.",
     "merge queue": "The trunk integration mechanism that validates required checks on merge-group candidates before writing to main.",
     "merge_group": "The GitHub Actions event used to run required checks for merge-queue candidates.",
     "release candidate": "A specific immutable build/version produced by the pipeline and promoted through later stages without rebuilding.",
@@ -59,7 +62,7 @@
   },
   "renames": [
     { "legacy": "merge-queue-gate", "canonical": "acceptance-stage" },
-    { "legacy": "mergeQueueGate", "canonical": "integrationGate" },
+    { "legacy": "mergeQueueGate", "canonical": "acceptanceStage" },
     { "legacy": "release-package", "canonical": "release-candidate" },
     { "legacy": "releasePackage", "canonical": "releaseCandidate" },
     { "legacy": "cloud-delivery-pipeline", "canonical": "cloud-deployment-pipeline" },
@@ -85,7 +88,7 @@
     {
       "pattern": "\\bmerge queue gate\\b",
       "flags": "gi",
-      "message": "Use integration gate."
+      "message": "Use acceptance stage."
     },
     {
       "pattern": "\\brelease-package\\b",

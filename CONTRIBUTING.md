@@ -28,5 +28,5 @@ pnpm db:postgres:down
 ## Commit And Push
 
 - Keep commits small and reversible.
-- Push to `main` unless `HR001` routes the change to PR flow.
+- Open a PR and let merge queue update `main`.
 - Treat CI gate results as release evidence.

@@ -87,17 +87,65 @@ jobs:
           ref: ${{ needs.desktop_release_candidate_context.outputs.release_candidate_sha }}
           fetch-depth: 0
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Classify changed paths
+        id: changes
+        uses: dorny/paths-filter@v3
         with:
-          node-version-file: .nvmrc
+          token: ${{ github.token }}
+          base: ${{ github.event.before || format('{0}^', needs.desktop_release_candidate_context.outputs.release_candidate_sha) }}
+          ref: ${{ needs.desktop_release_candidate_context.outputs.release_candidate_sha }}
+          filters: |
+            docs:
+              - 'docs/**'
+              - 'README.md'
+              - 'CONTRIBUTING.md'
+              - 'AGENTS.md'
+              - '**/README.md'
+            desktop:
+              - 'apps/desktop/**'
 
-      - name: Resolve commit scope
+      - name: Resolve desktop scope
         id: scope
         env:
-          GITHUB_HEAD_SHA: ${{ needs.desktop_release_candidate_context.outputs.release_candidate_sha }}
-          GITHUB_TESTED_SHA: ${{ needs.desktop_release_candidate_context.outputs.release_candidate_sha }}
-        run: node scripts/pipeline/commit/resolve-scope.mjs
+          TESTED_SHA: ${{ needs.desktop_release_candidate_context.outputs.release_candidate_sha }}
+          DOCS_CHANGED: ${{ steps.changes.outputs.docs }}
+          DESKTOP_CHANGED: ${{ steps.changes.outputs.desktop }}
+        run: |
+          set -euo pipefail
+
+          docs_only_changed=false
+          if [ "$DOCS_CHANGED" = "true" ] && [ "$DESKTOP_CHANGED" != "true" ]; then
+            docs_only_changed=true
+          fi
+
+          change_class="checks"
+          if [ "$DESKTOP_CHANGED" = "true" ] && [ "$docs_only_changed" != "true" ]; then
+            change_class="desktop"
+          fi
+
+          scope_path=".artifacts/commit-stage/$TESTED_SHA/scope.json"
+          mkdir -p "$(dirname "$scope_path")"
+          cat > "$scope_path" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "testedSha": "$TESTED_SHA",
+            "scope": {
+              "desktop": ${DESKTOP_CHANGED},
+              "docsOnly": ${docs_only_changed}
+            },
+            "changeClass": "$change_class"
+          }
+          JSON
+
+          {
+            echo "head_sha=$TESTED_SHA"
+            echo "tested_sha=$TESTED_SHA"
+            echo "change_class=$change_class"
+            echo "desktop_changed=$DESKTOP_CHANGED"
+            echo "docs_only_changed=$docs_only_changed"
+            echo "scope_path=$scope_path"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Upload desktop scope artifact
         if: ${{ always() }}

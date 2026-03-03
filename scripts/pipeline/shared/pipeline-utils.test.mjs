@@ -2,280 +2,75 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
-  classifyReleaseCandidateKind,
-  evaluateDocsDrift,
+  fileExists,
   getChangedFiles,
-  loadPipelinePolicyObject,
   matchesAnyPattern,
-  resolveChangeScope
+  parseJsonEnv,
+  parsePossiblyFencedJson,
+  readJsonFile,
+  requireEnv,
+  writeJsonFile
 } from "./pipeline-utils.mjs";
 
-const policy = loadPipelinePolicyObject({
-  version: "1",
-  scopeRules: {
-    runtime: [
-      "apps/api/**",
-      "apps/web/**",
-      "apps/worker/**",
-      "packages/**",
-      "db/migrations/**",
-      "db/scripts/**",
-      "apps/api/Dockerfile",
-      "apps/web/Dockerfile",
-      "package.json",
-      "pnpm-lock.yaml",
-      "pnpm-workspace.yaml",
-      "**/package.json"
-    ],
-    desktop: [
-      "apps/desktop/**",
-      ".github/workflows/desktop-deployment-pipeline.yml",
-      ".github/workflows/desktop-deployment-pipeline.yml"
-    ],
-    infra: ["infra/azure/**"],
-    identity: ["infra/identity/**"],
-    migration: ["db/migrations/**", "db/scripts/**"],
-    infraRollout: [
-      "infra/azure/main.bicep",
-      "infra/azure/modules/containerapp-*.bicep",
-      "infra/azure/modules/containerapps-env.bicep",
-      "infra/azure/environments/*.bicepparam",
-      "infra/azure/environments/**"
-    ],
-    docsOnly: [
-      "docs/**",
-      "README.md",
-      "CONTRIBUTING.md",
-      "AGENTS.md",
-      "apps/**/README.md",
-      "packages/**/README.md",
-      "scripts/**/README.md",
-      "tests/**/README.md",
-      "infra/**/README.md"
-    ]
-  },
-  commitStage: {
-    requiredChecks: [
-      "determine-scope",
-      "commit-test-suite",
-      "desktop-commit-test-suite",
-      "commit-stage"
-    ],
-    slo: {
-      targetSeconds: 300,
-      mode: "enforce"
+describe("environment helpers", () => {
+  const touchedEnv = [];
+
+  afterEach(() => {
+    for (const key of touchedEnv) {
+      delete process.env[key];
     }
-  },
-  highRiskMainlinePolicy: {
-    ruleId: "HR001",
-    mainBranch: "main",
-    requirePullRequestOnMain: true,
-    codeOwners: ["@jrkropp"],
-    categories: [
-      {
-        id: "infra-mutation",
-        patterns: ["infra/azure/**", "infra/identity/**"],
-        rationale: "production infrastructure and identity control-plane mutation risk"
-      },
-      {
-        id: "data-mutation",
-        patterns: ["db/migrations/**", "db/scripts/**"],
-        rationale: "schema/data integrity and rollout/rollback risk"
-      },
-      {
-        id: "pipeline-governance-mutation",
-        patterns: [".github/workflows/**", ".github/policy/**", "scripts/pipeline/**"],
-        rationale: "deployment pipeline config and release/deploy decision behavior risk"
-      }
-    ]
-  },
-  integrationGate: {
-    requiredChecks: [
-      "determine-scope",
-      "build-compile",
-      "migration-safety",
-      "runtime-contract-smoke",
-      "minimal-integration-smoke",
-      "integration-gate"
-    ]
-  },
-  stagingGate: {
-    requiredChecks: [
-      "determine-scope",
-      "staging-build-release-candidate-api-image",
-      "staging-build-release-candidate-web-image",
-      "staging-build-release-candidate-worker-image",
-      "staging-build-release-candidate-dynamic-sessions-runtime-image",
-      "staging-publish-release-candidate",
-      "staging-deploy-cloud",
-      "staging-smoke",
-      "staging-gate"
-    ],
-    slo: {
-      mode: "observe",
-      targetSeconds: 900
-    }
-  },
-  deploymentStage: {
-    requireFreshHeadOnAuto: true
-  },
-  cloudDeploymentPipeline: {
-    requiredChecks: [
-      "verify-commit-stage-evidence",
-      "verify-integration-gate-evidence",
-      "build-release-candidate-api-image",
-      "build-release-candidate-web-image",
-      "build-release-candidate-worker-image",
-      "build-release-candidate-dynamic-sessions-runtime-image",
-      "publish-release-candidate",
-      "deploy-cloud",
-      "production-smoke",
-      "release-decision"
-    ],
-    slo: {
-      mode: "observe",
-      deployCloudTargetSeconds: 1200,
-      productionSmokeTargetSeconds: 600
-    }
-  },
-  desktopDeploymentPipeline: {
-    requiredChecks: [
-      "desktop-commit-stage",
-      "desktop-automated-acceptance-test-gate",
-      "desktop-deployment-stage",
-      "desktop-release-decision"
-    ],
-    artifactContracts: {
-      releaseCandidateManifestPath: ".artifacts/desktop-release-candidate/<sha>/manifest.json",
-      automatedAcceptanceTestGateResultPath:
-        ".artifacts/desktop-automated-acceptance-test-gate/<sha>/result.json",
-      deploymentResultPath: ".artifacts/desktop-deployment-stage/<sha>/result.json",
-      releaseDecisionPath: ".artifacts/desktop-release/<sha>/decision.json"
-    },
-    slo: {
-      mode: "observe",
-      automatedAcceptanceTestGateTargetSeconds: 1800,
-      deploymentStageTargetSeconds: 1200
-    }
-  },
-  docsDriftRules: {
-    blockingPaths: [".github/workflows/**", "scripts/pipeline/**"],
-    docsCriticalPaths: ["packages/contracts/**"],
-    docTargets: ["docs/commit-stage-policy.md", "docs/branch-protection.md"]
-  }
-});
-
-describe("scope resolution", () => {
-  it("classifies runtime changes", () => {
-    const scope = resolveChangeScope(policy, ["apps/api/src/server.ts"]);
-    expect(scope.runtime).toBe(true);
-    expect(scope.infra).toBe(false);
-    expect(scope.identity).toBe(false);
-    expect(scope.docsOnly).toBe(false);
-    expect(classifyReleaseCandidateKind(scope)).toBe("runtime");
+    touchedEnv.length = 0;
   });
 
-  it("classifies infra-only changes", () => {
-    const scope = resolveChangeScope(policy, ["infra/azure/main.bicep"]);
-    expect(scope.runtime).toBe(false);
-    expect(scope.infra).toBe(true);
-    expect(scope.infraRollout).toBe(true);
-    expect(classifyReleaseCandidateKind(scope)).toBe("infra");
+  it("requireEnv returns trimmed values", () => {
+    process.env.PIPELINE_UTILS_TEST_REQUIRED = "  value  ";
+    touchedEnv.push("PIPELINE_UTILS_TEST_REQUIRED");
+
+    expect(requireEnv("PIPELINE_UTILS_TEST_REQUIRED")).toBe("value");
   });
 
-  it("classifies identity-only changes", () => {
-    const scope = resolveChangeScope(policy, ["infra/identity/main.tf"]);
-    expect(scope.runtime).toBe(false);
-    expect(scope.infra).toBe(false);
-    expect(scope.identity).toBe(true);
-    expect(classifyReleaseCandidateKind(scope)).toBe("identity");
+  it("parseJsonEnv parses JSON payloads", () => {
+    process.env.PIPELINE_UTILS_TEST_JSON = '{"enabled":true,"count":2}';
+    touchedEnv.push("PIPELINE_UTILS_TEST_JSON");
+
+    expect(parseJsonEnv("PIPELINE_UTILS_TEST_JSON")).toEqual({ enabled: true, count: 2 });
+    expect(parseJsonEnv("PIPELINE_UTILS_TEST_MISSING", { fallback: true })).toEqual({
+      fallback: true
+    });
   });
 
-  it("classifies docs-only changes", () => {
-    const scope = resolveChangeScope(policy, ["docs/README.md"]);
-    expect(scope.docsOnly).toBe(true);
-    expect(classifyReleaseCandidateKind(scope)).toBe("checks");
-  });
-
-  it("treats infra README changes as docs-only (not infra mutation scope)", () => {
-    const scope = resolveChangeScope(policy, ["infra/azure/README.md"]);
-    expect(scope.docsOnly).toBe(true);
-    expect(scope.infra).toBe(false);
-    expect(scope.identity).toBe(false);
-    expect(scope.runtime).toBe(false);
-    expect(scope.desktop).toBe(false);
-    expect(classifyReleaseCandidateKind(scope)).toBe("checks");
-  });
-
-  it("classifies desktop-only changes", () => {
-    const scope = resolveChangeScope(policy, ["apps/desktop/src/main.ts"]);
-    expect(scope.runtime).toBe(false);
-    expect(scope.desktop).toBe(true);
-    expect(scope.infra).toBe(false);
-    expect(scope.identity).toBe(false);
-    expect(scope.docsOnly).toBe(false);
-    expect(classifyReleaseCandidateKind(scope)).toBe("desktop");
-  });
-
-  it("treats desktop README changes as docs-only (not desktop runtime scope)", () => {
-    const scope = resolveChangeScope(policy, ["apps/desktop/README.md"]);
-    expect(scope.docsOnly).toBe(true);
-    expect(scope.desktop).toBe(false);
-    expect(scope.runtime).toBe(false);
-    expect(scope.infra).toBe(false);
-    expect(scope.identity).toBe(false);
-    expect(classifyReleaseCandidateKind(scope)).toBe("checks");
-  });
-
-  it("flags migration changes", () => {
-    const scope = resolveChangeScope(policy, ["db/migrations/202602230001_add_table.sql"]);
-    expect(scope.runtime).toBe(true);
-    expect(scope.migration).toBe(true);
+  it("parsePossiblyFencedJson accepts fenced JSON blocks", () => {
+    const raw = '```json\n{\n  "ok": true\n}\n```';
+    expect(parsePossiblyFencedJson(raw)).toEqual({ ok: true });
   });
 });
 
-describe("docs drift", () => {
-  it("records advisory reason codes for deployment pipeline config changes outside docs-critical paths", () => {
-    const result = evaluateDocsDrift(policy, [".github/workflows/commit-stage.yml"]);
-    expect(result.shouldBlock).toBe(false);
-    expect(result.reasonCodes).toEqual(["DOCS_DRIFT_ADVISORY_DOC_TARGET_MISSING"]);
-    expect(result.blockingPathsChanged).toEqual([".github/workflows/commit-stage.yml"]);
-  });
+describe("filesystem helpers", () => {
+  it("writes and reads JSON files", async () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "pipeline-utils-json-"));
+    const filePath = path.join(tempDir, "artifact", "result.json");
 
-  it("blocks docs-critical changes without docs updates", () => {
-    const result = evaluateDocsDrift(policy, ["packages/contracts/openapi/schema.ts"]);
-    expect(result.shouldBlock).toBe(true);
-    expect(result.reasonCodes).toEqual(["DOCS_DRIFT_BLOCKING_DOC_TARGET_MISSING"]);
-    expect(result.docsCriticalPathsChanged).toEqual(["packages/contracts/openapi/schema.ts"]);
-    expect(result.expectedDocTargets).toEqual([
-      "docs/commit-stage-policy.md",
-      "docs/branch-protection.md"
-    ]);
-  });
-
-  it("passes when docs target is updated", () => {
-    const result = evaluateDocsDrift(policy, [
-      ".github/workflows/commit-stage.yml",
-      "docs/commit-stage-policy.md"
-    ]);
-
-    expect(result.shouldBlock).toBe(false);
-    expect(result.reasonCodes).toEqual([]);
-    expect(result.touchedDocTargets).toEqual(["docs/commit-stage-policy.md"]);
+    try {
+      await writeJsonFile(filePath, { pass: true, reasonCodes: [] });
+      await expect(fileExists(filePath)).resolves.toBe(true);
+      await expect(readJsonFile(filePath)).resolves.toEqual({ pass: true, reasonCodes: [] });
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
 
-describe("glob matching engine", () => {
-  it("matches deployment pipeline config patterns for dot-prefixed directories", () => {
+describe("glob matching", () => {
+  it("matches dot-prefixed workflow paths", () => {
     expect(matchesAnyPattern(".github/workflows/commit-stage.yml", [".github/workflows/**"])).toBe(
       true
     );
   });
 
-  it("keeps dot-path behavior deterministic for '**' patterns", () => {
-    expect(matchesAnyPattern(".github/policy/pipeline-policy.json", ["**"])).toBe(false);
+  it("keeps deterministic behavior for '**' patterns", () => {
+    expect(matchesAnyPattern(".github/workflows/commit-stage.yml", ["**"])).toBe(false);
     expect(matchesAnyPattern("README.md", ["**"])).toBe(true);
   });
 });
@@ -356,11 +151,9 @@ describe("getChangedFiles", () => {
     }
   });
 
-  it("ignores inherited git context env variables", async () => {
+  it("ignores inherited git context environment variables", async () => {
     const repoDir = initRepo();
     const previousCwd = process.cwd();
-    const envKeys = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"];
-    const previousEnv = new Map(envKeys.map((key) => [key, process.env[key]]));
 
     try {
       writeFileSync(path.join(repoDir, "a.txt"), "one\n", "utf8");
@@ -378,71 +171,16 @@ describe("getChangedFiles", () => {
         encoding: "utf8"
       }).trim();
 
-      process.env.GIT_DIR = "/tmp/not-a-repo";
-      process.env.GIT_WORK_TREE = "/tmp/not-a-work-tree";
-      process.env.GIT_INDEX_FILE = "/tmp/not-an-index";
+      process.env.GIT_DIR = "/invalid";
+      process.env.GIT_WORK_TREE = "/invalid";
 
       process.chdir(repoDir);
       await expect(getChangedFiles(baseSha, headSha)).resolves.toEqual(["b.txt"]);
     } finally {
-      for (const [key, value] of previousEnv) {
-        if (value === undefined) {
-          delete process.env[key];
-        } else {
-          process.env[key] = value;
-        }
-      }
+      delete process.env.GIT_DIR;
+      delete process.env.GIT_WORK_TREE;
       process.chdir(previousCwd);
       rmSync(repoDir, { recursive: true, force: true });
     }
-  });
-});
-
-describe("high risk mainline policy schema", () => {
-  it("requires categories and code owners in policy shape", () => {
-    expect(() =>
-      loadPipelinePolicyObject({
-        ...policy,
-        highRiskMainlinePolicy: {
-          ...policy.highRiskMainlinePolicy,
-          categories: []
-        }
-      })
-    ).toThrowError("highRiskMainlinePolicy.categories must be a non-empty array");
-
-    expect(() =>
-      loadPipelinePolicyObject({
-        ...policy,
-        highRiskMainlinePolicy: {
-          ...policy.highRiskMainlinePolicy,
-          codeOwners: ["jrkropp"]
-        }
-      })
-    ).toThrowError("highRiskMainlinePolicy.codeOwners entries must be GitHub handles");
-  });
-
-  it("validates optional staging gate schema", () => {
-    expect(() =>
-      loadPipelinePolicyObject({
-        ...policy,
-        stagingGate: {
-          ...policy.stagingGate,
-          requiredChecks: []
-        }
-      })
-    ).toThrowError("stagingGate.requiredChecks must be a non-empty array");
-
-    expect(() =>
-      loadPipelinePolicyObject({
-        ...policy,
-        stagingGate: {
-          ...policy.stagingGate,
-          slo: {
-            mode: "invalid",
-            targetSeconds: 900
-          }
-        }
-      })
-    ).toThrowError("stagingGate.slo.mode must be one of: observe, enforce");
   });
 });

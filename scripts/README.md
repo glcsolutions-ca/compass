@@ -11,4 +11,4 @@ Purpose: operational scripts for dev, infra, and pipeline automation.
 ## Source Of Truth
 
 - `.github/workflows/*.yml`
-- `.github/policy/pipeline-policy.json`
+- `docs/development-pipeline.md`

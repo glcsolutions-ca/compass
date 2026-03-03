@@ -48,9 +48,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          WORKFLOW_FILE: cloud-deployment-pipeline.yml
+          WORKFLOW_FILE: acceptance-stage.yml
           HEAD_SHA: ${{ steps.source.outputs.release_candidate_sha }}
-          RUN_EVENT: push
+          RUN_EVENT: merge_group
           RUN_STATUS: success
           RUN_STATUS_FALLBACK: completed
         run: node scripts/pipeline/shared/resolve-triggered-run-id.mjs
@@ -62,10 +62,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       head_sha: ${{ steps.parse.outputs.head_sha }}
-      api_ref: ${{ steps.parse.outputs.api_ref }}
-      web_ref: ${{ steps.parse.outputs.web_ref }}
-      worker_ref: ${{ steps.parse.outputs.worker_ref }}
-      dynamic_sessions_runtime_ref: ${{ steps.parse.outputs.dynamic_sessions_runtime_ref }}
+      api_ref: ${{ steps.parse.outputs.release_candidate_api_ref }}
+      web_ref: ${{ steps.parse.outputs.release_candidate_web_ref }}
+      worker_ref: ${{ steps.parse.outputs.release_candidate_worker_ref }}
+      dynamic_sessions_runtime_ref: ${{ steps.parse.outputs.release_candidate_dynamic_sessions_runtime_ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -80,34 +80,24 @@ jobs:
 
       - name: Parse release candidate manifest
         id: parse
+        env:
+          RELEASE_CANDIDATE_MANIFEST_PATH: .artifacts/release-candidate/${{ needs.resolve_replay_source.outputs.release_candidate_sha }}/manifest.json
+          RUN_ID: ${{ needs.resolve_replay_source.outputs.source_run_id }}
+        run: node scripts/pipeline/shared/load-release-candidate-contract.mjs
+
+      - name: Require deployment-capable release candidate
         run: |
           set -euo pipefail
-
-          manifest_path=".artifacts/release-candidate/${{ needs.resolve_replay_source.outputs.release_candidate_sha }}/manifest.json"
-          head_sha="$(jq -r '.headSha' "$manifest_path")"
-          api_ref="$(jq -r '.releaseCandidate.apiRef' "$manifest_path")"
-          web_ref="$(jq -r '.releaseCandidate.webRef' "$manifest_path")"
-          worker_ref="$(jq -r '.releaseCandidate.workerRef' "$manifest_path")"
-          dynamic_sessions_runtime_ref="$(jq -r '.releaseCandidate.dynamicSessionsRuntimeRef' "$manifest_path")"
-
-          for image in "$api_ref" "$web_ref" "$worker_ref" "$dynamic_sessions_runtime_ref"; do
-            if [[ "$image" != *"@sha256:"* ]]; then
-              echo "Release candidate image is not digest-pinned: $image" >&2
-              exit 1
-            fi
-          done
-
-          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
-          echo "api_ref=$api_ref" >> "$GITHUB_OUTPUT"
-          echo "web_ref=$web_ref" >> "$GITHUB_OUTPUT"
-          echo "worker_ref=$worker_ref" >> "$GITHUB_OUTPUT"
-          echo "dynamic_sessions_runtime_ref=$dynamic_sessions_runtime_ref" >> "$GITHUB_OUTPUT"
+          if [ "${{ steps.parse.outputs.deployment_required }}" != "true" ]; then
+            echo "Replay requires deploymentRequired=true in the release candidate manifest." >&2
+            exit 1
+          fi
 
       - name: Upload replay manifest copy
         uses: actions/upload-artifact@v4
         with:
           name: replay-release-candidate-${{ steps.parse.outputs.head_sha }}
-          path: .artifacts/release-candidate/${{ needs.resolve_replay_source.outputs.release_candidate_sha }}/manifest.json
+          path: ${{ steps.parse.outputs.release_candidate_manifest_copy_path }}
           if-no-files-found: error
 
   deploy_cloud:

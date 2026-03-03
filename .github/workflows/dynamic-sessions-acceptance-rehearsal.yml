@@ -56,9 +56,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          WORKFLOW_FILE: cloud-deployment-pipeline.yml
+          WORKFLOW_FILE: acceptance-stage.yml
           HEAD_SHA: ${{ steps.source.outputs.release_candidate_sha }}
-          RUN_EVENT: push
+          RUN_EVENT: merge_group
           RUN_STATUS: success
           RUN_STATUS_FALLBACK: completed
         run: node scripts/pipeline/shared/resolve-triggered-run-id.mjs

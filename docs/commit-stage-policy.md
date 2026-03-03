@@ -1,41 +1,36 @@
-# Commit Stage Policy Contract
+# Commit And Acceptance Stage Contract
 
-Purpose: contract for how commit-stage and integration-gate decide pass/fail.
+Purpose: contract for how `commit-stage` and `acceptance-stage` decide pass/fail.
 
-Canonical model: `development-pipeline.md`.
+Canonical model: `docs/development-pipeline.md`.
 
 ## Source Of Truth
 
-- Policy: `.github/policy/pipeline-policy.json`
-- Commit gate workflow: `.github/workflows/commit-stage.yml`
-- Integration gate workflow: `.github/workflows/integration-gate.yml`
-- Decision scripts:
-  - `scripts/pipeline/commit/decide-commit-stage.mjs`
-  - `scripts/pipeline/commit/decide-integration-gate.mjs`
+- Commit stage workflow: `.github/workflows/commit-stage.yml`
+- Acceptance stage workflow: `.github/workflows/acceptance-stage.yml`
 
 ## Required Status Contexts
 
 - `commit-stage`
-- `integration-gate`
-- `staging-gate`
+- `acceptance-stage`
 
 ## Decision Inputs
 
-- scope classification
-- required check outcomes
-- docs drift status
-- timing/SLO mode where configured
+- path classification (`dorny/paths-filter`)
+- lane-required check outcomes
+- merge-group staging rehearsal outcomes
+- release-candidate digest contract (when deployment is required)
 
 ## Policy Rules
 
-- `HR001` blocks high-risk direct commits to `main`.
-- docs drift blocks docs-critical changes without required doc updates.
-- artifacts are written under `.artifacts/**` for each gate.
+- High-risk boundaries are enforced by GitHub native controls: branch rulesets + CODEOWNERS.
+- `acceptance-stage` is merge-group authoritative for release-candidate packaging.
+- Promotion pipeline on `push main` is non-mutating and fix-forward.
 
 ## Artifacts
 
+- `.artifacts/commit-stage/<sha>/scope.json`
 - `.artifacts/commit-stage/<sha>/result.json`
-- `.artifacts/integration-gate/<sha>/result.json`
-- `.artifacts/staging-gate/<sha>/result.json`
-- `.artifacts/docs-drift/<sha>/result.json`
-- `.artifacts/main-recovery/<sha>/result.json` (legacy only; no longer authoritative)
+- `.artifacts/acceptance-stage/<sha>/scope.json`
+- `.artifacts/acceptance-stage/<sha>/result.json`
+- `.artifacts/release-candidate/<sha>/manifest.json`

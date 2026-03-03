@@ -16,7 +16,7 @@ Purpose: verify branch protection and ruleset governance for trunk-based deliver
 
 1. Check main branch protection settings.
 2. Confirm ruleset requires pull request + merge queue on `main`.
-3. Confirm required status contexts align with policy.
+3. Confirm required status contexts align with policy (`commit-stage`, `acceptance-stage`).
 4. Confirm force-push and deletion protections.
 5. Confirm no conflicting bypass rules on `main`.
 

@@ -1,22 +1,6 @@
 name: Commit Stage
 
-permissions:
-  actions: read
-  contents: read
-  pull-requests: read
-  id-token: write
-
-env:
-  EXPECTED_ENTRYPOINT: /
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 on:
-  push:
-    branches:
-      - main
   merge_group:
     types:
       - checks_requested
@@ -29,115 +13,217 @@ on:
       - reopened
       - ready_for_review
 
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+env:
+  EXPECTED_ENTRYPOINT: /
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  determine_scope:
-    name: determine-scope
+  classify_change:
+    name: classify-change
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      scope_path: ${{ steps.scope.outputs.scope_path }}
-      base_sha: ${{ steps.scope.outputs.base_sha }}
-      head_sha: ${{ steps.scope.outputs.head_sha }}
-      tested_sha: ${{ steps.scope.outputs.tested_sha }}
-      pr_number: ${{ steps.scope.outputs.pr_number }}
-      change_class: ${{ steps.scope.outputs.change_class }}
-      runtime_changed: ${{ steps.scope.outputs.runtime_changed }}
-      desktop_changed: ${{ steps.scope.outputs.desktop_changed }}
-      infra_changed: ${{ steps.scope.outputs.infra_changed }}
-      identity_changed: ${{ steps.scope.outputs.identity_changed }}
-      migration_changed: ${{ steps.scope.outputs.migration_changed }}
-      infra_rollout_changed: ${{ steps.scope.outputs.infra_rollout_changed }}
-      docs_only_changed: ${{ steps.scope.outputs.docs_only_changed }}
-      deployment_pipeline_config_changed: ${{ steps.scope.outputs.deployment_pipeline_config_changed }}
-      requires_infra_convergence: ${{ steps.scope.outputs.requires_infra_convergence }}
-      requires_migrations: ${{ steps.scope.outputs.requires_migrations }}
-      changed_files_json: ${{ steps.scope.outputs.changed_files_json }}
-      required_flow_ids_json: ${{ steps.scope.outputs.required_flow_ids_json }}
-      docs_drift_blocking: ${{ steps.scope.outputs.docs_drift_blocking }}
-      docs_drift_path: ${{ steps.docs_drift.outputs.docs_drift_path }}
-      docs_drift_status: ${{ steps.docs_drift.outputs.docs_drift_status }}
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+      desktop_only: ${{ steps.classify.outputs.desktop_only }}
+      docs_changed: ${{ steps.classify.outputs.docs_changed }}
+      desktop_changed: ${{ steps.classify.outputs.desktop_changed }}
+      runtime_changed: ${{ steps.classify.outputs.runtime_changed }}
+      infra_changed: ${{ steps.classify.outputs.infra_changed }}
+      identity_changed: ${{ steps.classify.outputs.identity_changed }}
+      migration_changed: ${{ steps.classify.outputs.migration_changed }}
+      pipeline_changed: ${{ steps.classify.outputs.pipeline_changed }}
+      runtime_lane_required: ${{ steps.classify.outputs.runtime_lane_required }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Classify changed paths
+        id: changes
+        uses: dorny/paths-filter@v3
         with:
-          node-version-file: .nvmrc
+          token: ${{ github.token }}
+          base: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          filters: |
+            docs:
+              - 'docs/**'
+              - 'README.md'
+              - 'CONTRIBUTING.md'
+              - 'AGENTS.md'
+              - '**/README.md'
+            desktop:
+              - 'apps/desktop/**'
+            runtime:
+              - 'apps/api/**'
+              - 'apps/web/**'
+              - 'apps/worker/**'
+              - 'apps/codex-session-runtime/**'
+              - 'apps/api/Dockerfile'
+              - 'apps/web/Dockerfile'
+              - 'apps/worker/Dockerfile'
+              - 'apps/codex-session-runtime/Dockerfile'
+              - 'packages/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '**/package.json'
+            infra:
+              - 'infra/azure/**'
+            identity:
+              - 'infra/identity/**'
+            migration:
+              - 'db/migrations/**'
+              - 'db/scripts/**'
+            pipeline:
+              - '.github/workflows/**'
+              - '.github/policy/**'
+              - 'scripts/pipeline/**'
 
-      - name: Resolve commit scope
-        id: scope
-        env:
-          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
-          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
-          GITHUB_TESTED_SHA: ${{ github.sha }}
-        run: node scripts/pipeline/commit/resolve-scope.mjs
+      - name: Resolve lane selection
+        id: classify
+        run: |
+          set -euo pipefail
+
+          docs_changed='${{ steps.changes.outputs.docs }}'
+          desktop_changed='${{ steps.changes.outputs.desktop }}'
+          runtime_changed='${{ steps.changes.outputs.runtime }}'
+          infra_changed='${{ steps.changes.outputs.infra }}'
+          identity_changed='${{ steps.changes.outputs.identity }}'
+          migration_changed='${{ steps.changes.outputs.migration }}'
+          pipeline_changed='${{ steps.changes.outputs.pipeline }}'
+
+          docs_only=false
+          if [ "$docs_changed" = "true" ] && \
+             [ "$desktop_changed" != "true" ] && \
+             [ "$runtime_changed" != "true" ] && \
+             [ "$infra_changed" != "true" ] && \
+             [ "$identity_changed" != "true" ] && \
+             [ "$migration_changed" != "true" ] && \
+             [ "$pipeline_changed" != "true" ]; then
+            docs_only=true
+          fi
+
+          desktop_only=false
+          if [ "$desktop_changed" = "true" ] && \
+             [ "$runtime_changed" != "true" ] && \
+             [ "$infra_changed" != "true" ] && \
+             [ "$identity_changed" != "true" ] && \
+             [ "$migration_changed" != "true" ] && \
+             [ "$pipeline_changed" != "true" ] && \
+             [ "$docs_changed" != "true" ]; then
+            desktop_only=true
+          fi
+
+          runtime_lane_required=false
+          if [ "$runtime_changed" = "true" ] || \
+             [ "$infra_changed" = "true" ] || \
+             [ "$identity_changed" = "true" ] || \
+             [ "$migration_changed" = "true" ] || \
+             [ "$pipeline_changed" = "true" ]; then
+            runtime_lane_required=true
+          fi
+
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "desktop_only=$desktop_only" >> "$GITHUB_OUTPUT"
+          echo "docs_changed=$docs_changed" >> "$GITHUB_OUTPUT"
+          echo "desktop_changed=$desktop_changed" >> "$GITHUB_OUTPUT"
+          echo "runtime_changed=$runtime_changed" >> "$GITHUB_OUTPUT"
+          echo "infra_changed=$infra_changed" >> "$GITHUB_OUTPUT"
+          echo "identity_changed=$identity_changed" >> "$GITHUB_OUTPUT"
+          echo "migration_changed=$migration_changed" >> "$GITHUB_OUTPUT"
+          echo "pipeline_changed=$pipeline_changed" >> "$GITHUB_OUTPUT"
+          echo "runtime_lane_required=$runtime_lane_required" >> "$GITHUB_OUTPUT"
+
+          mkdir -p ".artifacts/commit-stage/${GITHUB_SHA}"
+          cat > ".artifacts/commit-stage/${GITHUB_SHA}/scope.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "testedSha": "${GITHUB_SHA}",
+            "eventName": "${GITHUB_EVENT_NAME}",
+            "scope": {
+              "docs": ${docs_changed},
+              "desktop": ${desktop_changed},
+              "runtime": ${runtime_changed},
+              "infra": ${infra_changed},
+              "identity": ${identity_changed},
+              "migration": ${migration_changed},
+              "pipeline": ${pipeline_changed},
+              "docsOnly": ${docs_only},
+              "desktopOnly": ${desktop_only}
+            }
+          }
+          JSON
 
       - name: Upload scope artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: commit-scope-${{ steps.scope.outputs.tested_sha }}
-          path: ${{ steps.scope.outputs.scope_path }}
+          name: commit-stage-scope-${{ github.sha }}
+          path: .artifacts/commit-stage/${{ github.sha }}/scope.json
           if-no-files-found: warn
 
-      - name: Evaluate docs drift
-        id: docs_drift
-        env:
-          HEAD_SHA: ${{ steps.scope.outputs.head_sha }}
-          TESTED_SHA: ${{ steps.scope.outputs.tested_sha }}
-          CHANGED_FILES_JSON: ${{ steps.scope.outputs.changed_files_json }}
-        run: node scripts/pipeline/commit/check-docs-drift.mjs
-
-      - name: Upload docs-drift artifact
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: docs-drift-${{ steps.scope.outputs.tested_sha }}
-          path: .artifacts/docs-drift/${{ steps.scope.outputs.tested_sha }}/result.json
-          if-no-files-found: warn
-
-  commit_test_suite:
-    name: commit-test-suite
+  docs_checks:
+    name: docs-checks
     needs:
-      - determine_scope
-    if: ${{ needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true' }}
+      - classify_change
+    if: ${{ needs.classify_change.outputs.docs_only == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Node + pnpm
         uses: ./.github/actions/setup-node-pnpm
 
-      - name: Run commit-test suite
-        env:
-          HIGH_RISK_MAINLINE_TARGET_BRANCH: ${{ github.event_name == 'push' && 'main' || '' }}
-          HIGH_RISK_MAINLINE_CHANGED_FILES_JSON: ${{ github.event_name == 'push' && needs.determine_scope.outputs.changed_files_json || '' }}
-        run: pnpm ci:commit-test-suite
+      - name: Run docs lane checks
+        run: |
+          pnpm ci:doc-quality
+          pnpm ci:terminology-policy
 
-  desktop_commit_test_suite:
-    name: desktop-commit-test-suite
+  runtime_commit_tests:
+    name: runtime-commit-tests
     needs:
-      - determine_scope
-    if: ${{ needs.determine_scope.outputs.desktop_changed == 'true' && needs.determine_scope.outputs.docs_only_changed != 'true' }}
+      - classify_change
+    if: ${{ needs.classify_change.outputs.runtime_lane_required == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Node + pnpm
         uses: ./.github/actions/setup-node-pnpm
 
-      - name: Run desktop commit-test suite
+      - name: Run runtime commit lane
+        run: pnpm ci:commit-test-suite
+
+  desktop_commit_tests:
+    name: desktop-commit-tests
+    needs:
+      - classify_change
+    if: ${{ needs.classify_change.outputs.desktop_changed == 'true' && needs.classify_change.outputs.docs_only != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Run desktop commit lane
         run: |
           pnpm --filter @compass/desktop lint
           pnpm --filter @compass/desktop test
@@ -146,8 +232,8 @@ jobs:
   infra_static_check:
     name: infra-static-check
     needs:
-      - determine_scope
-    if: ${{ needs.determine_scope.outputs.infra_changed == 'true' }}
+      - classify_change
+    if: ${{ needs.classify_change.outputs.infra_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -160,8 +246,8 @@ jobs:
   identity_static_check:
     name: identity-static-check
     needs:
-      - determine_scope
-    if: ${{ needs.determine_scope.outputs.identity_changed == 'true' }}
+      - classify_change
+    if: ${{ needs.classify_change.outputs.identity_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -184,56 +270,92 @@ jobs:
     name: commit-stage
     if: ${{ always() }}
     needs:
-      - determine_scope
-      - commit_test_suite
-      - desktop_commit_test_suite
+      - classify_change
+      - docs_checks
+      - runtime_commit_tests
+      - desktop_commit_tests
       - infra_static_check
       - identity_static_check
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      TESTED_SHA: ${{ github.sha }}
+      DOCS_ONLY: ${{ needs.classify_change.outputs.docs_only }}
+      DESKTOP_CHANGED: ${{ needs.classify_change.outputs.desktop_changed }}
+      RUNTIME_REQUIRED: ${{ needs.classify_change.outputs.runtime_lane_required }}
+      INFRA_CHANGED: ${{ needs.classify_change.outputs.infra_changed }}
+      IDENTITY_CHANGED: ${{ needs.classify_change.outputs.identity_changed }}
+      DOCS_CHECKS_RESULT: ${{ needs.docs_checks.result }}
+      RUNTIME_CHECKS_RESULT: ${{ needs.runtime_commit_tests.result }}
+      DESKTOP_CHECKS_RESULT: ${{ needs.desktop_commit_tests.result }}
+      INFRA_CHECK_RESULT: ${{ needs.infra_static_check.result }}
+      IDENTITY_CHECK_RESULT: ${{ needs.identity_static_check.result }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Evaluate commit-stage
+        id: evaluate
+        run: |
+          set -euo pipefail
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
+          pass=true
+          reason_codes='[]'
 
-      - name: Collect commit-stage timing
-        id: timing
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
-          TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
-          TIMING_PHASE: final
-        run: node scripts/pipeline/shared/collect-commit-stage-timing.mjs
+          add_reason() {
+            local code="$1"
+            reason_codes="$(jq -c --arg code "$code" '. + [$code]' <<<"$reason_codes")"
+            pass=false
+          }
 
-      - name: Decide commit stage
-        env:
-          HEAD_SHA: ${{ needs.determine_scope.outputs.head_sha }}
-          TESTED_SHA: ${{ needs.determine_scope.outputs.tested_sha }}
-          RUNTIME_REQUIRED: ${{ needs.determine_scope.outputs.runtime_changed == 'true' || needs.determine_scope.outputs.infra_changed == 'true' || needs.determine_scope.outputs.identity_changed == 'true' || needs.determine_scope.outputs.deployment_pipeline_config_changed == 'true' }}
-          DESKTOP_REQUIRED: ${{ needs.determine_scope.outputs.desktop_changed == 'true' && needs.determine_scope.outputs.docs_only_changed != 'true' }}
-          INFRA_REQUIRED: ${{ needs.determine_scope.outputs.infra_changed }}
-          IDENTITY_REQUIRED: ${{ needs.determine_scope.outputs.identity_changed }}
-          DOCS_DRIFT_BLOCKING: ${{ needs.determine_scope.outputs.docs_drift_blocking }}
-          DOCS_DRIFT_STATUS: ${{ needs.determine_scope.outputs.docs_drift_status }}
-          COMMIT_STAGE_SLO_MODE: ${{ steps.timing.outputs.commit_stage_slo_mode }}
-          COMMIT_STAGE_SLO_PASS: ${{ steps.timing.outputs.commit_stage_slo_pass }}
-          COMMIT_STAGE_SLO_TARGET_SECONDS: ${{ steps.timing.outputs.commit_stage_slo_target_seconds }}
-          TIME_TO_COMMIT_GATE_SECONDS: ${{ steps.timing.outputs.time_to_commit_gate_seconds }}
-          CHECK_RESULTS_JSON: ${{ format('{{"determine-scope":"{0}","commit-test-suite":"{1}","desktop-commit-test-suite":"{2}","infra-static-check":"{3}","identity-static-check":"{4}"}}', needs.determine_scope.result, needs.commit_test_suite.result, needs.desktop_commit_test_suite.result, needs.infra_static_check.result, needs.identity_static_check.result) }}
-        run: node scripts/pipeline/commit/decide-commit-stage.mjs
+          if [ "$DOCS_ONLY" = "true" ] && [ "$DOCS_CHECKS_RESULT" != "success" ]; then
+            add_reason "DOCS_CHECKS_FAILED"
+          fi
+
+          if [ "$RUNTIME_REQUIRED" = "true" ] && [ "$RUNTIME_CHECKS_RESULT" != "success" ]; then
+            add_reason "RUNTIME_COMMIT_TESTS_FAILED"
+          fi
+
+          if [ "$DESKTOP_CHANGED" = "true" ] && [ "$DESKTOP_CHECKS_RESULT" != "success" ]; then
+            add_reason "DESKTOP_COMMIT_TESTS_FAILED"
+          fi
+
+          if [ "$INFRA_CHANGED" = "true" ] && [ "$INFRA_CHECK_RESULT" != "success" ]; then
+            add_reason "INFRA_STATIC_CHECK_FAILED"
+          fi
+
+          if [ "$IDENTITY_CHANGED" = "true" ] && [ "$IDENTITY_CHECK_RESULT" != "success" ]; then
+            add_reason "IDENTITY_STATIC_CHECK_FAILED"
+          fi
+
+          mkdir -p ".artifacts/commit-stage/$TESTED_SHA"
+          cat > ".artifacts/commit-stage/$TESTED_SHA/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "testedSha": "$TESTED_SHA",
+            "pass": $pass,
+            "reasonCodes": $reason_codes,
+            "checks": {
+              "classifyChange": "${{ needs.classify_change.result }}",
+              "docsChecks": "$DOCS_CHECKS_RESULT",
+              "runtimeCommitTests": "$RUNTIME_CHECKS_RESULT",
+              "desktopCommitTests": "$DESKTOP_CHECKS_RESULT",
+              "infraStaticCheck": "$INFRA_CHECK_RESULT",
+              "identityStaticCheck": "$IDENTITY_CHECK_RESULT"
+            }
+          }
+          JSON
+
+          echo "gate_pass=$pass" >> "$GITHUB_OUTPUT"
 
       - name: Upload commit-stage artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: commit-stage-${{ needs.determine_scope.outputs.tested_sha }}
-          path: |
-            .artifacts/commit-stage/${{ needs.determine_scope.outputs.tested_sha }}/result.json
-            .artifacts/commit-stage/${{ needs.determine_scope.outputs.tested_sha }}/timing.json
+          name: commit-stage-${{ env.TESTED_SHA }}
+          path: .artifacts/commit-stage/${{ env.TESTED_SHA }}/result.json
           if-no-files-found: warn
+
+      - name: Fail when commit-stage is NO
+        if: ${{ steps.evaluate.outputs.gate_pass != 'true' }}
+        run: |
+          echo "commit-stage failed" >&2
+          exit 1

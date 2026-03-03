@@ -1,10 +1,7 @@
-# High-risk mainline surfaces (HR001)
-/infra/azure/** @jrkropp
-/infra/identity/** @jrkropp
-/db/migrations/** @jrkropp
-/db/scripts/** @jrkropp
-/.github/workflows/** @jrkropp
-/.github/policy/** @jrkropp
+# High-risk mainline surfaces
+/infra/** @jrkropp
+/db/** @jrkropp
+/.github/** @jrkropp
 /scripts/pipeline/** @jrkropp
 
 # Policy-driven testing enforcement (layers 1-3)

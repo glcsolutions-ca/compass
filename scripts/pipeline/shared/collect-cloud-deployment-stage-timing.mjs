@@ -2,7 +2,6 @@ import path from "node:path";
 import {
   appendGithubOutput,
   appendGithubStepSummary,
-  loadPipelinePolicy,
   writeJsonFile,
   requireEnv
 } from "./pipeline-utils.mjs";
@@ -114,6 +113,15 @@ function parseTarget(value) {
   return value;
 }
 
+function coalesceEpoch(...values) {
+  for (const value of values) {
+    if (value !== null && Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return null;
+}
+
 function stagePass(duration, target) {
   if (duration === null || target === null) {
     return null;
@@ -149,37 +157,43 @@ async function main() {
   const runId = requireEnv("GITHUB_RUN_ID");
   const headSha = process.env.HEAD_SHA?.trim() || process.env.GITHUB_SHA?.trim() || "unknown";
 
-  const policyPath =
-    process.env.PIPELINE_POLICY_PATH ?? path.join(".github", "policy", "pipeline-policy.json");
-  const policy = await loadPipelinePolicy(policyPath);
-  const cloudDeploymentPipelineSlo = policy.cloudDeploymentPipeline?.slo ?? {};
-  const sloMode = String(cloudDeploymentPipelineSlo.mode || "observe")
+  const rawSloMode = String(process.env.CLOUD_DEPLOYMENT_SLO_MODE || "observe")
     .trim()
     .toLowerCase();
-  const deployCloudTarget = parseTarget(cloudDeploymentPipelineSlo.deployCloudTargetSeconds);
+  const sloMode = rawSloMode === "enforce" ? "enforce" : "observe";
+  const deployCloudTarget = parseTarget(
+    Number.parseInt(process.env.CLOUD_DEPLOYMENT_DEPLOY_TARGET_SECONDS ?? "1200", 10)
+  );
   const productionSmokeTarget = parseTarget(
-    cloudDeploymentPipelineSlo.productionSmokeTargetSeconds
+    Number.parseInt(process.env.CLOUD_DEPLOYMENT_SMOKE_TARGET_SECONDS ?? "600", 10)
   );
 
   const { run, jobs } = await fetchRunAndJobs({ token, repository, runId });
 
-  const commitStart = earliestStartEpoch(jobs, [
-    "verify-integration-gate-evidence",
-    "verify-commit-stage-evidence",
-    "determine-scope"
+  const resolveSourceStart = earliestStartEpoch(jobs, [
+    "resolve-acceptance-source",
+    "resolve-replay-source"
   ]);
-  const commitEnd = latestEndEpoch(jobs, ["determine-scope"]);
+  const resolveSourceEnd = latestEndEpoch(jobs, [
+    "resolve-acceptance-source",
+    "resolve-replay-source"
+  ]);
 
-  const releaseCandidateStart = earliestStartEpoch(jobs, [
-    "build-release-candidate-api-image",
-    "build-release-candidate-web-image",
-    "build-release-candidate-worker-image",
-    "build-release-candidate-dynamic-sessions-runtime-image"
+  const loadCandidateStart = earliestStartEpoch(jobs, ["load-release-candidate"]);
+  const loadCandidateEnd = latestEndEpoch(jobs, ["load-release-candidate"]);
+
+  const promotionStart = earliestStartEpoch(jobs, [
+    "promote-predeployed-revisions",
+    "deploy-cloud"
   ]);
-  const releaseCandidateEnd = latestEndEpoch(jobs, ["publish-release-candidate"]);
+  const promotionEnd = latestEndEpoch(jobs, ["promote-predeployed-revisions", "deploy-cloud"]);
+
+  const trafficShiftStart = earliestStartEpoch(jobs, ["promote-predeployed-revisions"]);
+  const trafficShiftEnd = latestEndEpoch(jobs, ["promote-predeployed-revisions"]);
 
   const deployCloudStart = earliestStartEpoch(jobs, ["deploy-cloud"]);
   const deployCloudEnd = latestEndEpoch(jobs, ["deploy-cloud"]);
+
   const productionSmokeStart = earliestStartEpoch(jobs, ["production-smoke"]);
   const productionSmokeEnd = latestEndEpoch(jobs, ["production-smoke"]);
 
@@ -192,8 +206,14 @@ async function main() {
   const overallExecutionSeconds = durationFromRange(overallStart, runUpdatedAt);
   const queueDelaySeconds = durationFromRange(runCreatedAt, overallStart);
 
-  const commitDuration = durationFromRange(commitStart, commitEnd);
-  const releaseCandidateDuration = durationFromRange(releaseCandidateStart, releaseCandidateEnd);
+  const acceptanceSourceDuration = durationFromRange(resolveSourceStart, resolveSourceEnd);
+  const loadReleaseCandidateDuration = durationFromRange(loadCandidateStart, loadCandidateEnd);
+  const promotionDuration = durationFromRange(promotionStart, promotionEnd);
+  const trafficShiftDuration = durationFromRange(trafficShiftStart, trafficShiftEnd);
+  const acceptancePrepDuration = durationFromRange(
+    coalesceEpoch(resolveSourceStart, loadCandidateStart),
+    coalesceEpoch(loadCandidateEnd, resolveSourceEnd)
+  );
   const deployCloudDuration = durationFromRange(deployCloudStart, deployCloudEnd);
   const productionSmokeDuration = durationFromRange(productionSmokeStart, productionSmokeEnd);
 
@@ -207,8 +227,13 @@ async function main() {
     metrics: {
       queueDelaySeconds,
       overallExecutionSeconds,
-      commitStageSeconds: commitDuration,
-      releaseCandidateBuildSeconds: releaseCandidateDuration,
+      acceptanceSourceResolveSeconds: acceptanceSourceDuration,
+      loadReleaseCandidateSeconds: loadReleaseCandidateDuration,
+      promotionSeconds: promotionDuration,
+      trafficShiftPromotionSeconds: trafficShiftDuration,
+      // Backward-compatible aliases kept for existing dashboards.
+      commitStageSeconds: acceptancePrepDuration,
+      releaseCandidateBuildSeconds: null,
       deployCloudSeconds: deployCloudDuration,
       productionSmokeSeconds: productionSmokeDuration
     },
@@ -238,8 +263,9 @@ async function main() {
       "### Cloud Deployment Pipeline Timing",
       `- queue delay (non-SLO): ${formatMetric(queueDelaySeconds)}`,
       `- overall execution: ${formatMetric(overallExecutionSeconds)}`,
-      `- commit stage: ${formatMetric(commitDuration)}`,
-      `- release candidate build: ${formatMetric(releaseCandidateDuration)}`,
+      `- resolve acceptance source: ${formatMetric(acceptanceSourceDuration)}`,
+      `- load release candidate: ${formatMetric(loadReleaseCandidateDuration)}`,
+      `- promotion path (traffic shift or deploy): ${formatMetric(promotionDuration)}`,
       `- deploy cloud: ${formatMetric(deployCloudDuration)}`,
       `- production smoke: ${formatMetric(productionSmokeDuration)}`,
       `- SLO mode: \`${sloMode}\``,

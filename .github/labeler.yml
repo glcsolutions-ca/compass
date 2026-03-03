@@ -1,0 +1,69 @@
+scope:docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "README.md"
+          - "CONTRIBUTING.md"
+          - "AGENTS.md"
+          - "**/README.md"
+
+scope:desktop:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "apps/desktop/**"
+
+scope:runtime-api-web:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "apps/api/**"
+          - "apps/web/**"
+          - "apps/api/Dockerfile"
+          - "apps/web/Dockerfile"
+
+scope:runtime-worker:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "apps/worker/**"
+          - "apps/worker/Dockerfile"
+          - "apps/codex-session-runtime/**"
+          - "apps/codex-session-runtime/Dockerfile"
+
+scope:packages:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "packages/**"
+          - "package.json"
+          - "pnpm-lock.yaml"
+          - "pnpm-workspace.yaml"
+          - "**/package.json"
+
+risk:db:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "db/migrations/**"
+          - "db/scripts/**"
+
+risk:infra:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "infra/azure/**"
+
+risk:identity:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "infra/identity/**"
+
+risk:pipeline:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/policy/**"
+          - "scripts/pipeline/**"
+
+risk:high:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "infra/**"
+          - "db/**"
+          - ".github/**"
+          - "scripts/pipeline/**"

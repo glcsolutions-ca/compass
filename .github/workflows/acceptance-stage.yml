@@ -1,0 +1,920 @@
+name: Acceptance Stage
+
+on:
+  merge_group:
+    types:
+      - checks_requested
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  actions: read
+  contents: read
+  deployments: write
+  id-token: write
+  pull-requests: read
+
+env:
+  EXPECTED_ENTRYPOINT: /
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  classify_change:
+    name: classify-change
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tested_sha: ${{ steps.classify.outputs.tested_sha }}
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+      desktop_only: ${{ steps.classify.outputs.desktop_only }}
+      docs_changed: ${{ steps.classify.outputs.docs_changed }}
+      desktop_changed: ${{ steps.classify.outputs.desktop_changed }}
+      runtime_changed: ${{ steps.classify.outputs.runtime_changed }}
+      infra_changed: ${{ steps.classify.outputs.infra_changed }}
+      identity_changed: ${{ steps.classify.outputs.identity_changed }}
+      migration_changed: ${{ steps.classify.outputs.migration_changed }}
+      pipeline_changed: ${{ steps.classify.outputs.pipeline_changed }}
+      high_risk: ${{ steps.classify.outputs.high_risk }}
+      deployment_required: ${{ steps.classify.outputs.deployment_required }}
+      low_risk_runtime: ${{ steps.classify.outputs.low_risk_runtime }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed paths
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          token: ${{ github.token }}
+          base: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          filters: |
+            docs:
+              - 'docs/**'
+              - 'README.md'
+              - 'CONTRIBUTING.md'
+              - 'AGENTS.md'
+              - '**/README.md'
+            desktop:
+              - 'apps/desktop/**'
+            runtime_api_web:
+              - 'apps/api/**'
+              - 'apps/web/**'
+              - 'apps/api/Dockerfile'
+              - 'apps/web/Dockerfile'
+            runtime_worker:
+              - 'apps/worker/**'
+              - 'apps/worker/Dockerfile'
+            runtime_dynamic_sessions:
+              - 'apps/codex-session-runtime/**'
+              - 'apps/codex-session-runtime/Dockerfile'
+            packages:
+              - 'packages/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '**/package.json'
+            infra:
+              - 'infra/azure/**'
+            identity:
+              - 'infra/identity/**'
+            migration:
+              - 'db/migrations/**'
+              - 'db/scripts/**'
+            pipeline:
+              - '.github/workflows/**'
+              - '.github/policy/**'
+              - 'scripts/pipeline/**'
+
+      - name: Resolve acceptance-stage lane selection
+        id: classify
+        run: |
+          set -euo pipefail
+
+          tested_sha='${GITHUB_SHA}'
+          docs_changed='${{ steps.changes.outputs.docs }}'
+          desktop_changed='${{ steps.changes.outputs.desktop }}'
+          runtime_api_web_changed='${{ steps.changes.outputs.runtime_api_web }}'
+          runtime_worker_changed='${{ steps.changes.outputs.runtime_worker }}'
+          runtime_dynamic_sessions_changed='${{ steps.changes.outputs.runtime_dynamic_sessions }}'
+          packages_changed='${{ steps.changes.outputs.packages }}'
+          infra_changed='${{ steps.changes.outputs.infra }}'
+          identity_changed='${{ steps.changes.outputs.identity }}'
+          migration_changed='${{ steps.changes.outputs.migration }}'
+          pipeline_changed='${{ steps.changes.outputs.pipeline }}'
+
+          runtime_changed=false
+          if [ "$runtime_api_web_changed" = "true" ] || \
+             [ "$runtime_worker_changed" = "true" ] || \
+             [ "$runtime_dynamic_sessions_changed" = "true" ] || \
+             [ "$packages_changed" = "true" ]; then
+            runtime_changed=true
+          fi
+
+          docs_only=false
+          if [ "$docs_changed" = "true" ] && \
+             [ "$desktop_changed" != "true" ] && \
+             [ "$runtime_changed" != "true" ] && \
+             [ "$infra_changed" != "true" ] && \
+             [ "$identity_changed" != "true" ] && \
+             [ "$migration_changed" != "true" ] && \
+             [ "$pipeline_changed" != "true" ]; then
+            docs_only=true
+          fi
+
+          desktop_only=false
+          if [ "$desktop_changed" = "true" ] && \
+             [ "$runtime_changed" != "true" ] && \
+             [ "$infra_changed" != "true" ] && \
+             [ "$identity_changed" != "true" ] && \
+             [ "$migration_changed" != "true" ] && \
+             [ "$pipeline_changed" != "true" ] && \
+             [ "$docs_changed" != "true" ]; then
+            desktop_only=true
+          fi
+
+          high_risk=false
+          if [ "$infra_changed" = "true" ] || \
+             [ "$identity_changed" = "true" ] || \
+             [ "$migration_changed" = "true" ] || \
+             [ "$pipeline_changed" = "true" ] || \
+             [ "$runtime_worker_changed" = "true" ] || \
+             [ "$runtime_dynamic_sessions_changed" = "true" ] || \
+             [ "$packages_changed" = "true" ]; then
+            high_risk=true
+          fi
+
+          deployment_required=false
+          if [ "$runtime_changed" = "true" ] || \
+             [ "$infra_changed" = "true" ] || \
+             [ "$identity_changed" = "true" ] || \
+             [ "$migration_changed" = "true" ] || \
+             [ "$pipeline_changed" = "true" ]; then
+            deployment_required=true
+          fi
+
+          low_risk_runtime=false
+          if [ "$deployment_required" = "true" ] && \
+             [ "$runtime_api_web_changed" = "true" ] && \
+             [ "$high_risk" != "true" ]; then
+            low_risk_runtime=true
+          fi
+
+          echo "tested_sha=$tested_sha" >> "$GITHUB_OUTPUT"
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "desktop_only=$desktop_only" >> "$GITHUB_OUTPUT"
+          echo "docs_changed=$docs_changed" >> "$GITHUB_OUTPUT"
+          echo "desktop_changed=$desktop_changed" >> "$GITHUB_OUTPUT"
+          echo "runtime_changed=$runtime_changed" >> "$GITHUB_OUTPUT"
+          echo "infra_changed=$infra_changed" >> "$GITHUB_OUTPUT"
+          echo "identity_changed=$identity_changed" >> "$GITHUB_OUTPUT"
+          echo "migration_changed=$migration_changed" >> "$GITHUB_OUTPUT"
+          echo "pipeline_changed=$pipeline_changed" >> "$GITHUB_OUTPUT"
+          echo "high_risk=$high_risk" >> "$GITHUB_OUTPUT"
+          echo "deployment_required=$deployment_required" >> "$GITHUB_OUTPUT"
+          echo "low_risk_runtime=$low_risk_runtime" >> "$GITHUB_OUTPUT"
+
+          mkdir -p ".artifacts/acceptance-stage/$tested_sha"
+          cat > ".artifacts/acceptance-stage/$tested_sha/scope.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "testedSha": "$tested_sha",
+            "eventName": "${GITHUB_EVENT_NAME}",
+            "scope": {
+              "docs": ${docs_changed},
+              "desktop": ${desktop_changed},
+              "runtime": ${runtime_changed},
+              "infra": ${infra_changed},
+              "identity": ${identity_changed},
+              "migration": ${migration_changed},
+              "pipeline": ${pipeline_changed},
+              "docsOnly": ${docs_only},
+              "desktopOnly": ${desktop_only}
+            },
+            "deploymentRequired": ${deployment_required},
+            "riskClass": "$(if [ "$high_risk" = "true" ]; then echo high-risk; elif [ "$deployment_required" = "true" ]; then echo low-risk-runtime; else echo none; fi)"
+          }
+          JSON
+
+      - name: Upload scope artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-stage-scope-${{ steps.classify.outputs.tested_sha }}
+          path: .artifacts/acceptance-stage/${{ steps.classify.outputs.tested_sha }}/scope.json
+          if-no-files-found: warn
+
+  package_once_images:
+    name: package-once-${{ matrix.service.name }}
+    needs:
+      - classify_change
+    if: ${{ github.event_name == 'merge_group' && needs.classify_change.outputs.deployment_required == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: production
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: api
+            image_name: compass-api
+            dockerfile: apps/api/Dockerfile
+          - name: web
+            image_name: compass-web
+            dockerfile: apps/web/Dockerfile
+          - name: worker
+            image_name: compass-worker
+            dockerfile: apps/worker/Dockerfile
+          - name: dynamic-sessions-runtime
+            image_name: compass-codex-session-runtime
+            dockerfile: apps/codex-session-runtime/Dockerfile
+    env:
+      HEAD_SHA: ${{ needs.classify_change.outputs.tested_sha }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: ACR login
+        run: az acr login --name "$ACR_NAME" --only-show-errors
+
+      - name: Build and push digest-pinned candidate image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.service.dockerfile }}
+          push: true
+          tags: ${{ env.ACR_REGISTRY }}/${{ matrix.service.image_name }}:${{ env.HEAD_SHA }}
+          cache-from: type=gha,scope=${{ matrix.service.image_name }}
+          cache-to: type=gha,scope=${{ matrix.service.image_name }},mode=max
+
+      - name: Write candidate image ref
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/release-candidate/$HEAD_SHA"
+          echo "${ACR_REGISTRY}/${{ matrix.service.image_name }}@${{ steps.build.outputs.digest }}" > ".artifacts/release-candidate/$HEAD_SHA/${{ matrix.service.name }}.ref"
+
+      - name: Upload candidate image ref artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-release-candidate-ref-${{ matrix.service.name }}-${{ env.HEAD_SHA }}
+          path: .artifacts/release-candidate/${{ env.HEAD_SHA }}/${{ matrix.service.name }}.ref
+          if-no-files-found: error
+
+  publish_release_candidate:
+    name: publish-release-candidate
+    needs:
+      - classify_change
+      - package_once_images
+    if: ${{ always() && needs.classify_change.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      api_ref: ${{ steps.publish.outputs.api_ref }}
+      web_ref: ${{ steps.publish.outputs.web_ref }}
+      worker_ref: ${{ steps.publish.outputs.worker_ref }}
+      dynamic_sessions_runtime_ref: ${{ steps.publish.outputs.dynamic_sessions_runtime_ref }}
+    env:
+      HEAD_SHA: ${{ needs.classify_change.outputs.tested_sha }}
+      DEPLOYMENT_REQUIRED: ${{ needs.classify_change.outputs.deployment_required }}
+      MERGE_GROUP_RUN: ${{ github.event_name == 'merge_group' }}
+    steps:
+      - name: Download release candidate refs
+        if: ${{ env.DEPLOYMENT_REQUIRED == 'true' && env.MERGE_GROUP_RUN == 'true' && needs.package_once_images.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: acceptance-release-candidate-ref-*-${{ env.HEAD_SHA }}
+          path: .artifacts/release-candidate/${{ env.HEAD_SHA }}
+          merge-multiple: true
+
+      - name: Resolve release candidate refs
+        id: publish
+        run: |
+          set -euo pipefail
+
+          api_ref=""
+          web_ref=""
+          worker_ref=""
+          dynamic_sessions_runtime_ref=""
+
+          if [ "$DEPLOYMENT_REQUIRED" = "true" ] && [ "$MERGE_GROUP_RUN" = "true" ]; then
+            artifact_dir=".artifacts/release-candidate/$HEAD_SHA"
+            api_ref="$(cat "$artifact_dir/api.ref")"
+            web_ref="$(cat "$artifact_dir/web.ref")"
+            worker_ref="$(cat "$artifact_dir/worker.ref")"
+            dynamic_sessions_runtime_ref="$(cat "$artifact_dir/dynamic-sessions-runtime.ref")"
+
+            for image in "$api_ref" "$web_ref" "$worker_ref" "$dynamic_sessions_runtime_ref"; do
+              if [[ "$image" != *"@sha256:"* ]]; then
+                echo "Release candidate image reference must be digest-pinned: $image" >&2
+                exit 1
+              fi
+            done
+          fi
+
+          echo "api_ref=$api_ref" >> "$GITHUB_OUTPUT"
+          echo "web_ref=$web_ref" >> "$GITHUB_OUTPUT"
+          echo "worker_ref=$worker_ref" >> "$GITHUB_OUTPUT"
+          echo "dynamic_sessions_runtime_ref=$dynamic_sessions_runtime_ref" >> "$GITHUB_OUTPUT"
+
+  automated_acceptance_tests:
+    name: automated-acceptance-tests
+    needs:
+      - classify_change
+    if: ${{ needs.classify_change.outputs.deployment_required == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Run automated acceptance tests
+        run: pnpm ci:smoke:system
+
+  integration_testing:
+    name: integration-testing
+    needs:
+      - classify_change
+    if: ${{ needs.classify_change.outputs.deployment_required == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Run integration testing
+        env:
+          DATABASE_URL: postgres://compass:compass@localhost:5432/compass
+          AGENT_RUNTIME_PROVIDER: mock
+          AGENT_CLOUD_DRIVER_MOCK: "true"
+        run: |
+          set -euo pipefail
+          pnpm db:postgres:up
+          pnpm test:integration
+
+      - name: Tear down local Postgres
+        if: ${{ always() }}
+        run: pnpm db:postgres:down
+
+  staging_rehearsal_low_risk:
+    name: staging-rehearsal-low-risk
+    needs:
+      - classify_change
+      - publish_release_candidate
+    if: ${{ github.event_name == 'merge_group' && needs.classify_change.outputs.deployment_required == 'true' && needs.classify_change.outputs.low_risk_runtime == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    concurrency:
+      group: production-cloud-rehearsal
+      cancel-in-progress: false
+    outputs:
+      predeployed_revisions_json: ${{ steps.predeploy.outputs.predeployed_revisions_json }}
+    env:
+      HEAD_SHA: ${{ needs.classify_change.outputs.tested_sha }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      API_IMAGE: ${{ needs.publish_release_candidate.outputs.api_ref }}
+      WEB_IMAGE: ${{ needs.publish_release_candidate.outputs.web_ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Resolve target app names
+        run: |
+          set -euo pipefail
+          params_file="infra/azure/environments/cloud.bicepparam"
+
+          api_app_name="$(sed -n "s/^param apiAppName = '\\(.*\\)'/\\1/p" "$params_file" | head -n 1)"
+          web_app_name="$(sed -n "s/^param webAppName = '\\(.*\\)'/\\1/p" "$params_file" | head -n 1)"
+          api_custom_domain="$(sed -n "s/^param apiCustomDomain = '\\(.*\\)'/\\1/p" "$params_file" | head -n 1)"
+          web_custom_domain="$(sed -n "s/^param webCustomDomain = '\\(.*\\)'/\\1/p" "$params_file" | head -n 1)"
+
+          if [ -z "$api_app_name" ] || [ -z "$web_app_name" ]; then
+            echo "Unable to resolve app names from $params_file" >&2
+            exit 1
+          fi
+
+          echo "ACA_API_APP_NAME=$api_app_name" >> "$GITHUB_ENV"
+          echo "ACA_WEB_APP_NAME=$web_app_name" >> "$GITHUB_ENV"
+          echo "API_CUSTOM_DOMAIN=$api_custom_domain" >> "$GITHUB_ENV"
+          echo "WEB_CUSTOM_DOMAIN=$web_custom_domain" >> "$GITHUB_ENV"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve production base URLs
+        run: |
+          set -euo pipefail
+
+          if [ -n "${API_CUSTOM_DOMAIN:-}" ]; then
+            api_base_url="https://${API_CUSTOM_DOMAIN}"
+          else
+            api_fqdn="$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_API_APP_NAME" --query properties.configuration.ingress.fqdn --output tsv --only-show-errors)"
+            api_base_url="https://${api_fqdn}"
+          fi
+
+          if [ -n "${WEB_CUSTOM_DOMAIN:-}" ]; then
+            web_base_url="https://${WEB_CUSTOM_DOMAIN}"
+          else
+            web_fqdn="$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$ACA_WEB_APP_NAME" --query properties.configuration.ingress.fqdn --output tsv --only-show-errors)"
+            web_base_url="https://${web_fqdn}"
+          fi
+
+          echo "PRODUCTION_API_BASE_URL=$api_base_url" >> "$GITHUB_ENV"
+          echo "PRODUCTION_WEB_BASE_URL=$web_base_url" >> "$GITHUB_ENV"
+
+      - name: Stage zero-traffic revisions
+        id: predeploy
+        run: node scripts/pipeline/cloud/deployment-stage/stage-zero-traffic-revisions.mjs
+
+      - name: Smoke predeployed API revision
+        env:
+          TARGET_API_BASE_URL: ${{ steps.predeploy.outputs.api_revision_url }}
+          EXPECTED_ENTRA_REDIRECT_URI: ${{ env.PRODUCTION_WEB_BASE_URL }}/v1/auth/entra/callback
+        run: node scripts/pipeline/cloud/deployment-stage/verify-api-smoke.mjs
+
+      - name: Upload low-risk staging rehearsal artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-rehearsal-low-risk-${{ env.HEAD_SHA }}
+          path: |
+            .artifacts/deploy/${{ env.HEAD_SHA }}/zero-traffic-predeploy.json
+            .artifacts/deploy/${{ env.HEAD_SHA }}/api-smoke.json
+          if-no-files-found: warn
+
+  staging_rehearsal_high_risk:
+    name: staging-rehearsal-high-risk
+    needs:
+      - classify_change
+      - publish_release_candidate
+    if: ${{ github.event_name == 'merge_group' && needs.classify_change.outputs.deployment_required == 'true' && needs.classify_change.outputs.high_risk == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: staging
+    concurrency:
+      group: staging-cloud-mutation
+      cancel-in-progress: false
+    env:
+      HEAD_SHA: ${{ needs.classify_change.outputs.tested_sha }}
+      API_IMAGE: ${{ needs.publish_release_candidate.outputs.api_ref }}
+      WEB_IMAGE: ${{ needs.publish_release_candidate.outputs.web_ref }}
+      WORKER_IMAGE: ${{ needs.publish_release_candidate.outputs.worker_ref }}
+      DYNAMIC_SESSIONS_RUNTIME_IMAGE: ${{ needs.publish_release_candidate.outputs.dynamic_sessions_runtime_ref }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      KEY_VAULT_NAME: ${{ vars.KEY_VAULT_NAME }}
+      TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+      TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+      TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
+      TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
+      API_IDENTIFIER_URI: ${{ vars.API_IDENTIFIER_URI }}
+      IDENTITY_OWNER_OBJECT_IDS_JSON: ${{ vars.IDENTITY_OWNER_OBJECT_IDS_JSON }}
+      ACA_WEB_CUSTOM_DOMAIN: ${{ vars.ACA_WEB_CUSTOM_DOMAIN }}
+      IDENTITY_CONVERGE_ENABLED: ${{ vars.IDENTITY_CONVERGE_ENABLED || 'false' }}
+      MIGRATION_TIMEOUT_SECONDS: ${{ vars.MIGRATION_TIMEOUT_SECONDS || '900' }}
+      MIGRATION_CONTAINER_NAME: ${{ vars.MIGRATION_CONTAINER_NAME || 'migrate' }}
+      STAGING_ARM_PARAMETERS_FILE: ${{ vars.STAGING_ARM_PARAMETERS_FILE || 'infra/azure/environments/cloud.bicepparam' }}
+      STAGING_DEPLOYMENT_NAME_PREFIX: ${{ vars.STAGING_DEPLOYMENT_NAME_PREFIX || 'staging' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Validate release candidate refs
+        run: |
+          set -euo pipefail
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$DYNAMIC_SESSIONS_RUNTIME_IMAGE"; do
+            if [ -z "$image" ]; then
+              echo "Missing release candidate image reference" >&2
+              exit 1
+            fi
+            if [[ "$image" != *"@sha256:"* ]]; then
+              echo "Release candidate image is not digest-pinned: $image" >&2
+              exit 1
+            fi
+          done
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate Key Vault secret contract
+        run: node scripts/pipeline/cloud/deployment-stage/validate-keyvault-secrets.mjs
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Converge identity (optional)
+        env:
+          ARM_USE_OIDC: "true"
+          ARM_USE_AZUREAD: "true"
+          ARM_CLIENT_ID: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ env.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ env.AZURE_SUBSCRIPTION_ID }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [ "${IDENTITY_CONVERGE_ENABLED,,}" != "true" ]; then
+            echo "Identity converge is disabled; skipping."
+            exit 0
+          fi
+
+          if [ -z "${TFSTATE_RESOURCE_GROUP:-}" ] || [ -z "${TFSTATE_STORAGE_ACCOUNT:-}" ] || [ -z "${TFSTATE_CONTAINER:-}" ] || [ -z "${TFSTATE_KEY:-}" ] || [ -z "${API_IDENTIFIER_URI:-}" ] || [ -z "${IDENTITY_OWNER_OBJECT_IDS_JSON:-}" ] || [ -z "${ACA_WEB_CUSTOM_DOMAIN:-}" ]; then
+            echo "Identity converge is not configured in repository variables; skipping."
+            exit 0
+          fi
+
+          gh_organization="${GITHUB_REPOSITORY%%/*}"
+          gh_repository="${GITHUB_REPOSITORY##*/}"
+
+          terraform -chdir=infra/identity init \
+            -input=false \
+            -backend-config="resource_group_name=${TFSTATE_RESOURCE_GROUP}" \
+            -backend-config="storage_account_name=${TFSTATE_STORAGE_ACCOUNT}" \
+            -backend-config="container_name=${TFSTATE_CONTAINER}" \
+            -backend-config="key=${TFSTATE_KEY}" \
+            -backend-config="use_oidc=true" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="tenant_id=${ARM_TENANT_ID}" \
+            -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}" \
+            -backend-config="client_id=${ARM_CLIENT_ID}"
+
+          terraform -chdir=infra/identity apply \
+            -input=false \
+            -auto-approve \
+            -var-file=env/prod.tfvars \
+            -var "github_organization=${gh_organization}" \
+            -var "github_repository=${gh_repository}" \
+            -var "github_environment_name=staging" \
+            -var "api_identifier_uri=${API_IDENTIFIER_URI}" \
+            -var "owners=${IDENTITY_OWNER_OBJECT_IDS_JSON}" \
+            -var "web_custom_domain=${ACA_WEB_CUSTOM_DOMAIN}"
+
+          mkdir -p ".artifacts/identity/$HEAD_SHA"
+          terraform -chdir=infra/identity output -json > ".artifacts/identity/$HEAD_SHA/outputs.json"
+
+      - name: Apply staging infra
+        run: |
+          set -euo pipefail
+
+          export ARM_TEMPLATE_FILE="infra/azure/main.bicep"
+          export ARM_PARAMETERS_FILE="$STAGING_ARM_PARAMETERS_FILE"
+          export ARM_ARTIFACT_DIR=".artifacts/infra/$HEAD_SHA"
+          export ARM_DEPLOYMENT_NAME_PREFIX="$STAGING_DEPLOYMENT_NAME_PREFIX"
+          export ARM_PARAMETERS_OVERRIDES="$(cat <<PARAMS
+          apiImage=$API_IMAGE
+          webImage=$WEB_IMAGE
+          workerImage=$WORKER_IMAGE
+          dynamicSessionsRuntimeImage=$DYNAMIC_SESSIONS_RUNTIME_IMAGE
+          PARAMS
+          )"
+
+          node scripts/pipeline/cloud/deployment-stage/apply-infra.mjs
+
+      - name: Refresh Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve deployed resource names
+        run: |
+          set -euo pipefail
+
+          deployment_json=".artifacts/infra/$HEAD_SHA/deployment.json"
+
+          echo "ACA_API_APP_NAME=$(jq -er '.properties.outputs.apiContainerAppName.value' "$deployment_json")" >> "$GITHUB_ENV"
+          echo "ACA_WEB_APP_NAME=$(jq -er '.properties.outputs.webContainerAppName.value' "$deployment_json")" >> "$GITHUB_ENV"
+          echo "ACA_WORKER_APP_NAME=$(jq -er '.properties.outputs.workerContainerAppName.value' "$deployment_json")" >> "$GITHUB_ENV"
+          echo "DYNAMIC_SESSIONS_POOL_NAME=$(jq -er '.properties.outputs.dynamicSessionsPoolNameOutput.value' "$deployment_json")" >> "$GITHUB_ENV"
+          echo "DYNAMIC_SESSIONS_EXECUTOR_IDENTITY_NAME=$(jq -er '.properties.outputs.dynamicSessionsExecutorIdentityName.value' "$deployment_json")" >> "$GITHUB_ENV"
+          echo "ACA_MIGRATE_JOB_NAME=$(jq -er '.properties.outputs.migrationJobName.value' "$deployment_json")" >> "$GITHUB_ENV"
+          echo "SERVICE_BUS_PROD_NAMESPACE_NAME=$(jq -er '.properties.outputs.serviceBusProdNamespaceNameOutput.value' "$deployment_json")" >> "$GITHUB_ENV"
+          echo "SERVICE_BUS_QUEUE_NAME=$(jq -er '.properties.outputs.serviceBusQueueNameOutput.value' "$deployment_json")" >> "$GITHUB_ENV"
+          echo "WORKER_RUNTIME_IDENTITY_CLIENT_ID=$(jq -er '.properties.outputs.workerRuntimeIdentityClientId.value' "$deployment_json")" >> "$GITHUB_ENV"
+          echo "WORKER_RUNTIME_IDENTITY_PRINCIPAL_ID=$(jq -er '.properties.outputs.workerRuntimeIdentityPrincipalId.value' "$deployment_json")" >> "$GITHUB_ENV"
+
+      - name: Verify Dynamic Sessions convergence
+        env:
+          RELEASE_CANDIDATE_DYNAMIC_SESSIONS_RUNTIME_REF: ${{ env.DYNAMIC_SESSIONS_RUNTIME_IMAGE }}
+        run: node scripts/pipeline/cloud/deployment-stage/verify-dynamic-sessions-convergence.mjs
+
+      - name: Verify agent runtime compatibility
+        run: node scripts/pipeline/cloud/deployment-stage/verify-agent-runtime-compatibility.mjs
+
+      - name: Verify worker Service Bus cutover
+        run: node scripts/pipeline/cloud/deployment-stage/verify-worker-servicebus-cutover.mjs
+
+      - name: Update migration job image
+        run: |
+          az containerapp job update \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$ACA_MIGRATE_JOB_NAME" \
+            --image "$API_IMAGE" \
+            --output none
+
+      - name: Run migration job
+        id: migration_start
+        env:
+          AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
+          ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
+        run: node scripts/pipeline/cloud/deployment-stage/start-migration-job.mjs
+
+      - name: Wait for migration completion
+        env:
+          AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
+          ACA_MIGRATE_JOB_NAME: ${{ env.ACA_MIGRATE_JOB_NAME }}
+          MIGRATION_EXECUTION_NAME: ${{ steps.migration_start.outputs.migration_execution_name }}
+          MIGRATION_TIMEOUT_SECONDS: ${{ env.MIGRATION_TIMEOUT_SECONDS }}
+          MIGRATION_CONTAINER_NAME: ${{ env.MIGRATION_CONTAINER_NAME }}
+        run: node scripts/pipeline/cloud/deployment-stage/wait-migration-job.mjs
+
+      - name: Deploy API
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          imageToDeploy: ${{ env.API_IMAGE }}
+          containerAppName: ${{ env.ACA_API_APP_NAME }}
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          disableTelemetry: true
+
+      - name: Deploy Web
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          imageToDeploy: ${{ env.WEB_IMAGE }}
+          containerAppName: ${{ env.ACA_WEB_APP_NAME }}
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          disableTelemetry: true
+
+      - name: Deploy Worker
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          imageToDeploy: ${{ env.WORKER_IMAGE }}
+          containerAppName: ${{ env.ACA_WORKER_APP_NAME }}
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          disableTelemetry: true
+
+      - name: Resolve staging URLs
+        run: |
+          set -euo pipefail
+
+          deployment_json=".artifacts/infra/$HEAD_SHA/deployment.json"
+          api_staging_url="$(jq -er '.properties.outputs.apiBaseUrlOutput.value' "$deployment_json")"
+          web_staging_url="$(jq -er '.properties.outputs.webBaseUrlOutput.value' "$deployment_json")"
+
+          echo "TARGET_API_BASE_URL=$api_staging_url" >> "$GITHUB_ENV"
+          echo "EXPECTED_ENTRA_REDIRECT_URI=${web_staging_url}/v1/auth/entra/callback" >> "$GITHUB_ENV"
+
+      - name: Smoke staging deployment
+        run: node scripts/pipeline/cloud/deployment-stage/verify-api-smoke.mjs
+
+      - name: Upload high-risk staging rehearsal artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-rehearsal-high-risk-${{ env.HEAD_SHA }}
+          path: |
+            .artifacts/infra/${{ env.HEAD_SHA }}
+            .artifacts/identity/${{ env.HEAD_SHA }}
+            .artifacts/deploy/${{ env.HEAD_SHA }}
+          if-no-files-found: warn
+
+  acceptance_stage:
+    name: acceptance-stage
+    if: ${{ always() }}
+    needs:
+      - classify_change
+      - publish_release_candidate
+      - automated_acceptance_tests
+      - integration_testing
+      - staging_rehearsal_low_risk
+      - staging_rehearsal_high_risk
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      TESTED_SHA: ${{ needs.classify_change.outputs.tested_sha || github.sha }}
+      DOCS_ONLY: ${{ needs.classify_change.outputs.docs_only || 'false' }}
+      DESKTOP_ONLY: ${{ needs.classify_change.outputs.desktop_only || 'false' }}
+      RUNTIME_CHANGED: ${{ needs.classify_change.outputs.runtime_changed || 'false' }}
+      INFRA_CHANGED: ${{ needs.classify_change.outputs.infra_changed || 'false' }}
+      IDENTITY_CHANGED: ${{ needs.classify_change.outputs.identity_changed || 'false' }}
+      MIGRATION_CHANGED: ${{ needs.classify_change.outputs.migration_changed || 'false' }}
+      PIPELINE_CHANGED: ${{ needs.classify_change.outputs.pipeline_changed || 'false' }}
+      HIGH_RISK: ${{ needs.classify_change.outputs.high_risk || 'false' }}
+      DEPLOYMENT_REQUIRED: ${{ needs.classify_change.outputs.deployment_required || 'false' }}
+      LOW_RISK_RUNTIME: ${{ needs.classify_change.outputs.low_risk_runtime || 'false' }}
+      AUTOMATED_ACCEPTANCE_RESULT: ${{ needs.automated_acceptance_tests.result }}
+      INTEGRATION_TESTING_RESULT: ${{ needs.integration_testing.result }}
+      PUBLISH_RELEASE_CANDIDATE_RESULT: ${{ needs.publish_release_candidate.result }}
+      LOW_RISK_STAGING_RESULT: ${{ needs.staging_rehearsal_low_risk.result }}
+      HIGH_RISK_STAGING_RESULT: ${{ needs.staging_rehearsal_high_risk.result }}
+      API_REF: ${{ needs.publish_release_candidate.outputs.api_ref }}
+      WEB_REF: ${{ needs.publish_release_candidate.outputs.web_ref }}
+      WORKER_REF: ${{ needs.publish_release_candidate.outputs.worker_ref }}
+      DYNAMIC_SESSIONS_RUNTIME_REF: ${{ needs.publish_release_candidate.outputs.dynamic_sessions_runtime_ref }}
+      PREDEPLOYED_REVISIONS_JSON: ${{ needs.staging_rehearsal_low_risk.outputs.predeployed_revisions_json }}
+    steps:
+      - name: Evaluate acceptance-stage and publish manifest
+        id: decision
+        run: |
+          set -euo pipefail
+
+          queue_run=false
+          if [ "${GITHUB_EVENT_NAME}" = "merge_group" ]; then
+            queue_run=true
+          fi
+
+          pass=true
+          reason_codes='[]'
+
+          add_reason() {
+            local code="$1"
+            reason_codes="$(jq -c --arg code "$code" '. + [$code]' <<<"$reason_codes")"
+            pass=false
+          }
+
+          if [ "$DEPLOYMENT_REQUIRED" = "true" ]; then
+            if [ "$AUTOMATED_ACCEPTANCE_RESULT" != "success" ]; then
+              add_reason "AUTOMATED_ACCEPTANCE_TESTS_FAILED"
+            fi
+
+            if [ "$INTEGRATION_TESTING_RESULT" != "success" ]; then
+              add_reason "INTEGRATION_TESTING_FAILED"
+            fi
+
+            if [ "$queue_run" = "true" ]; then
+              if [ "$PUBLISH_RELEASE_CANDIDATE_RESULT" != "success" ]; then
+                add_reason "PACKAGE_ONCE_OR_PUBLISH_FAILED"
+              fi
+
+              if [ -z "$API_REF" ] || [ -z "$WEB_REF" ] || [ -z "$WORKER_REF" ] || [ -z "$DYNAMIC_SESSIONS_RUNTIME_REF" ]; then
+                add_reason "RELEASE_CANDIDATE_REFS_MISSING"
+              fi
+
+              if [ "$LOW_RISK_RUNTIME" = "true" ] && [ "$LOW_RISK_STAGING_RESULT" != "success" ]; then
+                add_reason "LOW_RISK_STAGING_REHEARSAL_FAILED"
+              fi
+
+              if [ "$HIGH_RISK" = "true" ] && [ "$HIGH_RISK_STAGING_RESULT" != "success" ]; then
+                add_reason "HIGH_RISK_STAGING_REHEARSAL_FAILED"
+              fi
+            else
+              reason_codes="$(jq -c '. + ["ACCEPTANCE_STAGE_PR_PREVIEW_ONLY"]' <<<"$reason_codes")"
+            fi
+          fi
+
+          risk_class="none"
+          if [ "$DEPLOYMENT_REQUIRED" = "true" ] && [ "$HIGH_RISK" = "true" ]; then
+            risk_class="high-risk"
+          elif [ "$DEPLOYMENT_REQUIRED" = "true" ]; then
+            risk_class="low-risk-runtime"
+          fi
+
+          manifest_dir=".artifacts/release-candidate/$TESTED_SHA"
+          mkdir -p "$manifest_dir"
+
+          jq -n \
+            --arg generatedAt "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+            --arg headSha "$TESTED_SHA" \
+            --arg riskClass "$risk_class" \
+            --argjson deploymentRequired "$DEPLOYMENT_REQUIRED" \
+            --argjson docsOnly "$DOCS_ONLY" \
+            --argjson desktopOnly "$DESKTOP_ONLY" \
+            --argjson runtime "$RUNTIME_CHANGED" \
+            --argjson infra "$INFRA_CHANGED" \
+            --argjson identity "$IDENTITY_CHANGED" \
+            --argjson migration "$MIGRATION_CHANGED" \
+            --argjson pipeline "$PIPELINE_CHANGED" \
+            --arg apiRef "$API_REF" \
+            --arg webRef "$WEB_REF" \
+            --arg workerRef "$WORKER_REF" \
+            --arg dynamicRef "$DYNAMIC_SESSIONS_RUNTIME_REF" \
+            '{
+              schemaVersion: "1",
+              generatedAt: $generatedAt,
+              headSha: $headSha,
+              deploymentRequired: $deploymentRequired,
+              riskClass: $riskClass,
+              scope: {
+                docsOnly: $docsOnly,
+                desktopOnly: $desktopOnly,
+                runtime: $runtime,
+                infra: $infra,
+                identity: $identity,
+                migration: $migration,
+                pipeline: $pipeline
+              },
+              releaseCandidate: (
+                if $deploymentRequired then {
+                  apiRef: $apiRef,
+                  webRef: $webRef,
+                  workerRef: $workerRef,
+                  dynamicSessionsRuntimeRef: $dynamicRef
+                } else null end
+              )
+            }' > "$manifest_dir/manifest.json"
+
+          if [ "$LOW_RISK_RUNTIME" = "true" ] && [ "$queue_run" = "true" ] && [ -n "${PREDEPLOYED_REVISIONS_JSON:-}" ]; then
+            tmp_manifest="$manifest_dir/manifest.tmp.json"
+            jq --argjson predeployed "$PREDEPLOYED_REVISIONS_JSON" \
+              '. + { predeployedRevisions: $predeployed }' \
+              "$manifest_dir/manifest.json" > "$tmp_manifest"
+            mv "$tmp_manifest" "$manifest_dir/manifest.json"
+          fi
+
+          mkdir -p ".artifacts/acceptance-stage/$TESTED_SHA"
+          cat > ".artifacts/acceptance-stage/$TESTED_SHA/result.json" <<JSON
+          {
+            "schemaVersion": "1",
+            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "testedSha": "$TESTED_SHA",
+            "eventName": "${GITHUB_EVENT_NAME}",
+            "deploymentRequired": ${DEPLOYMENT_REQUIRED},
+            "riskClass": "$risk_class",
+            "pass": ${pass},
+            "reasonCodes": ${reason_codes},
+            "stages": {
+              "classifyChange": "${{ needs.classify_change.result }}",
+              "publishReleaseCandidate": "${PUBLISH_RELEASE_CANDIDATE_RESULT}",
+              "automatedAcceptanceTests": "${AUTOMATED_ACCEPTANCE_RESULT}",
+              "integrationTesting": "${INTEGRATION_TESTING_RESULT}",
+              "stagingRehearsalLowRisk": "${LOW_RISK_STAGING_RESULT}",
+              "stagingRehearsalHighRisk": "${HIGH_RISK_STAGING_RESULT}"
+            }
+          }
+          JSON
+
+          echo "gate_pass=$pass" >> "$GITHUB_OUTPUT"
+
+      - name: Upload acceptance-stage artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-stage-${{ env.TESTED_SHA }}
+          path: .artifacts/acceptance-stage/${{ env.TESTED_SHA }}/result.json
+          if-no-files-found: warn
+
+      - name: Upload release candidate manifest
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-${{ env.TESTED_SHA }}
+          path: .artifacts/release-candidate/${{ env.TESTED_SHA }}/manifest.json
+          if-no-files-found: warn
+
+      - name: Fail when acceptance-stage decision is NO
+        if: ${{ steps.decision.outputs.gate_pass != 'true' }}
+        run: |
+          echo "acceptance-stage failed" >&2
+          exit 1

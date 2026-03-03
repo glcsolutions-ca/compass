@@ -22,7 +22,7 @@ compass/
 
 ### Testing
 
-- `pnpm test:quick` — **commit-stage** checks (policy + doc quality + formatting + lint + typecheck + unit/component + contract)
+- `pnpm test:quick` — **commit-stage** checks (testing/doc/format/lint/typecheck/unit/component/contract)
 - `pnpm test` — alias for `pnpm test:quick`
 - `pnpm test:full` — quick gate + integration tests + Playwright smoke
 - `pnpm test:integration` — integration tests only (requires local Postgres)
@@ -62,8 +62,7 @@ gh pr merge --auto --merge                 # enters merge queue when branch prot
 
 # Observe required checks for deterministic feedback:
 # - commit-stage
-# - integration-gate
-# - staging-gate
+# - acceptance-stage
 gh pr checks --watch
 
 # If checks fail: fix forward on the same PR branch and push again.

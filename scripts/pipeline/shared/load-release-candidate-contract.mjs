@@ -7,6 +7,33 @@ function asBoolean(value) {
   return value === true;
 }
 
+function deriveChangeClass({ changeClass, riskClass, scope, deploymentRequired }) {
+  const explicit = String(changeClass || "").trim();
+  if (explicit.length > 0) {
+    return explicit;
+  }
+
+  if (riskClass === "high-risk") {
+    if (asBoolean(scope?.infra)) {
+      return "infra";
+    }
+    if (asBoolean(scope?.identity)) {
+      return "identity";
+    }
+    return "runtime";
+  }
+
+  if (deploymentRequired) {
+    return "runtime";
+  }
+
+  if (asBoolean(scope?.desktop)) {
+    return "desktop";
+  }
+
+  return "checks";
+}
+
 async function main() {
   const manifestPath = requireEnv("RELEASE_CANDIDATE_MANIFEST_PATH");
   const runId = process.env.RUN_ID?.trim() || "";
@@ -16,15 +43,24 @@ async function main() {
     throw new Error(`Unsupported release candidate schemaVersion: ${manifest?.schemaVersion}`);
   }
 
-  const runtimeChanged = asBoolean(manifest?.scope?.runtime);
-  const desktopChanged = asBoolean(manifest?.scope?.desktop);
+  const scope = manifest?.scope ?? {};
+  const runtimeChanged = asBoolean(scope.runtime);
+  const desktopChanged = asBoolean(scope.desktop);
   const infraChanged = asBoolean(manifest?.scope?.infra);
   const identityChanged = asBoolean(manifest?.scope?.identity);
   const docsOnlyChanged = asBoolean(manifest?.scope?.docsOnly);
 
-  const changeClass = String(manifest?.changeClass || "").trim();
-  const requiresInfraConvergence = asBoolean(manifest?.requiresInfraConvergence);
-  const requiresMigrations = asBoolean(manifest?.requiresMigrations);
+  const deploymentRequired = asBoolean(manifest?.deploymentRequired);
+  const riskClass = String(manifest?.riskClass || "none").trim() || "none";
+  const changeClass = deriveChangeClass({
+    changeClass: manifest?.changeClass,
+    riskClass,
+    scope,
+    deploymentRequired
+  });
+  const requiresInfraConvergence =
+    asBoolean(manifest?.requiresInfraConvergence) || infraChanged || identityChanged;
+  const requiresMigrations = asBoolean(manifest?.requiresMigrations) || asBoolean(scope.migration);
 
   const releaseCandidateApiRef = String(manifest?.releaseCandidate?.apiRef || "");
   const releaseCandidateWebRef = String(manifest?.releaseCandidate?.webRef || "");
@@ -33,8 +69,9 @@ async function main() {
     manifest?.releaseCandidate?.dynamicSessionsRuntimeRef || ""
   );
 
+  const predeployedRevisionsJson = JSON.stringify(manifest?.predeployedRevisions ?? null);
   const reasonCodes = [];
-  const requiresReleasePackageRefs = runtimeChanged || infraChanged || requiresInfraConvergence;
+  const requiresReleasePackageRefs = deploymentRequired;
 
   if (requiresReleasePackageRefs) {
     if (!releaseCandidateApiRef) {
@@ -73,9 +110,7 @@ async function main() {
   if (!headSha) {
     throw new Error("Release candidate contract missing headSha");
   }
-  if (!changeClass) {
-    throw new Error("Release candidate contract missing changeClass");
-  }
+
   const copyPath = path.join(
     ".artifacts",
     "acceptance",
@@ -93,13 +128,17 @@ async function main() {
     infra_changed: String(infraChanged),
     identity_changed: String(identityChanged),
     docs_only_changed: String(docsOnlyChanged),
+    deployment_required: String(deploymentRequired),
+    risk_class: riskClass,
     requires_infra_convergence: String(requiresInfraConvergence),
     requires_migrations: String(requiresMigrations),
     release_candidate_api_ref: releaseCandidateApiRef,
     release_candidate_web_ref: releaseCandidateWebRef,
     release_candidate_worker_ref: releaseCandidateWorkerRef,
     release_candidate_dynamic_sessions_runtime_ref: releaseCandidateDynamicSessionsRuntimeRef,
+    predeployed_revisions_json: predeployedRevisionsJson,
     commit_run_id: runId,
+    acceptance_run_id: runId,
     release_candidate_ref_contract_status: releaseCandidateRefContractStatus,
     release_candidate_ref_contract_reason_codes_json: JSON.stringify(reasonCodes),
     release_candidate_manifest_copy_path: copyPath

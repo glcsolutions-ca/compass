@@ -5,8 +5,7 @@ Purpose: GitHub governance contract for trunk-based delivery.
 ## Required Contexts
 
 - `commit-stage`
-- `integration-gate`
-- `staging-gate`
+- `acceptance-stage`
 
 ## Required Protections
 
@@ -15,7 +14,8 @@ Purpose: GitHub governance contract for trunk-based delivery.
 - no branch deletion
 - require pull request before merge to `main`
 - require merge queue for `main`
-- allow direct push only for emergency admins
+- require review from Code Owners for owned paths
+- allow direct push bypass only for emergency admins
 
 ## Verification
 

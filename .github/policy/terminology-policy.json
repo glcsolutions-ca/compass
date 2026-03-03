@@ -58,15 +58,13 @@
     "desktop deployment pipeline yml": "Canonical desktop deployment workflow file name."
   },
   "renames": [
-    { "legacy": "merge-queue-gate", "canonical": "integration-gate" },
+    { "legacy": "merge-queue-gate", "canonical": "acceptance-stage" },
     { "legacy": "mergeQueueGate", "canonical": "integrationGate" },
     { "legacy": "release-package", "canonical": "release-candidate" },
     { "legacy": "releasePackage", "canonical": "releaseCandidate" },
     { "legacy": "cloud-delivery-pipeline", "canonical": "cloud-deployment-pipeline" },
     { "legacy": "cloudDeliveryPipeline", "canonical": "cloudDeploymentPipeline" },
     { "legacy": "cloud-delivery-replay", "canonical": "cloud-deployment-pipeline-replay" },
-    { "legacy": "acceptance-stage", "canonical": "automated-acceptance-test-gate" },
-    { "legacy": "acceptanceStage", "canonical": "automatedAcceptanceTestGate" },
     { "legacy": "production-stage", "canonical": "deployment-stage" },
     { "legacy": "productionStage", "canonical": "deploymentStage" },
     { "legacy": "releaseable", "canonical": "releasable" },
@@ -82,7 +80,7 @@
     {
       "pattern": "\\bmerge-queue-gate\\b",
       "flags": "g",
-      "message": "Use integration-gate."
+      "message": "Use acceptance-stage."
     },
     {
       "pattern": "\\bmerge queue gate\\b",
@@ -123,16 +121,6 @@
       "pattern": "\\bcloud delivery pipeline\\b",
       "flags": "gi",
       "message": "Use cloud deployment pipeline."
-    },
-    {
-      "pattern": "\\bacceptance-stage\\b",
-      "flags": "g",
-      "message": "Use automated-acceptance-test-gate."
-    },
-    {
-      "pattern": "\\bacceptanceStage\\b",
-      "flags": "g",
-      "message": "Use automatedAcceptanceTestGate."
     },
     {
       "pattern": "\\bproduction-stage\\b",

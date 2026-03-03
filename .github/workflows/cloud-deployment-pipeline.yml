@@ -13,13 +13,13 @@ permissions:
   pull-requests: read
 
 jobs:
-  verify_commit_stage_evidence:
-    name: verify-commit-stage-evidence
+  resolve_acceptance_source:
+    name: resolve-acceptance-source
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      commit_stage_run_id: ${{ steps.verify.outputs.commit_stage_run_id }}
-      commit_stage_evidence_path: ${{ steps.verify.outputs.commit_stage_evidence_path }}
+      source_run_id: ${{ steps.resolve_run.outputs.run_id }}
+      source_run_url: ${{ steps.resolve_run.outputs.run_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,200 +29,195 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Verify commit-stage evidence for release SHA
-        id: verify
+      - name: Resolve successful acceptance-stage run
+        id: resolve_run
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          WORKFLOW_FILE: acceptance-stage.yml
           HEAD_SHA: ${{ github.sha }}
-          COMMIT_STAGE_WORKFLOW_FILE: commit-stage.yml
-          COMMIT_STAGE_EVENT: push
-        run: node scripts/pipeline/shared/verify-commit-stage-evidence.mjs
+          RUN_EVENT: merge_group
+          RUN_STATUS: success
+          RUN_STATUS_FALLBACK: completed
+        run: node scripts/pipeline/shared/resolve-triggered-run-id.mjs
 
-      - name: Upload commit-stage evidence artifact
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: commit-stage-evidence-${{ github.sha }}
-          path: .artifacts/commit-stage/${{ github.sha }}/evidence.json
-          if-no-files-found: warn
-
-  verify_integration_gate_evidence:
-    name: verify-integration-gate-evidence
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      integration_gate_run_id: ${{ steps.verify.outputs.integration_gate_run_id }}
-      integration_gate_evidence_path: ${{ steps.verify.outputs.integration_gate_evidence_path }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-
-      - name: Verify integration gate evidence for release SHA
-        id: verify
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          HEAD_SHA: ${{ github.sha }}
-          INTEGRATION_GATE_WORKFLOW_FILE: integration-gate.yml
-          INTEGRATION_GATE_EVENT: push
-        run: node scripts/pipeline/shared/verify-integration-gate-evidence.mjs
-
-      - name: Upload integration gate evidence artifact
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: integration-gate-evidence-${{ github.sha }}
-          path: .artifacts/integration-gate/${{ github.sha }}/evidence.json
-          if-no-files-found: warn
-
-  build_release_candidate_images:
-    name: build-release-candidate-${{ matrix.service.name }}-image
+  load_release_candidate:
+    name: load-release-candidate
     needs:
-      - verify_commit_stage_evidence
-      - verify_integration_gate_evidence
+      - resolve_acceptance_source
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    environment: production
-    strategy:
-      fail-fast: false
-      matrix:
-        service:
-          - name: api
-            image_name: compass-api
-            dockerfile: apps/api/Dockerfile
-          - name: web
-            image_name: compass-web
-            dockerfile: apps/web/Dockerfile
-          - name: worker
-            image_name: compass-worker
-            dockerfile: apps/worker/Dockerfile
-          - name: dynamic-sessions-runtime
-            image_name: compass-codex-session-runtime
-            dockerfile: apps/codex-session-runtime/Dockerfile
-    env:
-      HEAD_SHA: ${{ github.sha }}
-      ACR_NAME: ${{ vars.ACR_NAME }}
-      ACR_REGISTRY: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
+    timeout-minutes: 15
+    outputs:
+      head_sha: ${{ steps.parse.outputs.head_sha }}
+      deployment_required: ${{ steps.parse.outputs.deployment_required }}
+      risk_class: ${{ steps.parse.outputs.risk_class }}
+      predeployed_revisions_json: ${{ steps.parse.outputs.predeployed_revisions_json }}
+      api_ref: ${{ steps.parse.outputs.api_ref }}
+      web_ref: ${{ steps.parse.outputs.web_ref }}
+      worker_ref: ${{ steps.parse.outputs.worker_ref }}
+      dynamic_sessions_runtime_ref: ${{ steps.parse.outputs.dynamic_sessions_runtime_ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download release candidate manifest from acceptance-stage
+        uses: actions/download-artifact@v4
+        with:
+          name: release-candidate-${{ github.sha }}
+          path: .artifacts/release-candidate/${{ github.sha }}
+          run-id: ${{ needs.resolve_acceptance_source.outputs.source_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Parse release candidate manifest
+        id: parse
+        run: |
+          set -euo pipefail
+
+          manifest_path=".artifacts/release-candidate/${GITHUB_SHA}/manifest.json"
+          if [ ! -f "$manifest_path" ]; then
+            echo "Missing release candidate manifest: $manifest_path" >&2
+            exit 1
+          fi
+
+          head_sha="$(jq -er '.headSha' "$manifest_path")"
+          deployment_required="$(jq -er '.deploymentRequired' "$manifest_path")"
+          risk_class="$(jq -r '.riskClass // "none"' "$manifest_path")"
+
+          if [ "$head_sha" != "${GITHUB_SHA}" ]; then
+            echo "Manifest headSha '$head_sha' does not match pushed main SHA '${GITHUB_SHA}'" >&2
+            exit 1
+          fi
+
+          api_ref="$(jq -r '.releaseCandidate.apiRef // ""' "$manifest_path")"
+          web_ref="$(jq -r '.releaseCandidate.webRef // ""' "$manifest_path")"
+          worker_ref="$(jq -r '.releaseCandidate.workerRef // ""' "$manifest_path")"
+          dynamic_sessions_runtime_ref="$(jq -r '.releaseCandidate.dynamicSessionsRuntimeRef // ""' "$manifest_path")"
+          predeployed_revisions_json="$(jq -c '.predeployedRevisions // empty' "$manifest_path")"
+
+          if [ "$deployment_required" = "true" ]; then
+            for image in "$api_ref" "$web_ref" "$worker_ref" "$dynamic_sessions_runtime_ref"; do
+              if [ -z "$image" ]; then
+                echo "Deployment is required but release candidate image refs are incomplete" >&2
+                exit 1
+              fi
+              if [[ "$image" != *"@sha256:"* ]]; then
+                echo "Release candidate image is not digest-pinned: $image" >&2
+                exit 1
+              fi
+            done
+          fi
+
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+          echo "deployment_required=$deployment_required" >> "$GITHUB_OUTPUT"
+          echo "risk_class=$risk_class" >> "$GITHUB_OUTPUT"
+          echo "predeployed_revisions_json=$predeployed_revisions_json" >> "$GITHUB_OUTPUT"
+          echo "api_ref=$api_ref" >> "$GITHUB_OUTPUT"
+          echo "web_ref=$web_ref" >> "$GITHUB_OUTPUT"
+          echo "worker_ref=$worker_ref" >> "$GITHUB_OUTPUT"
+          echo "dynamic_sessions_runtime_ref=$dynamic_sessions_runtime_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release candidate manifest copy
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-${{ github.sha }}
+          path: .artifacts/release-candidate/${{ github.sha }}/manifest.json
+          if-no-files-found: error
+
+  promote_predeployed_revisions:
+    name: promote-predeployed-revisions
+    needs:
+      - load_release_candidate
+    if: ${{ needs.load_release_candidate.outputs.deployment_required == 'true' && needs.load_release_candidate.outputs.predeployed_revisions_json != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    concurrency:
+      group: production-cloud-mutation
+      cancel-in-progress: false
+    outputs:
+      head_sha: ${{ steps.set_head.outputs.head_sha }}
+      api_prod_url: ${{ steps.resolve_urls.outputs.api_prod_url }}
+      web_prod_url: ${{ steps.resolve_urls.outputs.web_prod_url }}
+    env:
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      PREDEPLOYED_REVISIONS_JSON: ${{ needs.load_release_candidate.outputs.predeployed_revisions_json }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set head SHA output
+        id: set_head
+        run: echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
 
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Promote predeployed revisions to 100% traffic
+        run: node scripts/pipeline/cloud/deployment-stage/promote-zero-traffic-revisions.mjs
 
-      - name: ACR login
-        run: az acr login --name "$ACR_NAME" --only-show-errors
-
-      - name: Build and push release candidate image
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ${{ matrix.service.dockerfile }}
-          push: true
-          tags: ${{ env.ACR_REGISTRY }}/${{ matrix.service.image_name }}:${{ env.HEAD_SHA }}
-          cache-from: type=gha,scope=${{ matrix.service.image_name }}
-          cache-to: type=gha,scope=${{ matrix.service.image_name }},mode=max
-
-      - name: Write release candidate ref
-        run: |
-          set -euo pipefail
-          mkdir -p ".artifacts/release-candidate/$HEAD_SHA"
-          echo "${ACR_REGISTRY}/${{ matrix.service.image_name }}@${{ steps.build.outputs.digest }}" > ".artifacts/release-candidate/$HEAD_SHA/${{ matrix.service.name }}.ref"
-
-      - name: Upload release candidate ref artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-candidate-ref-${{ matrix.service.name }}-${{ github.sha }}
-          path: .artifacts/release-candidate/${{ env.HEAD_SHA }}/${{ matrix.service.name }}.ref
-          if-no-files-found: error
-
-  publish_release_candidate:
-    name: publish-release-candidate
-    needs:
-      - verify_commit_stage_evidence
-      - verify_integration_gate_evidence
-      - build_release_candidate_images
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    outputs:
-      head_sha: ${{ steps.publish.outputs.head_sha }}
-      manifest_path: ${{ steps.publish.outputs.manifest_path }}
-    env:
-      HEAD_SHA: ${{ github.sha }}
-      COMMIT_STAGE_RUN_ID: ${{ needs.verify_commit_stage_evidence.outputs.commit_stage_run_id }}
-      INTEGRATION_GATE_RUN_ID: ${{ needs.verify_integration_gate_evidence.outputs.integration_gate_run_id }}
-    steps:
-      - name: Download release candidate ref artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: release-candidate-ref-*-${{ github.sha }}
-          path: .artifacts/release-candidate/${{ env.HEAD_SHA }}
-          merge-multiple: true
-
-      - name: Publish release candidate manifest
-        id: publish
+      - name: Resolve production URLs
+        id: resolve_urls
         run: |
           set -euo pipefail
 
-          artifact_dir=".artifacts/release-candidate/$HEAD_SHA"
-          api_ref="$(cat "$artifact_dir/api.ref")"
-          web_ref="$(cat "$artifact_dir/web.ref")"
-          worker_ref="$(cat "$artifact_dir/worker.ref")"
-          dynamic_sessions_runtime_ref="$(cat "$artifact_dir/dynamic-sessions-runtime.ref")"
+          params_file="infra/azure/environments/cloud.bicepparam"
+          api_custom_domain="$(sed -n "s/^param apiCustomDomain = '\\(.*\\)'/\\1/p" "$params_file" | head -n 1)"
+          web_custom_domain="$(sed -n "s/^param webCustomDomain = '\\(.*\\)'/\\1/p" "$params_file" | head -n 1)"
 
-          for image in "$api_ref" "$web_ref" "$worker_ref" "$dynamic_sessions_runtime_ref"; do
-            if [[ "$image" != *"@sha256:"* ]]; then
-              echo "Release candidate image reference must be digest-pinned: $image" >&2
-              exit 1
+          api_prod_url=""
+          web_prod_url=""
+
+          if [ -n "$api_custom_domain" ]; then
+            api_prod_url="https://$api_custom_domain"
+          fi
+
+          if [ -n "$web_custom_domain" ]; then
+            web_prod_url="https://$web_custom_domain"
+          fi
+
+          if [ -z "$api_prod_url" ] || [ -z "$web_prod_url" ]; then
+            api_app_name="$(jq -r '.api.appName' <<<"$PREDEPLOYED_REVISIONS_JSON")"
+            web_app_name="$(jq -r '.web.appName' <<<"$PREDEPLOYED_REVISIONS_JSON")"
+
+            if [ -z "$api_prod_url" ]; then
+              api_fqdn="$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$api_app_name" --query properties.configuration.ingress.fqdn --output tsv --only-show-errors)"
+              api_prod_url="https://$api_fqdn"
             fi
-          done
 
-          manifest_path="$artifact_dir/manifest.json"
-          cat > "$manifest_path" <<JSON
-          {
-            "schemaVersion": "1",
-            "generatedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-            "headSha": "$HEAD_SHA",
-            "commitStageRunId": "$COMMIT_STAGE_RUN_ID",
-            "integrationGateRunId": "$INTEGRATION_GATE_RUN_ID",
-            "buildRunId": "${GITHUB_RUN_ID}",
-            "releaseCandidate": {
-              "apiRef": "$api_ref",
-              "webRef": "$web_ref",
-              "workerRef": "$worker_ref",
-              "dynamicSessionsRuntimeRef": "$dynamic_sessions_runtime_ref"
-            }
-          }
-          JSON
+            if [ -z "$web_prod_url" ]; then
+              web_fqdn="$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$web_app_name" --query properties.configuration.ingress.fqdn --output tsv --only-show-errors)"
+              web_prod_url="https://$web_fqdn"
+            fi
+          fi
 
-          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
-          echo "manifest_path=$manifest_path" >> "$GITHUB_OUTPUT"
+          echo "api_prod_url=$api_prod_url" >> "$GITHUB_OUTPUT"
+          echo "web_prod_url=$web_prod_url" >> "$GITHUB_OUTPUT"
 
-      - name: Upload release candidate artifact
+      - name: Upload predeployed promotion artifacts
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: release-candidate-${{ env.HEAD_SHA }}
-          path: .artifacts/release-candidate/${{ env.HEAD_SHA }}/manifest.json
-          if-no-files-found: error
+          name: promote-predeployed-${{ env.HEAD_SHA }}
+          path: .artifacts/deploy/${{ env.HEAD_SHA }}/traffic-promotion.json
+          if-no-files-found: warn
 
   deploy_cloud:
     name: deploy-cloud
     needs:
-      - publish_release_candidate
+      - load_release_candidate
+    if: ${{ needs.load_release_candidate.outputs.deployment_required == 'true' && needs.load_release_candidate.outputs.predeployed_revisions_json == '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: production
@@ -234,7 +229,11 @@ jobs:
       api_prod_url: ${{ steps.resolve_urls.outputs.api_prod_url }}
       web_prod_url: ${{ steps.resolve_urls.outputs.web_prod_url }}
     env:
-      HEAD_SHA: ${{ needs.publish_release_candidate.outputs.head_sha }}
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      API_IMAGE: ${{ needs.load_release_candidate.outputs.api_ref }}
+      WEB_IMAGE: ${{ needs.load_release_candidate.outputs.web_ref }}
+      WORKER_IMAGE: ${{ needs.load_release_candidate.outputs.worker_ref }}
+      DYNAMIC_SESSIONS_RUNTIME_IMAGE: ${{ needs.load_release_candidate.outputs.dynamic_sessions_runtime_ref }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
@@ -261,22 +260,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-
-      - name: Download release candidate artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: release-candidate-${{ env.HEAD_SHA }}
-          path: .artifacts/release-candidate/${{ env.HEAD_SHA }}
-
-      - name: Parse release candidate manifest
-        run: |
-          set -euo pipefail
-          manifest_path=".artifacts/release-candidate/$HEAD_SHA/manifest.json"
-
-          echo "API_IMAGE=$(jq -r '.releaseCandidate.apiRef' "$manifest_path")" >> "$GITHUB_ENV"
-          echo "WEB_IMAGE=$(jq -r '.releaseCandidate.webRef' "$manifest_path")" >> "$GITHUB_ENV"
-          echo "WORKER_IMAGE=$(jq -r '.releaseCandidate.workerRef' "$manifest_path")" >> "$GITHUB_ENV"
-          echo "DYNAMIC_SESSIONS_RUNTIME_IMAGE=$(jq -r '.releaseCandidate.dynamicSessionsRuntimeRef' "$manifest_path")" >> "$GITHUB_ENV"
 
       - name: Validate release candidate refs
         run: |
@@ -381,7 +364,6 @@ jobs:
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Resolve deployed resource names
-        id: resolve_runtime
         run: |
           set -euo pipefail
 
@@ -483,14 +465,17 @@ jobs:
   production_smoke:
     name: production-smoke
     needs:
+      - load_release_candidate
+      - promote_predeployed_revisions
       - deploy_cloud
+    if: ${{ needs.load_release_candidate.outputs.deployment_required == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
     env:
-      HEAD_SHA: ${{ needs.deploy_cloud.outputs.head_sha }}
-      TARGET_API_BASE_URL: ${{ needs.deploy_cloud.outputs.api_prod_url }}
-      EXPECTED_ENTRA_REDIRECT_URI: ${{ needs.deploy_cloud.outputs.web_prod_url }}/v1/auth/entra/callback
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha }}
+      TARGET_API_BASE_URL: ${{ needs.deploy_cloud.outputs.api_prod_url || needs.promote_predeployed_revisions.outputs.api_prod_url }}
+      TARGET_WEB_BASE_URL: ${{ needs.deploy_cloud.outputs.web_prod_url || needs.promote_predeployed_revisions.outputs.web_prod_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -500,7 +485,17 @@ jobs:
         with:
           node-version-file: .nvmrc
 
+      - name: Validate smoke target URLs
+        run: |
+          set -euo pipefail
+          if [ -z "${TARGET_API_BASE_URL:-}" ] || [ -z "${TARGET_WEB_BASE_URL:-}" ]; then
+            echo "Production URLs are required for smoke verification" >&2
+            exit 1
+          fi
+
       - name: API smoke verification
+        env:
+          EXPECTED_ENTRA_REDIRECT_URI: ${{ env.TARGET_WEB_BASE_URL }}/v1/auth/entra/callback
         run: node scripts/pipeline/cloud/deployment-stage/verify-api-smoke.mjs
 
       - name: Upload smoke artifacts
@@ -514,15 +509,16 @@ jobs:
   release_decision:
     name: release-decision
     needs:
-      - verify_commit_stage_evidence
-      - verify_integration_gate_evidence
-      - publish_release_candidate
+      - load_release_candidate
+      - promote_predeployed_revisions
       - deploy_cloud
       - production_smoke
     if: ${{ always() }}
     runs-on: ubuntu-latest
     env:
-      HEAD_SHA: ${{ needs.publish_release_candidate.outputs.head_sha || github.sha }}
+      HEAD_SHA: ${{ needs.load_release_candidate.outputs.head_sha || github.sha }}
+      DEPLOYMENT_REQUIRED: ${{ needs.load_release_candidate.outputs.deployment_required || 'false' }}
+      PREDEPLOYED_REVISIONS_JSON: ${{ needs.load_release_candidate.outputs.predeployed_revisions_json }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -560,20 +556,46 @@ jobs:
           promotion_halted="false"
           post_merge_verification_failed="false"
 
-          if [ "${{ needs.verify_commit_stage_evidence.result }}" = "success" ] && \
-             [ "${{ needs.verify_integration_gate_evidence.result }}" = "success" ] && \
-             [ "${{ needs.publish_release_candidate.result }}" = "success" ] && \
-             [ "${{ needs.deploy_cloud.result }}" = "success" ] && \
-             [ "${{ needs.production_smoke.result }}" = "success" ]; then
-            releasable="true"
-          else
-            promotion_halted="true"
-            reason_codes='["CLOUD_DEPLOYMENT_PIPELINE_FAILED","PROMOTION_HALTED"]'
+          used_predeployed="false"
+          if [ -n "${PREDEPLOYED_REVISIONS_JSON:-}" ]; then
+            used_predeployed="true"
+          fi
 
-            if [ "${{ needs.deploy_cloud.result }}" != "success" ] || \
-               [ "${{ needs.production_smoke.result }}" != "success" ]; then
-              post_merge_verification_failed="true"
-              reason_codes='["CLOUD_DEPLOYMENT_PIPELINE_FAILED","PROMOTION_HALTED","PRODUCTION_VERIFICATION_FAILED_NO_REVERT"]'
+          if [ "${{ needs.load_release_candidate.result }}" != "success" ]; then
+            promotion_halted="true"
+            reason_codes='["LOAD_RELEASE_CANDIDATE_FAILED","PROMOTION_HALTED"]'
+          elif [ "$DEPLOYMENT_REQUIRED" != "true" ]; then
+            releasable="true"
+            reason_codes='["DEPLOYMENT_NOT_REQUIRED"]'
+          elif [ "$used_predeployed" = "true" ]; then
+            if [ "${{ needs.promote_predeployed_revisions.result }}" = "success" ] && \
+               [ "${{ needs.production_smoke.result }}" = "success" ]; then
+              releasable="true"
+            else
+              promotion_halted="true"
+              reason_codes='["PROMOTION_HALTED"]'
+              if [ "${{ needs.promote_predeployed_revisions.result }}" != "success" ]; then
+                reason_codes='["PROMOTION_HALTED","TRAFFIC_SHIFT_FAILED"]'
+              fi
+              if [ "${{ needs.production_smoke.result }}" != "success" ]; then
+                post_merge_verification_failed="true"
+                reason_codes="$(jq -c '. + [\"PRE_PROMOTION_SMOKE_FAILED\",\"PRODUCTION_VERIFICATION_FAILED_NO_REVERT\"]' <<<"$reason_codes")"
+              fi
+            fi
+          else
+            if [ "${{ needs.deploy_cloud.result }}" = "success" ] && \
+               [ "${{ needs.production_smoke.result }}" = "success" ]; then
+              releasable="true"
+            else
+              promotion_halted="true"
+              reason_codes='["PROMOTION_HALTED"]'
+              if [ "${{ needs.deploy_cloud.result }}" != "success" ]; then
+                reason_codes='["PROMOTION_HALTED","PRE_PROMOTION_DEPLOY_FAILED"]'
+              fi
+              if [ "${{ needs.production_smoke.result }}" != "success" ]; then
+                post_merge_verification_failed="true"
+                reason_codes="$(jq -c '. + [\"PRE_PROMOTION_SMOKE_FAILED\",\"PRODUCTION_VERIFICATION_FAILED_NO_REVERT\"]' <<<"$reason_codes")"
+              fi
             fi
           fi
 
@@ -588,9 +610,8 @@ jobs:
             "autoRevertAttempted": false,
             "reasonCodes": ${reason_codes},
             "stages": {
-              "verifyCommitStageEvidence": "${{ needs.verify_commit_stage_evidence.result }}",
-              "verifyIntegrationGateEvidence": "${{ needs.verify_integration_gate_evidence.result }}",
-              "publishReleaseCandidate": "${{ needs.publish_release_candidate.result }}",
+              "loadReleaseCandidate": "${{ needs.load_release_candidate.result }}",
+              "promotePredeployedRevisions": "${{ needs.promote_predeployed_revisions.result }}",
               "deployCloud": "${{ needs.deploy_cloud.result }}",
               "productionSmoke": "${{ needs.production_smoke.result }}"
             }

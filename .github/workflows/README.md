@@ -1,24 +1,23 @@
 # Workflows
 
-Purpose: workflow file contract for delivery automation.
+Purpose: workflow file contract for deterministic delivery.
 
 Canonical model: `docs/development-pipeline.md`.
 
 ## Workflow Files
 
-- `commit-stage.yml`: push to `main`, PR preview, and merge queue (`merge_group`) required check.
-- `integration-gate.yml`: push to `main`, PR preview, and merge queue (`merge_group`) required check.
-- `staging-gate.yml`: merge queue (`merge_group`) staging deployment rehearsal required check.
-- `cloud-deployment-pipeline.yml`: push to `main`.
+- `commit-stage.yml`: fast pre-merge quality gate on `pull_request` and `merge_group`.
+- `acceptance-stage.yml`: Farley acceptance stage on `pull_request` and `merge_group`, including package-once and parallel integration/staging rehearsal.
+- `cloud-deployment-pipeline.yml`: production promotion on `push` to `main` using the tested release candidate manifest from `acceptance-stage` (no rebuild).
 - `cloud-deployment-pipeline-replay.yml`: manual replay by `release_candidate_sha`.
 - `dynamic-sessions-acceptance-rehearsal.yml`: manual acceptance rehearsal by SHA.
 - `desktop-deployment-pipeline.yml`: desktop release path.
+- `labeler.yml`: advisory PR scope/risk labels.
 
 ## Required Status Contexts
 
 - `commit-stage`
-- `integration-gate`
-- `staging-gate`
+- `acceptance-stage`
 
 ## Cloud Artifact Contract
 
@@ -30,6 +29,6 @@ Canonical model: `docs/development-pipeline.md`.
 
 ## Source Of Truth
 
-- `.github/policy/pipeline-policy.json`
+- `docs/development-pipeline.md`
 - `docs/commit-stage-policy.md`
 - `docs/runbooks/cloud-deployment-pipeline-setup.md`

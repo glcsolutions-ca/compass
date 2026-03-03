@@ -252,6 +252,20 @@ The manifest MUST NOT contain policy or stage-outcome fields such as:
 
 Those values belong in stage evidence, not in the Release Candidate contract.
 
+## Validation source of truth
+
+The JSON schema files under `pipeline/` are the executable source of truth for contract validation:
+
+- `pipeline/release-candidate.schema.json`
+- `pipeline/acceptance-evidence.schema.json`
+- `pipeline/release-evidence.schema.json`
+
+Runtime validators MUST use these schemas directly. Custom validation rules SHOULD be added only where schema constraints cannot express required behavior.
+
+Current custom exception:
+
+- `riskClass`, `deploymentRequired`, `promotionHalted`, and `acceptancePassed` are explicitly rejected at top-level in release-candidate validation to preserve clear operator error messaging.
+
 ---
 
 ## Commit Stage requirements

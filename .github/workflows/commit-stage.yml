@@ -17,7 +17,6 @@ env:
   WORKER_IMAGE_NAME: compass-worker
   MIGRATIONS_IMAGE_NAME: compass-migrations
   RC_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-release-candidates
-  ACCEPTANCE_EVIDENCE_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-acceptance-evidence
 
 jobs:
   commit_tests:
@@ -50,10 +49,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Commit quick gate
-        run: pnpm test:quick
+        run: pnpm test:commit:candidate
 
       - name: Pipeline script tests
-        run: pnpm test:rc
+        run: pnpm test:commit:pipeline
 
   commit_analysis:
     name: Commit analysis
@@ -81,25 +80,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Coverage gate inputs
-        run: pnpm test:coverage:commit
-
-      - name: Duplication analysis (JSCPD)
-        run: |
-          mkdir -p .artifacts/jscpd
-          pnpm exec jscpd \
-            --reporters json \
-            --output .artifacts/jscpd \
-            --ignore "**/node_modules/**,**/dist/**,**/dist-types/**,**/coverage/**,**/.next/**,**/.turbo/**,**/.react-router/**,**/.artifacts/**,**/pnpm-lock.yaml,**/*.snap,**/*.test.*,**/db/migrations/**,**/packages/codex-protocol/generated/**,**/packages/contracts/openapi/openapi.json" \
-            --format "typescript,javascript,tsx,jsx,json,css,md,yaml,yml" \
-            .
-
-      - name: Generate commit analysis report
-        run: |
-          pnpm rc:analyze:report \
-            --config pipeline/stages/01-commit/policies/commit-analysis.config.json \
-            --out .artifacts/commit-analysis/commit-analysis.json \
-            --lint-warnings 0 \
-            --typecheck-warnings 0
+        run: pnpm test:commit:analysis
 
       - name: Upload commit analysis artifact
         if: always()
@@ -294,6 +275,26 @@ jobs:
         id: capture_end
         run: echo "stage_end_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
+      - name: Write commit-stage handoff artifact
+        run: |
+          mkdir -p .artifacts/commit-stage-output
+          cat > .artifacts/commit-stage-output/commit-stage-output.json <<EOF
+          {
+            "schemaVersion": "commit-stage-output.v1",
+            "candidateId": "${{ steps.candidate.outputs.candidate_id }}",
+            "sourceRevision": "${{ github.sha }}",
+            "manifestRef": "${{ steps.publish_manifest.outputs.manifest_ref }}",
+            "commitStageRunId": "${{ github.run_id }}"
+          }
+          EOF
+
+      - name: Upload commit-stage handoff artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-stage-output
+          path: .artifacts/commit-stage-output/commit-stage-output.json
+          if-no-files-found: error
+
   enforce_commit_stage_slo:
     name: Enforce commit-stage SLO
     runs-on: ubuntu-latest
@@ -338,134 +339,3 @@ jobs:
           name: commit-stage-metrics-${{ github.run_id }}
           path: .artifacts/commit-stage/commit-stage-metrics.json
           if-no-files-found: error
-
-  acceptance_tests:
-    name: Automated acceptance (placeholder)
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    needs:
-      - generate_and_validate_manifest
-      - enforce_commit_stage_slo
-    if: ${{ always() && needs.generate_and_validate_manifest.result == 'success' }}
-    outputs:
-      started_at: ${{ steps.capture_start.outputs.started_at }}
-      finished_at: ${{ steps.capture_finish.outputs.finished_at }}
-
-    steps:
-      - name: Capture acceptance start time
-        id: capture_start
-        run: echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.1
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Setup ORAS
-        uses: oras-project/setup-oras@v1
-
-      - name: Login to GHCR (ORAS)
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-      - name: Fetch release candidate manifest
-        run: |
-          node pipeline/shared/scripts/fetch-release-candidate.mjs \
-            --candidate-id "${{ needs.generate_and_validate_manifest.outputs.candidate_id }}" \
-            --registry-repo "${{ env.RC_REGISTRY_REPO }}" \
-            --out "$RUNNER_TEMP/release-candidate.json"
-
-      - name: Re-validate release candidate manifest
-        run: node pipeline/shared/scripts/validate-release-candidate.mjs --file "$RUNNER_TEMP/release-candidate.json"
-
-      - name: Placeholder acceptance pass
-        run: |
-          echo "Acceptance placeholder is enabled."
-          echo "Candidate ${{ needs.generate_and_validate_manifest.outputs.candidate_id }} marked pass."
-          echo "TODO: replace with deploy + verify + acceptance suites."
-
-      - name: Capture acceptance finish time
-        id: capture_finish
-        if: always()
-        run: echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
-  record_acceptance_evidence:
-    name: Record acceptance evidence
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs:
-      - generate_and_validate_manifest
-      - acceptance_tests
-    if: ${{ always() && needs.generate_and_validate_manifest.result == 'success' }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.1
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Setup ORAS
-        uses: oras-project/setup-oras@v1
-
-      - name: Login to GHCR (ORAS)
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-      - name: Record acceptance evidence
-        run: |
-          mkdir -p .artifacts/acceptance-evidence
-
-          verdict="fail"
-          if [ "${{ needs.acceptance_tests.result }}" = "success" ]; then
-            verdict="pass"
-          fi
-
-          started_at="${{ needs.acceptance_tests.outputs.started_at }}"
-          finished_at="${{ needs.acceptance_tests.outputs.finished_at }}"
-
-          if [ -z "${started_at}" ]; then
-            started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          fi
-
-          if [ -z "${finished_at}" ]; then
-            finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          fi
-
-          node pipeline/stages/02-acceptance/scripts/record-acceptance-evidence.mjs \
-            --out .artifacts/acceptance-evidence/acceptance-evidence.json \
-            --candidate-id "${{ needs.generate_and_validate_manifest.outputs.candidate_id }}" \
-            --source-revision "${{ github.sha }}" \
-            --workflow-run-id "${{ github.run_id }}" \
-            --verdict "${verdict}" \
-            --started-at "${started_at}" \
-            --finished-at "${finished_at}" \
-            --summary "Automated acceptance ${verdict} for candidate ${{ needs.generate_and_validate_manifest.outputs.candidate_id }}"
-
-      - name: Publish acceptance evidence
-        run: |
-          cp .artifacts/acceptance-evidence/acceptance-evidence.json acceptance-evidence.json
-          oras push --artifact-type application/vnd.compass.acceptance-evidence.v1 \
-            "${ACCEPTANCE_EVIDENCE_REGISTRY_REPO}:${{ needs.generate_and_validate_manifest.outputs.candidate_id }}" \
-            "acceptance-evidence.json:application/vnd.compass.acceptance-evidence.v1+json"

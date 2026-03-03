@@ -38,6 +38,15 @@ export interface ChatActionData {
   parentMessageId?: string | null;
 }
 
+type PromptIntent = "sendMessage" | "editMessage" | "reloadMessage";
+
+interface PromptActionInput {
+  prompt: string;
+  sourceMessageId: string | null;
+  clientRequestId: string | undefined;
+  parentMessageId: string | null;
+}
+
 function createErrorAction(input: {
   intent: ChatActionData["intent"];
   error: string;
@@ -75,6 +84,294 @@ function createErrorAction(input: {
   return result;
 }
 
+function createSuccessAction(input: {
+  intent: ChatActionData["intent"];
+  threadId: string;
+  turnId: string | null;
+  executionMode: AgentExecutionMode;
+  prompt?: string | null;
+  answer?: string | null;
+  clientRequestId?: string | undefined;
+  sourceMessageId?: string | null;
+  parentMessageId?: string | null;
+}): ChatActionData {
+  const result: ChatActionData = {
+    intent: input.intent,
+    ok: true,
+    error: null,
+    threadId: input.threadId,
+    turnId: input.turnId,
+    executionMode: input.executionMode,
+    prompt: input.prompt ?? null,
+    answer: input.answer ?? null
+  };
+
+  if (input.clientRequestId !== undefined) {
+    result.clientRequestId = input.clientRequestId;
+  }
+
+  if (input.sourceMessageId) {
+    result.sourceMessageId = input.sourceMessageId;
+  }
+
+  if (input.parentMessageId) {
+    result.parentMessageId = input.parentMessageId;
+  }
+
+  return result;
+}
+
+function resolveExecutionMode(formData: FormData): AgentExecutionMode {
+  const requestedExecutionMode = ChatExecutionModeSchema.safeParse(formData.get("executionMode"));
+  return requestedExecutionMode.success ? requestedExecutionMode.data : "cloud";
+}
+
+function resolveTargetThreadId(
+  formData: FormData,
+  routeThreadId: string | undefined
+): string | null {
+  const formThreadId = ChatThreadIdSchema.safeParse(formData.get("threadId"));
+  return formThreadId.success
+    ? (formThreadId.data ?? routeThreadId ?? null)
+    : (routeThreadId ?? null);
+}
+
+function parsePromptActionInput(
+  formData: FormData,
+  intent: PromptIntent,
+  executionMode: AgentExecutionMode,
+  targetThreadId: string | null
+): PromptActionInput | ChatActionData {
+  const sourceMessageIdResult = ChatMessageIdSchema.safeParse(formData.get("sourceMessageId"));
+  const sourceMessageId = sourceMessageIdResult.success
+    ? (sourceMessageIdResult.data ?? null)
+    : null;
+  const clientRequestIdResult = ChatClientRequestIdSchema.safeParse(
+    formData.get("clientRequestId")
+  );
+  const clientRequestId = clientRequestIdResult.success ? clientRequestIdResult.data : undefined;
+  const parentMessageIdResult = ChatMessageIdSchema.safeParse(formData.get("parentMessageId"));
+  const parentMessageId = parentMessageIdResult.success
+    ? (parentMessageIdResult.data ?? null)
+    : null;
+  const parsedPrompt = ChatPromptSchema.safeParse({ prompt: formData.get("prompt") });
+
+  if (!parsedPrompt.success) {
+    return createErrorAction({
+      intent,
+      executionMode,
+      threadId: targetThreadId,
+      clientRequestId,
+      error: parsedPrompt.error.issues[0]?.message ?? "Prompt is required."
+    });
+  }
+
+  return {
+    prompt: parsedPrompt.data.prompt,
+    sourceMessageId,
+    clientRequestId,
+    parentMessageId
+  };
+}
+
+async function resolveThreadForPromptAction(input: {
+  request: Request;
+  workspaceSlug: string | undefined;
+  intent: PromptIntent;
+  executionMode: AgentExecutionMode;
+  prompt: string;
+  clientRequestId: string | undefined;
+  targetThreadId: string | null;
+}): Promise<string | Response | ChatActionData> {
+  if (input.targetThreadId) {
+    return input.targetThreadId;
+  }
+
+  const requiresExistingThread = input.intent === "editMessage" || input.intent === "reloadMessage";
+  if (requiresExistingThread) {
+    return createErrorAction({
+      intent: input.intent,
+      executionMode: input.executionMode,
+      prompt: input.prompt,
+      clientRequestId: input.clientRequestId,
+      error: "Select a thread before editing or reloading."
+    });
+  }
+
+  const auth = await loadAuthShellData({ request: input.request });
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  let resolvedWorkspaceSlug: string;
+  try {
+    resolvedWorkspaceSlug = input.workspaceSlug?.trim() || resolveThreadCreateWorkspaceSlug(auth);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to resolve workspace context.";
+    return createErrorAction({
+      intent: input.intent,
+      executionMode: input.executionMode,
+      prompt: input.prompt,
+      clientRequestId: input.clientRequestId,
+      error: message
+    });
+  }
+
+  const createThreadResult = await createAgentThread(input.request, {
+    workspaceSlug: resolvedWorkspaceSlug,
+    executionMode: input.executionMode,
+    title: input.prompt.slice(0, 80)
+  });
+
+  if (!createThreadResult.data || createThreadResult.status >= 400) {
+    return createErrorAction({
+      intent: input.intent,
+      executionMode: input.executionMode,
+      prompt: input.prompt,
+      clientRequestId: input.clientRequestId,
+      error: createThreadResult.message || "Unable to create a new chat thread."
+    });
+  }
+
+  return createThreadResult.data.threadId;
+}
+
+async function handleSwitchModeIntent(input: {
+  request: Request;
+  executionMode: AgentExecutionMode;
+  targetThreadId: string | null;
+}): Promise<ChatActionData> {
+  if (!input.targetThreadId) {
+    return createErrorAction({
+      intent: "switchMode",
+      executionMode: input.executionMode,
+      error: "Select a thread before switching execution mode."
+    });
+  }
+
+  const modeSwitchResult = await switchAgentThreadMode(input.request, {
+    threadId: input.targetThreadId,
+    executionMode: input.executionMode
+  });
+  if (!modeSwitchResult.data || modeSwitchResult.status >= 400) {
+    return createErrorAction({
+      intent: "switchMode",
+      executionMode: input.executionMode,
+      threadId: input.targetThreadId,
+      error: modeSwitchResult.message || "Unable to switch execution mode."
+    });
+  }
+
+  return createSuccessAction({
+    intent: "switchMode",
+    threadId: modeSwitchResult.data.threadId,
+    turnId: null,
+    executionMode: modeSwitchResult.data.executionMode
+  });
+}
+
+async function handleInterruptTurnIntent(input: {
+  request: Request;
+  formData: FormData;
+  executionMode: AgentExecutionMode;
+  targetThreadId: string | null;
+}): Promise<ChatActionData> {
+  const turnIdResult = ChatTurnIdSchema.safeParse(input.formData.get("turnId"));
+  const targetTurnId = turnIdResult.success ? (turnIdResult.data ?? null) : null;
+  if (!input.targetThreadId || !targetTurnId) {
+    return createErrorAction({
+      intent: "interruptTurn",
+      executionMode: input.executionMode,
+      threadId: input.targetThreadId,
+      error: "No active turn to interrupt."
+    });
+  }
+
+  const interruptResult = await interruptAgentTurn(input.request, {
+    threadId: input.targetThreadId,
+    turnId: targetTurnId
+  });
+  if (!interruptResult.data || interruptResult.status >= 400) {
+    return createErrorAction({
+      intent: "interruptTurn",
+      executionMode: input.executionMode,
+      threadId: input.targetThreadId,
+      turnId: targetTurnId,
+      error: interruptResult.message || "Unable to interrupt the running turn."
+    });
+  }
+
+  return createSuccessAction({
+    intent: "interruptTurn",
+    threadId: interruptResult.data.threadId,
+    turnId: interruptResult.data.turnId,
+    executionMode: interruptResult.data.executionMode
+  });
+}
+
+async function handlePromptIntent(input: {
+  request: Request;
+  formData: FormData;
+  workspaceSlug: string | undefined;
+  intent: PromptIntent;
+  executionMode: AgentExecutionMode;
+  targetThreadId: string | null;
+}): Promise<Response | ChatActionData> {
+  const parsedInput = parsePromptActionInput(
+    input.formData,
+    input.intent,
+    input.executionMode,
+    input.targetThreadId
+  );
+  if ("ok" in parsedInput) {
+    return parsedInput;
+  }
+
+  const resolvedThreadId = await resolveThreadForPromptAction({
+    request: input.request,
+    workspaceSlug: input.workspaceSlug,
+    intent: input.intent,
+    executionMode: input.executionMode,
+    prompt: parsedInput.prompt,
+    clientRequestId: parsedInput.clientRequestId,
+    targetThreadId: input.targetThreadId
+  });
+  if (resolvedThreadId instanceof Response) {
+    return resolvedThreadId;
+  }
+  if (typeof resolvedThreadId !== "string") {
+    return resolvedThreadId;
+  }
+
+  const startTurnResult = await startAgentTurn(input.request, {
+    threadId: resolvedThreadId,
+    text: parsedInput.prompt,
+    executionMode: input.executionMode
+  });
+  if (!startTurnResult.data || startTurnResult.status >= 400) {
+    return createErrorAction({
+      intent: input.intent,
+      executionMode: input.executionMode,
+      threadId: resolvedThreadId,
+      prompt: parsedInput.prompt,
+      clientRequestId: parsedInput.clientRequestId,
+      error: startTurnResult.message || "Unable to submit this prompt."
+    });
+  }
+
+  return createSuccessAction({
+    intent: input.intent,
+    threadId: startTurnResult.data.threadId,
+    turnId: startTurnResult.data.turnId,
+    executionMode: startTurnResult.data.executionMode,
+    prompt: parsedInput.prompt,
+    answer: startTurnResult.data.outputText,
+    clientRequestId: parsedInput.clientRequestId,
+    sourceMessageId: parsedInput.sourceMessageId,
+    parentMessageId: parsedInput.parentMessageId
+  });
+}
+
 export async function submitChatAction({
   request,
   workspaceSlug,
@@ -98,8 +395,7 @@ export async function submitChatAction({
     return logoutAndRedirect(request);
   }
 
-  const requestedExecutionMode = ChatExecutionModeSchema.safeParse(formData.get("executionMode"));
-  const executionMode = requestedExecutionMode.success ? requestedExecutionMode.data : "cloud";
+  const executionMode = resolveExecutionMode(formData);
   if (executionMode === "local") {
     return createErrorAction({
       intent,
@@ -107,205 +403,31 @@ export async function submitChatAction({
       error: "Local mode turns are not implemented yet."
     });
   }
-  const formThreadId = ChatThreadIdSchema.safeParse(formData.get("threadId"));
-  const targetThreadId = formThreadId.success
-    ? (formThreadId.data ?? threadId ?? null)
-    : (threadId ?? null);
 
+  const targetThreadId = resolveTargetThreadId(formData, threadId);
   if (intent === "switchMode") {
-    if (!targetThreadId) {
-      return createErrorAction({
-        intent,
-        executionMode,
-        error: "Select a thread before switching execution mode."
-      });
-    }
-
-    const modeSwitchResult = await switchAgentThreadMode(request, {
-      threadId: targetThreadId,
-      executionMode
+    return handleSwitchModeIntent({
+      request,
+      executionMode,
+      targetThreadId
     });
-
-    if (!modeSwitchResult.data || modeSwitchResult.status >= 400) {
-      return createErrorAction({
-        intent,
-        executionMode,
-        threadId: targetThreadId,
-        error: modeSwitchResult.message || "Unable to switch execution mode."
-      });
-    }
-
-    return {
-      intent,
-      ok: true,
-      error: null,
-      threadId: modeSwitchResult.data.threadId,
-      turnId: null,
-      executionMode: modeSwitchResult.data.executionMode,
-      prompt: null,
-      answer: null
-    };
   }
 
   if (intent === "interruptTurn") {
-    const turnIdResult = ChatTurnIdSchema.safeParse(formData.get("turnId"));
-    const targetTurnId = turnIdResult.success ? (turnIdResult.data ?? null) : null;
-
-    if (!targetThreadId || !targetTurnId) {
-      return createErrorAction({
-        intent,
-        executionMode,
-        threadId: targetThreadId,
-        error: "No active turn to interrupt."
-      });
-    }
-
-    const interruptResult = await interruptAgentTurn(request, {
-      threadId: targetThreadId,
-      turnId: targetTurnId
-    });
-
-    if (!interruptResult.data || interruptResult.status >= 400) {
-      return createErrorAction({
-        intent,
-        executionMode,
-        threadId: targetThreadId,
-        turnId: targetTurnId,
-        error: interruptResult.message || "Unable to interrupt the running turn."
-      });
-    }
-
-    return {
-      intent,
-      ok: true,
-      error: null,
-      threadId: interruptResult.data.threadId,
-      turnId: interruptResult.data.turnId,
-      executionMode: interruptResult.data.executionMode,
-      prompt: null,
-      answer: null
-    };
-  }
-
-  const sourceMessageIdResult = ChatMessageIdSchema.safeParse(formData.get("sourceMessageId"));
-  const sourceMessageId = sourceMessageIdResult.success
-    ? (sourceMessageIdResult.data ?? null)
-    : null;
-  const clientRequestIdResult = ChatClientRequestIdSchema.safeParse(
-    formData.get("clientRequestId")
-  );
-  const clientRequestId = clientRequestIdResult.success ? clientRequestIdResult.data : undefined;
-  const parentMessageIdResult = ChatMessageIdSchema.safeParse(formData.get("parentMessageId"));
-  const parentMessageId = parentMessageIdResult.success
-    ? (parentMessageIdResult.data ?? null)
-    : null;
-
-  const parsedPrompt = ChatPromptSchema.safeParse({
-    prompt: formData.get("prompt")
-  });
-  if (!parsedPrompt.success) {
-    return createErrorAction({
-      intent,
+    return handleInterruptTurnIntent({
+      request,
+      formData,
       executionMode,
-      threadId: targetThreadId,
-      clientRequestId,
-      error: parsedPrompt.error.issues[0]?.message ?? "Prompt is required."
+      targetThreadId
     });
   }
 
-  const prompt = parsedPrompt.data.prompt;
-  let resolvedThreadId = targetThreadId;
-  const requiresExistingThread = intent === "editMessage" || intent === "reloadMessage";
-
-  if (!resolvedThreadId && requiresExistingThread) {
-    return createErrorAction({
-      intent,
-      executionMode,
-      prompt,
-      clientRequestId,
-      error: "Select a thread before editing or reloading."
-    });
-  }
-
-  if (!resolvedThreadId) {
-    const auth = await loadAuthShellData({ request });
-    if (auth instanceof Response) {
-      return auth;
-    }
-
-    let resolvedWorkspaceSlug: string;
-    try {
-      resolvedWorkspaceSlug = workspaceSlug?.trim() || resolveThreadCreateWorkspaceSlug(auth);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to resolve workspace context.";
-      return createErrorAction({
-        intent,
-        executionMode,
-        prompt,
-        clientRequestId,
-        error: message
-      });
-    }
-
-    const createThreadResult = await createAgentThread(request, {
-      workspaceSlug: resolvedWorkspaceSlug,
-      executionMode,
-      title: prompt.slice(0, 80)
-    });
-
-    if (!createThreadResult.data || createThreadResult.status >= 400) {
-      return createErrorAction({
-        intent,
-        executionMode,
-        prompt,
-        clientRequestId,
-        error: createThreadResult.message || "Unable to create a new chat thread."
-      });
-    }
-
-    resolvedThreadId = createThreadResult.data.threadId;
-  }
-
-  const startTurnResult = await startAgentTurn(request, {
-    threadId: resolvedThreadId,
-    text: prompt,
-    executionMode
-  });
-
-  if (!startTurnResult.data || startTurnResult.status >= 400) {
-    return createErrorAction({
-      intent,
-      executionMode,
-      threadId: resolvedThreadId,
-      prompt,
-      clientRequestId,
-      error: startTurnResult.message || "Unable to submit this prompt."
-    });
-  }
-
-  const result: ChatActionData = {
+  return handlePromptIntent({
+    request,
+    formData,
+    workspaceSlug,
     intent,
-    ok: true,
-    error: null,
-    threadId: startTurnResult.data.threadId,
-    turnId: startTurnResult.data.turnId,
-    executionMode: startTurnResult.data.executionMode,
-    prompt,
-    answer: startTurnResult.data.outputText
-  };
-
-  if (clientRequestId !== undefined) {
-    result.clientRequestId = clientRequestId;
-  }
-
-  if (sourceMessageId) {
-    result.sourceMessageId = sourceMessageId;
-  }
-
-  if (parentMessageId) {
-    result.parentMessageId = parentMessageId;
-  }
-
-  return result;
+    executionMode,
+    targetThreadId
+  });
 }

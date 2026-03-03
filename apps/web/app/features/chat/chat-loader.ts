@@ -1,4 +1,5 @@
 import { redirect } from "react-router";
+import type { AuthShellLoaderData } from "~/features/auth/types";
 import type { ChatContextMode } from "~/features/auth/types";
 import { loadAuthShellData } from "~/features/auth/shell-loader";
 import { readPersonalContextLabel } from "~/features/chat/chat-context";
@@ -18,6 +19,107 @@ export interface ChatLoaderData {
   executionMode: AgentExecutionMode;
 }
 
+function resolveWorkspaceSlugOrRedirect(workspaceSlug: string | undefined): string | Response {
+  const normalizedWorkspaceSlug = workspaceSlug?.trim() || null;
+  return normalizedWorkspaceSlug ? normalizedWorkspaceSlug : redirect("/chat");
+}
+
+function resolveWorkspaceAccessRedirect(input: {
+  workspaceSlug: string;
+  auth: AuthShellLoaderData;
+}): Response | null {
+  const { workspaceSlug, auth } = input;
+  const hasWorkspaceAccess = auth.workspaces.some(
+    (workspace) => workspace.status === "active" && workspace.slug === workspaceSlug
+  );
+  if (hasWorkspaceAccess) {
+    return null;
+  }
+
+  const fallbackWorkspace =
+    auth.personalWorkspaceSlug?.trim() ||
+    auth.activeWorkspaceSlug?.trim() ||
+    auth.workspaces.find((workspace) => workspace.status === "active")?.slug ||
+    null;
+  if (!fallbackWorkspace) {
+    return redirect("/workspaces");
+  }
+
+  return redirect(`/w/${encodeURIComponent(fallbackWorkspace)}/chat`);
+}
+
+function parseRequestedThreadSeed(request: Request): string | null {
+  const requestedThreadSeedCandidate = new URL(request.url).searchParams.get("thread");
+  if (!requestedThreadSeedCandidate) {
+    return null;
+  }
+
+  return requestedThreadSeedCandidate.trim().length > 0 ? requestedThreadSeedCandidate : null;
+}
+
+function buildLoginRedirect(request: Request): Response {
+  return redirect(`/login?returnTo=${encodeURIComponent(buildReturnTo(request))}`);
+}
+
+interface ThreadLoadResult {
+  thread: AgentThread | null;
+  initialEvents: AgentEvent[];
+  initialCursor: number;
+  executionMode: AgentExecutionMode;
+}
+
+async function loadThreadContext(input: {
+  request: Request;
+  workspaceSlug: string;
+  threadId: string | null;
+}): Promise<ThreadLoadResult | Response> {
+  if (!input.threadId) {
+    return {
+      thread: null,
+      initialEvents: [],
+      initialCursor: 0,
+      executionMode: "cloud"
+    };
+  }
+
+  const threadResult = await getAgentThread(input.request, input.threadId);
+  if (threadResult.status === 401) {
+    return buildLoginRedirect(input.request);
+  }
+
+  if (threadResult.status === 403 || threadResult.status === 404) {
+    return redirect(`/w/${encodeURIComponent(input.workspaceSlug)}/chat`);
+  }
+
+  if (!threadResult.data) {
+    throw new Error(threadResult.message || "Unable to load chat thread.");
+  }
+
+  if (threadResult.data.workspaceSlug && threadResult.data.workspaceSlug !== input.workspaceSlug) {
+    return redirect(
+      `/w/${encodeURIComponent(threadResult.data.workspaceSlug)}/chat/${encodeURIComponent(input.threadId)}`
+    );
+  }
+
+  const resolvedThread = threadResult.data;
+  const eventsResult = await listAgentThreadEvents(input.request, {
+    threadId: resolvedThread.threadId,
+    cursor: 0,
+    limit: 300
+  });
+
+  if (eventsResult.status === 401) {
+    return buildLoginRedirect(input.request);
+  }
+
+  return {
+    thread: resolvedThread,
+    initialEvents: eventsResult.data?.events ?? [],
+    initialCursor: eventsResult.data?.nextCursor ?? 0,
+    executionMode: resolvedThread.executionMode
+  };
+}
+
 export async function loadChatData({
   request,
   workspaceSlug,
@@ -32,91 +134,39 @@ export async function loadChatData({
     return auth;
   }
 
-  const normalizedWorkspaceSlug = workspaceSlug?.trim() || null;
-  if (!normalizedWorkspaceSlug) {
-    return redirect("/chat");
+  const resolvedWorkspaceSlug = resolveWorkspaceSlugOrRedirect(workspaceSlug);
+  if (resolvedWorkspaceSlug instanceof Response) {
+    return resolvedWorkspaceSlug;
   }
 
-  const hasWorkspaceAccess = auth.workspaces.some(
-    (workspace) => workspace.status === "active" && workspace.slug === normalizedWorkspaceSlug
-  );
-  if (!hasWorkspaceAccess) {
-    const fallbackWorkspace =
-      auth.personalWorkspaceSlug?.trim() ||
-      auth.activeWorkspaceSlug?.trim() ||
-      auth.workspaces.find((workspace) => workspace.status === "active")?.slug ||
-      null;
-    if (!fallbackWorkspace) {
-      return redirect("/workspaces");
-    }
-
-    return redirect(`/w/${encodeURIComponent(fallbackWorkspace)}/chat`);
+  const workspaceAccessRedirect = resolveWorkspaceAccessRedirect({
+    workspaceSlug: resolvedWorkspaceSlug,
+    auth
+  });
+  if (workspaceAccessRedirect) {
+    return workspaceAccessRedirect;
   }
 
-  const url = new URL(request.url);
-  const requestedThreadSeedCandidate = url.searchParams.get("thread");
-  const requestedThreadSeed =
-    requestedThreadSeedCandidate && requestedThreadSeedCandidate.trim().length > 0
-      ? requestedThreadSeedCandidate
-      : null;
-
+  const requestedThreadSeed = parseRequestedThreadSeed(request);
   const normalizedThreadId = threadId?.trim() || null;
-  let resolvedThread: AgentThread | null = null;
-  let initialEvents: AgentEvent[] = [];
-  let initialCursor = 0;
-  let executionMode: AgentExecutionMode = "cloud";
-
-  if (normalizedThreadId) {
-    const threadResult = await getAgentThread(request, normalizedThreadId);
-    if (threadResult.status === 401) {
-      return redirect(`/login?returnTo=${encodeURIComponent(buildReturnTo(request))}`);
-    }
-
-    if (threadResult.status === 403 || threadResult.status === 404) {
-      return redirect(`/w/${encodeURIComponent(normalizedWorkspaceSlug)}/chat`);
-    }
-
-    if (!threadResult.data) {
-      throw new Error(threadResult.message || "Unable to load chat thread.");
-    }
-
-    if (
-      threadResult.data.workspaceSlug &&
-      threadResult.data.workspaceSlug !== normalizedWorkspaceSlug
-    ) {
-      return redirect(
-        `/w/${encodeURIComponent(threadResult.data.workspaceSlug)}/chat/${encodeURIComponent(normalizedThreadId)}`
-      );
-    }
-
-    resolvedThread = threadResult.data;
-    executionMode = resolvedThread.executionMode;
-
-    const eventsResult = await listAgentThreadEvents(request, {
-      threadId: resolvedThread.threadId,
-      cursor: 0,
-      limit: 300
-    });
-
-    if (eventsResult.status === 401) {
-      return redirect(`/login?returnTo=${encodeURIComponent(buildReturnTo(request))}`);
-    }
-
-    if (eventsResult.data) {
-      initialEvents = eventsResult.data.events;
-      initialCursor = eventsResult.data.nextCursor;
-    }
+  const threadContext = await loadThreadContext({
+    request,
+    workspaceSlug: resolvedWorkspaceSlug,
+    threadId: normalizedThreadId
+  });
+  if (threadContext instanceof Response) {
+    return threadContext;
   }
 
   return {
     contextMode: "personal",
     contextLabel: readPersonalContextLabel({ user: auth.user }),
-    workspaceSlug: normalizedWorkspaceSlug,
+    workspaceSlug: resolvedWorkspaceSlug,
     threadId: normalizedThreadId,
     requestedThreadSeed,
-    thread: resolvedThread,
-    initialEvents,
-    initialCursor,
-    executionMode
+    thread: threadContext.thread,
+    initialEvents: threadContext.initialEvents,
+    initialCursor: threadContext.initialCursor,
+    executionMode: threadContext.executionMode
   };
 }

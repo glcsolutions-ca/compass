@@ -24,22 +24,23 @@ It covers `01-commit` responsibilities only.
 
 ## Ownership and Escalation
 
-| Failure Class                                     | Primary Owner     | Secondary Owner   | Escalate After | Target MTTR       |
-| ------------------------------------------------- | ----------------- | ----------------- | -------------- | ----------------- |
-| Commit quick gate (`test:quick`)                  | Merging engineer  | Feature team lead | 15 minutes     | <= 30 minutes     |
-| Commit analysis thresholds (coverage/duplication) | Feature team lead | Platform/Delivery | 30 minutes     | <= 1 business day |
-| Image build/publish                               | Platform/Delivery | App owner         | 20 minutes     | <= 45 minutes     |
-| Candidate manifest generation/validation          | Platform/Delivery | App owner         | 15 minutes     | <= 30 minutes     |
+| Failure Class                                                       | Primary Owner     | Secondary Owner   | Escalate After | Target MTTR       |
+| ------------------------------------------------------------------- | ----------------- | ----------------- | -------------- | ----------------- |
+| Commit candidate gate (`test:commit:candidate`)                     | Merging engineer  | Feature team lead | 15 minutes     | <= 30 minutes     |
+| Commit analysis thresholds (coverage/duplication/complexity/cycles) | Feature team lead | Platform/Delivery | 30 minutes     | <= 1 business day |
+| Image build/publish                                                 | Platform/Delivery | App owner         | 20 minutes     | <= 45 minutes     |
+| Candidate manifest generation/validation                            | Platform/Delivery | App owner         | 15 minutes     | <= 30 minutes     |
 
 ## Failure Taxonomy
 
-| Code    | Class                      | Typical Signal                   | Immediate Action                                                        |
-| ------- | -------------------------- | -------------------------------- | ----------------------------------------------------------------------- |
-| CMT-001 | Compilation/type failure   | `typecheck` step failed          | Fix forward/backout immediately                                         |
-| CMT-002 | Commit test failure        | `test:quick` failed              | Fix test or defect; re-run                                              |
-| CMT-003 | Analysis threshold breach  | `commit-analysis` verdict `fail` | Improve coverage/reduce duplication or adjust approved threshold change |
-| CMT-004 | Build/publish failure      | Docker/registry error            | Repair build config or registry auth and re-run                         |
-| CMT-005 | Candidate contract failure | manifest validation failed       | Fix generator/schema mismatch; do not promote                           |
+| Code    | Class                      | Typical Signal                                    | Immediate Action                                                        |
+| ------- | -------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------- |
+| CMT-001 | Compilation/type failure   | `typecheck` step failed                           | Fix forward/backout immediately                                         |
+| CMT-002 | Commit test failure        | `test:commit:candidate` failed                    | Fix test or defect; re-run                                              |
+| CMT-003 | Analysis threshold breach  | `commit-analysis` verdict `fail`                  | Improve coverage/reduce duplication or adjust approved threshold change |
+| CMT-006 | Complexity/cycle breach    | `rc:check:complexity` or `rc:check:cycles` failed | Refactor to reduce branch complexity and break import cycles            |
+| CMT-004 | Build/publish failure      | Docker/registry error                             | Repair build config or registry auth and re-run                         |
+| CMT-005 | Candidate contract failure | manifest validation failed                        | Fix generator/schema mismatch; do not promote                           |
 
 ## Weekly Reliability Review (Required)
 

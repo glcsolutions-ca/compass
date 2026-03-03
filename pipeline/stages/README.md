@@ -158,9 +158,13 @@ Everything after that is candidate promotion and evidence collection.
 
 ## Current State Notes
 
-`02-acceptance` currently includes a temporary placeholder pass in this repository.
-That is a transitional implementation detail, not the target operating model.
-Target state is full automated deployment verification + acceptance suite as a hard gate.
+`02-acceptance` is implemented as a real gate in this repository:
+
+1. triggered from successful `commit-stage` runs on `main`;
+2. fetches the published candidate by `candidateId`;
+3. deploys/verifies from the same manifest;
+4. runs system and browser acceptance suites;
+5. records acceptance evidence with `pass|fail` verdict.
 
 ## Ownership Boundaries in this folder
 

@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { z } from "zod";
 import {
   AuthMeResponseSchema,
@@ -136,6 +136,13 @@ interface OidcRequestRecord {
   nonceHash: string;
   encryptedPayload: string;
   returnTo: string | null;
+}
+
+interface OidcRequestSecrets {
+  flow: "entra-login" | "admin-consent";
+  client: AuthClient;
+  nonce: string;
+  pkceVerifier: string;
 }
 
 interface DesktopHandoffRecord {
@@ -995,6 +1002,309 @@ export class AuthRepository {
     }));
   }
 
+  private async readLockedPersonalWorkspace(
+    client: PoolClient,
+    userId: string
+  ): Promise<{
+    organizationId: string;
+    organizationSlug: string;
+    workspaceId: string;
+    workspaceSlug: string;
+  } | null> {
+    const existing = await client.query<{
+      organization_id: string;
+      organization_slug: string;
+      workspace_id: string;
+      workspace_slug: string;
+    }>(
+      `
+        select
+          o.id as organization_id,
+          o.slug as organization_slug,
+          w.id as workspace_id,
+          w.slug as workspace_slug
+        from organizations o
+        join workspaces w on w.organization_id = o.id and w.is_personal = true
+        where o.kind = 'personal'
+          and o.owner_user_id = $1
+        limit 1
+        for update of o, w
+      `,
+      [userId]
+    );
+
+    const row = existing.rows[0];
+    if (!row) {
+      return null;
+    }
+
+    return {
+      organizationId: row.organization_id,
+      organizationSlug: row.organization_slug,
+      workspaceId: row.workspace_id,
+      workspaceSlug: row.workspace_slug
+    };
+  }
+
+  private isExpectedUniqueConflict(error: unknown, keys: readonly string[]): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return keys.some((key) => message.includes(key));
+  }
+
+  private async insertPersonalOrganizationIfMissing(input: {
+    client: PoolClient;
+    userId: string;
+    displayName: string | null;
+    primaryEmail: string | null;
+    nowIso: string;
+  }): Promise<void> {
+    const createdId = randomUUID();
+    const createdSlug = buildPersonalTenantSlug(input.userId);
+    const createdName = buildPersonalTenantName({
+      displayName: input.displayName,
+      primaryEmail: input.primaryEmail
+    });
+
+    try {
+      await input.client.query(
+        `
+          insert into organizations (
+            id,
+            slug,
+            name,
+            status,
+            kind,
+            owner_user_id,
+            created_at,
+            updated_at
+          ) values (
+            $1,
+            $2,
+            $3,
+            'active',
+            'personal',
+            $4,
+            $5::timestamptz,
+            $5::timestamptz
+          )
+        `,
+        [createdId, createdSlug, createdName, input.userId, input.nowIso]
+      );
+    } catch (error) {
+      if (
+        !this.isExpectedUniqueConflict(error, [
+          "organizations_owner_user_personal_uidx",
+          "organizations_unique_slug"
+        ])
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  private async readLockedPersonalOrganization(
+    client: PoolClient,
+    userId: string
+  ): Promise<{ id: string; slug: string; name: string }> {
+    const resolvedOrganization = await client.query<{ id: string; slug: string; name: string }>(
+      `
+        select id, slug, name
+        from organizations
+        where kind = 'personal'
+          and owner_user_id = $1
+        limit 1
+        for update
+      `,
+      [userId]
+    );
+
+    const organizationRow = resolvedOrganization.rows[0];
+    if (!organizationRow) {
+      throw new Error("Unable to resolve personal organization");
+    }
+
+    return organizationRow;
+  }
+
+  private async insertPersonalWorkspaceIfMissing(input: {
+    client: PoolClient;
+    organizationId: string;
+    organizationSlug: string;
+    organizationName: string;
+    nowIso: string;
+  }): Promise<void> {
+    try {
+      await input.client.query(
+        `
+          insert into workspaces (
+            id,
+            organization_id,
+            slug,
+            name,
+            status,
+            is_personal,
+            created_at,
+            updated_at
+          ) values (
+            $1,
+            $2,
+            $3,
+            $4,
+            'active',
+            true,
+            $5::timestamptz,
+            $5::timestamptz
+          )
+        `,
+        [
+          input.organizationId,
+          input.organizationId,
+          input.organizationSlug,
+          input.organizationName,
+          input.nowIso
+        ]
+      );
+    } catch (error) {
+      if (
+        !this.isExpectedUniqueConflict(error, [
+          "workspaces_unique_slug",
+          "workspaces_organization_personal_uidx"
+        ])
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  private async readLockedPersonalWorkspaceByOrganization(
+    client: PoolClient,
+    organizationId: string
+  ): Promise<{ id: string; slug: string }> {
+    const resolvedWorkspace = await client.query<{ id: string; slug: string }>(
+      `
+        select id, slug
+        from workspaces
+        where organization_id = $1
+          and is_personal = true
+        limit 1
+        for update
+      `,
+      [organizationId]
+    );
+
+    const workspaceRow = resolvedWorkspace.rows[0];
+    if (!workspaceRow) {
+      throw new Error("Unable to resolve personal workspace");
+    }
+
+    return workspaceRow;
+  }
+
+  private async ensurePersonalMemberships(input: {
+    client: PoolClient;
+    organizationId: string;
+    workspaceId: string;
+    userId: string;
+    nowIso: string;
+  }): Promise<void> {
+    await input.client.query(
+      `
+        insert into organization_memberships (
+          organization_id,
+          user_id,
+          role,
+          status,
+          created_at,
+          updated_at
+        ) values (
+          $1,
+          $2,
+          'owner',
+          'active',
+          $3::timestamptz,
+          $3::timestamptz
+        )
+        on conflict (organization_id, user_id)
+        do update set
+          role = excluded.role,
+          status = 'active',
+          updated_at = excluded.updated_at
+      `,
+      [input.organizationId, input.userId, input.nowIso]
+    );
+
+    await input.client.query(
+      `
+        insert into workspace_memberships (
+          workspace_id,
+          user_id,
+          role,
+          status,
+          created_at,
+          updated_at
+        ) values (
+          $1,
+          $2,
+          'admin',
+          'active',
+          $3::timestamptz,
+          $3::timestamptz
+        )
+        on conflict (workspace_id, user_id)
+        do update set
+          role = excluded.role,
+          status = 'active',
+          updated_at = excluded.updated_at
+      `,
+      [input.workspaceId, input.userId, input.nowIso]
+    );
+  }
+
+  private async resolveOrCreatePersonalWorkspace(input: {
+    client: PoolClient;
+    userId: string;
+    displayName: string | null;
+    primaryEmail: string | null;
+    nowIso: string;
+  }): Promise<{
+    organizationId: string;
+    organizationSlug: string;
+    workspaceId: string;
+    workspaceSlug: string;
+  }> {
+    const existing = await this.readLockedPersonalWorkspace(input.client, input.userId);
+    if (existing) {
+      return existing;
+    }
+
+    await this.insertPersonalOrganizationIfMissing({
+      client: input.client,
+      userId: input.userId,
+      displayName: input.displayName,
+      primaryEmail: input.primaryEmail,
+      nowIso: input.nowIso
+    });
+    const organizationRow = await this.readLockedPersonalOrganization(input.client, input.userId);
+    await this.insertPersonalWorkspaceIfMissing({
+      client: input.client,
+      organizationId: organizationRow.id,
+      organizationSlug: organizationRow.slug,
+      organizationName: organizationRow.name,
+      nowIso: input.nowIso
+    });
+    const workspaceRow = await this.readLockedPersonalWorkspaceByOrganization(
+      input.client,
+      organizationRow.id
+    );
+
+    return {
+      organizationId: organizationRow.id,
+      organizationSlug: organizationRow.slug,
+      workspaceId: workspaceRow.id,
+      workspaceSlug: workspaceRow.slug
+    };
+  }
+
   async ensurePersonalWorkspace(input: {
     userId: string;
     now: Date;
@@ -1012,211 +1322,23 @@ export class AuthRepository {
     try {
       await client.query("begin");
 
-      const existing = await client.query<{
-        organization_id: string;
-        organization_slug: string;
-        workspace_id: string;
-        workspace_slug: string;
-      }>(
-        `
-          select
-            o.id as organization_id,
-            o.slug as organization_slug,
-            w.id as workspace_id,
-            w.slug as workspace_slug
-          from organizations o
-          join workspaces w on w.organization_id = o.id and w.is_personal = true
-          where o.kind = 'personal'
-            and o.owner_user_id = $1
-          limit 1
-          for update of o, w
-        `,
-        [input.userId]
-      );
-
-      let organizationId = existing.rows[0]?.organization_id ?? null;
-      let organizationSlug = existing.rows[0]?.organization_slug ?? null;
-      let workspaceId = existing.rows[0]?.workspace_id ?? null;
-      let workspaceSlug = existing.rows[0]?.workspace_slug ?? null;
-
-      if (!organizationId || !organizationSlug || !workspaceId || !workspaceSlug) {
-        const createdId = randomUUID();
-        const createdSlug = buildPersonalTenantSlug(input.userId);
-        const createdName = buildPersonalTenantName({
-          displayName: input.displayName,
-          primaryEmail: input.primaryEmail
-        });
-
-        try {
-          await client.query(
-            `
-              insert into organizations (
-                id,
-                slug,
-                name,
-                status,
-                kind,
-                owner_user_id,
-                created_at,
-                updated_at
-              ) values (
-                $1,
-                $2,
-                $3,
-                'active',
-                'personal',
-                $4,
-                $5::timestamptz,
-                $5::timestamptz
-              )
-            `,
-            [createdId, createdSlug, createdName, input.userId, nowIso]
-          );
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          if (
-            !message.includes("organizations_owner_user_personal_uidx") &&
-            !message.includes("organizations_unique_slug")
-          ) {
-            throw error;
-          }
-        }
-
-        const resolvedOrganization = await client.query<{ id: string; slug: string; name: string }>(
-          `
-            select id, slug, name
-            from organizations
-            where kind = 'personal'
-              and owner_user_id = $1
-            limit 1
-            for update
-          `,
-          [input.userId]
-        );
-
-        const organizationRow = resolvedOrganization.rows[0];
-        if (!organizationRow) {
-          throw new Error("Unable to resolve personal organization");
-        }
-
-        organizationId = organizationRow.id;
-        organizationSlug = organizationRow.slug;
-
-        try {
-          await client.query(
-            `
-              insert into workspaces (
-                id,
-                organization_id,
-                slug,
-                name,
-                status,
-                is_personal,
-                created_at,
-                updated_at
-              ) values (
-                $1,
-                $2,
-                $3,
-                $4,
-                'active',
-                true,
-                $5::timestamptz,
-                $5::timestamptz
-              )
-            `,
-            [organizationId, organizationId, organizationSlug, createdName, nowIso]
-          );
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          if (
-            !message.includes("workspaces_unique_slug") &&
-            !message.includes("workspaces_organization_personal_uidx")
-          ) {
-            throw error;
-          }
-        }
-
-        const resolvedWorkspace = await client.query<{ id: string; slug: string }>(
-          `
-            select id, slug
-            from workspaces
-            where organization_id = $1
-              and is_personal = true
-            limit 1
-            for update
-          `,
-          [organizationId]
-        );
-
-        const workspaceRow = resolvedWorkspace.rows[0];
-        if (!workspaceRow) {
-          throw new Error("Unable to resolve personal workspace");
-        }
-
-        workspaceId = workspaceRow.id;
-        workspaceSlug = workspaceRow.slug;
-      }
-
-      await client.query(
-        `
-          insert into organization_memberships (
-            organization_id,
-            user_id,
-            role,
-            status,
-            created_at,
-            updated_at
-          ) values (
-            $1,
-            $2,
-            'owner',
-            'active',
-            $3::timestamptz,
-            $3::timestamptz
-          )
-          on conflict (organization_id, user_id)
-          do update set
-            role = excluded.role,
-            status = 'active',
-            updated_at = excluded.updated_at
-        `,
-        [organizationId, input.userId, nowIso]
-      );
-
-      await client.query(
-        `
-          insert into workspace_memberships (
-            workspace_id,
-            user_id,
-            role,
-            status,
-            created_at,
-            updated_at
-          ) values (
-            $1,
-            $2,
-            'admin',
-            'active',
-            $3::timestamptz,
-            $3::timestamptz
-          )
-          on conflict (workspace_id, user_id)
-          do update set
-            role = excluded.role,
-            status = 'active',
-            updated_at = excluded.updated_at
-        `,
-        [workspaceId, input.userId, nowIso]
-      );
+      const resolved = await this.resolveOrCreatePersonalWorkspace({
+        client,
+        userId: input.userId,
+        displayName: input.displayName,
+        primaryEmail: input.primaryEmail,
+        nowIso
+      });
+      await this.ensurePersonalMemberships({
+        client,
+        organizationId: resolved.organizationId,
+        workspaceId: resolved.workspaceId,
+        userId: input.userId,
+        nowIso
+      });
 
       await client.query("commit");
-      return {
-        organizationId,
-        organizationSlug,
-        workspaceId,
-        workspaceSlug
-      };
+      return resolved;
     } catch (error) {
       await client.query("rollback");
       throw error;
@@ -1895,34 +2017,65 @@ export class AuthService {
     const state = asStringOrNull(input.state);
     const tenantHint = asStringOrNull(input.tenant);
     const hasAdminConsent = parseBooleanQueryFlag(input.adminConsent);
+    const { consumeStateRequest, consumeStateSecrets } = this.createOidcStateResolvers({
+      state,
+      now: input.now
+    });
 
+    if (hasAdminConsent) {
+      return this.handleAdminConsentCallback({
+        tenantHint,
+        consumeStateRequest,
+        consumeStateSecrets
+      });
+    }
+
+    if (input.error) {
+      return this.handleEntraErrorCallback({
+        state,
+        tenantHint,
+        error: input.error,
+        errorDescription: input.errorDescription,
+        now: input.now,
+        consumeStateRequest,
+        consumeStateSecrets
+      });
+    }
+
+    if (!input.code || !state) {
+      throw new ApiError(400, "INVALID_CALLBACK", "Missing callback code or state");
+    }
+
+    return this.handleEntraLoginSuccess({
+      code: input.code,
+      userAgent: input.userAgent,
+      ip: input.ip,
+      now: input.now,
+      consumeStateRequest,
+      consumeStateSecrets
+    });
+  }
+
+  private createOidcStateResolvers(input: { state: string | null; now: Date }): {
+    consumeStateRequest: () => Promise<OidcRequestRecord | null>;
+    consumeStateSecrets: () => Promise<OidcRequestSecrets | null>;
+  } {
     let consumedStateRequest: OidcRequestRecord | null | undefined;
-    let consumedStateSecrets:
-      | {
-          flow: "entra-login" | "admin-consent";
-          client: AuthClient;
-          nonce: string;
-          pkceVerifier: string;
-        }
-      | null
-      | undefined;
+    let consumedStateSecrets: OidcRequestSecrets | null | undefined;
+
     const consumeStateRequest = async (): Promise<OidcRequestRecord | null> => {
-      if (!state) {
+      if (!input.state) {
         return null;
       }
       if (consumedStateRequest !== undefined) {
         return consumedStateRequest;
       }
 
-      consumedStateRequest = await this.repository.consumeOidcRequest(state, input.now);
+      consumedStateRequest = await this.repository.consumeOidcRequest(input.state, input.now);
       return consumedStateRequest;
     };
-    const consumeStateSecrets = async (): Promise<{
-      flow: "entra-login" | "admin-consent";
-      client: AuthClient;
-      nonce: string;
-      pkceVerifier: string;
-    } | null> => {
+
+    const consumeStateSecrets = async (): Promise<OidcRequestSecrets | null> => {
       if (consumedStateSecrets !== undefined) {
         return consumedStateSecrets;
       }
@@ -1937,92 +2090,120 @@ export class AuthService {
       return consumedStateSecrets;
     };
 
-    if (hasAdminConsent) {
-      const oidcRequest = await consumeStateRequest();
-      if (!oidcRequest) {
-        throw new ApiError(401, "STATE_INVALID", "OIDC state is invalid or expired");
-      }
+    return { consumeStateRequest, consumeStateSecrets };
+  }
 
-      const oidcSecrets = await consumeStateSecrets();
-      if (oidcSecrets?.flow !== "admin-consent") {
-        throw new ApiError(400, "INVALID_CALLBACK", "Callback state does not match admin consent");
-      }
+  private formatClientRedirect(input: {
+    client: AuthClient | undefined;
+    redirectTo: string;
+  }): string {
+    return input.client === "desktop"
+      ? this.buildDesktopCallbackDeepLink({ nextPath: input.redirectTo })
+      : input.redirectTo;
+  }
 
-      const loginRedirect = buildLoginRedirect({
-        consent: "granted",
-        returnTo: oidcRequest.returnTo,
-        tenantHint
-      });
-
-      return {
-        redirectTo:
-          oidcSecrets.client === "desktop"
-            ? this.buildDesktopCallbackDeepLink({ nextPath: loginRedirect })
-            : loginRedirect
-      };
-    }
-
-    if (input.error) {
-      const oidcRequest = state ? await consumeStateRequest() : null;
-      if (state && !oidcRequest) {
-        throw new ApiError(401, "STATE_INVALID", "OIDC state is invalid or expired");
-      }
-      const oidcSecrets = state ? await consumeStateSecrets() : null;
-
-      await this.repository.insertAuditEvent({
-        eventType: "auth.login.failure",
-        actorUserId: null,
-        tenantId: null,
-        metadata: {
-          provider: "entra",
-          error: input.error,
-          errorDescription: input.errorDescription ?? null
-        },
-        now: input.now
-      });
-
-      const lower = `${input.error} ${input.errorDescription ?? ""}`.toLowerCase();
-      if (oidcSecrets?.flow === "admin-consent") {
-        const loginRedirect = buildLoginRedirect({
-          consent: "denied",
-          returnTo: oidcRequest?.returnTo,
-          tenantHint
-        });
-        return {
-          redirectTo:
-            oidcSecrets.client === "desktop"
-              ? this.buildDesktopCallbackDeepLink({ nextPath: loginRedirect })
-              : loginRedirect
-        };
-      }
-
-      const isConsent = lower.includes("consent") || lower.includes("aadsts65001");
-      if (isConsent) {
-        const loginRedirect = buildLoginRedirect({
-          error: "admin_consent_required",
-          returnTo: oidcRequest?.returnTo ?? "/",
-          tenantHint
-        });
-        return {
-          redirectTo:
-            oidcSecrets?.client === "desktop"
-              ? this.buildDesktopCallbackDeepLink({ nextPath: loginRedirect })
-              : loginRedirect
-        };
-      }
-
-      throw new ApiError(401, "OIDC_CALLBACK_ERROR", input.errorDescription || input.error);
-    }
-
-    if (!input.code || !state) {
-      throw new ApiError(400, "INVALID_CALLBACK", "Missing callback code or state");
-    }
-
-    const oidcRequest = await consumeStateRequest();
+  private async handleAdminConsentCallback(input: {
+    tenantHint: string | null;
+    consumeStateRequest: () => Promise<OidcRequestRecord | null>;
+    consumeStateSecrets: () => Promise<OidcRequestSecrets | null>;
+  }): Promise<{ redirectTo: string }> {
+    const oidcRequest = await input.consumeStateRequest();
     if (!oidcRequest) {
       throw new ApiError(401, "STATE_INVALID", "OIDC state is invalid or expired");
     }
-    const oidcSecrets = await consumeStateSecrets();
+
+    const oidcSecrets = await input.consumeStateSecrets();
+    if (oidcSecrets?.flow !== "admin-consent") {
+      throw new ApiError(400, "INVALID_CALLBACK", "Callback state does not match admin consent");
+    }
+
+    const loginRedirect = buildLoginRedirect({
+      consent: "granted",
+      returnTo: oidcRequest.returnTo,
+      tenantHint: input.tenantHint
+    });
+
+    return {
+      redirectTo: this.formatClientRedirect({
+        client: oidcSecrets.client,
+        redirectTo: loginRedirect
+      })
+    };
+  }
+
+  private async handleEntraErrorCallback(input: {
+    state: string | null;
+    tenantHint: string | null;
+    error: string;
+    errorDescription?: string;
+    now: Date;
+    consumeStateRequest: () => Promise<OidcRequestRecord | null>;
+    consumeStateSecrets: () => Promise<OidcRequestSecrets | null>;
+  }): Promise<{ redirectTo: string }> {
+    const oidcRequest = input.state ? await input.consumeStateRequest() : null;
+    if (input.state && !oidcRequest) {
+      throw new ApiError(401, "STATE_INVALID", "OIDC state is invalid or expired");
+    }
+    const oidcSecrets = input.state ? await input.consumeStateSecrets() : null;
+
+    await this.repository.insertAuditEvent({
+      eventType: "auth.login.failure",
+      actorUserId: null,
+      tenantId: null,
+      metadata: {
+        provider: "entra",
+        error: input.error,
+        errorDescription: input.errorDescription ?? null
+      },
+      now: input.now
+    });
+
+    if (oidcSecrets?.flow === "admin-consent") {
+      const loginRedirect = buildLoginRedirect({
+        consent: "denied",
+        returnTo: oidcRequest?.returnTo,
+        tenantHint: input.tenantHint
+      });
+      return {
+        redirectTo: this.formatClientRedirect({
+          client: oidcSecrets.client,
+          redirectTo: loginRedirect
+        })
+      };
+    }
+
+    const lower = `${input.error} ${input.errorDescription ?? ""}`.toLowerCase();
+    const isConsent = lower.includes("consent") || lower.includes("aadsts65001");
+    if (isConsent) {
+      const loginRedirect = buildLoginRedirect({
+        error: "admin_consent_required",
+        returnTo: oidcRequest?.returnTo ?? "/",
+        tenantHint: input.tenantHint
+      });
+      return {
+        redirectTo: this.formatClientRedirect({
+          client: oidcSecrets?.client,
+          redirectTo: loginRedirect
+        })
+      };
+    }
+
+    throw new ApiError(401, "OIDC_CALLBACK_ERROR", input.errorDescription || input.error);
+  }
+
+  private async handleEntraLoginSuccess(input: {
+    code: string;
+    userAgent: string | undefined;
+    ip: string;
+    now: Date;
+    consumeStateRequest: () => Promise<OidcRequestRecord | null>;
+    consumeStateSecrets: () => Promise<OidcRequestSecrets | null>;
+  }): Promise<{ redirectTo: string; sessionToken?: string }> {
+    const oidcRequest = await input.consumeStateRequest();
+    if (!oidcRequest) {
+      throw new ApiError(401, "STATE_INVALID", "OIDC state is invalid or expired");
+    }
+    const oidcSecrets = await input.consumeStateSecrets();
     if (!oidcSecrets) {
       throw new ApiError(401, "STATE_INVALID", "OIDC state is invalid or expired");
     }
@@ -2035,12 +2216,10 @@ export class AuthService {
       redirectUri: this.requiredRedirectUri(),
       codeVerifier: oidcSecrets.pkceVerifier
     });
-
     const claims = await this.oidcClient.verifyIdToken({
       idToken,
       expectedNonce: oidcSecrets.nonce
     });
-
     if (!this.isAllowedTenant(claims.tid)) {
       await this.repository.insertAuditEvent({
         eventType: "auth.login.failure",
@@ -2054,7 +2233,6 @@ export class AuthService {
         },
         now: input.now
       });
-
       throw new ApiError(
         403,
         "ENTRA_TENANT_NOT_ALLOWED",
@@ -2069,7 +2247,6 @@ export class AuthService {
       displayName: user.displayName,
       primaryEmail: user.primaryEmail
     });
-
     await this.repository.insertAuditEvent({
       eventType: "auth.login.success",
       actorUserId: user.id,
@@ -2099,7 +2276,6 @@ export class AuthService {
         redirectTo,
         now: input.now
       });
-
       return {
         redirectTo: this.buildDesktopCallbackDeepLink({ handoffToken })
       };
@@ -2111,7 +2287,6 @@ export class AuthService {
       ip: input.ip,
       now: input.now
     });
-
     return {
       redirectTo,
       sessionToken
@@ -2554,18 +2729,8 @@ export class AuthService {
     return this.oidcStateEncryptionKey;
   }
 
-  private decodeOidcRequestSecrets(oidcRequest: OidcRequestRecord): {
-    flow: "entra-login" | "admin-consent";
-    client: AuthClient;
-    nonce: string;
-    pkceVerifier: string;
-  } {
-    let decoded: {
-      flow: "entra-login" | "admin-consent";
-      client: AuthClient;
-      nonce: string;
-      pkceVerifier: string;
-    };
+  private decodeOidcRequestSecrets(oidcRequest: OidcRequestRecord): OidcRequestSecrets {
+    let decoded: OidcRequestSecrets;
     try {
       decoded = decryptOidcRequestPayload({
         encryptionKey: this.requiredOidcStateEncryptionKey(),

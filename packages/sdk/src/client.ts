@@ -1,5 +1,5 @@
 import createClient, { type Client } from "openapi-fetch";
-import type { ApiPaths } from "./index.js";
+import type { paths as ApiPaths } from "./generated/schema.js";
 
 export type ApiClient = Client<ApiPaths>;
 

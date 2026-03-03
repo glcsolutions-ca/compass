@@ -82,6 +82,25 @@ interface CloudTurnResult {
   runtimeMetadata: Record<string, unknown>;
 }
 
+interface StartTurnResolvedInput {
+  threadId: string;
+  text: string;
+  now: Date;
+  executionMode: AgentExecutionMode;
+  executionHost: AgentExecutionHost;
+  clientRequestId: string | null;
+  parentTurnId: string | null;
+  sourceTurnId: string | null;
+  turnId: string;
+  userMessageId: string;
+}
+
+interface StartTurnTransactionResult {
+  reusedTurn: AgentTurnRecord | null;
+  startedEvent: AgentEventRecord | null;
+  turnContext: StartTurnResolvedInput;
+}
+
 interface CloudInterruptResult {
   interrupted: boolean;
   runtimeMetadata: Record<string, unknown>;
@@ -1738,8 +1757,7 @@ class PostgresAgentService implements AgentService {
     }
   }
 
-  async startTurn(input: {
-    userId: string;
+  private normalizeStartTurnInput(input: {
     threadId: string;
     text: string;
     clientRequestId?: string;
@@ -1748,14 +1766,10 @@ class PostgresAgentService implements AgentService {
     executionMode?: AgentExecutionMode;
     executionHost?: AgentExecutionHost;
     now: Date;
-  }): Promise<{ turn: AgentTurnRecord; outputText: string | null }> {
-    const access = await this.requireThreadAccess({
-      userId: input.userId,
-      threadId: input.threadId
-    });
-
-    const executionMode = input.executionMode ?? access.thread.executionMode;
-    const executionHost = input.executionHost ?? access.thread.executionHost;
+    threadDefaults: AgentThreadRecord;
+  }): StartTurnResolvedInput {
+    const executionMode = input.executionMode ?? input.threadDefaults.executionMode;
+    const executionHost = input.executionHost ?? input.threadDefaults.executionHost;
     if (executionMode === "local") {
       throw new ApiError(
         503,
@@ -1763,193 +1777,223 @@ class PostgresAgentService implements AgentService {
         "Local mode turns are not implemented yet."
       );
     }
-    const clientRequestId = input.clientRequestId?.trim() || null;
-    const parentTurnId = input.parentTurnId?.trim() || null;
-    const sourceTurnId = input.sourceTurnId?.trim() || null;
-    const turnId = randomUUID();
-    const userMessageId = randomUUID();
-    let assistantMessageId: string | null = null;
 
+    return {
+      threadId: input.threadId,
+      text: input.text,
+      now: input.now,
+      executionMode,
+      executionHost,
+      clientRequestId: input.clientRequestId?.trim() || null,
+      parentTurnId: input.parentTurnId?.trim() || null,
+      sourceTurnId: input.sourceTurnId?.trim() || null,
+      turnId: randomUUID(),
+      userMessageId: randomUUID()
+    };
+  }
+
+  private async readLatestTurnByClientRequest(input: {
+    client: PoolClient;
+    threadId: string;
+    clientRequestId: string;
+  }): Promise<AgentTurnRecord | null> {
+    const existingTurnResult = await input.client.query(
+      `
+        select
+          turn_id,
+          thread_id,
+          parent_turn_id,
+          source_turn_id,
+          client_request_id,
+          status,
+          input,
+          output,
+          error,
+          started_at,
+          completed_at,
+          execution_mode,
+          execution_host
+        from agent_turns
+        where thread_id = $1 and client_request_id = $2
+        order by started_at desc
+        limit 1
+      `,
+      [input.threadId, input.clientRequestId]
+    );
+    if ((existingTurnResult.rowCount ?? 0) < 1) {
+      return null;
+    }
+
+    return mapTurnRow(existingTurnResult.rows[0] as Record<string, unknown>);
+  }
+
+  private async ensureTurnReferenceExists(input: {
+    client: PoolClient;
+    threadId: string;
+    turnId: string | null;
+    notFoundCode: string;
+    notFoundMessage: string;
+  }): Promise<void> {
+    if (!input.turnId) {
+      return;
+    }
+
+    const result = await input.client.query(
+      `
+        select 1
+        from agent_turns
+        where thread_id = $1 and turn_id = $2
+        limit 1
+      `,
+      [input.threadId, input.turnId]
+    );
+    if ((result.rowCount ?? 0) < 1) {
+      throw new ApiError(404, input.notFoundCode, input.notFoundMessage);
+    }
+  }
+
+  private async assertThreadIdleForNewTurn(client: PoolClient, threadId: string): Promise<void> {
+    const inProgress = await client.query(
+      `
+        select 1
+        from agent_turns
+        where thread_id = $1 and status = 'inProgress'
+        limit 1
+      `,
+      [threadId]
+    );
+    if ((inProgress.rowCount ?? 0) > 0) {
+      throw new ApiError(409, "AGENT_THREAD_BUSY", "A turn is already in progress");
+    }
+  }
+
+  private async insertInProgressTurn(
+    client: PoolClient,
+    input: StartTurnResolvedInput
+  ): Promise<AgentTurnRecord | null> {
+    const insertTurn = await client.query(
+      `
+        insert into agent_turns (
+          turn_id,
+          thread_id,
+          parent_turn_id,
+          source_turn_id,
+          client_request_id,
+          status,
+          input,
+          output,
+          error,
+          started_at,
+          completed_at,
+          execution_mode,
+          execution_host,
+          runtime_metadata
+        )
+        values (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          'inProgress',
+          $6::jsonb,
+          null,
+          null,
+          $7,
+          null,
+          $8,
+          $9,
+          '{}'::jsonb
+        )
+        on conflict (thread_id, client_request_id)
+        where client_request_id is not null
+        do nothing
+        returning
+          turn_id,
+          thread_id,
+          parent_turn_id,
+          source_turn_id,
+          client_request_id,
+          status,
+          input,
+          output,
+          error,
+          started_at,
+          completed_at,
+          execution_mode,
+          execution_host
+      `,
+      [
+        input.turnId,
+        input.threadId,
+        input.parentTurnId,
+        input.sourceTurnId,
+        input.clientRequestId,
+        JSON.stringify({ text: input.text }),
+        input.now.toISOString(),
+        input.executionMode,
+        input.executionHost
+      ]
+    );
+    if ((insertTurn.rowCount ?? 0) < 1) {
+      return null;
+    }
+
+    return mapTurnRow(insertTurn.rows[0] as Record<string, unknown>);
+  }
+
+  private async createTurnStartTransaction(
+    input: StartTurnResolvedInput
+  ): Promise<StartTurnTransactionResult> {
     const client = await this.pool.connect();
-    let startedEvent: AgentEventRecord;
     try {
       await client.query("begin");
 
-      if (clientRequestId) {
-        const existingTurnResult = await client.query(
-          `
-            select
-              turn_id,
-              thread_id,
-              parent_turn_id,
-              source_turn_id,
-              client_request_id,
-              status,
-              input,
-              output,
-              error,
-              started_at,
-              completed_at,
-              execution_mode,
-              execution_host
-            from agent_turns
-            where thread_id = $1 and client_request_id = $2
-            order by started_at desc
-            limit 1
-          `,
-          [input.threadId, clientRequestId]
-        );
-
-        if ((existingTurnResult.rowCount ?? 0) > 0) {
-          const existingTurn = mapTurnRow(existingTurnResult.rows[0] as Record<string, unknown>);
+      if (input.clientRequestId) {
+        const existingTurn = await this.readLatestTurnByClientRequest({
+          client,
+          threadId: input.threadId,
+          clientRequestId: input.clientRequestId
+        });
+        if (existingTurn) {
           await client.query("commit");
           return {
-            turn: existingTurn,
-            outputText: readTurnOutputText(existingTurn)
+            reusedTurn: existingTurn,
+            startedEvent: null,
+            turnContext: input
           };
         }
       }
 
-      if (parentTurnId) {
-        const parentTurn = await client.query(
-          `
-            select 1
-            from agent_turns
-            where thread_id = $1 and turn_id = $2
-            limit 1
-          `,
-          [input.threadId, parentTurnId]
-        );
-        if ((parentTurn.rowCount ?? 0) < 1) {
-          throw new ApiError(404, "AGENT_PARENT_TURN_NOT_FOUND", "Parent turn not found");
-        }
-      }
+      await this.ensureTurnReferenceExists({
+        client,
+        threadId: input.threadId,
+        turnId: input.parentTurnId,
+        notFoundCode: "AGENT_PARENT_TURN_NOT_FOUND",
+        notFoundMessage: "Parent turn not found"
+      });
+      await this.ensureTurnReferenceExists({
+        client,
+        threadId: input.threadId,
+        turnId: input.sourceTurnId,
+        notFoundCode: "AGENT_SOURCE_TURN_NOT_FOUND",
+        notFoundMessage: "Source turn not found"
+      });
+      await this.assertThreadIdleForNewTurn(client, input.threadId);
 
-      if (sourceTurnId) {
-        const sourceTurn = await client.query(
-          `
-            select 1
-            from agent_turns
-            where thread_id = $1 and turn_id = $2
-            limit 1
-          `,
-          [input.threadId, sourceTurnId]
-        );
-        if ((sourceTurn.rowCount ?? 0) < 1) {
-          throw new ApiError(404, "AGENT_SOURCE_TURN_NOT_FOUND", "Source turn not found");
-        }
-      }
-
-      const inProgress = await client.query(
-        `
-          select 1
-          from agent_turns
-          where thread_id = $1 and status = 'inProgress'
-          limit 1
-        `,
-        [input.threadId]
-      );
-
-      if ((inProgress.rowCount ?? 0) > 0) {
-        throw new ApiError(409, "AGENT_THREAD_BUSY", "A turn is already in progress");
-      }
-
-      const insertTurn = await client.query(
-        `
-          insert into agent_turns (
-            turn_id,
-            thread_id,
-            parent_turn_id,
-            source_turn_id,
-            client_request_id,
-            status,
-            input,
-            output,
-            error,
-            started_at,
-            completed_at,
-            execution_mode,
-            execution_host,
-            runtime_metadata
-          )
-          values (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5,
-            'inProgress',
-            $6::jsonb,
-            null,
-            null,
-            $7,
-            null,
-            $8,
-            $9,
-            '{}'::jsonb
-          )
-          on conflict (thread_id, client_request_id)
-          where client_request_id is not null
-          do nothing
-          returning
-            turn_id,
-            thread_id,
-            parent_turn_id,
-            source_turn_id,
-            client_request_id,
-            status,
-            input,
-            output,
-            error,
-            started_at,
-            completed_at,
-            execution_mode,
-            execution_host
-        `,
-        [
-          turnId,
-          input.threadId,
-          parentTurnId,
-          sourceTurnId,
-          clientRequestId,
-          JSON.stringify({ text: input.text }),
-          input.now.toISOString(),
-          executionMode,
-          executionHost
-        ]
-      );
-
-      if ((insertTurn.rowCount ?? 0) < 1 && clientRequestId) {
-        const existingTurnResult = await client.query(
-          `
-            select
-              turn_id,
-              thread_id,
-              parent_turn_id,
-              source_turn_id,
-              client_request_id,
-              status,
-              input,
-              output,
-              error,
-              started_at,
-              completed_at,
-              execution_mode,
-              execution_host
-            from agent_turns
-            where thread_id = $1 and client_request_id = $2
-            order by started_at desc
-            limit 1
-          `,
-          [input.threadId, clientRequestId]
-        );
-
-        if ((existingTurnResult.rowCount ?? 0) > 0) {
-          const existingTurn = mapTurnRow(existingTurnResult.rows[0] as Record<string, unknown>);
+      const insertedTurn = await this.insertInProgressTurn(client, input);
+      if (!insertedTurn && input.clientRequestId) {
+        const existingTurn = await this.readLatestTurnByClientRequest({
+          client,
+          threadId: input.threadId,
+          clientRequestId: input.clientRequestId
+        });
+        if (existingTurn) {
           await client.query("commit");
           return {
-            turn: existingTurn,
-            outputText: readTurnOutputText(existingTurn)
+            reusedTurn: existingTurn,
+            startedEvent: null,
+            turnContext: input
           };
         }
       }
@@ -1969,64 +2013,74 @@ class PostgresAgentService implements AgentService {
           values ($1, $2, $3, 'user_message', 'completed', $4::jsonb, $5, $5)
         `,
         [
-          userMessageId,
+          input.userMessageId,
           input.threadId,
-          turnId,
+          input.turnId,
           JSON.stringify({ text: input.text }),
           input.now.toISOString()
         ]
       );
 
-      startedEvent = await this.insertEvent(
+      const startedEvent = await this.insertEvent(
         {
           threadId: input.threadId,
-          turnId,
+          turnId: input.turnId,
           method: "turn.started",
           payload: {
-            turnId,
+            turnId: input.turnId,
             text: input.text,
-            userMessageId,
-            parentTurnId,
-            sourceTurnId,
-            clientRequestId,
-            executionMode,
-            executionHost
+            userMessageId: input.userMessageId,
+            parentTurnId: input.parentTurnId,
+            sourceTurnId: input.sourceTurnId,
+            clientRequestId: input.clientRequestId,
+            executionMode: input.executionMode,
+            executionHost: input.executionHost
           },
           now: input.now
         },
         client
       );
-
       await client.query("commit");
+      return {
+        reusedTurn: null,
+        startedEvent,
+        turnContext: input
+      };
     } catch (error) {
       await client.query("rollback");
       throw error;
     } finally {
       client.release();
     }
+  }
 
-    this.publishEvent(startedEvent);
+  private async runTurnWithRuntime(input: {
+    accessThread: AgentThreadRecord;
+    turnContext: StartTurnResolvedInput;
+  }): Promise<{
+    cloudResult: CloudTurnResult | null;
+    turnError: unknown;
+    effectiveThread: AgentThreadRecord;
+  }> {
+    const effectiveThreadForExecution: AgentThreadRecord = {
+      ...input.accessThread,
+      executionMode: input.turnContext.executionMode,
+      executionHost: input.turnContext.executionHost,
+      cloudSessionIdentifier:
+        input.accessThread.cloudSessionIdentifier ||
+        (input.turnContext.executionMode === "cloud" ? `thr-${input.turnContext.threadId}` : null)
+    };
 
     let cloudResult: CloudTurnResult | null = null;
     let turnError: unknown = null;
-    const effectiveThreadForExecution: AgentThreadRecord = {
-      ...access.thread,
-      executionMode,
-      executionHost,
-      cloudSessionIdentifier:
-        access.thread.cloudSessionIdentifier ||
-        (executionMode === "cloud" ? `thr-${input.threadId}` : null)
-    };
-
     try {
       await this.runtimeExecutionDriver.bootstrapSession({
         thread: effectiveThreadForExecution
       });
-
       cloudResult = await this.runtimeExecutionDriver.runTurn({
         thread: effectiveThreadForExecution,
-        turnId,
-        text: input.text
+        turnId: input.turnContext.turnId,
+        text: input.turnContext.text
       });
     } catch (error) {
       turnError = {
@@ -2034,16 +2088,23 @@ class PostgresAgentService implements AgentService {
       };
     }
 
-    const completeClient = await this.pool.connect();
+    return { cloudResult, turnError, effectiveThread: effectiveThreadForExecution };
+  }
+
+  private async completeTurnTransaction(input: {
+    turnContext: StartTurnResolvedInput;
+    cloudResult: CloudTurnResult | null;
+    turnError: unknown;
+  }): Promise<{ turn: AgentTurnRecord; outputText: string | null }> {
+    const client = await this.pool.connect();
     try {
-      await completeClient.query("begin");
+      await client.query("begin");
       const completionNow = new Date();
       const completionIso = completionNow.toISOString();
+      const finalizedStatus = input.turnError ? "error" : "completed";
+      const finalizedOutput = input.cloudResult ? { text: input.cloudResult.outputText } : null;
 
-      const finalizedStatus = turnError ? "error" : "completed";
-      const finalizedOutput = cloudResult ? { text: cloudResult.outputText } : null;
-
-      const turnUpdate = await completeClient.query(
+      const turnUpdate = await client.query(
         `
           update agent_turns
           set
@@ -2069,21 +2130,21 @@ class PostgresAgentService implements AgentService {
             execution_host
         `,
         [
-          turnId,
-          input.threadId,
+          input.turnContext.turnId,
+          input.turnContext.threadId,
           finalizedStatus,
           JSON.stringify(finalizedOutput),
-          JSON.stringify(turnError),
+          JSON.stringify(input.turnError),
           completionIso,
-          JSON.stringify(cloudResult?.runtimeMetadata || {})
+          JSON.stringify(input.cloudResult?.runtimeMetadata || {})
         ]
       );
-
       const updatedTurn = mapTurnRow(turnUpdate.rows[0] as Record<string, unknown>);
+      const assistantMessageId = input.turnError || !input.cloudResult ? null : randomUUID();
+      const cloudResult = input.cloudResult;
 
-      if (!turnError && cloudResult) {
-        assistantMessageId = randomUUID();
-        await completeClient.query(
+      if (assistantMessageId && cloudResult) {
+        await client.query(
           `
             insert into agent_items (
               item_id,
@@ -2099,8 +2160,8 @@ class PostgresAgentService implements AgentService {
           `,
           [
             assistantMessageId,
-            input.threadId,
-            turnId,
+            input.turnContext.threadId,
+            input.turnContext.turnId,
             JSON.stringify({ text: cloudResult.outputText }),
             completionIso
           ]
@@ -2108,64 +2169,64 @@ class PostgresAgentService implements AgentService {
       }
 
       const eventRows: AgentEventRecord[] = [];
+      if (input.cloudResult) {
+        eventRows.push(
+          await this.insertEvent(
+            {
+              threadId: input.turnContext.threadId,
+              turnId: input.turnContext.turnId,
+              method: "item.delta",
+              payload: {
+                type: input.turnError ? "error" : "assistant_message",
+                text: input.cloudResult.outputText,
+                userMessageId: input.turnContext.userMessageId,
+                assistantMessageId,
+                parentTurnId: input.turnContext.parentTurnId,
+                sourceTurnId: input.turnContext.sourceTurnId,
+                clientRequestId: input.turnContext.clientRequestId
+              },
+              now: completionNow
+            },
+            client
+          )
+        );
+        eventRows.push(
+          await this.insertEvent(
+            {
+              threadId: input.turnContext.threadId,
+              turnId: input.turnContext.turnId,
+              method: "runtime.metadata",
+              payload: input.cloudResult.runtimeMetadata,
+              now: completionNow
+            },
+            client
+          )
+        );
+      }
 
-      if (cloudResult) {
-        const deltaEvent = await this.insertEvent(
+      eventRows.push(
+        await this.insertEvent(
           {
-            threadId: input.threadId,
-            turnId,
-            method: "item.delta",
+            threadId: input.turnContext.threadId,
+            turnId: input.turnContext.turnId,
+            method: "turn.completed",
             payload: {
-              type: turnError ? "error" : "assistant_message",
-              text: cloudResult.outputText,
-              userMessageId,
+              turnId: input.turnContext.turnId,
+              userMessageId: input.turnContext.userMessageId,
               assistantMessageId,
-              parentTurnId,
-              sourceTurnId,
-              clientRequestId
+              parentTurnId: input.turnContext.parentTurnId,
+              sourceTurnId: input.turnContext.sourceTurnId,
+              clientRequestId: input.turnContext.clientRequestId,
+              status: updatedTurn.status,
+              output: updatedTurn.output,
+              error: updatedTurn.error
             },
             now: completionNow
           },
-          completeClient
-        );
-        eventRows.push(deltaEvent);
-
-        const runtimeMetadataEvent = await this.insertEvent(
-          {
-            threadId: input.threadId,
-            turnId,
-            method: "runtime.metadata",
-            payload: cloudResult.runtimeMetadata,
-            now: completionNow
-          },
-          completeClient
-        );
-        eventRows.push(runtimeMetadataEvent);
-      }
-
-      const completedEvent = await this.insertEvent(
-        {
-          threadId: input.threadId,
-          turnId,
-          method: "turn.completed",
-          payload: {
-            turnId,
-            userMessageId,
-            assistantMessageId,
-            parentTurnId,
-            sourceTurnId,
-            clientRequestId,
-            status: updatedTurn.status,
-            output: updatedTurn.output,
-            error: updatedTurn.error
-          },
-          now: completionNow
-        },
-        completeClient
+          client
+        )
       );
-      eventRows.push(completedEvent);
-
-      await completeClient.query(
+      await client.query(
         `
           update agent_threads
           set
@@ -2173,25 +2234,64 @@ class PostgresAgentService implements AgentService {
             updated_at = $3
           where thread_id = $1
         `,
-        [input.threadId, updatedTurn.status, completionIso]
+        [input.turnContext.threadId, updatedTurn.status, completionIso]
       );
-
-      await completeClient.query("commit");
+      await client.query("commit");
 
       for (const eventRow of eventRows) {
         this.publishEvent(eventRow);
       }
-
       return {
         turn: updatedTurn,
-        outputText: cloudResult?.outputText ?? null
+        outputText: input.cloudResult?.outputText ?? null
       };
     } catch (error) {
-      await completeClient.query("rollback");
+      await client.query("rollback");
       throw error;
     } finally {
-      completeClient.release();
+      client.release();
     }
+  }
+
+  async startTurn(input: {
+    userId: string;
+    threadId: string;
+    text: string;
+    clientRequestId?: string;
+    parentTurnId?: string;
+    sourceTurnId?: string;
+    executionMode?: AgentExecutionMode;
+    executionHost?: AgentExecutionHost;
+    now: Date;
+  }): Promise<{ turn: AgentTurnRecord; outputText: string | null }> {
+    const access = await this.requireThreadAccess({
+      userId: input.userId,
+      threadId: input.threadId
+    });
+    const resolvedInput = this.normalizeStartTurnInput({
+      ...input,
+      threadDefaults: access.thread
+    });
+    const startTransaction = await this.createTurnStartTransaction(resolvedInput);
+    if (startTransaction.reusedTurn) {
+      return {
+        turn: startTransaction.reusedTurn,
+        outputText: readTurnOutputText(startTransaction.reusedTurn)
+      };
+    }
+    if (startTransaction.startedEvent) {
+      this.publishEvent(startTransaction.startedEvent);
+    }
+
+    const runtimeExecution = await this.runTurnWithRuntime({
+      accessThread: access.thread,
+      turnContext: resolvedInput
+    });
+    return this.completeTurnTransaction({
+      turnContext: resolvedInput,
+      cloudResult: runtimeExecution.cloudResult,
+      turnError: runtimeExecution.turnError
+    });
   }
 
   async interruptTurn(input: {

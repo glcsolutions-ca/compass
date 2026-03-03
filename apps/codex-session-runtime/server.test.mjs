@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
-import { test } from "node:test";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { it } from "vitest";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -95,7 +95,7 @@ async function startRuntimeForTest(options = {}) {
   };
 }
 
-test("runtime health endpoint returns deterministic baseline payload", async () => {
+it("runtime health endpoint returns deterministic baseline payload", async () => {
   const runtime = await startRuntimeForTest();
 
   try {
@@ -112,7 +112,7 @@ test("runtime health endpoint returns deterministic baseline payload", async () 
   }
 });
 
-test("session bootstrap and turn start return runtime metadata in mock mode", async () => {
+it("session bootstrap and turn start return runtime metadata in mock mode", async () => {
   const runtime = await startRuntimeForTest();
 
   try {
@@ -159,7 +159,7 @@ test("session bootstrap and turn start return runtime metadata in mock mode", as
   }
 });
 
-test("codex engine bootstraps sticky thread mapping and returns streamed output", async () => {
+it("codex engine bootstraps sticky thread mapping and returns streamed output", async () => {
   const runtime = await startRuntimeForTest({
     engine: "codex",
     env: {
@@ -234,7 +234,7 @@ test("codex engine bootstraps sticky thread mapping and returns streamed output"
   }
 });
 
-test("codex engine recovers from app-server crash and retries turn start", async () => {
+it("codex engine recovers from app-server crash and retries turn start", async () => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "codex-runtime-test-"));
   const crashMarkerFile = path.join(tempDir, "crash-marker");
 

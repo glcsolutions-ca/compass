@@ -118,162 +118,253 @@ function upsertAssistantMessage(input: {
   input.assistantMessageByTurn.set(turnKey, nextIndex);
 }
 
-export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelineItem[] {
-  const sorted = [...events].sort((left, right) => left.cursor - right.cursor);
-  const timeline: ChatTimelineItem[] = [];
-  const assistantMessageByTurn = new Map<string, number>();
+interface NormalizationContext {
+  timeline: ChatTimelineItem[];
+  assistantMessageByTurn: Map<string, number>;
+}
 
-  for (const event of sorted) {
-    const method = event.method;
-    const turnId = event.turnId ?? null;
-    const createdAt = event.createdAt ?? null;
-    const label = formatEventLabel(method);
+interface EventView {
+  method: string;
+  turnId: string | null;
+  createdAt: string | null;
+}
 
-    if (method === "turn.started") {
-      const payload = readPayloadObject(event.payload);
-      const promptText = readText(payload?.text) ?? readText(payload?.input);
+function getEventView(event: AgentEvent): EventView {
+  return {
+    method: event.method,
+    turnId: event.turnId ?? null,
+    createdAt: event.createdAt ?? null
+  };
+}
 
-      if (promptText) {
-        timeline.push({
-          id: `evt-${event.cursor}-user`,
-          kind: "message",
-          role: "user",
-          text: promptText,
-          parts: [
-            {
-              type: "text",
-              text: promptText
-            }
-          ],
-          turnId,
-          cursor: event.cursor,
-          streaming: false,
-          createdAt
-        });
-      }
-      continue;
-    }
-
-    if (method === "item.delta") {
-      const deltaParts = parseItemDeltaParts({
-        cursor: event.cursor,
-        payload: event.payload
-      });
-
-      if (deltaParts.length < 1) {
-        timeline.push({
-          id: `evt-${event.cursor}`,
-          kind: "runtime",
-          label: "Item delta",
-          detail: readRuntimeDetail(event.payload),
-          payload: event.payload,
-          turnId,
-          cursor: event.cursor,
-          createdAt
-        });
-        continue;
-      }
-
-      upsertAssistantMessage({
-        timeline,
-        assistantMessageByTurn,
-        turnId,
-        cursor: event.cursor,
-        createdAt,
-        parts: deltaParts,
-        streaming: true
-      });
-      continue;
-    }
-
-    if (method === "turn.completed") {
-      if (turnId) {
-        const priorIndex = assistantMessageByTurn.get(turnId);
-        if (priorIndex !== undefined) {
-          const previous = timeline[priorIndex];
-          if (previous && previous.kind === "message" && previous.role === "assistant") {
-            timeline[priorIndex] = {
-              ...previous,
-              streaming: false,
-              cursor: event.cursor,
-              createdAt
-            };
-          }
-        }
-      }
-      continue;
-    }
-
-    if (method === "approval.requested" || method === "approval.resolved") {
-      timeline.push({
-        id: `evt-${event.cursor}`,
-        kind: "approval",
-        label: method === "approval.requested" ? "Approval requested" : "Approval resolved",
-        detail: null,
-        turnId,
-        cursor: event.cursor,
-        createdAt
-      });
-      continue;
-    }
-
-    if (method === "item.started" || method === "item.completed") {
-      timeline.push({
-        id: `evt-${event.cursor}`,
-        kind: "runtime",
-        label: method === "item.started" ? "Item started" : "Item completed",
-        detail: readItemLifecycleDetail(event.payload),
-        payload: event.payload,
-        turnId,
-        cursor: event.cursor,
-        createdAt
-      });
-      continue;
-    }
-
-    const runtimeDataPart = parseRuntimeDataPart({
-      method,
-      payload: event.payload
-    });
-    if (runtimeDataPart) {
-      upsertAssistantMessage({
-        timeline,
-        assistantMessageByTurn,
-        turnId,
-        cursor: event.cursor,
-        createdAt,
-        parts: [runtimeDataPart]
-      });
-      continue;
-    }
-
-    if (method === "thread.started" || method === "thread.modeSwitched") {
-      continue;
-    }
-
-    if (method === "error") {
-      timeline.push({
-        id: `evt-${event.cursor}`,
-        kind: "status",
-        label: "Error",
-        detail: readText(readPayloadObject(event.payload)?.message),
-        turnId,
-        cursor: event.cursor,
-        createdAt
-      });
-      continue;
-    }
-
-    timeline.push({
-      id: `evt-${event.cursor}`,
-      kind: "unknown",
-      label,
-      payload: event.payload,
-      turnId,
-      cursor: event.cursor,
-      createdAt
-    });
+function appendUserTurnStarted(
+  context: NormalizationContext,
+  event: AgentEvent,
+  view: EventView
+): void {
+  const payload = readPayloadObject(event.payload);
+  const promptText = readText(payload?.text) ?? readText(payload?.input);
+  if (!promptText) {
+    return;
   }
 
-  return timeline;
+  context.timeline.push({
+    id: `evt-${event.cursor}-user`,
+    kind: "message",
+    role: "user",
+    text: promptText,
+    parts: [
+      {
+        type: "text",
+        text: promptText
+      }
+    ],
+    turnId: view.turnId,
+    cursor: event.cursor,
+    streaming: false,
+    createdAt: view.createdAt
+  });
+}
+
+function appendItemDelta(context: NormalizationContext, event: AgentEvent, view: EventView): void {
+  const deltaParts = parseItemDeltaParts({
+    cursor: event.cursor,
+    payload: event.payload
+  });
+
+  if (deltaParts.length < 1) {
+    context.timeline.push({
+      id: `evt-${event.cursor}`,
+      kind: "runtime",
+      label: "Item delta",
+      detail: readRuntimeDetail(event.payload),
+      payload: event.payload,
+      turnId: view.turnId,
+      cursor: event.cursor,
+      createdAt: view.createdAt
+    });
+    return;
+  }
+
+  upsertAssistantMessage({
+    timeline: context.timeline,
+    assistantMessageByTurn: context.assistantMessageByTurn,
+    turnId: view.turnId,
+    cursor: event.cursor,
+    createdAt: view.createdAt,
+    parts: deltaParts,
+    streaming: true
+  });
+}
+
+function markTurnCompleted(
+  context: NormalizationContext,
+  event: AgentEvent,
+  view: EventView
+): void {
+  if (!view.turnId) {
+    return;
+  }
+
+  const priorIndex = context.assistantMessageByTurn.get(view.turnId);
+  if (priorIndex === undefined) {
+    return;
+  }
+
+  const previous = context.timeline[priorIndex];
+  if (!previous || previous.kind !== "message" || previous.role !== "assistant") {
+    return;
+  }
+
+  context.timeline[priorIndex] = {
+    ...previous,
+    streaming: false,
+    cursor: event.cursor,
+    createdAt: view.createdAt
+  };
+}
+
+function appendApprovalEvent(
+  context: NormalizationContext,
+  event: AgentEvent,
+  view: EventView
+): void {
+  const approvalLabel =
+    view.method === "approval.requested" ? "Approval requested" : "Approval resolved";
+  context.timeline.push({
+    id: `evt-${event.cursor}`,
+    kind: "approval",
+    label: approvalLabel,
+    detail: null,
+    turnId: view.turnId,
+    cursor: event.cursor,
+    createdAt: view.createdAt
+  });
+}
+
+function appendItemLifecycle(
+  context: NormalizationContext,
+  event: AgentEvent,
+  view: EventView
+): void {
+  const lifecycleLabel = view.method === "item.started" ? "Item started" : "Item completed";
+  context.timeline.push({
+    id: `evt-${event.cursor}`,
+    kind: "runtime",
+    label: lifecycleLabel,
+    detail: readItemLifecycleDetail(event.payload),
+    payload: event.payload,
+    turnId: view.turnId,
+    cursor: event.cursor,
+    createdAt: view.createdAt
+  });
+}
+
+function appendRuntimeDataPart(
+  context: NormalizationContext,
+  event: AgentEvent,
+  view: EventView
+): boolean {
+  const runtimeDataPart = parseRuntimeDataPart({
+    method: view.method,
+    payload: event.payload
+  });
+  if (!runtimeDataPart) {
+    return false;
+  }
+
+  upsertAssistantMessage({
+    timeline: context.timeline,
+    assistantMessageByTurn: context.assistantMessageByTurn,
+    turnId: view.turnId,
+    cursor: event.cursor,
+    createdAt: view.createdAt,
+    parts: [runtimeDataPart]
+  });
+  return true;
+}
+
+function appendErrorEvent(context: NormalizationContext, event: AgentEvent, view: EventView): void {
+  context.timeline.push({
+    id: `evt-${event.cursor}`,
+    kind: "status",
+    label: "Error",
+    detail: readText(readPayloadObject(event.payload)?.message),
+    turnId: view.turnId,
+    cursor: event.cursor,
+    createdAt: view.createdAt
+  });
+}
+
+function appendUnknownEvent(
+  context: NormalizationContext,
+  event: AgentEvent,
+  view: EventView
+): void {
+  context.timeline.push({
+    id: `evt-${event.cursor}`,
+    kind: "unknown",
+    label: formatEventLabel(view.method),
+    payload: event.payload,
+    turnId: view.turnId,
+    cursor: event.cursor,
+    createdAt: view.createdAt
+  });
+}
+
+function normalizeSingleEvent(context: NormalizationContext, event: AgentEvent): void {
+  const view = getEventView(event);
+  if (view.method === "turn.started") {
+    appendUserTurnStarted(context, event, view);
+    return;
+  }
+
+  if (view.method === "item.delta") {
+    appendItemDelta(context, event, view);
+    return;
+  }
+
+  if (view.method === "turn.completed") {
+    markTurnCompleted(context, event, view);
+    return;
+  }
+
+  if (view.method === "approval.requested" || view.method === "approval.resolved") {
+    appendApprovalEvent(context, event, view);
+    return;
+  }
+
+  if (view.method === "item.started" || view.method === "item.completed") {
+    appendItemLifecycle(context, event, view);
+    return;
+  }
+
+  if (appendRuntimeDataPart(context, event, view)) {
+    return;
+  }
+
+  if (view.method === "thread.started" || view.method === "thread.modeSwitched") {
+    return;
+  }
+
+  if (view.method === "error") {
+    appendErrorEvent(context, event, view);
+    return;
+  }
+
+  appendUnknownEvent(context, event, view);
+}
+
+export function normalizeAgentEvents(events: readonly AgentEvent[]): ChatTimelineItem[] {
+  const sorted = [...events].sort((left, right) => left.cursor - right.cursor);
+  const context: NormalizationContext = {
+    timeline: [],
+    assistantMessageByTurn: new Map<string, number>()
+  };
+
+  for (const event of sorted) {
+    normalizeSingleEvent(context, event);
+  }
+
+  return context.timeline;
 }

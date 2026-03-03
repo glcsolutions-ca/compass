@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["test/unit/**/*.unit.test.ts"],
     setupFiles: ["../../packages/testkit/guardrails/commit-stage.setup.mjs"],
     coverage: {
       provider: "v8",

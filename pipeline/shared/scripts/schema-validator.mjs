@@ -16,7 +16,10 @@ function loadSchema(relativePath) {
 const SCHEMAS = {
   releaseCandidate: loadSchema("pipeline/contracts/schemas/release-candidate.schema.json"),
   acceptanceEvidence: loadSchema("pipeline/contracts/schemas/acceptance-evidence.schema.json"),
-  releaseEvidence: loadSchema("pipeline/contracts/schemas/release-evidence.schema.json")
+  releaseEvidence: loadSchema("pipeline/contracts/schemas/release-evidence.schema.json"),
+  productionRehearsalEvidence: loadSchema(
+    "pipeline/contracts/schemas/production-rehearsal-evidence.schema.json"
+  )
 };
 
 const ajv = new Ajv2020({
@@ -28,7 +31,8 @@ addFormats(ajv);
 const VALIDATORS = {
   releaseCandidate: ajv.compile(SCHEMAS.releaseCandidate),
   acceptanceEvidence: ajv.compile(SCHEMAS.acceptanceEvidence),
-  releaseEvidence: ajv.compile(SCHEMAS.releaseEvidence)
+  releaseEvidence: ajv.compile(SCHEMAS.releaseEvidence),
+  productionRehearsalEvidence: ajv.compile(SCHEMAS.productionRehearsalEvidence)
 };
 
 function toDotPath(instancePath) {

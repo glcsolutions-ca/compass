@@ -1,0 +1,228 @@
+name: 02-automated-acceptance-test-stage
+
+on:
+  workflow_run:
+    workflows:
+      - 01-commit-stage
+    types:
+      - completed
+
+concurrency:
+  group: acceptance-environment
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  packages: write
+
+env:
+  RC_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-release-candidates
+  ACCEPTANCE_EVIDENCE_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-acceptance-evidence
+
+jobs:
+  acceptance_tests:
+    name: Automated acceptance tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: acceptance
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+
+    steps:
+      - name: Capture acceptance stage start time
+        id: acceptance_start
+        run: echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Login to GHCR (ORAS)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Compute candidate id from triggering commit-stage run
+        id: candidate
+        run: |
+          candidate_id="$(node pipeline/shared/scripts/build-candidate-id.mjs --source-revision "${{ github.event.workflow_run.head_sha }}" --run-id "${{ github.event.workflow_run.id }}")"
+          echo "candidate_id=${candidate_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch release candidate manifest
+        run: |
+          node pipeline/shared/scripts/fetch-release-candidate.mjs \
+            --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
+            --registry-repo "${{ env.RC_REGISTRY_REPO }}" \
+            --out "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Validate release candidate manifest
+        run: node pipeline/shared/scripts/validate-release-candidate.mjs --file "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Verify manifest revision matches triggering commit revision
+        id: manifest_source
+        run: |
+          manifest_source_revision="$(node -e 'const fs=require("fs");const doc=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(doc.source.revision);' "$RUNNER_TEMP/release-candidate.json")"
+          echo "source_revision=${manifest_source_revision}" >> "$GITHUB_OUTPUT"
+          if [ "${manifest_source_revision}" != "${{ github.event.workflow_run.head_sha }}" ]; then
+            echo "Manifest source revision mismatch for candidate ${{ steps.candidate.outputs.candidate_id }}" >&2
+            echo "manifest=${manifest_source_revision} trigger=${{ github.event.workflow_run.head_sha }}" >&2
+            exit 1
+          fi
+
+      - name: Assert required environment config
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          PEER_API_BASE_URL: ${{ vars.PEER_API_BASE_URL }}
+          PEER_WEB_BASE_URL: ${{ vars.PEER_WEB_BASE_URL }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_CONTAINERAPP_API_NAME: ${{ vars.AZURE_CONTAINERAPP_API_NAME }}
+          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.AZURE_CONTAINERAPP_WEB_NAME }}
+          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.AZURE_CONTAINERAPP_WORKER_NAME }}
+          AZURE_MIGRATION_JOB_NAME: ${{ vars.AZURE_MIGRATION_JOB_NAME }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          node pipeline/shared/scripts/assert-environment-config.mjs \
+            --required API_BASE_URL \
+            --required WEB_BASE_URL \
+            --required PEER_API_BASE_URL \
+            --required PEER_WEB_BASE_URL \
+            --required AZURE_RESOURCE_GROUP \
+            --required AZURE_CONTAINERAPP_API_NAME \
+            --required AZURE_CONTAINERAPP_WEB_NAME \
+            --required AZURE_CONTAINERAPP_WORKER_NAME \
+            --required AZURE_MIGRATION_JOB_NAME \
+            --required AZURE_CLIENT_ID \
+            --required AZURE_TENANT_ID \
+            --required AZURE_SUBSCRIPTION_ID
+
+      - name: Assert environment separation
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          PEER_API_BASE_URL: ${{ vars.PEER_API_BASE_URL }}
+          PEER_WEB_BASE_URL: ${{ vars.PEER_WEB_BASE_URL }}
+        run: |
+          node pipeline/shared/scripts/assert-env-separation.mjs \
+            --current-api "$API_BASE_URL" \
+            --current-web "$WEB_BASE_URL" \
+            --peer-api "$PEER_API_BASE_URL" \
+            --peer-web "$PEER_WEB_BASE_URL"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy exact candidate to acceptance
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_CONTAINERAPP_API_NAME: ${{ vars.AZURE_CONTAINERAPP_API_NAME }}
+          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.AZURE_CONTAINERAPP_WEB_NAME }}
+          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.AZURE_CONTAINERAPP_WORKER_NAME }}
+          AZURE_MIGRATION_JOB_NAME: ${{ vars.AZURE_MIGRATION_JOB_NAME }}
+        run: |
+          node pipeline/stages/02-acceptance/scripts/deploy-acceptance-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --api-app-name "$AZURE_CONTAINERAPP_API_NAME" \
+            --web-app-name "$AZURE_CONTAINERAPP_WEB_NAME" \
+            --worker-app-name "$AZURE_CONTAINERAPP_WORKER_NAME" \
+            --migrations-job-name "$AZURE_MIGRATION_JOB_NAME" \
+            --out "$RUNNER_TEMP/acceptance-deploy-state.json"
+
+      - name: Verify acceptance deployment
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_CONTAINERAPP_API_NAME: ${{ vars.AZURE_CONTAINERAPP_API_NAME }}
+          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.AZURE_CONTAINERAPP_WEB_NAME }}
+          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.AZURE_CONTAINERAPP_WORKER_NAME }}
+        run: |
+          node pipeline/stages/02-acceptance/scripts/verify-acceptance-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
+            --deploy-state "$RUNNER_TEMP/acceptance-deploy-state.json" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --api-app-name "$AZURE_CONTAINERAPP_API_NAME" \
+            --web-app-name "$AZURE_CONTAINERAPP_WEB_NAME" \
+            --worker-app-name "$AZURE_CONTAINERAPP_WORKER_NAME" \
+            --api-base-url "$API_BASE_URL" \
+            --web-base-url "$WEB_BASE_URL"
+
+      - name: System acceptance tests
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          TESTED_SHA: ${{ steps.manifest_source.outputs.source_revision }}
+          BASE_URL: ${{ vars.API_BASE_URL }}
+          TARGET_API_BASE_URL: ${{ vars.API_BASE_URL }}
+        run: pnpm test:acceptance:system
+
+      - name: Browser acceptance tests
+        env:
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+        run: pnpm test:acceptance:browser
+
+      - name: Record and publish acceptance evidence
+        if: always()
+        run: |
+          finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          verdict="fail"
+          if [ "${{ job.status }}" = "success" ]; then
+            verdict="pass"
+          fi
+
+          mkdir -p .artifacts/acceptance-evidence
+          node pipeline/stages/02-acceptance/scripts/record-acceptance-evidence.mjs \
+            --out .artifacts/acceptance-evidence/acceptance-evidence.json \
+            --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
+            --source-revision "${{ steps.manifest_source.outputs.source_revision }}" \
+            --workflow-run-id "${{ github.run_id }}" \
+            --verdict "${verdict}" \
+            --started-at "${{ steps.acceptance_start.outputs.started_at }}" \
+            --finished-at "${finished_at}" \
+            --summary "Automated acceptance ${verdict} for candidate ${{ steps.candidate.outputs.candidate_id }}"
+
+          cp .artifacts/acceptance-evidence/acceptance-evidence.json acceptance-evidence.json
+          oras push --artifact-type application/vnd.compass.acceptance-evidence.v1 \
+            "${ACCEPTANCE_EVIDENCE_REGISTRY_REPO}:${{ steps.candidate.outputs.candidate_id }}" \
+            "acceptance-evidence.json:application/vnd.compass.acceptance-evidence.v1+json"
+
+      - name: Write acceptance-stage output
+        if: always()
+        run: |
+          mkdir -p .artifacts/acceptance-stage-output
+          cat > .artifacts/acceptance-stage-output/acceptance-stage-output.json <<EOF_JSON
+          {
+            "schemaVersion": "acceptance-stage-output.v1",
+            "candidateId": "${{ steps.candidate.outputs.candidate_id }}",
+            "sourceRevision": "${{ steps.manifest_source.outputs.source_revision }}"
+          }
+          EOF_JSON
+
+      - name: Upload acceptance-stage output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-stage-output
+          path: .artifacts/acceptance-stage-output/acceptance-stage-output.json
+          if-no-files-found: error

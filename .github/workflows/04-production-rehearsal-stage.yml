@@ -1,0 +1,238 @@
+name: 04-production-rehearsal-stage
+
+on:
+  workflow_run:
+    workflows:
+      - 02-automated-acceptance-test-stage
+    types:
+      - completed
+
+concurrency:
+  group: production-environment
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  packages: write
+
+env:
+  RC_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-release-candidates
+  ACCEPTANCE_EVIDENCE_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-acceptance-evidence
+  PRODUCTION_REHEARSAL_EVIDENCE_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-production-rehearsal-evidence
+
+jobs:
+  production_rehearsal:
+    name: Production rehearsal (zero traffic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: production
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+
+    steps:
+      - name: Capture rehearsal stage start time
+        id: rehearsal_start
+        run: echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Login to GHCR (ORAS)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Download acceptance-stage output
+        uses: actions/download-artifact@v4
+        with:
+          name: acceptance-stage-output
+          path: ${{ runner.temp }}/acceptance-stage-output
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read acceptance-stage output
+        id: acceptance_output
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const outputPath = path.join(process.env.RUNNER_TEMP, 'acceptance-stage-output', 'acceptance-stage-output.json');
+          const payload = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+
+          const required = ['candidateId', 'sourceRevision'];
+          for (const key of required) {
+            if (!payload[key] || String(payload[key]).trim().length === 0) {
+              throw new Error(`Missing '${key}' in acceptance-stage output`);
+            }
+          }
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `candidate_id=${payload.candidateId}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `source_revision=${payload.sourceRevision}\n`);
+          NODE
+
+      - name: Fetch release candidate manifest
+        run: |
+          node pipeline/shared/scripts/fetch-release-candidate.mjs \
+            --candidate-id "${{ steps.acceptance_output.outputs.candidate_id }}" \
+            --registry-repo "${{ env.RC_REGISTRY_REPO }}" \
+            --out "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Validate release candidate manifest
+        run: node pipeline/shared/scripts/validate-release-candidate.mjs --file "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Verify manifest revision and candidate match acceptance output
+        id: manifest_source
+        run: |
+          manifest_candidate_id="$(node -e 'const fs=require("fs");const doc=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(doc.candidateId);' "$RUNNER_TEMP/release-candidate.json")"
+          manifest_source_revision="$(node -e 'const fs=require("fs");const doc=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(doc.source.revision);' "$RUNNER_TEMP/release-candidate.json")"
+
+          echo "source_revision=${manifest_source_revision}" >> "$GITHUB_OUTPUT"
+
+          if [ "$manifest_candidate_id" != "${{ steps.acceptance_output.outputs.candidate_id }}" ]; then
+            echo "Candidate mismatch between acceptance output and manifest" >&2
+            exit 1
+          fi
+
+          if [ "$manifest_source_revision" != "${{ steps.acceptance_output.outputs.source_revision }}" ]; then
+            echo "Source revision mismatch between acceptance output and manifest" >&2
+            exit 1
+          fi
+
+      - name: Fetch and verify acceptance evidence pass
+        run: |
+          mkdir -p "$RUNNER_TEMP/acceptance-evidence"
+          oras pull "${ACCEPTANCE_EVIDENCE_REGISTRY_REPO}:${{ steps.acceptance_output.outputs.candidate_id }}" -o "$RUNNER_TEMP/acceptance-evidence"
+          node pipeline/stages/05-release/scripts/verify-acceptance-evidence.mjs \
+            --dir "$RUNNER_TEMP/acceptance-evidence" \
+            --candidate-id "${{ steps.acceptance_output.outputs.candidate_id }}" \
+            --source-revision "${{ steps.manifest_source.outputs.source_revision }}"
+
+      - name: Assert required environment config
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          PEER_API_BASE_URL: ${{ vars.PEER_API_BASE_URL }}
+          PEER_WEB_BASE_URL: ${{ vars.PEER_WEB_BASE_URL }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_CONTAINERAPP_API_NAME: ${{ vars.AZURE_CONTAINERAPP_API_NAME }}
+          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.AZURE_CONTAINERAPP_WEB_NAME }}
+          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.AZURE_CONTAINERAPP_WORKER_NAME }}
+          AZURE_MIGRATION_JOB_NAME: ${{ vars.AZURE_MIGRATION_JOB_NAME }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          node pipeline/shared/scripts/assert-environment-config.mjs \
+            --required API_BASE_URL \
+            --required WEB_BASE_URL \
+            --required PEER_API_BASE_URL \
+            --required PEER_WEB_BASE_URL \
+            --required AZURE_RESOURCE_GROUP \
+            --required AZURE_CONTAINERAPP_API_NAME \
+            --required AZURE_CONTAINERAPP_WEB_NAME \
+            --required AZURE_CONTAINERAPP_WORKER_NAME \
+            --required AZURE_MIGRATION_JOB_NAME \
+            --required AZURE_CLIENT_ID \
+            --required AZURE_TENANT_ID \
+            --required AZURE_SUBSCRIPTION_ID
+
+      - name: Assert environment separation
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          PEER_API_BASE_URL: ${{ vars.PEER_API_BASE_URL }}
+          PEER_WEB_BASE_URL: ${{ vars.PEER_WEB_BASE_URL }}
+        run: |
+          node pipeline/shared/scripts/assert-env-separation.mjs \
+            --current-api "$API_BASE_URL" \
+            --current-web "$WEB_BASE_URL" \
+            --peer-api "$PEER_API_BASE_URL" \
+            --peer-web "$PEER_WEB_BASE_URL"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy exact candidate to production with zero traffic
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_CONTAINERAPP_API_NAME: ${{ vars.AZURE_CONTAINERAPP_API_NAME }}
+          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.AZURE_CONTAINERAPP_WEB_NAME }}
+          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.AZURE_CONTAINERAPP_WORKER_NAME }}
+          AZURE_MIGRATION_JOB_NAME: ${{ vars.AZURE_MIGRATION_JOB_NAME }}
+        run: |
+          node pipeline/stages/05-release/scripts/deploy-production-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --api-app-name "$AZURE_CONTAINERAPP_API_NAME" \
+            --web-app-name "$AZURE_CONTAINERAPP_WEB_NAME" \
+            --worker-app-name "$AZURE_CONTAINERAPP_WORKER_NAME" \
+            --migrations-job-name "$AZURE_MIGRATION_JOB_NAME" \
+            --zero-traffic \
+            --out "$RUNNER_TEMP/production-rehearsal-deploy-state.json"
+
+      - name: Verify production rehearsal deployment
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_CONTAINERAPP_API_NAME: ${{ vars.AZURE_CONTAINERAPP_API_NAME }}
+          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.AZURE_CONTAINERAPP_WEB_NAME }}
+          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.AZURE_CONTAINERAPP_WORKER_NAME }}
+        run: |
+          node pipeline/stages/05-release/scripts/verify-production-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
+            --deploy-state "$RUNNER_TEMP/production-rehearsal-deploy-state.json" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --api-app-name "$AZURE_CONTAINERAPP_API_NAME" \
+            --web-app-name "$AZURE_CONTAINERAPP_WEB_NAME" \
+            --worker-app-name "$AZURE_CONTAINERAPP_WORKER_NAME" \
+            --api-base-url "$API_BASE_URL" \
+            --web-base-url "$WEB_BASE_URL" \
+            --zero-traffic
+
+      - name: Record and publish production rehearsal evidence
+        if: always()
+        run: |
+          finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          verdict="fail"
+          if [ "${{ job.status }}" = "success" ]; then
+            verdict="pass"
+          fi
+
+          mkdir -p .artifacts/production-rehearsal-evidence
+          node pipeline/stages/04-production-rehearsal/scripts/record-production-rehearsal-evidence.mjs \
+            --out .artifacts/production-rehearsal-evidence/production-rehearsal-evidence.json \
+            --deploy-state "$RUNNER_TEMP/production-rehearsal-deploy-state.json" \
+            --candidate-id "${{ steps.acceptance_output.outputs.candidate_id }}" \
+            --source-revision "${{ steps.manifest_source.outputs.source_revision }}" \
+            --workflow-run-id "${{ github.run_id }}" \
+            --verdict "${verdict}" \
+            --started-at "${{ steps.rehearsal_start.outputs.started_at }}" \
+            --finished-at "${finished_at}" \
+            --summary "Production rehearsal ${verdict} for candidate ${{ steps.acceptance_output.outputs.candidate_id }}"
+
+          cp .artifacts/production-rehearsal-evidence/production-rehearsal-evidence.json production-rehearsal-evidence.json
+          oras push --artifact-type application/vnd.compass.production-rehearsal-evidence.v1 \
+            "${PRODUCTION_REHEARSAL_EVIDENCE_REGISTRY_REPO}:${{ steps.acceptance_output.outputs.candidate_id }}" \
+            "production-rehearsal-evidence.json:application/vnd.compass.production-rehearsal-evidence.v1+json"

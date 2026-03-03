@@ -1,4 +1,4 @@
-name: commit-stage
+name: 01-commit-stage
 
 on:
   push:
@@ -233,8 +233,7 @@ jobs:
       - name: Compute candidate id
         id: candidate
         run: |
-          short_sha="${GITHUB_SHA::7}"
-          candidate_id="main-${short_sha}-${GITHUB_RUN_ID}"
+          candidate_id="$(node pipeline/shared/scripts/build-candidate-id.mjs --source-revision "${GITHUB_SHA}" --run-id "${GITHUB_RUN_ID}")"
           echo "candidate_id=${candidate_id}" >> "$GITHUB_OUTPUT"
 
       - name: Generate release candidate manifest
@@ -274,26 +273,6 @@ jobs:
       - name: Capture commit-stage end time
         id: capture_end
         run: echo "stage_end_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
-      - name: Write commit-stage handoff artifact
-        run: |
-          mkdir -p .artifacts/commit-stage-output
-          cat > .artifacts/commit-stage-output/commit-stage-output.json <<EOF
-          {
-            "schemaVersion": "commit-stage-output.v1",
-            "candidateId": "${{ steps.candidate.outputs.candidate_id }}",
-            "sourceRevision": "${{ github.sha }}",
-            "manifestRef": "${{ steps.publish_manifest.outputs.manifest_ref }}",
-            "commitStageRunId": "${{ github.run_id }}"
-          }
-          EOF
-
-      - name: Upload commit-stage handoff artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: commit-stage-output
-          path: .artifacts/commit-stage-output/commit-stage-output.json
-          if-no-files-found: error
 
   enforce_commit_stage_slo:
     name: Enforce commit-stage SLO

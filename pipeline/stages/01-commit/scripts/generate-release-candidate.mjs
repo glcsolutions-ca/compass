@@ -1,11 +1,11 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { parseCliArgs, requireOption, optionalOption } from "./cli-utils.mjs";
+import { parseCliArgs, requireOption, optionalOption } from "../../../shared/scripts/cli-utils.mjs";
 import {
   validateReleaseCandidateDocument,
   writeJsonFile,
   buildCandidateId
-} from "./pipeline-contract-lib.mjs";
+} from "../../../shared/scripts/pipeline-contract-lib.mjs";
 
 function collectListValues(value) {
   if (Array.isArray(value)) {

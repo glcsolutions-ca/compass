@@ -9,7 +9,7 @@ compass/
 ├─ db/{migrations,postgres,scripts,seeds}
 ├─ infra/{azure,identity}
 ├─ packages/{contracts,sdk,testkit}
-├─ pipeline/{contracts,scripts,policies,runbooks}
+├─ pipeline/{contracts,shared,stages,runbooks}
 ├─ scripts/{dev,infra}
 └─ tests/{acceptance,nonfunctional}
 ```
@@ -30,19 +30,54 @@ compass/
 │  │  │  ├─ acceptance-evidence.schema.json
 │  │  │  └─ release-evidence.schema.json
 │  │  └─ fixtures/
-│  ├─ scripts/
-│  │  ├─ generate-release-candidate.mjs
-│  │  ├─ validate-release-candidate.mjs
-│  │  ├─ fetch-release-candidate.mjs
-│  │  ├─ deploy-from-manifest.mjs
-│  │  ├─ verify-from-manifest.mjs
-│  │  └─ verify-acceptance-evidence.mjs
-│  ├─ policies/
-│  │  └─ commit-analysis.config.json
+│  ├─ shared/
+│  │  └─ scripts/
+│  │     ├─ cli-utils.mjs
+│  │     ├─ schema-validator.mjs
+│  │     ├─ pipeline-contract-lib.mjs
+│  │     ├─ validate-release-candidate.mjs
+│  │     ├─ fetch-release-candidate.mjs
+│  │     ├─ deploy-from-manifest.mjs
+│  │     └─ verify-from-manifest.mjs
+│  ├─ stages/
+│  │  ├─ 01-commit/
+│  │  │  ├─ policies/
+│  │  │  │  └─ commit-analysis.config.json
+│  │  │  ├─ scripts/
+│  │  │  │  ├─ generate-release-candidate.mjs
+│  │  │  │  ├─ enforce-commit-stage-slo.mjs
+│  │  │  │  └─ generate-commit-analysis-report.mjs
+│  │  │  ├─ tests/
+│  │  │  │  ├─ generate-release-candidate.test.mjs
+│  │  │  │  ├─ enforce-commit-stage-slo.test.mjs
+│  │  │  │  └─ generate-commit-analysis-report.test.mjs
+│  │  │  └─ runbook.md
+│  │  ├─ 02-acceptance/
+│  │  │  ├─ scripts/
+│  │  │  │  └─ record-acceptance-evidence.mjs
+│  │  │  ├─ tests/
+│  │  │  │  ├─ record-acceptance-evidence.test.mjs
+│  │  │  │  └─ deploy-verify-from-manifest.test.mjs
+│  │  │  └─ runbook.md
+│  │  ├─ 03-nonfunctional/
+│  │  │  ├─ README.md
+│  │  │  └─ runbook.md
+│  │  ├─ 04-manual-or-staging/
+│  │  │  ├─ README.md
+│  │  │  └─ runbook.md
+│  │  ├─ 05-release/
+│  │  │  ├─ scripts/
+│  │  │  │  ├─ verify-acceptance-evidence.mjs
+│  │  │  │  └─ record-release-evidence.mjs
+│  │  │  ├─ tests/
+│  │  │  │  └─ verify-acceptance-evidence.test.mjs
+│  │  │  └─ runbook.md
+│  │  └─ shared-tests/
+│  │     ├─ validate-release-candidate.test.mjs
+│  │     ├─ fetch-release-candidate.test.mjs
+│  │     └─ schema-parity.test.mjs
 │  └─ runbooks/
-│     ├─ commit-stage-operating-model.md
-│     ├─ acceptance-gate.md
-│     └─ release-and-rollback.md
+│     └─ repo-structure-migration.md
 ├─ apps/
 │  ├─ api/
 │  │  ├─ src/

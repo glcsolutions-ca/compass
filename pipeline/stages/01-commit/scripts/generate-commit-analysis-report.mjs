@@ -1,8 +1,8 @@
 import path from "node:path";
 import { access } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
-import { parseCliArgs, optionalOption } from "./cli-utils.mjs";
-import { readJsonFile, writeJsonFile } from "./pipeline-contract-lib.mjs";
+import { parseCliArgs, optionalOption } from "../../../shared/scripts/cli-utils.mjs";
+import { readJsonFile, writeJsonFile } from "../../../shared/scripts/pipeline-contract-lib.mjs";
 
 async function fileExists(filePath) {
   try {
@@ -148,7 +148,7 @@ export async function main(argv = process.argv.slice(2)) {
   const options = parseCliArgs(argv);
   const configPath =
     optionalOption(options, "config") ??
-    path.resolve("pipeline/policies/commit-analysis.config.json");
+    path.resolve("pipeline/stages/01-commit/policies/commit-analysis.config.json");
   const outputPath =
     optionalOption(options, "out") ?? ".artifacts/commit-analysis/commit-analysis.json";
   const lintWarnings = optionalOption(options, "lint-warnings") ?? "0";

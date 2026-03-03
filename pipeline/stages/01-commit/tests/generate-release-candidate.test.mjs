@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createReleaseCandidate } from "./generate-release-candidate.mjs";
-import { validateReleaseCandidateDocument } from "./pipeline-contract-lib.mjs";
+import { createReleaseCandidate } from "../scripts/generate-release-candidate.mjs";
+import { validateReleaseCandidateDocument } from "../../../shared/scripts/pipeline-contract-lib.mjs";
 
 describe("generate-release-candidate", () => {
   it("builds a valid release candidate document", () => {

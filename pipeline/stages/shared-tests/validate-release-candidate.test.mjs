@@ -2,7 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { validateReleaseCandidateFile } from "./validate-release-candidate.mjs";
+import { validateReleaseCandidateFile } from "../../shared/scripts/validate-release-candidate.mjs";
 
 function baseManifest() {
   return {

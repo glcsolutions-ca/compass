@@ -1,12 +1,12 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { readdir } from "node:fs/promises";
-import { parseCliArgs, requireOption } from "./cli-utils.mjs";
+import { parseCliArgs, requireOption } from "../../../shared/scripts/cli-utils.mjs";
 import {
   PATTERNS,
   readJsonFile,
   validateAcceptanceEvidenceDocument
-} from "./pipeline-contract-lib.mjs";
+} from "../../../shared/scripts/pipeline-contract-lib.mjs";
 
 async function collectFilesRecursive(directory) {
   const entries = await readdir(directory, { withFileTypes: true });

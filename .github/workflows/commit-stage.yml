@@ -96,7 +96,7 @@ jobs:
       - name: Generate commit analysis report
         run: |
           pnpm rc:analyze:report \
-            --config pipeline/policies/commit-analysis.config.json \
+            --config pipeline/stages/01-commit/policies/commit-analysis.config.json \
             --out .artifacts/commit-analysis/commit-analysis.json \
             --lint-warnings 0 \
             --typecheck-warnings 0
@@ -245,7 +245,7 @@ jobs:
       - name: Generate release candidate manifest
         run: |
           mkdir -p .artifacts/release-candidate
-          node pipeline/scripts/generate-release-candidate.mjs \
+          node pipeline/stages/01-commit/scripts/generate-release-candidate.mjs \
             --out .artifacts/release-candidate/manifest.json \
             --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
             --repository "${{ github.repository }}" \
@@ -258,7 +258,7 @@ jobs:
             --commit-stage-run-id "${{ github.run_id }}"
 
       - name: Validate release candidate manifest
-        run: node pipeline/scripts/validate-release-candidate.mjs --file .artifacts/release-candidate/manifest.json
+        run: node pipeline/shared/scripts/validate-release-candidate.mjs --file .artifacts/release-candidate/manifest.json
 
       - name: Setup ORAS
         uses: oras-project/setup-oras@v1
@@ -367,13 +367,13 @@ jobs:
 
       - name: Fetch release candidate manifest
         run: |
-          node pipeline/scripts/fetch-release-candidate.mjs \
+          node pipeline/shared/scripts/fetch-release-candidate.mjs \
             --candidate-id "${{ needs.generate_and_validate_manifest.outputs.candidate_id }}" \
             --registry-repo "${{ env.RC_REGISTRY_REPO }}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
       - name: Re-validate release candidate manifest
-        run: node pipeline/scripts/validate-release-candidate.mjs --file "$RUNNER_TEMP/release-candidate.json"
+        run: node pipeline/shared/scripts/validate-release-candidate.mjs --file "$RUNNER_TEMP/release-candidate.json"
 
       - name: Placeholder acceptance pass
         run: |
@@ -425,7 +425,7 @@ jobs:
             finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           fi
 
-          node pipeline/scripts/record-acceptance-evidence.mjs \
+          node pipeline/stages/02-acceptance/scripts/record-acceptance-evidence.mjs \
             --out .artifacts/acceptance-evidence/acceptance-evidence.json \
             --candidate-id "${{ needs.generate_and_validate_manifest.outputs.candidate_id }}" \
             --source-revision "${{ github.sha }}" \

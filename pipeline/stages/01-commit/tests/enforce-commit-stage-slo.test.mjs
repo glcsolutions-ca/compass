@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateCommitStageSlo } from "./enforce-commit-stage-slo.mjs";
+import { evaluateCommitStageSlo } from "../scripts/enforce-commit-stage-slo.mjs";
 
 describe("enforce-commit-stage-slo", () => {
   it("returns pass when duration is within warning threshold", () => {

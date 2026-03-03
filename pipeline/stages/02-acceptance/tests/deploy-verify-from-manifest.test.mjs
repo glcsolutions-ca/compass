@@ -2,8 +2,8 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { deployFromManifest } from "./deploy-from-manifest.mjs";
-import { verifyFromManifest } from "./verify-from-manifest.mjs";
+import { deployFromManifest } from "../../../shared/scripts/deploy-from-manifest.mjs";
+import { verifyFromManifest } from "../../../shared/scripts/verify-from-manifest.mjs";
 
 function baseManifest() {
   return {

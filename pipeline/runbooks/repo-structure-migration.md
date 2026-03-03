@@ -2,25 +2,39 @@
 
 ## Goal
 
-Migrate to canonical `pipeline/` domain layout and standardized test placement with minimal risk.
+Migrate to canonical stage-first `pipeline/` layout and standardized test placement with minimal risk.
 
 ## Move Matrix
 
-| Legacy Path                              | Target Path                                        |
-| ---------------------------------------- | -------------------------------------------------- |
-| `pipeline/release-candidate-contract.md` | `pipeline/contracts/release-candidate-contract.md` |
-| `pipeline/*.schema.json`                 | `pipeline/contracts/schemas/*.schema.json`         |
-| `pipeline/.fixtures/*`                   | `pipeline/contracts/fixtures/*`                    |
-| `pipeline/commit-analysis.config.json`   | `pipeline/policies/commit-analysis.config.json`    |
-| `scripts/pipeline/*`                     | `pipeline/scripts/*`                               |
-| `tests/system/*`                         | `tests/acceptance/system/*`                        |
-| `tests/e2e/*`                            | `tests/acceptance/e2e/*`                           |
+| Legacy Path                                         | Target Path                                                                           |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `pipeline/contracts/*`                              | `pipeline/contracts/*` (unchanged)                                                    |
+| `pipeline/scripts/cli-utils.mjs`                    | `pipeline/shared/scripts/cli-utils.mjs`                                               |
+| `pipeline/scripts/schema-validator.mjs`             | `pipeline/shared/scripts/schema-validator.mjs`                                        |
+| `pipeline/scripts/pipeline-contract-lib.mjs`        | `pipeline/shared/scripts/pipeline-contract-lib.mjs`                                   |
+| `pipeline/scripts/validate-release-candidate*`      | `pipeline/shared/scripts/*` + `pipeline/stages/shared-tests/*`                        |
+| `pipeline/scripts/fetch-release-candidate*`         | `pipeline/shared/scripts/*` + `pipeline/stages/shared-tests/*`                        |
+| `pipeline/scripts/deploy-from-manifest.mjs`         | `pipeline/shared/scripts/deploy-from-manifest.mjs`                                    |
+| `pipeline/scripts/verify-from-manifest.mjs`         | `pipeline/shared/scripts/verify-from-manifest.mjs`                                    |
+| `pipeline/policies/commit-analysis.config.json`     | `pipeline/stages/01-commit/policies/commit-analysis.config.json`                      |
+| `pipeline/scripts/generate-release-candidate*`      | `pipeline/stages/01-commit/scripts/*` and `pipeline/stages/01-commit/tests/*`         |
+| `pipeline/scripts/enforce-commit-stage-slo*`        | `pipeline/stages/01-commit/scripts/*` and `pipeline/stages/01-commit/tests/*`         |
+| `pipeline/scripts/generate-commit-analysis-*`       | `pipeline/stages/01-commit/scripts/*` and `pipeline/stages/01-commit/tests/*`         |
+| `pipeline/scripts/record-acceptance-*`              | `pipeline/stages/02-acceptance/scripts/*` and `pipeline/stages/02-acceptance/tests/*` |
+| `pipeline/scripts/verify-acceptance-*`              | `pipeline/stages/05-release/scripts/*` and `pipeline/stages/05-release/tests/*`       |
+| `pipeline/scripts/record-release-evidence.mjs`      | `pipeline/stages/05-release/scripts/record-release-evidence.mjs`                      |
+| `pipeline/runbooks/commit-stage-operating-model.md` | `pipeline/stages/01-commit/runbook.md`                                                |
+| `pipeline/runbooks/acceptance-gate.md`              | `pipeline/stages/02-acceptance/runbook.md`                                            |
+| `pipeline/runbooks/release-and-rollback.md`         | `pipeline/stages/05-release/runbook.md`                                               |
+| `tests/system/*`                                    | `tests/acceptance/system/*`                                                           |
+| `tests/e2e/*`                                       | `tests/acceptance/e2e/*`                                                              |
 
 ## Compatibility Strategy
 
-1. Keep thin wrappers in `scripts/pipeline/*` forwarding to `pipeline/scripts/*` for one cycle.
-2. Update workflows and package scripts to canonical `pipeline/scripts/*` paths immediately.
-3. Remove wrappers only after references are confirmed migrated.
+1. Move shared script mechanics into `pipeline/shared/scripts/*`.
+2. Move stage-specific scripts/tests under `pipeline/stages/<stage>/*`.
+3. Rewire workflows and package scripts directly to stage/shared targets.
+4. Keep command names stable while only changing script paths.
 
 ## Rollback Steps
 

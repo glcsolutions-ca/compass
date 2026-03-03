@@ -147,6 +147,7 @@ export default tseslint.config(
   },
   {
     files: commitStageGlobs,
+    ignores: ["**/test/integration/**", "**/*.integration.test.ts", "**/*.integration.test.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",

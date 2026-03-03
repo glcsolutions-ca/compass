@@ -1,0 +1,117 @@
+name: release-stage
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_id:
+        description: Release candidate id (main-<sha>-<run>)
+        required: true
+        type: string
+      environment:
+        description: Target environment
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  RC_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-release-candidates
+  ACCEPTANCE_EVIDENCE_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-acceptance-evidence
+  RELEASE_EVIDENCE_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-release-evidence
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Capture release start time
+        id: release_start
+        run: echo "released_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Login to GHCR (ORAS)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Fetch release candidate manifest
+        run: |
+          node scripts/pipeline/fetch-release-candidate.mjs \
+            --candidate-id "${{ inputs.candidate_id }}" \
+            --registry-repo "${{ env.RC_REGISTRY_REPO }}" \
+            --out "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Validate release candidate manifest
+        run: node scripts/pipeline/validate-release-candidate.mjs --file "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Capture source revision from manifest
+        id: source
+        run: |
+          source_revision=$(node -e 'const fs=require("fs");const doc=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(doc.source.revision);' "$RUNNER_TEMP/release-candidate.json")
+          echo "source_revision=${source_revision}" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch acceptance evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/acceptance-evidence"
+          oras pull "${ACCEPTANCE_EVIDENCE_REGISTRY_REPO}:${{ inputs.candidate_id }}" -o "$RUNNER_TEMP/acceptance-evidence"
+
+      - name: Verify acceptance evidence pass
+        run: |
+          node -e 'const fs=require("fs");const path=require("path");const dir=process.argv[1];const files=fs.readdirSync(dir).filter((f)=>f.endsWith(".json"));if(files.length===0){throw new Error("No acceptance evidence JSON found");}const doc=JSON.parse(fs.readFileSync(path.join(dir,files[0]),"utf8"));if(doc.candidateId!==process.argv[2]){throw new Error(`Acceptance evidence candidate mismatch: ${doc.candidateId}`);}if(doc.verdict!=="pass"){throw new Error(`Candidate is not accepted: verdict=${doc.verdict}`);}if(doc.environment!=="acceptance"){throw new Error(`Invalid acceptance evidence environment: ${doc.environment}`);}console.log("Acceptance evidence verified.");' "$RUNNER_TEMP/acceptance-evidence" "${{ inputs.candidate_id }}"
+
+      - name: Deploy exact candidate to production
+        env:
+          PRODUCTION_DEPLOY_COMMAND: ${{ vars.PRODUCTION_DEPLOY_COMMAND }}
+        run: |
+          if [ -z "${PRODUCTION_DEPLOY_COMMAND:-}" ]; then
+            echo "Repository variable PRODUCTION_DEPLOY_COMMAND is required." >&2
+            exit 1
+          fi
+          MANIFEST_PATH="$RUNNER_TEMP/release-candidate.json" bash -lc "$PRODUCTION_DEPLOY_COMMAND"
+
+      - name: Production smoke checks
+        env:
+          PRODUCTION_SMOKE_COMMAND: ${{ vars.PRODUCTION_SMOKE_COMMAND }}
+        run: |
+          if [ -z "${PRODUCTION_SMOKE_COMMAND:-}" ]; then
+            echo "Repository variable PRODUCTION_SMOKE_COMMAND is required." >&2
+            exit 1
+          fi
+          MANIFEST_PATH="$RUNNER_TEMP/release-candidate.json" bash -lc "$PRODUCTION_SMOKE_COMMAND"
+
+      - name: Record and publish release evidence
+        if: always()
+        run: |
+          source_revision="${{ steps.source.outputs.source_revision }}"
+          if [ -z "${source_revision}" ]; then
+            echo "Source revision unavailable. Skipping release evidence publication."
+            exit 0
+          fi
+
+          verdict="fail"
+          if [ "${{ job.status }}" = "success" ]; then
+            verdict="pass"
+          fi
+
+          mkdir -p .artifacts/release-evidence
+          node scripts/pipeline/record-release-evidence.mjs \
+            --out .artifacts/release-evidence/release-evidence.json \
+            --candidate-id "${{ inputs.candidate_id }}" \
+            --source-revision "${source_revision}" \
+            --workflow-run-id "${{ github.run_id }}" \
+            --verdict "${verdict}" \
+            --released-at "${{ steps.release_start.outputs.released_at }}" \
+            --summary "Release ${verdict} for candidate ${{ inputs.candidate_id }}"
+
+          oras push "${RELEASE_EVIDENCE_REGISTRY_REPO}:${{ inputs.candidate_id }}" \
+            .artifacts/release-evidence/release-evidence.json:application/vnd.compass.release-evidence.v1+json

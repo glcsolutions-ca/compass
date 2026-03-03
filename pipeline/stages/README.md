@@ -38,8 +38,8 @@ Later stages consume only candidates that passed required earlier stages.
 ```mermaid
 flowchart LR
   C["01-commit-stage\n(build once)"] --> A["02-automated-acceptance-test-stage\n(real gate)"]
-  A --> R["04-production-rehearsal-stage\nzero-traffic deploy"]
-  R --> L["05-release-stage\npromote rehearsed revision"]
+  A --> R["04-production-rehearsal-stage\nplaceholder gate"]
+  R --> L["05-release-stage\ndeploy accepted candidate"]
 ```
 
 ## Stage Contracts
@@ -80,13 +80,13 @@ Exit:
 
 Purpose:
 
-- Prove the candidate delivers expected behavior in a production-like environment.
+- Prove the candidate delivers expected behavior in a controlled acceptance environment.
 - Prove deployment works with the same candidate that was built in commit stage.
 
 Must do:
 
 1. Fetch and validate the published candidate manifest.
-2. Deploy exact digest-pinned artifacts from that manifest.
+2. Deploy exact digest-pinned artifacts from that manifest into runner-local resources.
 3. Run deployment verification and smoke checks.
 4. Run automated acceptance tests (cross-service/business outcomes).
 5. Record acceptance evidence tied to `candidateId` and `sourceRevision`.
@@ -114,36 +114,36 @@ Guidance:
 2. Use as advisory evidence where human judgment is required.
 3. Keep candidate identity unchanged; only add stage evidence.
 
-### 04-production-rehearsal-stage (Optional but Recommended)
+### 04-production-rehearsal-stage (Temporary Placeholder)
 
 Purpose:
 
-- Rehearse production deployment with the exact accepted candidate at zero traffic.
+- Provide a temporary integrity/evidence gate between acceptance and release.
 
 Rules:
 
-1. Deploy only accepted candidates.
-2. Keep traffic away from candidate revision during rehearsal.
-3. Verify candidate revision health directly.
-4. Record production rehearsal evidence for release gating.
+1. Consume only accepted candidates.
+2. Verify candidate and evidence identity integrity.
+3. Publish `production-rehearsal-evidence` with explicit placeholder summary.
+4. Trigger release automation only on successful placeholder completion.
 
 ### 05-release-stage (Production Promotion)
 
 Purpose:
 
-- Promote a previously rehearsed candidate revision to live traffic.
+- Deploy a previously accepted candidate to production from its manifest in the bare-minimum phase.
 
 Must do:
 
 1. Verify candidate contract and acceptance evidence.
 2. Verify production rehearsal evidence.
-3. Promote rehearsed revision to production traffic without rebuilding.
+3. Deploy candidate artifacts to production without rebuilding.
 4. Run production smoke verification.
 5. Record release evidence.
 
 Rollback/backout:
 
-1. Redeploy/promote a previously accepted candidate using the same mechanism.
+1. Redeploy a previously accepted candidate using the same mechanism.
 2. Do not use a special "one-off rollback process."
 
 ## Promotion Invariants
@@ -152,6 +152,12 @@ Rollback/backout:
 2. Environment config may vary; candidate artifacts may not.
 3. Stage evidence is separate from candidate manifest.
 4. Any material artifact change creates a new candidate.
+
+## Temporary Baseline Debt
+
+1. Worker runtime is placeholder-only in acceptance.
+2. Production rehearsal is placeholder-only and does not perform real zero-traffic deployment.
+3. Release currently deploys directly from manifest until real rehearsal automation is introduced.
 
 ## Team Operating Discipline
 

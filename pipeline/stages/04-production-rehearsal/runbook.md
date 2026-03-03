@@ -2,17 +2,28 @@
 
 ## Purpose
 
-Rehearse production deployment for an accepted candidate with zero user traffic.
+Provide a temporary placeholder gate between automated acceptance and release in the bare-minimum pipeline baseline.
 
 Workflow: `.github/workflows/04-production-rehearsal-stage.yml` (triggered by successful `02-automated-acceptance-test-stage` on `main`).
 
 ## Rules
 
 1. Rehearsal consumes the exact candidate manifest accepted in stage 02.
-2. Rehearsal deploys candidate digests unchanged.
-3. Rehearsal keeps candidate revisions at 0% traffic.
-4. Rehearsal verifies candidate revision health directly.
-5. Rehearsal records evidence in `production-rehearsal-evidence.v1`.
+2. Rehearsal verifies acceptance evidence pass and candidate identity integrity.
+3. Rehearsal does not deploy to production in this temporary phase.
+4. Rehearsal records pass/fail evidence in `production-rehearsal-evidence.v1` with explicit placeholder summary text.
+5. Rehearsal publishes `rehearsal-stage-output` artifact to drive automatic release trigger.
+
+## Temporary Debt (Explicit)
+
+1. This stage is a placeholder gate and does not perform real zero-traffic deployment rehearsal.
+2. `zeroTraffic=true` in rehearsal evidence is synthetic until full rehearsal automation is introduced.
+
+## Exit Criteria for Removing Temporary Debt
+
+1. Rehearsal deploys accepted candidates to production infrastructure with zero live traffic.
+2. Rehearsal verifies revision health against deployed candidate endpoints.
+3. Rehearsal evidence reflects real deployment state rather than placeholder state.
 
 ## Exit Criteria
 

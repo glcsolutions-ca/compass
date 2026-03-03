@@ -16,8 +16,8 @@ It reflects a stage-first deployment pipeline aligned to Farley/Humble.
 1. A new pipeline instance starts on trunk check-in (`main`).
 2. `01-commit-stage` creates the canonical release candidate once.
 3. `02-automated-acceptance-test-stage` deploys and tests that same candidate as the second major gate.
-4. `04-production-rehearsal-stage` deploys that accepted candidate to production with zero traffic.
-5. `05-release-stage` promotes that rehearsed revision to live traffic without rebuilding.
+4. `04-production-rehearsal-stage` runs as a temporary placeholder evidence gate.
+5. `05-release-stage` deploys that accepted candidate to production without rebuilding.
 
 ## Ownership Boundaries
 
@@ -34,3 +34,9 @@ It reflects a stage-first deployment pipeline aligned to Farley/Humble.
 4. Rehearsal evidence gates release.
 5. Release and rollback use the same automated mechanisms.
 6. Stage execution starts at `01-commit-stage`; no other stage creates release candidates.
+
+## Temporary Baseline Notes
+
+1. Acceptance currently runs on GitHub-hosted runner resources.
+2. Worker runtime execution in acceptance is placeholder-only.
+3. Production rehearsal is placeholder-only and will be replaced by real zero-traffic rehearsal.

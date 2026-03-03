@@ -151,11 +151,10 @@ Rollback/backout:
 3. Acceptance failures are owned and fixed with same urgency.
 4. Keep moving recurring late failures left into commit stage over time.
 
-## What is not a pipeline stage
+## Stage Boundary
 
-PR checks and merge-queue checks are governance/safety checks.
-They are useful, but they are not authoritative candidate-creation stages.
-Authoritative candidate creation starts at `01-commit`.
+Authoritative candidate creation starts at `01-commit` on trunk check-in.
+Everything after that is candidate promotion and evidence collection.
 
 ## Current State Notes
 

@@ -23,7 +23,26 @@ function run(command, args, { cwd } = {}) {
   return result;
 }
 
-async function resolvePulledManifestPath(directory) {
+export async function collectFilesRecursive(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = [];
+
+  for (const entry of entries) {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await collectFilesRecursive(fullPath)));
+      continue;
+    }
+
+    if (entry.isFile()) {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
+export async function resolvePulledManifestPath(directory) {
   const preferredPath = path.join(directory, "manifest.json");
 
   try {
@@ -33,15 +52,34 @@ async function resolvePulledManifestPath(directory) {
     // Fall through to generic discovery.
   }
 
-  const entries = await readdir(directory, { withFileTypes: true });
-  const files = entries.filter((entry) => entry.isFile() && entry.name.endsWith(".json"));
+  const files = await collectFilesRecursive(directory);
 
   if (files.length === 0) {
-    throw new Error(`No JSON files found in pulled artifact directory: ${directory}`);
+    throw new Error(`No files found in pulled artifact directory: ${directory}`);
   }
 
-  const manifest = files.find((entry) => entry.name === "manifest.json") || files[0];
-  return path.join(directory, manifest.name);
+  const namedManifest = files.find((filePath) => path.basename(filePath) === "manifest.json");
+  if (namedManifest) {
+    return namedManifest;
+  }
+
+  const prioritizedCandidates = [
+    ...files.filter((filePath) => filePath.endsWith(".json")),
+    ...files.filter((filePath) => !filePath.endsWith(".json"))
+  ];
+
+  for (const candidatePath of prioritizedCandidates) {
+    try {
+      const errors = await validateReleaseCandidateFile(candidatePath);
+      if (errors.length === 0) {
+        return candidatePath;
+      }
+    } catch {
+      // Ignore unreadable/non-JSON files and continue searching.
+    }
+  }
+
+  throw new Error(`No valid release candidate manifest found in pulled artifact: ${directory}`);
 }
 
 export async function main(argv = process.argv.slice(2)) {

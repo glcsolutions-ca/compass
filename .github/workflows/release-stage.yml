@@ -67,7 +67,7 @@ jobs:
 
       - name: Verify acceptance evidence pass
         run: |
-          node -e 'const fs=require("fs");const path=require("path");const dir=process.argv[1];const files=fs.readdirSync(dir).filter((f)=>f.endsWith(".json"));if(files.length===0){throw new Error("No acceptance evidence JSON found");}const doc=JSON.parse(fs.readFileSync(path.join(dir,files[0]),"utf8"));if(doc.candidateId!==process.argv[2]){throw new Error(`Acceptance evidence candidate mismatch: ${doc.candidateId}`);}if(doc.verdict!=="pass"){throw new Error(`Candidate is not accepted: verdict=${doc.verdict}`);}if(doc.environment!=="acceptance"){throw new Error(`Invalid acceptance evidence environment: ${doc.environment}`);}console.log("Acceptance evidence verified.");' "$RUNNER_TEMP/acceptance-evidence" "${{ inputs.candidate_id }}"
+          node -e 'const fs=require("fs");const path=require("path");const dir=process.argv[1];const expectedCandidate=process.argv[2];const walk=(base)=>{const out=[];for(const entry of fs.readdirSync(base,{withFileTypes:true})){const full=path.join(base,entry.name);if(entry.isDirectory()){out.push(...walk(full));}else if(entry.isFile()){out.push(full);}}return out;};const files=walk(dir).filter((f)=>f.endsWith(".json"));if(files.length===0){throw new Error("No acceptance evidence JSON found");}const docs=files.map((file)=>({file,doc:JSON.parse(fs.readFileSync(file,"utf8"))}));const match=docs.find(({doc})=>doc && doc.schemaVersion==="acceptance-evidence.v1" && doc.candidateId===expectedCandidate);if(!match){throw new Error(`No acceptance evidence found for candidate ${expectedCandidate}`);}const doc=match.doc;if(doc.verdict!=="pass"){throw new Error(`Candidate is not accepted: verdict=${doc.verdict}`);}if(doc.environment!=="acceptance"){throw new Error(`Invalid acceptance evidence environment: ${doc.environment}`);}console.log(`Acceptance evidence verified from ${match.file}.`);' "$RUNNER_TEMP/acceptance-evidence" "${{ inputs.candidate_id }}"
 
       - name: Deploy exact candidate to production
         env:
@@ -113,5 +113,7 @@ jobs:
             --released-at "${{ steps.release_start.outputs.released_at }}" \
             --summary "Release ${verdict} for candidate ${{ inputs.candidate_id }}"
 
-          oras push "${RELEASE_EVIDENCE_REGISTRY_REPO}:${{ inputs.candidate_id }}" \
-            .artifacts/release-evidence/release-evidence.json:application/vnd.compass.release-evidence.v1+json
+          cp .artifacts/release-evidence/release-evidence.json "$RUNNER_TEMP/release-evidence.json"
+          oras push --artifact-type application/vnd.compass.release-evidence.v1 \
+            "${RELEASE_EVIDENCE_REGISTRY_REPO}:${{ inputs.candidate_id }}" \
+            "$RUNNER_TEMP/release-evidence.json:application/vnd.compass.release-evidence.v1+json"

@@ -147,7 +147,8 @@ export async function createCommitAnalysisReport({ configPath, lintWarnings, typ
 export async function main(argv = process.argv.slice(2)) {
   const options = parseCliArgs(argv);
   const configPath =
-    optionalOption(options, "config") ?? path.resolve("pipeline/commit-analysis.config.json");
+    optionalOption(options, "config") ??
+    path.resolve("pipeline/policies/commit-analysis.config.json");
   const outputPath =
     optionalOption(options, "out") ?? ".artifacts/commit-analysis/commit-analysis.json";
   const lintWarnings = optionalOption(options, "lint-warnings") ?? "0";

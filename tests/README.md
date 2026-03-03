@@ -4,8 +4,8 @@ Purpose: fast local confidence and deterministic behavior checks.
 
 ## Start Here
 
-- `e2e/README.md`
-- `system/README.md`
+- `acceptance/e2e/README.md`
+- `acceptance/system/README.md`
 
 ## Run
 

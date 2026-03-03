@@ -14,9 +14,9 @@ function loadSchema(relativePath) {
 }
 
 const SCHEMAS = {
-  releaseCandidate: loadSchema("pipeline/release-candidate.schema.json"),
-  acceptanceEvidence: loadSchema("pipeline/acceptance-evidence.schema.json"),
-  releaseEvidence: loadSchema("pipeline/release-evidence.schema.json")
+  releaseCandidate: loadSchema("pipeline/contracts/schemas/release-candidate.schema.json"),
+  acceptanceEvidence: loadSchema("pipeline/contracts/schemas/acceptance-evidence.schema.json"),
+  releaseEvidence: loadSchema("pipeline/contracts/schemas/release-evidence.schema.json")
 };
 
 const ajv = new Ajv2020({

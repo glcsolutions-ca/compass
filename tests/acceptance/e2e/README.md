@@ -10,5 +10,5 @@ pnpm test:e2e
 
 ## Source Of Truth
 
-- `tests/e2e/smoke.spec.ts`
-- `tests/e2e/playwright.config.ts`
+- `tests/acceptance/e2e/smoke.spec.ts`
+- `tests/acceptance/e2e/playwright.config.ts`

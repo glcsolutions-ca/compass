@@ -250,9 +250,9 @@ Those values belong in stage evidence, not in the Release Candidate contract.
 
 The JSON schema files under `pipeline/` are the executable source of truth for contract validation:
 
-- `pipeline/release-candidate.schema.json`
-- `pipeline/acceptance-evidence.schema.json`
-- `pipeline/release-evidence.schema.json`
+- `pipeline/contracts/schemas/release-candidate.schema.json`
+- `pipeline/contracts/schemas/acceptance-evidence.schema.json`
+- `pipeline/contracts/schemas/release-evidence.schema.json`
 
 Runtime validators MUST use these schemas directly. Custom validation rules SHOULD be added only where schema constraints cannot express required behavior.
 

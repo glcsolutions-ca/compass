@@ -46,13 +46,13 @@ jobs:
 
       - name: Fetch release candidate manifest
         run: |
-          node scripts/pipeline/fetch-release-candidate.mjs \
+          node pipeline/scripts/fetch-release-candidate.mjs \
             --candidate-id "${{ inputs.candidate_id }}" \
             --registry-repo "${{ env.RC_REGISTRY_REPO }}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
       - name: Validate release candidate manifest
-        run: node scripts/pipeline/validate-release-candidate.mjs --file "$RUNNER_TEMP/release-candidate.json"
+        run: node pipeline/scripts/validate-release-candidate.mjs --file "$RUNNER_TEMP/release-candidate.json"
 
       - name: Capture source revision from manifest
         id: source
@@ -67,7 +67,7 @@ jobs:
 
       - name: Verify acceptance evidence pass
         run: |
-          node scripts/pipeline/verify-acceptance-evidence.mjs \
+          node pipeline/scripts/verify-acceptance-evidence.mjs \
             --dir "$RUNNER_TEMP/acceptance-evidence" \
             --candidate-id "${{ inputs.candidate_id }}" \
             --source-revision "${{ steps.source.outputs.source_revision }}"
@@ -107,7 +107,7 @@ jobs:
           fi
 
           mkdir -p .artifacts/release-evidence
-          node scripts/pipeline/record-release-evidence.mjs \
+          node pipeline/scripts/record-release-evidence.mjs \
             --out .artifacts/release-evidence/release-evidence.json \
             --candidate-id "${{ inputs.candidate_id }}" \
             --source-revision "${source_revision}" \

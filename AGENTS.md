@@ -4,12 +4,68 @@
 
 ```text
 compass/
+├─ .github/workflows
 ├─ apps/{api,web,worker}
 ├─ db/{migrations,postgres,scripts,seeds}
 ├─ infra/{azure,identity}
-├─ packages/{contracts,sdk}
+├─ packages/{contracts,sdk,testkit}
+├─ pipeline/{contracts,scripts,policies,runbooks}
 ├─ scripts/{dev,infra}
-└─ tests/{e2e,system}
+└─ tests/{acceptance,nonfunctional}
+```
+
+## Recommended structure (target)
+
+Current layout may differ during migration; target is canonical.
+
+```text
+compass/
+├─ .github/
+│  └─ workflows/                     # orchestration only
+├─ pipeline/                         # pipeline domain model + policy + tooling
+│  ├─ contracts/
+│  │  ├─ release-candidate-contract.md
+│  │  ├─ schemas/
+│  │  │  ├─ release-candidate.schema.json
+│  │  │  ├─ acceptance-evidence.schema.json
+│  │  │  └─ release-evidence.schema.json
+│  │  └─ fixtures/
+│  ├─ scripts/
+│  │  ├─ generate-release-candidate.mjs
+│  │  ├─ validate-release-candidate.mjs
+│  │  ├─ fetch-release-candidate.mjs
+│  │  ├─ deploy-from-manifest.mjs
+│  │  ├─ verify-from-manifest.mjs
+│  │  └─ verify-acceptance-evidence.mjs
+│  ├─ policies/
+│  │  └─ commit-analysis.config.json
+│  └─ runbooks/
+│     ├─ commit-stage-operating-model.md
+│     ├─ acceptance-gate.md
+│     └─ release-and-rollback.md
+├─ apps/
+│  ├─ api/
+│  │  ├─ src/
+│  │  └─ test/{unit,integration}
+│  ├─ web/
+│  │  ├─ src/
+│  │  └─ test/{unit,component}
+│  └─ worker/
+│     ├─ src/
+│     └─ test/{unit,integration}
+├─ tests/
+│  ├─ acceptance/
+│  │  ├─ system/                     # cross-service business flows
+│  │  └─ e2e/                        # browser/user journeys
+│  └─ nonfunctional/
+│     ├─ performance/
+│     └─ security/
+├─ db/
+├─ infra/
+├─ packages/
+└─ scripts/
+   ├─ dev/
+   └─ infra/
 ```
 
 ## Main commands

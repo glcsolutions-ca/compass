@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-const REPO_ROOT = path.resolve(__dirname, "..", "..");
+const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
 
 function parseEnvFile(filePath: string): Record<string, string> {
   if (!existsSync(filePath)) {

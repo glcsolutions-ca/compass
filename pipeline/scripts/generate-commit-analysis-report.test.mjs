@@ -14,7 +14,7 @@ describe("generate-commit-analysis-report", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "commit-analysis-pass-"));
     const coveragePath = path.join(root, "apps/api/coverage/coverage-summary.json");
     const jscpdPath = path.join(root, ".artifacts/jscpd/jscpd-report.json");
-    const configPath = path.join(root, "pipeline/commit-analysis.config.json");
+    const configPath = path.join(root, "pipeline/policies/commit-analysis.config.json");
 
     await writeJson(coveragePath, {
       total: {
@@ -58,7 +58,7 @@ describe("generate-commit-analysis-report", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "commit-analysis-fail-"));
     const coveragePath = path.join(root, "apps/api/coverage/coverage-summary.json");
     const jscpdPath = path.join(root, ".artifacts/jscpd/jscpd-report.json");
-    const configPath = path.join(root, "pipeline/commit-analysis.config.json");
+    const configPath = path.join(root, "pipeline/policies/commit-analysis.config.json");
 
     await writeJson(coveragePath, {
       total: {

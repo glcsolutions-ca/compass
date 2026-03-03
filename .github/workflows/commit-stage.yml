@@ -256,10 +256,24 @@ jobs:
           MANIFEST_PATH="$RUNNER_TEMP/release-candidate.json" bash -lc "$ACCEPTANCE_VERIFY_COMMAND"
 
       - name: Acceptance system tests
-        run: pnpm test:acceptance:system
+        env:
+          ACCEPTANCE_API_BASE_URL: ${{ vars.ACCEPTANCE_API_BASE_URL }}
+        run: |
+          if [ -z "${ACCEPTANCE_API_BASE_URL:-}" ]; then
+            echo "Repository variable ACCEPTANCE_API_BASE_URL is required." >&2
+            exit 1
+          fi
+          BASE_URL="${ACCEPTANCE_API_BASE_URL}" TARGET_API_BASE_URL="${ACCEPTANCE_API_BASE_URL}" pnpm test:acceptance:system
 
       - name: Acceptance browser tests
-        run: pnpm test:e2e
+        env:
+          ACCEPTANCE_WEB_BASE_URL: ${{ vars.ACCEPTANCE_WEB_BASE_URL }}
+        run: |
+          if [ -z "${ACCEPTANCE_WEB_BASE_URL:-}" ]; then
+            echo "Repository variable ACCEPTANCE_WEB_BASE_URL is required." >&2
+            exit 1
+          fi
+          WEB_BASE_URL="${ACCEPTANCE_WEB_BASE_URL}" pnpm test:e2e
 
       - name: Capture acceptance finish time
         id: capture_finish

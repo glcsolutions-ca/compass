@@ -339,7 +339,8 @@ The Automated Acceptance Test Stage MUST:
 2. deploy the exact candidate into a production-like environment;
 3. run automated deployment, smoke, integration, and acceptance tests;
 4. record acceptance evidence;
-5. prevent failed candidates from progressing.
+5. prevent failed candidates from progressing;
+6. run tests against the deployed acceptance endpoints for that candidate and MUST NOT fall back to local source-build servers.
 
 ### Optional Staging / Manual Test Stage
 

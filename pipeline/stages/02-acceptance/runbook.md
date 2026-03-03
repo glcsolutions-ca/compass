@@ -3,7 +3,7 @@
 ## Purpose
 
 Define the second major gate for release candidates.
-This stage proves customer-visible behavior and deployment viability in a production-like environment.
+This stage proves customer-visible behavior and deployment viability on GitHub-hosted runner resources for the bare-minimum pipeline baseline.
 
 Workflow: `.github/workflows/02-automated-acceptance-test-stage.yml` (triggered by successful `01-commit-stage` on `main`).
 
@@ -18,22 +18,26 @@ Workflow: `.github/workflows/02-automated-acceptance-test-stage.yml` (triggered 
 1. Acceptance consumes the exact candidate manifest published by commit stage.
 2. Acceptance must deploy exact digest references from that manifest.
 3. Acceptance must not rebuild or substitute artifacts.
-4. Acceptance must execute deployment verification plus acceptance suites.
+4. Acceptance must execute deployment verification plus acceptance suites on runner-local resources (Docker network, Postgres, migrations, API, Web).
 5. Evidence is recorded per `candidateId` with pass/fail verdict.
 6. Candidates failing acceptance are non-promotable.
-7. Acceptance uses environment-scoped configuration variables:
-   - `API_BASE_URL`
-   - `WEB_BASE_URL`
-   - `PEER_API_BASE_URL`
-   - `PEER_WEB_BASE_URL`
-   - `AZURE_RESOURCE_GROUP`
-   - `AZURE_CONTAINERAPP_API_NAME`
-   - `AZURE_CONTAINERAPP_WEB_NAME`
-   - `AZURE_CONTAINERAPP_WORKER_NAME`
-   - `AZURE_MIGRATION_JOB_NAME`
-   - `AZURE_CLIENT_ID`
-   - `AZURE_TENANT_ID`
-   - `AZURE_SUBSCRIPTION_ID`
+7. Worker runtime is placeholder-only in this stage:
+   - worker digest must be pulled/validated from the release candidate manifest;
+   - worker process is intentionally not started (no Service Bus emulator in bare-minimum acceptance).
+8. Acceptance stage uses fixed local endpoints:
+   - `API_BASE_URL=http://127.0.0.1:3001`
+   - `WEB_BASE_URL=http://127.0.0.1:3000`
+
+## Temporary Debt (Explicit)
+
+1. Worker runtime is not exercised in acceptance yet.
+2. Acceptance environment is runner-local, not a production-like managed environment.
+
+## Exit Criteria for Removing Temporary Debt
+
+1. A stable acceptance dependency strategy exists for worker messaging (for example, emulator/test-double or dedicated managed acceptance bus).
+2. Acceptance deploy path migrates from runner-local resources to managed infrastructure while preserving build-once/promote-unchanged.
+3. Worker runtime checks become first-class in acceptance and are no longer placeholder.
 
 ## Exit Criteria
 

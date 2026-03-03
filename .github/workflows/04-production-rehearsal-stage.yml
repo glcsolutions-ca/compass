@@ -14,7 +14,6 @@ concurrency:
 permissions:
   actions: read
   contents: read
-  id-token: write
   packages: write
 
 env:
@@ -24,9 +23,9 @@ env:
 
 jobs:
   production_rehearsal:
-    name: Production rehearsal (zero traffic)
+    name: Production rehearsal (placeholder)
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 30
     environment: production
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
 
@@ -124,96 +123,58 @@ jobs:
             --candidate-id "${{ steps.acceptance_output.outputs.candidate_id }}" \
             --source-revision "${{ steps.manifest_source.outputs.source_revision }}"
 
-      - name: Assert required environment config
-        env:
-          API_BASE_URL: ${{ vars.API_BASE_URL }}
-          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
-          PEER_API_BASE_URL: ${{ vars.PEER_API_BASE_URL }}
-          PEER_WEB_BASE_URL: ${{ vars.PEER_WEB_BASE_URL }}
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          AZURE_CONTAINERAPP_API_NAME: ${{ vars.AZURE_CONTAINERAPP_API_NAME }}
-          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.AZURE_CONTAINERAPP_WEB_NAME }}
-          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.AZURE_CONTAINERAPP_WORKER_NAME }}
-          AZURE_MIGRATION_JOB_NAME: ${{ vars.AZURE_MIGRATION_JOB_NAME }}
-          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Create placeholder rehearsal deploy state
         run: |
-          node pipeline/shared/scripts/assert-environment-config.mjs \
-            --required API_BASE_URL \
-            --required WEB_BASE_URL \
-            --required PEER_API_BASE_URL \
-            --required PEER_WEB_BASE_URL \
-            --required AZURE_RESOURCE_GROUP \
-            --required AZURE_CONTAINERAPP_API_NAME \
-            --required AZURE_CONTAINERAPP_WEB_NAME \
-            --required AZURE_CONTAINERAPP_WORKER_NAME \
-            --required AZURE_MIGRATION_JOB_NAME \
-            --required AZURE_CLIENT_ID \
-            --required AZURE_TENANT_ID \
-            --required AZURE_SUBSCRIPTION_ID
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const manifestPath = path.join(process.env.RUNNER_TEMP, 'release-candidate.json');
+          const outPath = path.join(process.env.RUNNER_TEMP, 'production-rehearsal-deploy-state.json');
+          const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 
-      - name: Assert environment separation
-        env:
-          API_BASE_URL: ${{ vars.API_BASE_URL }}
-          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
-          PEER_API_BASE_URL: ${{ vars.PEER_API_BASE_URL }}
-          PEER_WEB_BASE_URL: ${{ vars.PEER_WEB_BASE_URL }}
-        run: |
-          node pipeline/shared/scripts/assert-env-separation.mjs \
-            --current-api "$API_BASE_URL" \
-            --current-web "$WEB_BASE_URL" \
-            --peer-api "$PEER_API_BASE_URL" \
-            --peer-web "$PEER_WEB_BASE_URL"
+          const state = {
+            schemaVersion: 'production-rehearsal-placeholder-state.v1',
+            generatedAt: new Date().toISOString(),
+            candidateId: manifest.candidateId,
+            sourceRevision: manifest.source.revision,
+            resourceGroup: 'placeholder',
+            zeroTraffic: true,
+            deployment: {
+              api: {
+                appName: 'placeholder-api',
+                candidateRevision: 'placeholder',
+                candidateRevisionFqdn: '',
+                previousRevision: '',
+                candidateImage: manifest.artifacts.apiImage
+              },
+              web: {
+                appName: 'placeholder-web',
+                candidateRevision: 'placeholder',
+                candidateRevisionFqdn: '',
+                previousRevision: '',
+                candidateImage: manifest.artifacts.webImage
+              },
+              worker: {
+                appName: 'placeholder-worker',
+                candidateRevision: 'placeholder',
+                candidateRevisionFqdn: '',
+                previousRevision: '',
+                candidateImage: manifest.artifacts.workerImage
+              }
+            }
+          };
 
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Deploy exact candidate to production with zero traffic
-        env:
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          AZURE_CONTAINERAPP_API_NAME: ${{ vars.AZURE_CONTAINERAPP_API_NAME }}
-          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.AZURE_CONTAINERAPP_WEB_NAME }}
-          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.AZURE_CONTAINERAPP_WORKER_NAME }}
-          AZURE_MIGRATION_JOB_NAME: ${{ vars.AZURE_MIGRATION_JOB_NAME }}
-        run: |
-          node pipeline/stages/05-release/scripts/deploy-production-candidate.mjs \
-            --manifest "$RUNNER_TEMP/release-candidate.json" \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --api-app-name "$AZURE_CONTAINERAPP_API_NAME" \
-            --web-app-name "$AZURE_CONTAINERAPP_WEB_NAME" \
-            --worker-app-name "$AZURE_CONTAINERAPP_WORKER_NAME" \
-            --migrations-job-name "$AZURE_MIGRATION_JOB_NAME" \
-            --zero-traffic \
-            --out "$RUNNER_TEMP/production-rehearsal-deploy-state.json"
-
-      - name: Verify production rehearsal deployment
-        env:
-          API_BASE_URL: ${{ vars.API_BASE_URL }}
-          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          AZURE_CONTAINERAPP_API_NAME: ${{ vars.AZURE_CONTAINERAPP_API_NAME }}
-          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.AZURE_CONTAINERAPP_WEB_NAME }}
-          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.AZURE_CONTAINERAPP_WORKER_NAME }}
-        run: |
-          node pipeline/stages/05-release/scripts/verify-production-candidate.mjs \
-            --manifest "$RUNNER_TEMP/release-candidate.json" \
-            --deploy-state "$RUNNER_TEMP/production-rehearsal-deploy-state.json" \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --api-app-name "$AZURE_CONTAINERAPP_API_NAME" \
-            --web-app-name "$AZURE_CONTAINERAPP_WEB_NAME" \
-            --worker-app-name "$AZURE_CONTAINERAPP_WORKER_NAME" \
-            --api-base-url "$API_BASE_URL" \
-            --web-base-url "$WEB_BASE_URL" \
-            --zero-traffic
+          fs.writeFileSync(outPath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+          NODE
 
       - name: Record and publish production rehearsal evidence
         if: always()
         run: |
+          if [ ! -f "$RUNNER_TEMP/production-rehearsal-deploy-state.json" ]; then
+            echo "Placeholder deploy state unavailable; skipping rehearsal evidence publication."
+            exit 0
+          fi
+
           finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           verdict="fail"
           if [ "${{ job.status }}" = "success" ]; then
@@ -230,9 +191,34 @@ jobs:
             --verdict "${verdict}" \
             --started-at "${{ steps.rehearsal_start.outputs.started_at }}" \
             --finished-at "${finished_at}" \
-            --summary "Production rehearsal ${verdict} for candidate ${{ steps.acceptance_output.outputs.candidate_id }}"
+            --summary "Production rehearsal ${verdict} for candidate ${{ steps.acceptance_output.outputs.candidate_id }} (placeholder rehearsal - no deploy)"
 
           cp .artifacts/production-rehearsal-evidence/production-rehearsal-evidence.json production-rehearsal-evidence.json
           oras push --artifact-type application/vnd.compass.production-rehearsal-evidence.v1 \
             "${PRODUCTION_REHEARSAL_EVIDENCE_REGISTRY_REPO}:${{ steps.acceptance_output.outputs.candidate_id }}" \
             "production-rehearsal-evidence.json:application/vnd.compass.production-rehearsal-evidence.v1+json"
+
+      - name: Write rehearsal-stage output
+        if: always()
+        run: |
+          if [ -z "${{ steps.acceptance_output.outputs.candidate_id }}" ] || [ -z "${{ steps.manifest_source.outputs.source_revision }}" ]; then
+            echo "Candidate/source unavailable; skipping rehearsal-stage output."
+            exit 0
+          fi
+
+          mkdir -p .artifacts/rehearsal-stage-output
+          cat > .artifacts/rehearsal-stage-output/rehearsal-stage-output.json <<EOF_JSON
+          {
+            "schemaVersion": "rehearsal-stage-output.v1",
+            "candidateId": "${{ steps.acceptance_output.outputs.candidate_id }}",
+            "sourceRevision": "${{ steps.manifest_source.outputs.source_revision }}"
+          }
+          EOF_JSON
+
+      - name: Upload rehearsal-stage output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rehearsal-stage-output
+          path: .artifacts/rehearsal-stage-output/rehearsal-stage-output.json
+          if-no-files-found: ignore

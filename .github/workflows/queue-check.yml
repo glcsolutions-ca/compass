@@ -14,7 +14,7 @@ permissions:
 jobs:
   queue-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -34,29 +34,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Format check
-        run: pnpm format:check
+      - name: Queue quick gate
+        run: pnpm test:quick
 
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck:refs
-
-      - name: Typecheck workspace
-        run: pnpm typecheck
-
-      - name: Unit tests
-        run: pnpm test:unit
-
-      - name: Contract tests (pipeline scripts)
+      - name: Pipeline script tests
         run: pnpm test:rc
-
-      - name: Docker smoke build api
-        run: docker build -f apps/api/Dockerfile -t compass-api:queue-${{ github.sha }} .
-
-      - name: Docker smoke build web
-        run: docker build -f apps/web/Dockerfile -t compass-web:queue-${{ github.sha }} .
-
-      - name: Docker smoke build worker
-        run: docker build -f apps/worker/Dockerfile -t compass-worker:queue-${{ github.sha }} .

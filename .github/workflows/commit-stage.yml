@@ -43,22 +43,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Format check
-        run: pnpm format:check
+      - name: Commit quick gate
+        run: pnpm test:quick
 
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck:refs
-
-      - name: Typecheck workspace
-        run: pnpm typecheck
-
-      - name: Unit tests
-        run: pnpm test:unit
-
-      - name: Contract tests (pipeline scripts)
+      - name: Pipeline script tests
         run: pnpm test:rc
 
   build_and_publish_images:

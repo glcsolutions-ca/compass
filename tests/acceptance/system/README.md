@@ -11,4 +11,4 @@ pnpm test:acceptance:system
 
 ## Source Of Truth
 
-- `tests/system/smoke.ts`
+- `tests/acceptance/system/smoke.ts`

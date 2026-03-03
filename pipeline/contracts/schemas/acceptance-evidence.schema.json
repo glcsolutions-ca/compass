@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://compass/pipeline/acceptance-evidence.schema.json",
+  "$id": "https://compass/pipeline/contracts/schemas/acceptance-evidence.schema.json",
   "title": "Acceptance Evidence Contract v1",
   "type": "object",
   "additionalProperties": false,

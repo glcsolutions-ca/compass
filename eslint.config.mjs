@@ -93,7 +93,7 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ["tests/e2e/*.ts"]
+          allowDefaultProject: ["tests/acceptance/e2e/*.ts"]
         },
         tsconfigRootDir: import.meta.dirname
       }

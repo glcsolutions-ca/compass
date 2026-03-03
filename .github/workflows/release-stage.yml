@@ -113,7 +113,7 @@ jobs:
             --released-at "${{ steps.release_start.outputs.released_at }}" \
             --summary "Release ${verdict} for candidate ${{ inputs.candidate_id }}"
 
-          cp .artifacts/release-evidence/release-evidence.json "$RUNNER_TEMP/release-evidence.json"
+          cp .artifacts/release-evidence/release-evidence.json release-evidence.json
           oras push --artifact-type application/vnd.compass.release-evidence.v1 \
             "${RELEASE_EVIDENCE_REGISTRY_REPO}:${{ inputs.candidate_id }}" \
-            "$RUNNER_TEMP/release-evidence.json:application/vnd.compass.release-evidence.v1+json"
+            "release-evidence.json:application/vnd.compass.release-evidence.v1+json"

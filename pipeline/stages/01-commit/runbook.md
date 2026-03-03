@@ -4,6 +4,7 @@
 
 This runbook defines how the team operates the authoritative `commit-stage` pipeline on `main`.
 It formalizes stop-the-line behavior, ownership, escalation, and weekly optimization discipline.
+It covers `01-commit` responsibilities only.
 
 ## Policy: Developers Wait for Commit Stage
 
@@ -29,23 +30,16 @@ It formalizes stop-the-line behavior, ownership, escalation, and weekly optimiza
 | Commit analysis thresholds (coverage/duplication) | Feature team lead | Platform/Delivery | 30 minutes     | <= 1 business day |
 | Image build/publish                               | Platform/Delivery | App owner         | 20 minutes     | <= 45 minutes     |
 | Candidate manifest generation/validation          | Platform/Delivery | App owner         | 15 minutes     | <= 30 minutes     |
-| Acceptance deploy/verify command                  | Platform/Delivery | Infra owner       | 20 minutes     | <= 1 hour         |
-| Acceptance tests (system/e2e)                     | App owner         | Feature team lead | 30 minutes     | <= 1 business day |
-| Evidence publication/retrieval                    | Platform/Delivery | Infra owner       | 20 minutes     | <= 45 minutes     |
-| Release-stage evidence gate                       | Platform/Delivery | App owner         | 20 minutes     | <= 1 hour         |
 
 ## Failure Taxonomy
 
-| Code    | Class                           | Typical Signal                   | Immediate Action                                                        |
-| ------- | ------------------------------- | -------------------------------- | ----------------------------------------------------------------------- |
-| CMT-001 | Compilation/type failure        | `typecheck` step failed          | Fix forward/backout immediately                                         |
-| CMT-002 | Commit test failure             | `test:quick` failed              | Fix test or defect; re-run                                              |
-| CMT-003 | Analysis threshold breach       | `commit-analysis` verdict `fail` | Improve coverage/reduce duplication or adjust approved threshold change |
-| CMT-004 | Build/publish failure           | Docker/registry error            | Repair build config or registry auth and re-run                         |
-| CMT-005 | Candidate contract failure      | manifest validation failed       | Fix generator/schema mismatch; do not promote                           |
-| ACC-001 | Acceptance endpoint unavailable | precheck `/health` or `/` failed | Repair acceptance deploy/route before deeper tests                      |
-| ACC-002 | Acceptance functional failure   | system/e2e fail                  | Fix product defect; candidate remains non-promotable                    |
-| EVT-001 | Evidence mismatch/missing       | release gate rejects evidence    | Repair evidence generation or retrieval path                            |
+| Code    | Class                      | Typical Signal                   | Immediate Action                                                        |
+| ------- | -------------------------- | -------------------------------- | ----------------------------------------------------------------------- |
+| CMT-001 | Compilation/type failure   | `typecheck` step failed          | Fix forward/backout immediately                                         |
+| CMT-002 | Commit test failure        | `test:quick` failed              | Fix test or defect; re-run                                              |
+| CMT-003 | Analysis threshold breach  | `commit-analysis` verdict `fail` | Improve coverage/reduce duplication or adjust approved threshold change |
+| CMT-004 | Build/publish failure      | Docker/registry error            | Repair build config or registry auth and re-run                         |
+| CMT-005 | Candidate contract failure | manifest validation failed       | Fix generator/schema mismatch; do not promote                           |
 
 ## Weekly Reliability Review (Required)
 

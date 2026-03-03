@@ -3,7 +3,7 @@
 **Status:** Proposed v1  
 **Owner:** Platform / Delivery Engineering  
 **Applies to:** `api`, `web`, `worker`, and database migrations  
-**Canonical location:** `pipeline/release-candidate-contract.md`
+**Canonical location:** `pipeline/contracts/release-candidate-contract.md`
 
 ---
 
@@ -77,7 +77,7 @@ For v1, that means the exact artifact references for:
 
 ### Commit Stage
 
-The **Commit Stage** is the first authoritative pipeline stage for an integration candidate.
+The **Commit Stage** is the first authoritative pipeline stage for a trunk check-in.
 
 It is responsible for:
 
@@ -85,12 +85,6 @@ It is responsible for:
 - running fast, high-value automated checks;
 - publishing immutable artifact references;
 - and declaring whether a valid candidate exists.
-
-### Pre-flight
-
-**Pre-flight** means branch or pull-request checks used for fast author feedback.
-
-Pre-flight checks are **advisory**. They MAY build disposable outputs for validation, but they do **not** create the canonical Release Candidate and they do **not** produce artifacts for downstream promotion.
 
 ### Automated Acceptance Test Stage
 
@@ -198,7 +192,7 @@ The canonical v1 manifest MUST conform to the following logical shape.
 
 ```yaml
 schemaVersion: rc.v1
-candidateId: rc-20260303-abcdef1
+candidateId: main-abcdef1-123456
 source:
   repository: org/repo
   revision: abcdef1234567890abcdef1234567890abcdef12
@@ -286,10 +280,6 @@ The Commit Stage is the only stage that creates the authoritative Release Candid
 ### Performance expectation
 
 The Commit Stage SHOULD complete in minutes, not tens of minutes, and SHOULD remain the fastest authoritative gate in the pipeline.
-
-### Pre-flight relation
-
-Pre-flight checks MAY run before the Commit Stage for author feedback, but they MUST NOT replace the Commit Stage and MUST NOT produce the canonical Release Candidate.
 
 ---
 
@@ -500,11 +490,10 @@ promotionHalted: false
 
 For v1, the simplest correct implementation is:
 
-1. **Pre-flight** on PRs for cheap author feedback.
-2. **Commit Stage** on the authoritative integration candidate to build `api`, `web`, `worker`, and migrations once.
-3. **Automated Acceptance Test Stage** to deploy and test the exact same candidate.
-4. **Optional Staging / Manual Test Stage** only if additional human or operational checks are needed.
-5. **Release Stage** to deploy the exact same candidate to production.
+1. **Commit Stage** on each trunk check-in to build `api`, `web`, `worker`, and migrations once.
+2. **Automated Acceptance Test Stage** to deploy and test that exact candidate.
+3. **Optional Staging / Manual Test Stage** only if additional human or operational checks are needed.
+4. **Release Stage** to deploy the exact same accepted candidate to production.
 
 This keeps the pipeline aligned to the core rule:
 

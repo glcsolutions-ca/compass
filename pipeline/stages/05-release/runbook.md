@@ -3,8 +3,10 @@
 ## Release Rules
 
 1. Release can deploy only candidates with acceptance evidence `verdict=pass`.
-2. Release deploys exact digest-pinned artifacts from candidate manifest.
-3. Release records evidence linked to `candidateId` and `sourceRevision`.
+2. Candidate and acceptance evidence identity must match (`candidateId`, `sourceRevision`).
+3. Release deploys exact digest-pinned artifacts from candidate manifest.
+4. Release records evidence linked to `candidateId` and `sourceRevision`.
+5. Release gate is fail-closed; deploy must not run when evidence checks fail.
 
 ## Rollback Rules
 

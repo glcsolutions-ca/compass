@@ -1,9 +1,3 @@
-This version is aligned to the Farley/Humble model you were circling around: the Commit Stage is the only stage that creates the authoritative release candidate, later stages promote the same digest-pinned artifacts unchanged, and Automated Acceptance is a real gate that can stop progression without redefining the candidate. It also treats PR pre-flight as advisory rather than as a formal pipeline stage.
-
-I made one deliberate structural correction from your earlier drafts: the file separates candidate identity and contents from stage evidence. So fields like deploymentRequired, riskClass, or promotionHalted are defined as stage evidence, not part of the release-candidate manifest itself. That keeps the contract closer to "build once, promote unchanged" and makes the spec easier to validate mechanically.
-
----
-
 # Release Candidate Contract (v1)
 
 **Status:** Proposed v1  

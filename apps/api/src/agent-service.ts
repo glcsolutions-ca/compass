@@ -2680,6 +2680,27 @@ function buildRuntimeExecutionDriver(env: NodeJS.ProcessEnv): RuntimeExecutionDr
   });
 }
 
+export const __internalAgentServiceRuntime = {
+  PostgresAgentService,
+  MockCloudExecutionDriver,
+  UnavailableCloudExecutionDriver,
+  ManagedIdentityTokenProvider,
+  StaticAccessTokenProvider,
+  DynamicSessionsCloudExecutionDriver,
+  LocalHttpExecutionDriver,
+  parseExecutionMode,
+  parseExecutionHost,
+  parseFeatureEnabled,
+  parsePositiveInteger,
+  parseRuntimeProvider,
+  resolveDefaultExecutionHost,
+  resolveRuntimeProvider,
+  buildRuntimeExecutionDriver,
+  asRecord,
+  readRecordString,
+  readRecordNullableString
+};
+
 export function buildDefaultAgentService(input: {
   databaseUrl: string | undefined;
   env?: NodeJS.ProcessEnv;

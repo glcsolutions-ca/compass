@@ -67,7 +67,7 @@
     "rc:record:release": "node scripts/pipeline/record-release-evidence.mjs",
     "rc:deploy:manifest": "node scripts/pipeline/deploy-from-manifest.mjs",
     "rc:verify:manifest": "node scripts/pipeline/verify-from-manifest.mjs",
-    "test:rc": "vitest run scripts/pipeline/validate-release-candidate.test.mjs scripts/pipeline/generate-release-candidate.test.mjs scripts/pipeline/record-acceptance-evidence.test.mjs scripts/pipeline/deploy-verify-from-manifest.test.mjs --silent=passed-only --reporter=dot"
+    "test:rc": "vitest run scripts/pipeline/validate-release-candidate.test.mjs scripts/pipeline/generate-release-candidate.test.mjs scripts/pipeline/record-acceptance-evidence.test.mjs scripts/pipeline/deploy-verify-from-manifest.test.mjs scripts/pipeline/fetch-release-candidate.test.mjs --silent=passed-only --reporter=dot"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

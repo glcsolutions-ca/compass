@@ -180,8 +180,10 @@ jobs:
         id: publish_manifest
         run: |
           candidate_id="${{ steps.candidate.outputs.candidate_id }}"
-          oras push "${RC_REGISTRY_REPO}:${candidate_id}" \
-            .artifacts/release-candidate/manifest.json:application/vnd.compass.release-candidate.v1+json
+          cp .artifacts/release-candidate/manifest.json "$RUNNER_TEMP/manifest.json"
+          oras push --artifact-type application/vnd.compass.release-candidate.v1 \
+            "${RC_REGISTRY_REPO}:${candidate_id}" \
+            "$RUNNER_TEMP/manifest.json:application/vnd.compass.release-candidate.v1+json"
           echo "manifest_ref=${RC_REGISTRY_REPO}:${candidate_id}" >> "$GITHUB_OUTPUT"
 
   acceptance_tests:
@@ -315,5 +317,7 @@ jobs:
 
       - name: Publish acceptance evidence
         run: |
-          oras push "${ACCEPTANCE_EVIDENCE_REGISTRY_REPO}:${{ needs.generate_and_validate_manifest.outputs.candidate_id }}" \
-            .artifacts/acceptance-evidence/acceptance-evidence.json:application/vnd.compass.acceptance-evidence.v1+json
+          cp .artifacts/acceptance-evidence/acceptance-evidence.json "$RUNNER_TEMP/acceptance-evidence.json"
+          oras push --artifact-type application/vnd.compass.acceptance-evidence.v1 \
+            "${ACCEPTANCE_EVIDENCE_REGISTRY_REPO}:${{ needs.generate_and_validate_manifest.outputs.candidate_id }}" \
+            "$RUNNER_TEMP/acceptance-evidence.json:application/vnd.compass.acceptance-evidence.v1+json"

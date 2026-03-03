@@ -1,0 +1,319 @@
+name: commit-stage
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  REGISTRY_BASE: ghcr.io/glcsolutions-ca
+  API_IMAGE_NAME: compass-api
+  WEB_IMAGE_NAME: compass-web
+  WORKER_IMAGE_NAME: compass-worker
+  MIGRATIONS_IMAGE_NAME: compass-migrations
+  RC_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-release-candidates
+  ACCEPTANCE_EVIDENCE_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-acceptance-evidence
+
+jobs:
+  commit_tests:
+    name: Commit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck:refs
+
+      - name: Typecheck workspace
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test:unit
+
+      - name: Contract tests (pipeline scripts)
+        run: pnpm test:rc
+
+  build_and_publish_images:
+    name: Build and publish images
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - commit_tests
+    outputs:
+      api_image_ref: ${{ steps.refs.outputs.api_image_ref }}
+      web_image_ref: ${{ steps.refs.outputs.web_image_ref }}
+      worker_image_ref: ${{ steps.refs.outputs.worker_image_ref }}
+      migrations_image_ref: ${{ steps.refs.outputs.migrations_image_ref }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push api image
+        id: build_api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY_BASE }}/${{ env.API_IMAGE_NAME }}:sha-${{ github.sha }}
+
+      - name: Build and push web image
+        id: build_web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY_BASE }}/${{ env.WEB_IMAGE_NAME }}:sha-${{ github.sha }}
+
+      - name: Build and push worker image
+        id: build_worker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/worker/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY_BASE }}/${{ env.WORKER_IMAGE_NAME }}:sha-${{ github.sha }}
+
+      - name: Build and push migrations image
+        id: build_migrations
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: db/Dockerfile.migrations
+          push: true
+          tags: ${{ env.REGISTRY_BASE }}/${{ env.MIGRATIONS_IMAGE_NAME }}:sha-${{ github.sha }}
+
+      - name: Capture canonical digest refs
+        id: refs
+        run: |
+          echo "api_image_ref=${REGISTRY_BASE}/${API_IMAGE_NAME}@${{ steps.build_api.outputs.digest }}" >> "$GITHUB_OUTPUT"
+          echo "web_image_ref=${REGISTRY_BASE}/${WEB_IMAGE_NAME}@${{ steps.build_web.outputs.digest }}" >> "$GITHUB_OUTPUT"
+          echo "worker_image_ref=${REGISTRY_BASE}/${WORKER_IMAGE_NAME}@${{ steps.build_worker.outputs.digest }}" >> "$GITHUB_OUTPUT"
+          echo "migrations_image_ref=${REGISTRY_BASE}/${MIGRATIONS_IMAGE_NAME}@${{ steps.build_migrations.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
+  generate_and_validate_manifest:
+    name: Generate and publish release candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - build_and_publish_images
+    outputs:
+      candidate_id: ${{ steps.candidate.outputs.candidate_id }}
+      manifest_ref: ${{ steps.publish_manifest.outputs.manifest_ref }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute candidate id
+        id: candidate
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          candidate_id="main-${short_sha}-${GITHUB_RUN_ID}"
+          echo "candidate_id=${candidate_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release candidate manifest
+        run: |
+          mkdir -p .artifacts/release-candidate
+          node scripts/pipeline/generate-release-candidate.mjs \
+            --out .artifacts/release-candidate/manifest.json \
+            --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
+            --repository "${{ github.repository }}" \
+            --source-revision "${{ github.sha }}" \
+            --api-image "${{ needs.build_and_publish_images.outputs.api_image_ref }}" \
+            --web-image "${{ needs.build_and_publish_images.outputs.web_image_ref }}" \
+            --worker-image "${{ needs.build_and_publish_images.outputs.worker_image_ref }}" \
+            --migrations-artifact "${{ needs.build_and_publish_images.outputs.migrations_image_ref }}" \
+            --registry "${{ env.REGISTRY_BASE }}" \
+            --commit-stage-run-id "${{ github.run_id }}"
+
+      - name: Validate release candidate manifest
+        run: node scripts/pipeline/validate-release-candidate.mjs --file .artifacts/release-candidate/manifest.json
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Login to GHCR (ORAS)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Publish release candidate manifest
+        id: publish_manifest
+        run: |
+          candidate_id="${{ steps.candidate.outputs.candidate_id }}"
+          oras push "${RC_REGISTRY_REPO}:${candidate_id}" \
+            .artifacts/release-candidate/manifest.json:application/vnd.compass.release-candidate.v1+json
+          echo "manifest_ref=${RC_REGISTRY_REPO}:${candidate_id}" >> "$GITHUB_OUTPUT"
+
+  acceptance_tests:
+    name: Automated acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs:
+      - generate_and_validate_manifest
+    if: ${{ needs.generate_and_validate_manifest.result == 'success' }}
+    outputs:
+      started_at: ${{ steps.capture_start.outputs.started_at }}
+      finished_at: ${{ steps.capture_finish.outputs.finished_at }}
+
+    steps:
+      - name: Capture acceptance start time
+        id: capture_start
+        run: echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Login to GHCR (ORAS)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Fetch release candidate manifest
+        run: |
+          node scripts/pipeline/fetch-release-candidate.mjs \
+            --candidate-id "${{ needs.generate_and_validate_manifest.outputs.candidate_id }}" \
+            --registry-repo "${{ env.RC_REGISTRY_REPO }}" \
+            --out "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Re-validate release candidate manifest
+        run: node scripts/pipeline/validate-release-candidate.mjs --file "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Deploy exact candidate to acceptance
+        env:
+          ACCEPTANCE_DEPLOY_COMMAND: ${{ vars.ACCEPTANCE_DEPLOY_COMMAND }}
+        run: |
+          if [ -z "${ACCEPTANCE_DEPLOY_COMMAND:-}" ]; then
+            echo "Repository variable ACCEPTANCE_DEPLOY_COMMAND is required." >&2
+            exit 1
+          fi
+          MANIFEST_PATH="$RUNNER_TEMP/release-candidate.json" bash -lc "$ACCEPTANCE_DEPLOY_COMMAND"
+
+      - name: Deployment verification
+        env:
+          ACCEPTANCE_VERIFY_COMMAND: ${{ vars.ACCEPTANCE_VERIFY_COMMAND }}
+        run: |
+          if [ -z "${ACCEPTANCE_VERIFY_COMMAND:-}" ]; then
+            echo "Repository variable ACCEPTANCE_VERIFY_COMMAND is required." >&2
+            exit 1
+          fi
+          MANIFEST_PATH="$RUNNER_TEMP/release-candidate.json" bash -lc "$ACCEPTANCE_VERIFY_COMMAND"
+
+      - name: Acceptance system tests
+        run: pnpm test:acceptance:system
+
+      - name: Acceptance browser tests
+        run: pnpm test:e2e
+
+      - name: Capture acceptance finish time
+        id: capture_finish
+        if: always()
+        run: echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+  record_acceptance_evidence:
+    name: Record acceptance evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - generate_and_validate_manifest
+      - acceptance_tests
+    if: ${{ always() && needs.generate_and_validate_manifest.result == 'success' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Login to GHCR (ORAS)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Record acceptance evidence
+        run: |
+          mkdir -p .artifacts/acceptance-evidence
+
+          verdict="fail"
+          if [ "${{ needs.acceptance_tests.result }}" = "success" ]; then
+            verdict="pass"
+          fi
+
+          started_at="${{ needs.acceptance_tests.outputs.started_at }}"
+          finished_at="${{ needs.acceptance_tests.outputs.finished_at }}"
+
+          if [ -z "${started_at}" ]; then
+            started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          fi
+
+          if [ -z "${finished_at}" ]; then
+            finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          fi
+
+          node scripts/pipeline/record-acceptance-evidence.mjs \
+            --out .artifacts/acceptance-evidence/acceptance-evidence.json \
+            --candidate-id "${{ needs.generate_and_validate_manifest.outputs.candidate_id }}" \
+            --source-revision "${{ github.sha }}" \
+            --workflow-run-id "${{ github.run_id }}" \
+            --verdict "${verdict}" \
+            --started-at "${started_at}" \
+            --finished-at "${finished_at}" \
+            --summary "Automated acceptance ${verdict} for candidate ${{ needs.generate_and_validate_manifest.outputs.candidate_id }}"
+
+      - name: Publish acceptance evidence
+        run: |
+          oras push "${ACCEPTANCE_EVIDENCE_REGISTRY_REPO}:${{ needs.generate_and_validate_manifest.outputs.candidate_id }}" \
+            .artifacts/acceptance-evidence/acceptance-evidence.json:application/vnd.compass.acceptance-evidence.v1+json

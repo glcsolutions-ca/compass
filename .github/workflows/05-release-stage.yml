@@ -1,0 +1,208 @@
+name: 05-release-stage
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_id:
+        description: Release candidate id (main-<sha>-<run>)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: production-environment
+  cancel-in-progress: false
+
+env:
+  RC_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-release-candidates
+  ACCEPTANCE_EVIDENCE_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-acceptance-evidence
+  PRODUCTION_REHEARSAL_EVIDENCE_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-production-rehearsal-evidence
+  RELEASE_EVIDENCE_REGISTRY_REPO: ghcr.io/glcsolutions-ca/compass-release-evidence
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: production
+
+    steps:
+      - name: Capture release start time
+        id: release_start
+        run: echo "released_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Login to GHCR (ORAS)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Fetch release candidate manifest
+        run: |
+          node pipeline/shared/scripts/fetch-release-candidate.mjs \
+            --candidate-id "${{ inputs.candidate_id }}" \
+            --registry-repo "${{ env.RC_REGISTRY_REPO }}" \
+            --out "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Validate release candidate manifest
+        run: node pipeline/shared/scripts/validate-release-candidate.mjs --file "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Capture source revision from manifest
+        id: source
+        run: |
+          source_revision="$(node -e 'const fs=require("fs");const doc=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(doc.source.revision);' "$RUNNER_TEMP/release-candidate.json")"
+          echo "source_revision=${source_revision}" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch acceptance evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/acceptance-evidence"
+          oras pull "${ACCEPTANCE_EVIDENCE_REGISTRY_REPO}:${{ inputs.candidate_id }}" -o "$RUNNER_TEMP/acceptance-evidence"
+
+      - name: Verify acceptance evidence pass
+        run: |
+          node pipeline/stages/05-release/scripts/verify-acceptance-evidence.mjs \
+            --dir "$RUNNER_TEMP/acceptance-evidence" \
+            --candidate-id "${{ inputs.candidate_id }}" \
+            --source-revision "${{ steps.source.outputs.source_revision }}"
+
+      - name: Fetch production rehearsal evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/production-rehearsal-evidence"
+          oras pull "${PRODUCTION_REHEARSAL_EVIDENCE_REGISTRY_REPO}:${{ inputs.candidate_id }}" -o "$RUNNER_TEMP/production-rehearsal-evidence"
+
+      - name: Resolve production rehearsal evidence file
+        id: rehearsal_file
+        run: |
+          evidence_file="$(find "$RUNNER_TEMP/production-rehearsal-evidence" -type f -name '*.json' | head -n 1)"
+          if [ -z "$evidence_file" ]; then
+            echo "No production rehearsal evidence JSON found after ORAS pull" >&2
+            exit 1
+          fi
+          echo "file=${evidence_file}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify production rehearsal evidence pass
+        run: |
+          node pipeline/stages/05-release/scripts/verify-production-rehearsal-evidence.mjs \
+            --dir "$RUNNER_TEMP/production-rehearsal-evidence" \
+            --candidate-id "${{ inputs.candidate_id }}" \
+            --source-revision "${{ steps.source.outputs.source_revision }}"
+
+      - name: Assert required environment config
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          PEER_API_BASE_URL: ${{ vars.PEER_API_BASE_URL }}
+          PEER_WEB_BASE_URL: ${{ vars.PEER_WEB_BASE_URL }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_CONTAINERAPP_API_NAME: ${{ vars.AZURE_CONTAINERAPP_API_NAME }}
+          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.AZURE_CONTAINERAPP_WEB_NAME }}
+          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.AZURE_CONTAINERAPP_WORKER_NAME }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          node pipeline/shared/scripts/assert-environment-config.mjs \
+            --required API_BASE_URL \
+            --required WEB_BASE_URL \
+            --required PEER_API_BASE_URL \
+            --required PEER_WEB_BASE_URL \
+            --required AZURE_RESOURCE_GROUP \
+            --required AZURE_CONTAINERAPP_API_NAME \
+            --required AZURE_CONTAINERAPP_WEB_NAME \
+            --required AZURE_CONTAINERAPP_WORKER_NAME \
+            --required AZURE_CLIENT_ID \
+            --required AZURE_TENANT_ID \
+            --required AZURE_SUBSCRIPTION_ID
+
+      - name: Assert environment separation
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          PEER_API_BASE_URL: ${{ vars.PEER_API_BASE_URL }}
+          PEER_WEB_BASE_URL: ${{ vars.PEER_WEB_BASE_URL }}
+        run: |
+          node pipeline/shared/scripts/assert-env-separation.mjs \
+            --current-api "$API_BASE_URL" \
+            --current-web "$WEB_BASE_URL" \
+            --peer-api "$PEER_API_BASE_URL" \
+            --peer-web "$PEER_WEB_BASE_URL"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Promote rehearsed candidate revision to production traffic
+        run: |
+          node pipeline/stages/05-release/scripts/promote-production-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
+            --rehearsal-evidence "${{ steps.rehearsal_file.outputs.file }}"
+
+      - name: Production smoke checks
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_CONTAINERAPP_API_NAME: ${{ vars.AZURE_CONTAINERAPP_API_NAME }}
+          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.AZURE_CONTAINERAPP_WEB_NAME }}
+          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.AZURE_CONTAINERAPP_WORKER_NAME }}
+        run: |
+          node pipeline/stages/05-release/scripts/verify-production-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --api-app-name "$AZURE_CONTAINERAPP_API_NAME" \
+            --web-app-name "$AZURE_CONTAINERAPP_WEB_NAME" \
+            --worker-app-name "$AZURE_CONTAINERAPP_WORKER_NAME" \
+            --api-base-url "$API_BASE_URL" \
+            --web-base-url "$WEB_BASE_URL"
+
+      - name: Record and publish release evidence
+        if: always()
+        run: |
+          source_revision="${{ steps.source.outputs.source_revision }}"
+          if [ -z "${source_revision}" ]; then
+            echo "Source revision unavailable. Skipping release evidence publication."
+            exit 0
+          fi
+
+          verdict="fail"
+          if [ "${{ job.status }}" = "success" ]; then
+            verdict="pass"
+          fi
+
+          mkdir -p .artifacts/release-evidence
+          node pipeline/stages/05-release/scripts/record-release-evidence.mjs \
+            --out .artifacts/release-evidence/release-evidence.json \
+            --candidate-id "${{ inputs.candidate_id }}" \
+            --source-revision "${source_revision}" \
+            --workflow-run-id "${{ github.run_id }}" \
+            --verdict "${verdict}" \
+            --released-at "${{ steps.release_start.outputs.released_at }}" \
+            --summary "Release ${verdict} for candidate ${{ inputs.candidate_id }}"
+
+          cp .artifacts/release-evidence/release-evidence.json release-evidence.json
+          oras push --artifact-type application/vnd.compass.release-evidence.v1 \
+            "${RELEASE_EVIDENCE_REGISTRY_REPO}:${{ inputs.candidate_id }}" \
+            "release-evidence.json:application/vnd.compass.release-evidence.v1+json"

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   validateAcceptanceEvidenceDocument,
+  validateProductionRehearsalEvidenceDocument,
   validateReleaseCandidateDocument,
   validateReleaseEvidenceDocument
 } from "../../shared/scripts/pipeline-contract-lib.mjs";
@@ -69,6 +70,52 @@ describe("schema parity", () => {
 
     const helperValid = validateReleaseEvidenceDocument(evidence).length === 0;
     const schemaValid = validateBySchema("releaseEvidence", evidence).length === 0;
+    expect(helperValid).toBe(schemaValid);
+  });
+
+  it("keeps production rehearsal evidence helper verdict parity with schema validator", () => {
+    const evidence = {
+      schemaVersion: "production-rehearsal-evidence.v1",
+      stage: "production-rehearsal",
+      candidateId: "main-abcdef1-123456",
+      sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      workflowRunId: "123456",
+      environment: "production",
+      verdict: "pass",
+      startedAt: "2026-03-03T18:20:12Z",
+      finishedAt: "2026-03-03T18:25:12Z",
+      summary: "Production rehearsal passed",
+      deployment: {
+        resourceGroup: "rg-compass",
+        zeroTraffic: true,
+        apps: {
+          api: {
+            appName: "api-app",
+            candidateRevision: "api--abc",
+            previousRevision: "api--prev",
+            candidateImage:
+              "ghcr.io/glcsolutions-ca/compass-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          web: {
+            appName: "web-app",
+            candidateRevision: "web--abc",
+            previousRevision: "web--prev",
+            candidateImage:
+              "ghcr.io/glcsolutions-ca/compass-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          worker: {
+            appName: "worker-app",
+            candidateRevision: "worker--abc",
+            previousRevision: "worker--prev",
+            candidateImage:
+              "ghcr.io/glcsolutions-ca/compass-worker@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          }
+        }
+      }
+    };
+
+    const helperValid = validateProductionRehearsalEvidenceDocument(evidence).length === 0;
+    const schemaValid = validateBySchema("productionRehearsalEvidence", evidence).length === 0;
     expect(helperValid).toBe(schemaValid);
   });
 });

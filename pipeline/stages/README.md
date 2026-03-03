@@ -27,17 +27,24 @@ We do that by:
 
 ## Stage Order
 
-1. `01-commit`
-2. `02-acceptance`
+1. `01-commit-stage`
+2. `02-automated-acceptance-test-stage`
 3. `03-nonfunctional` (optional, may be gate or advisory)
-4. `04-manual-or-staging` (optional)
-5. `05-release`
+4. `04-production-rehearsal-stage` (optional but recommended)
+5. `05-release-stage`
 
 Later stages consume only candidates that passed required earlier stages.
 
+```mermaid
+flowchart LR
+  C["01-commit-stage\n(build once)"] --> A["02-automated-acceptance-test-stage\n(real gate)"]
+  A --> R["04-production-rehearsal-stage\nzero-traffic deploy"]
+  R --> L["05-release-stage\npromote rehearsed revision"]
+```
+
 ## Stage Contracts
 
-### 01-commit (Authoritative Candidate Creation)
+### 01-commit-stage (Authoritative Candidate Creation)
 
 Purpose:
 
@@ -69,7 +76,7 @@ Exit:
 - Pass: candidate exists and is promotable to acceptance.
 - Fail: no valid candidate for promotion.
 
-### 02-acceptance (Second Major Gate)
+### 02-automated-acceptance-test-stage (Second Major Gate)
 
 Purpose:
 
@@ -92,7 +99,7 @@ Must not do:
 
 Exit:
 
-- Pass: candidate eligible for later stages and release decision.
+- Pass: candidate eligible for rehearsal and release decision.
 - Fail: candidate is non-promotable.
 
 ### 03-nonfunctional (Optional)
@@ -107,34 +114,36 @@ Guidance:
 2. Use as advisory evidence where human judgment is required.
 3. Keep candidate identity unchanged; only add stage evidence.
 
-### 04-manual-or-staging (Optional)
+### 04-production-rehearsal-stage (Optional but Recommended)
 
 Purpose:
 
-- Support exploratory testing, UAT, rehearsal, and production-like manual checks.
+- Rehearse production deployment with the exact accepted candidate at zero traffic.
 
 Rules:
 
 1. Deploy only accepted candidates.
-2. Use the same deployment mechanism as other environments.
-3. Do not mutate candidate identity.
+2. Keep traffic away from candidate revision during rehearsal.
+3. Verify candidate revision health directly.
+4. Record production rehearsal evidence for release gating.
 
-### 05-release (Production Deployment)
+### 05-release-stage (Production Promotion)
 
 Purpose:
 
-- Push-button deployment of a previously accepted candidate.
+- Promote a previously rehearsed candidate revision to live traffic.
 
 Must do:
 
 1. Verify candidate contract and acceptance evidence.
-2. Deploy exact digest-pinned artifacts unchanged.
-3. Run production smoke verification.
-4. Record release evidence.
+2. Verify production rehearsal evidence.
+3. Promote rehearsed revision to production traffic without rebuilding.
+4. Run production smoke verification.
+5. Record release evidence.
 
 Rollback/backout:
 
-1. Redeploy a previously accepted candidate using the same mechanism.
+1. Redeploy/promote a previously accepted candidate using the same mechanism.
 2. Do not use a special "one-off rollback process."
 
 ## Promotion Invariants
@@ -153,18 +162,8 @@ Rollback/backout:
 
 ## Stage Boundary
 
-Authoritative candidate creation starts at `01-commit` on trunk check-in.
+Authoritative candidate creation starts at `01-commit-stage` on trunk check-in.
 Everything after that is candidate promotion and evidence collection.
-
-## Current State Notes
-
-`02-acceptance` is implemented as a real gate in this repository:
-
-1. triggered from successful `commit-stage` runs on `main`;
-2. fetches the published candidate by `candidateId`;
-3. deploys/verifies from the same manifest;
-4. runs system and browser acceptance suites;
-5. records acceptance evidence with `pass|fail` verdict.
 
 ## Ownership Boundaries in this folder
 

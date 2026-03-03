@@ -28,6 +28,7 @@ compass/
 │  │  ├─ schemas/
 │  │  │  ├─ release-candidate.schema.json
 │  │  │  ├─ acceptance-evidence.schema.json
+│  │  │  ├─ production-rehearsal-evidence.schema.json
 │  │  │  └─ release-evidence.schema.json
 │  │  └─ fixtures/
 │  ├─ shared/
@@ -62,7 +63,7 @@ compass/
 │  │  ├─ 03-nonfunctional/
 │  │  │  ├─ README.md
 │  │  │  └─ runbook.md
-│  │  ├─ 04-manual-or-staging/
+│  │  ├─ 04-production-rehearsal/
 │  │  │  ├─ README.md
 │  │  │  └─ runbook.md
 │  │  ├─ 05-release/

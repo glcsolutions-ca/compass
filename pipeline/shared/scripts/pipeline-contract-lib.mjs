@@ -57,6 +57,10 @@ export function validateReleaseEvidenceDocument(document) {
   return normalizeErrors(validateBySchema("releaseEvidence", document));
 }
 
+export function validateProductionRehearsalEvidenceDocument(document) {
+  return normalizeErrors(validateBySchema("productionRehearsalEvidence", document));
+}
+
 export async function readJsonFile(filePath) {
   const raw = await readFile(filePath, "utf8");
   return JSON.parse(raw);

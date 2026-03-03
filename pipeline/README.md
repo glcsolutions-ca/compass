@@ -5,18 +5,19 @@ It reflects a stage-first deployment pipeline aligned to Farley/Humble.
 
 ## Farley Stage Order
 
-1. `01-commit`
-2. `02-acceptance`
+1. `01-commit-stage`
+2. `02-automated-acceptance-test-stage`
 3. `03-nonfunctional` (optional)
-4. `04-manual-or-staging` (optional)
-5. `05-release`
+4. `04-production-rehearsal-stage` (optional but recommended)
+5. `05-release-stage`
 
 ## Authoritative Flow
 
-1. A new pipeline instance starts on a trunk check-in (`main`).
-2. `01-commit` creates the canonical release candidate once.
-3. `02-acceptance` deploys and tests that same candidate as the second major gate.
-4. Later stages, when enabled, only promote the same candidate unchanged.
+1. A new pipeline instance starts on trunk check-in (`main`).
+2. `01-commit-stage` creates the canonical release candidate once.
+3. `02-automated-acceptance-test-stage` deploys and tests that same candidate as the second major gate.
+4. `04-production-rehearsal-stage` deploys that accepted candidate to production with zero traffic.
+5. `05-release-stage` promotes that rehearsed revision to live traffic without rebuilding.
 
 ## Ownership Boundaries
 
@@ -29,6 +30,7 @@ It reflects a stage-first deployment pipeline aligned to Farley/Humble.
 
 1. Build once in commit stage.
 2. Promote digest-pinned candidate unchanged.
-3. Acceptance evidence gates release.
-4. Release and rollback use the same automated mechanisms.
-5. Stage execution starts at `01-commit`; no extra stage creates release candidates.
+3. Acceptance evidence gates production rehearsal.
+4. Rehearsal evidence gates release.
+5. Release and rollback use the same automated mechanisms.
+6. Stage execution starts at `01-commit-stage`; no other stage creates release candidates.

@@ -1,21 +1,42 @@
 import { pathToFileURL } from "node:url";
 import { parseCliArgs, requireOption } from "../../../shared/scripts/cli-utils.mjs";
-import { deployFromManifest } from "../../../shared/scripts/deploy-from-manifest.mjs";
-import { assertCandidateArtifactsAvailable } from "../../../shared/scripts/assert-candidate-artifacts-available.mjs";
+import { deployCandidateAzure } from "../../../shared/scripts/azure/deploy-candidate-azure.mjs";
 
-export async function deployProductionCandidate(manifestPath) {
-  await deployFromManifest({
-    environment: "production",
-    manifestPath
+export async function deployProductionCandidate({
+  manifestPath,
+  resourceGroup,
+  apiAppName,
+  webAppName,
+  workerAppName,
+  migrationsJobName,
+  outPath,
+  zeroTraffic
+}) {
+  await deployCandidateAzure({
+    manifestPath,
+    resourceGroup,
+    apiAppName,
+    webAppName,
+    workerAppName,
+    migrationsJobName,
+    outPath,
+    zeroTraffic
   });
-
-  await assertCandidateArtifactsAvailable(manifestPath);
 }
 
 export async function main(argv = process.argv.slice(2)) {
   const options = parseCliArgs(argv);
-  const manifestPath = requireOption(options, "manifest");
-  await deployProductionCandidate(manifestPath);
+
+  await deployProductionCandidate({
+    manifestPath: requireOption(options, "manifest"),
+    resourceGroup: requireOption(options, "resource-group"),
+    apiAppName: requireOption(options, "api-app-name"),
+    webAppName: requireOption(options, "web-app-name"),
+    workerAppName: requireOption(options, "worker-app-name"),
+    migrationsJobName: requireOption(options, "migrations-job-name"),
+    outPath: requireOption(options, "out"),
+    zeroTraffic: options["zero-traffic"] === true
+  });
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {

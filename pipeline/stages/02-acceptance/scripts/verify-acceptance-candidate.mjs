@@ -1,40 +1,42 @@
 import { pathToFileURL } from "node:url";
 import { parseCliArgs, requireOption } from "../../../shared/scripts/cli-utils.mjs";
-import { verifyFromManifest } from "../../../shared/scripts/verify-from-manifest.mjs";
+import { verifyCandidateAzure } from "../../../shared/scripts/azure/verify-candidate-azure.mjs";
 
-const REQUEST_TIMEOUT_MS = 15000;
-
-async function assertUrlResponds(url) {
-  const response = await fetch(url, {
-    method: "GET",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+export async function verifyAcceptanceCandidate({
+  manifestPath,
+  deployStatePath,
+  resourceGroup,
+  apiAppName,
+  webAppName,
+  workerAppName,
+  apiBaseUrl,
+  webBaseUrl
+}) {
+  await verifyCandidateAzure({
+    manifestPath,
+    deployStatePath,
+    resourceGroup,
+    apiAppName,
+    webAppName,
+    workerAppName,
+    apiBaseUrl,
+    webBaseUrl,
+    zeroTraffic: false
   });
-
-  if (!response.ok) {
-    throw new Error(`Acceptance verification failed for ${url}: HTTP ${response.status}`);
-  }
-}
-
-export async function verifyAcceptanceCandidate({ manifestPath, apiBaseUrl, webBaseUrl }) {
-  await verifyFromManifest({
-    environment: "acceptance",
-    manifestPath
-  });
-
-  await assertUrlResponds(`${apiBaseUrl.replace(/\/$/u, "")}/health`);
-  await assertUrlResponds(webBaseUrl.replace(/\/$/u, ""));
 }
 
 export async function main(argv = process.argv.slice(2)) {
   const options = parseCliArgs(argv);
-  const manifestPath = requireOption(options, "manifest");
-  const apiBaseUrl = requireOption(options, "api-base-url");
-  const webBaseUrl = requireOption(options, "web-base-url");
 
   await verifyAcceptanceCandidate({
-    manifestPath,
-    apiBaseUrl,
-    webBaseUrl
+    manifestPath: requireOption(options, "manifest"),
+    deployStatePath: requireOption(options, "deploy-state"),
+    resourceGroup: requireOption(options, "resource-group"),
+    apiAppName: requireOption(options, "api-app-name"),
+    webAppName: requireOption(options, "web-app-name"),
+    workerAppName: requireOption(options, "worker-app-name"),
+    apiBaseUrl: requireOption(options, "api-base-url"),
+    webBaseUrl: requireOption(options, "web-base-url")
   });
 }
 

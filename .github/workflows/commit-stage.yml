@@ -24,8 +24,14 @@ jobs:
     name: Commit tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      stage_start_at: ${{ steps.capture_start.outputs.stage_start_at }}
 
     steps:
+      - name: Capture commit-stage start time
+        id: capture_start
+        run: echo "stage_start_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -49,17 +55,82 @@ jobs:
       - name: Pipeline script tests
         run: pnpm test:rc
 
-  build_and_publish_images:
-    name: Build and publish images
+  commit_analysis:
+    name: Commit analysis
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 40
     needs:
       - commit_tests
-    outputs:
-      api_image_ref: ${{ steps.refs.outputs.api_image_ref }}
-      web_image_ref: ${{ steps.refs.outputs.web_image_ref }}
-      worker_image_ref: ${{ steps.refs.outputs.worker_image_ref }}
-      migrations_image_ref: ${{ steps.refs.outputs.migrations_image_ref }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Coverage gate inputs
+        run: pnpm test:coverage:commit
+
+      - name: Duplication analysis (JSCPD)
+        run: |
+          mkdir -p .artifacts/jscpd
+          pnpm exec jscpd \
+            --reporters json \
+            --output .artifacts/jscpd \
+            --ignore "**/node_modules/**,**/dist/**,**/coverage/**,**/.next/**,**/.turbo/**,**/pnpm-lock.yaml,**/*.snap,**/packages/contracts/openapi/openapi.json" \
+            --format "typescript,javascript,tsx,jsx,json,css,md,yaml,yml" \
+            .
+
+      - name: Generate commit analysis report
+        run: |
+          pnpm rc:analyze:report \
+            --config pipeline/commit-analysis.config.json \
+            --out .artifacts/commit-analysis/commit-analysis.json \
+            --lint-warnings 0 \
+            --typecheck-warnings 0
+
+      - name: Upload commit analysis artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-analysis-${{ github.run_id }}
+          path: .artifacts/commit-analysis/commit-analysis.json
+          if-no-files-found: error
+
+  build_and_publish_images:
+    name: Build and publish ${{ matrix.image.id }} image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - commit_tests
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - id: api
+            dockerfile: apps/api/Dockerfile
+            image_name: compass-api
+          - id: web
+            dockerfile: apps/web/Dockerfile
+            image_name: compass-web
+          - id: worker
+            dockerfile: apps/worker/Dockerfile
+            image_name: compass-worker
+          - id: migrations
+            dockerfile: db/Dockerfile.migrations
+            image_name: compass-migrations
 
     steps:
       - name: Checkout
@@ -75,59 +146,90 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push api image
-        id: build_api
+      - name: Build and push ${{ matrix.image.id }} image
+        id: build_image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: apps/api/Dockerfile
+          file: ${{ matrix.image.dockerfile }}
           push: true
-          tags: ${{ env.REGISTRY_BASE }}/${{ env.API_IMAGE_NAME }}:sha-${{ github.sha }}
+          tags: ${{ env.REGISTRY_BASE }}/${{ matrix.image.image_name }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=build-${{ matrix.image.id }}
+          cache-to: type=gha,mode=max,scope=build-${{ matrix.image.id }}
 
-      - name: Build and push web image
-        id: build_web
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: apps/web/Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY_BASE }}/${{ env.WEB_IMAGE_NAME }}:sha-${{ github.sha }}
+      - name: Record digest output
+        run: |
+          mkdir -p .artifacts/image-digests
+          printf '%s' '${{ steps.build_image.outputs.digest }}' > .artifacts/image-digests/${{ matrix.image.id }}.digest
 
-      - name: Build and push worker image
-        id: build_worker
-        uses: docker/build-push-action@v6
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v4
         with:
-          context: .
-          file: apps/worker/Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY_BASE }}/${{ env.WORKER_IMAGE_NAME }}:sha-${{ github.sha }}
+          name: image-digest-${{ matrix.image.id }}
+          path: .artifacts/image-digests/${{ matrix.image.id }}.digest
+          if-no-files-found: error
 
-      - name: Build and push migrations image
-        id: build_migrations
-        uses: docker/build-push-action@v6
+  collect_image_refs:
+    name: Collect image refs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - build_and_publish_images
+    outputs:
+      api_image_ref: ${{ steps.refs.outputs.api_image_ref }}
+      web_image_ref: ${{ steps.refs.outputs.web_image_ref }}
+      worker_image_ref: ${{ steps.refs.outputs.worker_image_ref }}
+      migrations_image_ref: ${{ steps.refs.outputs.migrations_image_ref }}
+
+    steps:
+      - name: Download api digest
+        uses: actions/download-artifact@v4
         with:
-          context: .
-          file: db/Dockerfile.migrations
-          push: true
-          tags: ${{ env.REGISTRY_BASE }}/${{ env.MIGRATIONS_IMAGE_NAME }}:sha-${{ github.sha }}
+          name: image-digest-api
+          path: .artifacts/image-digests
+
+      - name: Download web digest
+        uses: actions/download-artifact@v4
+        with:
+          name: image-digest-web
+          path: .artifacts/image-digests
+
+      - name: Download worker digest
+        uses: actions/download-artifact@v4
+        with:
+          name: image-digest-worker
+          path: .artifacts/image-digests
+
+      - name: Download migrations digest
+        uses: actions/download-artifact@v4
+        with:
+          name: image-digest-migrations
+          path: .artifacts/image-digests
 
       - name: Capture canonical digest refs
         id: refs
         run: |
-          echo "api_image_ref=${REGISTRY_BASE}/${API_IMAGE_NAME}@${{ steps.build_api.outputs.digest }}" >> "$GITHUB_OUTPUT"
-          echo "web_image_ref=${REGISTRY_BASE}/${WEB_IMAGE_NAME}@${{ steps.build_web.outputs.digest }}" >> "$GITHUB_OUTPUT"
-          echo "worker_image_ref=${REGISTRY_BASE}/${WORKER_IMAGE_NAME}@${{ steps.build_worker.outputs.digest }}" >> "$GITHUB_OUTPUT"
-          echo "migrations_image_ref=${REGISTRY_BASE}/${MIGRATIONS_IMAGE_NAME}@${{ steps.build_migrations.outputs.digest }}" >> "$GITHUB_OUTPUT"
+          api_digest="$(cat .artifacts/image-digests/api.digest)"
+          web_digest="$(cat .artifacts/image-digests/web.digest)"
+          worker_digest="$(cat .artifacts/image-digests/worker.digest)"
+          migrations_digest="$(cat .artifacts/image-digests/migrations.digest)"
+
+          echo "api_image_ref=${REGISTRY_BASE}/${API_IMAGE_NAME}@${api_digest}" >> "$GITHUB_OUTPUT"
+          echo "web_image_ref=${REGISTRY_BASE}/${WEB_IMAGE_NAME}@${web_digest}" >> "$GITHUB_OUTPUT"
+          echo "worker_image_ref=${REGISTRY_BASE}/${WORKER_IMAGE_NAME}@${worker_digest}" >> "$GITHUB_OUTPUT"
+          echo "migrations_image_ref=${REGISTRY_BASE}/${MIGRATIONS_IMAGE_NAME}@${migrations_digest}" >> "$GITHUB_OUTPUT"
 
   generate_and_validate_manifest:
     name: Generate and publish release candidate
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs:
-      - build_and_publish_images
+      - collect_image_refs
+      - commit_analysis
     outputs:
       candidate_id: ${{ steps.candidate.outputs.candidate_id }}
       manifest_ref: ${{ steps.publish_manifest.outputs.manifest_ref }}
+      stage_end_at: ${{ steps.capture_end.outputs.stage_end_at }}
 
     steps:
       - name: Checkout
@@ -148,10 +250,10 @@ jobs:
             --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
             --repository "${{ github.repository }}" \
             --source-revision "${{ github.sha }}" \
-            --api-image "${{ needs.build_and_publish_images.outputs.api_image_ref }}" \
-            --web-image "${{ needs.build_and_publish_images.outputs.web_image_ref }}" \
-            --worker-image "${{ needs.build_and_publish_images.outputs.worker_image_ref }}" \
-            --migrations-artifact "${{ needs.build_and_publish_images.outputs.migrations_image_ref }}" \
+            --api-image "${{ needs.collect_image_refs.outputs.api_image_ref }}" \
+            --web-image "${{ needs.collect_image_refs.outputs.web_image_ref }}" \
+            --worker-image "${{ needs.collect_image_refs.outputs.worker_image_ref }}" \
+            --migrations-artifact "${{ needs.collect_image_refs.outputs.migrations_image_ref }}" \
             --registry "${{ env.REGISTRY_BASE }}" \
             --commit-stage-run-id "${{ github.run_id }}"
 
@@ -174,13 +276,63 @@ jobs:
             "manifest.json:application/vnd.compass.release-candidate.v1+json"
           echo "manifest_ref=${RC_REGISTRY_REPO}:${candidate_id}" >> "$GITHUB_OUTPUT"
 
+      - name: Capture commit-stage end time
+        id: capture_end
+        run: echo "stage_end_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+  enforce_commit_stage_slo:
+    name: Enforce commit-stage SLO
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - commit_tests
+      - generate_and_validate_manifest
+    if: ${{ needs.generate_and_validate_manifest.result == 'success' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Enforce SLO and write metrics
+        run: |
+          mkdir -p .artifacts/commit-stage
+          pnpm rc:slo:check \
+            --start "${{ needs.commit_tests.outputs.stage_start_at }}" \
+            --end "${{ needs.generate_and_validate_manifest.outputs.stage_end_at }}" \
+            --warn-seconds 300 \
+            --fail-seconds 600 \
+            --out .artifacts/commit-stage/commit-stage-metrics.json
+
+      - name: Upload commit-stage metrics artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-stage-metrics-${{ github.run_id }}
+          path: .artifacts/commit-stage/commit-stage-metrics.json
+          if-no-files-found: error
+
   acceptance_tests:
     name: Automated acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 60
     needs:
       - generate_and_validate_manifest
-    if: ${{ needs.generate_and_validate_manifest.result == 'success' }}
+      - enforce_commit_stage_slo
+    if: ${{ needs.generate_and_validate_manifest.result == 'success' && needs.enforce_commit_stage_slo.result == 'success' }}
     outputs:
       started_at: ${{ steps.capture_start.outputs.started_at }}
       finished_at: ${{ steps.capture_finish.outputs.finished_at }}
@@ -243,24 +395,35 @@ jobs:
           fi
           MANIFEST_PATH="$RUNNER_TEMP/release-candidate.json" bash -lc "$ACCEPTANCE_VERIFY_COMMAND"
 
-      - name: Acceptance system tests
+      - name: Acceptance endpoint precheck
         env:
           ACCEPTANCE_API_BASE_URL: ${{ vars.ACCEPTANCE_API_BASE_URL }}
+          ACCEPTANCE_WEB_BASE_URL: ${{ vars.ACCEPTANCE_WEB_BASE_URL }}
         run: |
           if [ -z "${ACCEPTANCE_API_BASE_URL:-}" ]; then
             echo "Repository variable ACCEPTANCE_API_BASE_URL is required." >&2
             exit 1
           fi
+          if [ -z "${ACCEPTANCE_WEB_BASE_URL:-}" ]; then
+            echo "Repository variable ACCEPTANCE_WEB_BASE_URL is required." >&2
+            exit 1
+          fi
+
+          api_base="${ACCEPTANCE_API_BASE_URL%/}"
+          web_base="${ACCEPTANCE_WEB_BASE_URL%/}"
+          curl --fail --silent --show-error "${api_base}/health" > /dev/null
+          curl --fail --silent --show-error "${web_base}/" > /dev/null
+
+      - name: Acceptance system tests
+        env:
+          ACCEPTANCE_API_BASE_URL: ${{ vars.ACCEPTANCE_API_BASE_URL }}
+        run: |
           BASE_URL="${ACCEPTANCE_API_BASE_URL}" TARGET_API_BASE_URL="${ACCEPTANCE_API_BASE_URL}" pnpm test:acceptance:system
 
       - name: Acceptance browser tests
         env:
           ACCEPTANCE_WEB_BASE_URL: ${{ vars.ACCEPTANCE_WEB_BASE_URL }}
         run: |
-          if [ -z "${ACCEPTANCE_WEB_BASE_URL:-}" ]; then
-            echo "Repository variable ACCEPTANCE_WEB_BASE_URL is required." >&2
-            exit 1
-          fi
           WEB_BASE_URL="${ACCEPTANCE_WEB_BASE_URL}" pnpm test:e2e
 
       - name: Capture acceptance finish time

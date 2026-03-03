@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "commit-analysis-config.v1",
+  "thresholds": {
+    "coverageLinePercentMin": 65,
+    "duplicationPercentMax": 3,
+    "lintWarningsMax": 0,
+    "typecheckWarningsMax": 0
+  },
+  "coverageSummaryPaths": [
+    "apps/api/coverage/coverage-summary.json",
+    "apps/web/coverage/coverage-summary.json",
+    "apps/worker/coverage/coverage-summary.json",
+    "packages/contracts/coverage/coverage-summary.json",
+    "packages/sdk/coverage/coverage-summary.json"
+  ],
+  "jscpdReportPath": ".artifacts/jscpd/jscpd-report.json"
+}

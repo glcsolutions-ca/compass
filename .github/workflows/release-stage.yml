@@ -67,7 +67,10 @@ jobs:
 
       - name: Verify acceptance evidence pass
         run: |
-          node -e 'const fs=require("fs");const path=require("path");const dir=process.argv[1];const expectedCandidate=process.argv[2];const walk=(base)=>{const out=[];for(const entry of fs.readdirSync(base,{withFileTypes:true})){const full=path.join(base,entry.name);if(entry.isDirectory()){out.push(...walk(full));}else if(entry.isFile()){out.push(full);}}return out;};const files=walk(dir).filter((f)=>f.endsWith(".json"));if(files.length===0){throw new Error("No acceptance evidence JSON found");}const docs=files.map((file)=>({file,doc:JSON.parse(fs.readFileSync(file,"utf8"))}));const match=docs.find(({doc})=>doc && doc.schemaVersion==="acceptance-evidence.v1" && doc.candidateId===expectedCandidate);if(!match){throw new Error(`No acceptance evidence found for candidate ${expectedCandidate}`);}const doc=match.doc;if(doc.verdict!=="pass"){throw new Error(`Candidate is not accepted: verdict=${doc.verdict}`);}if(doc.environment!=="acceptance"){throw new Error(`Invalid acceptance evidence environment: ${doc.environment}`);}console.log(`Acceptance evidence verified from ${match.file}.`);' "$RUNNER_TEMP/acceptance-evidence" "${{ inputs.candidate_id }}"
+          node scripts/pipeline/verify-acceptance-evidence.mjs \
+            --dir "$RUNNER_TEMP/acceptance-evidence" \
+            --candidate-id "${{ inputs.candidate_id }}" \
+            --source-revision "${{ steps.source.outputs.source_revision }}"
 
       - name: Deploy exact candidate to production
         env:

@@ -189,6 +189,10 @@ jobs:
           AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.ACA_WEB_APP_NAME }}
           AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
           AZURE_MIGRATION_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          ACR_LOGIN_SERVER: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
+          SOURCE_REGISTRY_USERNAME: ${{ github.actor }}
+          SOURCE_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: |
           node pipeline/stages/05-release/scripts/deploy-production-candidate.mjs \
             --manifest "$RUNNER_TEMP/release-candidate.json" \
@@ -197,6 +201,10 @@ jobs:
             --web-app-name "$AZURE_CONTAINERAPP_WEB_NAME" \
             --worker-app-name "$AZURE_CONTAINERAPP_WORKER_NAME" \
             --migrations-job-name "$AZURE_MIGRATION_JOB_NAME" \
+            --acr-name "$ACR_NAME" \
+            --acr-login-server "$ACR_LOGIN_SERVER" \
+            --source-registry-username "$SOURCE_REGISTRY_USERNAME" \
+            --source-registry-password "$SOURCE_REGISTRY_PASSWORD" \
             --out "$RUNNER_TEMP/production-deploy-state.json"
 
       - name: Production smoke checks

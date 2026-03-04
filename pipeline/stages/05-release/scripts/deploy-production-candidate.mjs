@@ -10,7 +10,11 @@ export async function deployProductionCandidate({
   workerAppName,
   migrationsJobName,
   outPath,
-  zeroTraffic
+  zeroTraffic,
+  acrName,
+  acrLoginServer,
+  sourceRegistryUsername,
+  sourceRegistryPassword
 }) {
   await deployCandidateAzure({
     manifestPath,
@@ -20,7 +24,11 @@ export async function deployProductionCandidate({
     workerAppName,
     migrationsJobName,
     outPath,
-    zeroTraffic
+    zeroTraffic,
+    acrName,
+    acrLoginServer,
+    sourceRegistryUsername,
+    sourceRegistryPassword
   });
 }
 
@@ -35,7 +43,11 @@ export async function main(argv = process.argv.slice(2)) {
     workerAppName: requireOption(options, "worker-app-name"),
     migrationsJobName: requireOption(options, "migrations-job-name"),
     outPath: requireOption(options, "out"),
-    zeroTraffic: options["zero-traffic"] === true
+    zeroTraffic: options["zero-traffic"] === true,
+    acrName: options["acr-name"],
+    acrLoginServer: options["acr-login-server"],
+    sourceRegistryUsername: options["source-registry-username"],
+    sourceRegistryPassword: options["source-registry-password"]
   });
 }
 

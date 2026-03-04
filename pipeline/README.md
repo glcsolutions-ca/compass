@@ -56,6 +56,12 @@ Everything outside that purpose is optional tooling.
 
 `pull_request` queue admission is handled by `.github/workflows/00-queue-admission.yml` and is intentionally non-authoritative. The authoritative candidate build/publish path remains `.github/workflows/01-commit-stage.yml` on `merge_group` only.
 
+## Hardening Baseline
+
+1. Pipeline workflow actions are pinned to full commit SHAs and updated through Dependabot (`.github/dependabot.yml`).
+2. Acceptance and Release intentionally do not use `pnpm` cache in privileged `workflow_run` paths.
+3. Production deployments are restricted to `main` via GitHub environment deployment branch policy.
+
 ## System of Record
 
 GHCR is the canonical artifact and stage-evidence store.

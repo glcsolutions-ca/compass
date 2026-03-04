@@ -73,7 +73,7 @@ jobs:
 
       - name: Download release candidate handoff from triggering Acceptance run
         if: ${{ github.event_name == 'workflow_run' && steps.handoff_presence.outputs.present == 'true' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-candidate-manifest
           run-id: ${{ github.event.workflow_run.id }}
@@ -188,20 +188,19 @@ jobs:
 
       - &checkout_step
         name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
 
       - &setup_pnpm_step
         name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
 
       - &setup_node_step
         name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-          cache: pnpm
 
       - &install_dependencies_step
         name: Install dependencies
@@ -209,11 +208,11 @@ jobs:
 
       - &setup_oras_step
         name: Setup ORAS
-        uses: oras-project/setup-oras@v1
+        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
 
       - &login_ghcr_step
         name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -329,7 +328,7 @@ jobs:
             --required AZURE_SUBSCRIPTION_ID
 
       - name: Azure login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
         with:
           client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -404,7 +403,7 @@ jobs:
             --deployment-ref "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
       - name: Attest release verdict to candidate subject
-        uses: actions/attest@v2
+        uses: actions/attest@ce27ba3b4a9a139d9a20a4a07d69fabb52f1e5bc # v2
         with:
           subject-name: ${{ env.RELEASE_UNITS_REPO }}
           subject-digest: ${{ steps.release_unit.outputs.release_unit_digest }}
@@ -414,7 +413,7 @@ jobs:
 
       - name: Upload release diagnostics on failure
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-diagnostics-${{ github.run_id }}
           path: |

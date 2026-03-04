@@ -42,6 +42,12 @@ flowchart TD
 
 The deployment pipeline only needs to prove that the exact integrated candidate can be promoted to production unchanged. Everything else is optional tooling.
 
+## Hardening Baseline
+
+1. `.github/workflows` stage orchestration actions are pinned to full commit SHAs and maintained via Dependabot.
+2. Privileged downstream stages (`Acceptance`, `Release`) do not use `pnpm` cache by default.
+3. Production deployments are constrained to `main` via GitHub environment branch policy.
+
 ## Stage Contracts
 
 ### Commit Stage

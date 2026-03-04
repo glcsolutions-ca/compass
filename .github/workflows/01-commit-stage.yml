@@ -367,6 +367,7 @@ jobs:
   commit_stage_gate:
     name: Commit Stage
     runs-on: ubuntu-latest
+    if: ${{ always() }}
     needs:
       - commit_tests
       - commit_analysis
@@ -374,5 +375,37 @@ jobs:
       - generate_and_validate_manifest
       - enforce_commit_stage_slo
     steps:
-      - name: Confirm commit stage completion
-        run: echo "Commit Stage passed."
+      - name: Fail closed when upstream commit-stage jobs fail
+        env:
+          COMMIT_TESTS_RESULT: ${{ needs.commit_tests.result }}
+          COMMIT_ANALYSIS_RESULT: ${{ needs.commit_analysis.result }}
+          BUILD_AND_PUBLISH_IMAGES_RESULT: ${{ needs.build_and_publish_images.result }}
+          GENERATE_AND_VALIDATE_MANIFEST_RESULT: ${{ needs.generate_and_validate_manifest.result }}
+          ENFORCE_COMMIT_STAGE_SLO_RESULT: ${{ needs.enforce_commit_stage_slo.result }}
+        run: |
+          set -euo pipefail
+
+          results=(
+            "commit_tests:${COMMIT_TESTS_RESULT}"
+            "commit_analysis:${COMMIT_ANALYSIS_RESULT}"
+            "build_and_publish_images:${BUILD_AND_PUBLISH_IMAGES_RESULT}"
+            "generate_and_validate_manifest:${GENERATE_AND_VALIDATE_MANIFEST_RESULT}"
+            "enforce_commit_stage_slo:${ENFORCE_COMMIT_STAGE_SLO_RESULT}"
+          )
+
+          failed=0
+          for entry in "${results[@]}"; do
+            job="${entry%%:*}"
+            result="${entry##*:}"
+            echo "${job} => ${result}"
+            if [ "${result}" != "success" ]; then
+              failed=1
+            fi
+          done
+
+          if [ "${failed}" -ne 0 ]; then
+            echo "Commit Stage failed because one or more upstream jobs were not successful." >&2
+            exit 1
+          fi
+
+          echo "Commit Stage passed."

@@ -15,8 +15,6 @@ function loadSchema(relativePath) {
 
 const SCHEMAS = {
   releaseCandidate: loadSchema("pipeline/contracts/schemas/release-candidate.schema.json"),
-  acceptanceEvidence: loadSchema("pipeline/contracts/schemas/acceptance-evidence.schema.json"),
-  releaseEvidence: loadSchema("pipeline/contracts/schemas/release-evidence.schema.json"),
   acceptanceAttestationPredicate: loadSchema(
     "pipeline/contracts/schemas/acceptance-attestation-predicate.schema.json"
   ),
@@ -33,8 +31,6 @@ addFormats(ajv);
 
 const VALIDATORS = {
   releaseCandidate: ajv.compile(SCHEMAS.releaseCandidate),
-  acceptanceEvidence: ajv.compile(SCHEMAS.acceptanceEvidence),
-  releaseEvidence: ajv.compile(SCHEMAS.releaseEvidence),
   acceptanceAttestationPredicate: ajv.compile(SCHEMAS.acceptanceAttestationPredicate),
   releaseAttestationPredicate: ajv.compile(SCHEMAS.releaseAttestationPredicate)
 };

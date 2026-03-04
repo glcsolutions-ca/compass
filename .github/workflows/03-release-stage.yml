@@ -178,6 +178,8 @@ jobs:
 
       - name: Verify acceptance attestation pass
         if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           node pipeline/stages/05-release/scripts/verify-acceptance-attestation.mjs \
             --subject "oci://${{ env.RELEASE_UNITS_REPO }}@${{ steps.release_unit.outputs.release_unit_digest }}" \

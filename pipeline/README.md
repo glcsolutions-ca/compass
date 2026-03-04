@@ -57,8 +57,10 @@ Everything outside that purpose is optional tooling.
 GHCR is the canonical artifact and stage-evidence store.
 
 1. Commit Stage publishes runtime artifacts and release-unit metadata.
-2. Acceptance reads that exact candidate and writes acceptance attestation.
-3. Release reads that exact candidate plus acceptance attestation, deploys unchanged, and writes release attestation.
+2. Commit Stage writes `commit-stage-metadata` artifact used as the authoritative candidate handoff to Acceptance.
+3. Acceptance reads that exact candidate, writes acceptance attestation, and writes `acceptance-stage-metadata` for Release.
+4. Release reads that exact candidate plus acceptance attestation, deploys unchanged, and writes release attestation.
+5. PR-head queue admission uses a lightweight `Commit Stage` check only; authoritative candidate publication still happens once on `merge_group`.
 
 ## Invariants
 
@@ -75,3 +77,4 @@ GHCR is the canonical artifact and stage-evidence store.
 - `pipeline/contracts` defines candidate and attestation predicate contracts.
 - `pipeline/shared/scripts` contains reusable mechanics.
 - `pipeline/stages/*` contains stage-specific scripts/tests/runbooks.
+- `pipeline/runbooks` contains operational procedures (including GitHub Actions config cleanup).

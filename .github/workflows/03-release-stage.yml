@@ -58,16 +58,77 @@ jobs:
       - name: Resolve mode and candidate id
         id: candidate
         run: |
+          set -euo pipefail
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=manual" >> "$GITHUB_OUTPUT"
             echo "candidate_id=${{ inputs.candidate_id }}" >> "$GITHUB_OUTPUT"
             echo "source_revision_hint=" >> "$GITHUB_OUTPUT"
+            echo "release_unit_digest_hint=" >> "$GITHUB_OUTPUT"
+            echo "acceptance_run_id=" >> "$GITHUB_OUTPUT"
           else
-            source_revision="${{ github.event.workflow_run.head_sha }}"
             echo "mode=auto" >> "$GITHUB_OUTPUT"
-            echo "source_revision_hint=${source_revision}" >> "$GITHUB_OUTPUT"
-            echo "candidate_id=sha-${source_revision}" >> "$GITHUB_OUTPUT"
+            echo "acceptance_run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+            echo "candidate_id=" >> "$GITHUB_OUTPUT"
+            echo "source_revision_hint=" >> "$GITHUB_OUTPUT"
+            echo "release_unit_digest_hint=" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Download acceptance-stage metadata from triggering run
+        if: ${{ steps.candidate.outputs.mode == 'auto' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: acceptance-stage-metadata
+          run-id: ${{ steps.candidate.outputs.acceptance_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/triggering-run
+
+      - name: Resolve auto candidate from acceptance metadata
+        if: ${{ steps.candidate.outputs.mode == 'auto' }}
+        id: auto_candidate
+        run: |
+          set -euo pipefail
+
+          metadata_file="${RUNNER_TEMP}/triggering-run/acceptance-stage-metadata.json"
+          if [ ! -f "${metadata_file}" ]; then
+            echo "Missing acceptance metadata file: ${metadata_file}" >&2
+            exit 1
+          fi
+
+          candidate_id="$(jq -r '.candidateId // empty' "${metadata_file}")"
+          source_revision="$(jq -r '.sourceRevision // empty' "${metadata_file}")"
+          release_unit_digest="$(jq -r '.releaseUnitDigest // empty' "${metadata_file}")"
+          verdict="$(jq -r '.verdict // empty' "${metadata_file}")"
+          acceptance_run_id="$(jq -r '.acceptanceRunId // empty' "${metadata_file}")"
+
+          if ! echo "${candidate_id}" | grep -Eq '^sha-[0-9a-f]{40}$'; then
+            echo "Invalid candidateId in acceptance metadata: ${candidate_id}" >&2
+            exit 1
+          fi
+
+          if ! echo "${source_revision}" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "Invalid sourceRevision in acceptance metadata: ${source_revision}" >&2
+            exit 1
+          fi
+
+          if ! echo "${release_unit_digest}" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+            echo "Invalid releaseUnitDigest in acceptance metadata: ${release_unit_digest}" >&2
+            exit 1
+          fi
+
+          if [ "${verdict}" != "pass" ]; then
+            echo "Acceptance metadata verdict must be pass, got ${verdict}" >&2
+            exit 1
+          fi
+
+          if [ "${acceptance_run_id}" != "${{ steps.candidate.outputs.acceptance_run_id }}" ]; then
+            echo "Acceptance metadata run id mismatch: metadata=${acceptance_run_id} trigger=${{ steps.candidate.outputs.acceptance_run_id }}" >&2
+            exit 1
+          fi
+
+          echo "candidate_id=${candidate_id}" >> "$GITHUB_OUTPUT"
+          echo "source_revision_hint=${source_revision}" >> "$GITHUB_OUTPUT"
+          echo "release_unit_digest_hint=${release_unit_digest}" >> "$GITHUB_OUTPUT"
 
       - name: Determine whether release should execute
         id: release_guard
@@ -77,9 +138,17 @@ jobs:
           mode="${{ steps.candidate.outputs.mode }}"
           run_release=true
           reason=""
+          source_revision=""
 
           if [ "${mode}" = "auto" ]; then
-            source_revision="${{ steps.candidate.outputs.source_revision_hint }}"
+            source_revision="${{ steps.auto_candidate.outputs.source_revision_hint }}"
+          fi
+
+          if [ "${mode}" = "manual" ]; then
+            source_revision=""
+          fi
+
+          if [ "${mode}" = "auto" ] && [ -n "${source_revision}" ]; then
             deadline=$(( $(date +%s) + 600 ))
             is_on_main=false
 
@@ -101,10 +170,35 @@ jobs:
           echo "run_release=${run_release}" >> "$GITHUB_OUTPUT"
           echo "skip_reason=${reason}" >> "$GITHUB_OUTPUT"
 
+      - name: Finalize resolved candidate context
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        id: resolved_candidate
+        run: |
+          set -euo pipefail
+
+          if [ "${{ steps.candidate.outputs.mode }}" = "manual" ]; then
+            candidate_id="${{ inputs.candidate_id }}"
+            if ! echo "${candidate_id}" | grep -Eq '^sha-[0-9a-f]{40}$'; then
+              echo "Invalid manual candidate_id: ${candidate_id}" >&2
+              exit 1
+            fi
+            echo "candidate_id=${candidate_id}" >> "$GITHUB_OUTPUT"
+            echo "source_revision_hint=" >> "$GITHUB_OUTPUT"
+            echo "release_unit_digest_hint=" >> "$GITHUB_OUTPUT"
+          else
+            echo "candidate_id=${{ steps.auto_candidate.outputs.candidate_id }}" >> "$GITHUB_OUTPUT"
+            echo "source_revision_hint=${{ steps.auto_candidate.outputs.source_revision_hint }}" >> "$GITHUB_OUTPUT"
+            echo "release_unit_digest_hint=${{ steps.auto_candidate.outputs.release_unit_digest_hint }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Skip stale candidate release
         if: ${{ steps.release_guard.outputs.run_release != 'true' }}
         run: |
-          echo "Skipping release for ${{ steps.candidate.outputs.candidate_id }}: ${{ steps.release_guard.outputs.skip_reason }}"
+          candidate_id="${{ inputs.candidate_id }}"
+          if [ -z "${candidate_id}" ]; then
+            candidate_id="${{ steps.auto_candidate.outputs.candidate_id }}"
+          fi
+          echo "Skipping release for ${candidate_id}: ${{ steps.release_guard.outputs.skip_reason }}"
 
       - name: Setup pnpm
         if: ${{ steps.release_guard.outputs.run_release == 'true' }}
@@ -143,7 +237,7 @@ jobs:
         if: ${{ steps.release_guard.outputs.run_release == 'true' }}
         run: |
           node pipeline/shared/scripts/fetch-release-candidate.mjs \
-            --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
+            --candidate-id "${{ steps.resolved_candidate.outputs.candidate_id }}" \
             --registry-repo "${{ env.MANIFESTS_REPO }}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
@@ -158,7 +252,7 @@ jobs:
           source_revision="$(node -e 'const fs=require("fs");const doc=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(doc.source.revision);' "$RUNNER_TEMP/release-candidate.json")"
           echo "source_revision=${source_revision}" >> "$GITHUB_OUTPUT"
 
-          source_hint="${{ steps.candidate.outputs.source_revision_hint }}"
+          source_hint="${{ steps.resolved_candidate.outputs.source_revision_hint }}"
           if [ -n "${source_hint}" ] && [ "${source_hint}" != "${source_revision}" ]; then
             echo "Source revision mismatch between acceptance trigger and release manifest." >&2
             echo "trigger=${source_hint} manifest=${source_revision}" >&2
@@ -169,11 +263,19 @@ jobs:
         if: ${{ steps.release_guard.outputs.run_release == 'true' }}
         id: release_unit
         run: |
-          release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ steps.candidate.outputs.candidate_id }}" | jq -r '.digest')"
+          release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ steps.resolved_candidate.outputs.candidate_id }}" | jq -r '.digest')"
           if [ -z "${release_unit_digest}" ] || [ "${release_unit_digest}" = "null" ]; then
-            echo "Unable to resolve release-unit digest for ${{ steps.candidate.outputs.candidate_id }}" >&2
+            echo "Unable to resolve release-unit digest for ${{ steps.resolved_candidate.outputs.candidate_id }}" >&2
             exit 1
           fi
+
+          digest_hint="${{ steps.resolved_candidate.outputs.release_unit_digest_hint }}"
+          if [ -n "${digest_hint}" ] && [ "${digest_hint}" != "${release_unit_digest}" ]; then
+            echo "Release-unit digest mismatch for resolved candidate." >&2
+            echo "hint=${digest_hint} resolved=${release_unit_digest}" >&2
+            exit 1
+          fi
+
           echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
 
       - name: Verify acceptance attestation pass
@@ -185,7 +287,7 @@ jobs:
             --subject "oci://${{ env.RELEASE_UNITS_REPO }}@${{ steps.release_unit.outputs.release_unit_digest }}" \
             --repo "${{ github.repository }}" \
             --predicate-type "${{ env.ACCEPTANCE_PREDICATE_TYPE }}" \
-            --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
+            --candidate-id "${{ steps.resolved_candidate.outputs.candidate_id }}" \
             --source-revision "${{ steps.source.outputs.source_revision }}" \
             --signer-workflow "${{ github.repository }}/.github/workflows/02-acceptance-stage.yml"
 
@@ -286,7 +388,7 @@ jobs:
           mkdir -p .artifacts/attestations
           node pipeline/stages/05-release/scripts/generate-release-attestation-predicate.mjs \
             --out .artifacts/attestations/release-predicate.json \
-            --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
+            --candidate-id "${{ steps.resolved_candidate.outputs.candidate_id }}" \
             --source-revision "${{ steps.source.outputs.source_revision }}" \
             --verdict "${{ steps.release_run.outputs.verdict }}" \
             --workflow-run-id "${{ github.run_id }}" \
@@ -306,5 +408,5 @@ jobs:
       - name: Fail release stage when verdict is non-pass
         if: ${{ steps.release_guard.outputs.run_release == 'true' && steps.release_run.outputs.verdict != 'pass' }}
         run: |
-          echo "Release failed for candidate ${{ steps.candidate.outputs.candidate_id }}: ${{ steps.release_run.outputs.release_summary }}" >&2
+          echo "Release failed for candidate ${{ steps.resolved_candidate.outputs.candidate_id }}: ${{ steps.release_run.outputs.release_summary }}" >&2
           exit 1

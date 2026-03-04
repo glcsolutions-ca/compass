@@ -4,12 +4,13 @@
 
 Commit Stage is the only authoritative pre-merge stage.
 It builds the candidate exactly once for the merge-queue integrated SHA and publishes it to GHCR.
+For merge-queue admission, the same workflow also exposes a lightweight PR-head `Commit Stage` check that does not rebuild or publish artifacts.
 
 Workflow: `.github/workflows/01-commit-stage.yml`.
 
 ## Entry Criteria
 
-1. Trigger event is `merge_group` (`checks_requested`).
+1. For authoritative candidate publication, trigger event is `merge_group` (`checks_requested`).
 2. Integrated source revision exists and is immutable for this candidate.
 
 ## Required Outputs
@@ -19,6 +20,7 @@ Workflow: `.github/workflows/01-commit-stage.yml`.
 3. Candidate JSON manifest in GHCR (`compass-release-manifests:<candidateId>`).
 4. Candidate OCI release-unit representation in GHCR (`compass-release-units:<candidateId>`).
 5. Build provenance/SBOM attestations bound to candidate artifacts.
+6. Commit-stage metadata artifact (`commit-stage-metadata`) containing `candidateId`, `sourceRevision`, and `releaseUnitDigest`.
 
 ## Rules
 
@@ -27,8 +29,10 @@ Workflow: `.github/workflows/01-commit-stage.yml`.
 3. Candidate identity must be deterministic and immutable.
 4. Commit Stage does not depend on release/production state.
 5. Commit-stage SLO is not a blocking gate.
+6. PR-head check path is queue-admission only and must remain non-authoritative.
 
 ## Exit Criteria
 
-1. `pass`: merge queue may merge integrated SHA to `main`.
-2. `fail`: candidate is rejected and must not merge.
+1. `pull_request pass`: PR is eligible to enter merge queue.
+2. `merge_group pass`: merge queue may merge integrated SHA to `main`.
+3. `merge_group fail`: candidate is rejected and must not merge.

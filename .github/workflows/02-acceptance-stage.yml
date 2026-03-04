@@ -26,7 +26,7 @@ env:
 jobs:
   acceptance:
     name: Acceptance Stage
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'merge_group' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: acceptance
@@ -41,12 +41,66 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Resolve candidate id and source revision
+      - name: Download commit-stage metadata from triggering run
+        uses: actions/download-artifact@v4
+        with:
+          name: commit-stage-metadata
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/triggering-run
+
+      - name: Resolve candidate from commit-stage metadata
         id: candidate
         run: |
-          source_revision="${{ github.event.workflow_run.head_sha }}"
+          set -euo pipefail
+
+          metadata_file="${RUNNER_TEMP}/triggering-run/commit-stage-metadata.json"
+          if [ ! -f "${metadata_file}" ]; then
+            echo "Missing commit-stage metadata file: ${metadata_file}" >&2
+            exit 1
+          fi
+
+          candidate_id="$(jq -r '.candidateId // empty' "${metadata_file}")"
+          source_revision="$(jq -r '.sourceRevision // empty' "${metadata_file}")"
+          release_unit_digest="$(jq -r '.releaseUnitDigest // empty' "${metadata_file}")"
+          commit_run_id="$(jq -r '.commitRunId // empty' "${metadata_file}")"
+          event_name="$(jq -r '.eventName // empty' "${metadata_file}")"
+
+          if ! echo "${candidate_id}" | grep -Eq '^sha-[0-9a-f]{40}$'; then
+            echo "Invalid candidateId in commit metadata: ${candidate_id}" >&2
+            exit 1
+          fi
+
+          if ! echo "${source_revision}" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "Invalid sourceRevision in commit metadata: ${source_revision}" >&2
+            exit 1
+          fi
+
+          if ! echo "${release_unit_digest}" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+            echo "Invalid releaseUnitDigest in commit metadata: ${release_unit_digest}" >&2
+            exit 1
+          fi
+
+          if [ "${commit_run_id}" != "${{ github.event.workflow_run.id }}" ]; then
+            echo "Commit metadata run id mismatch: metadata=${commit_run_id} trigger=${{ github.event.workflow_run.id }}" >&2
+            exit 1
+          fi
+
+          if [ "${event_name}" != "merge_group" ]; then
+            echo "Commit metadata event mismatch: expected merge_group got ${event_name}" >&2
+            exit 1
+          fi
+
+          trigger_head_sha="${{ github.event.workflow_run.head_sha }}"
+          if [ -n "${trigger_head_sha}" ] && [ "${trigger_head_sha}" != "${source_revision}" ]; then
+            echo "Trigger head SHA mismatch: trigger=${trigger_head_sha} metadata=${source_revision}" >&2
+            exit 1
+          fi
+
+          echo "candidate_id=${candidate_id}" >> "$GITHUB_OUTPUT"
           echo "source_revision=${source_revision}" >> "$GITHUB_OUTPUT"
-          echo "candidate_id=sha-${source_revision}" >> "$GITHUB_OUTPUT"
+          echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
+          echo "commit_run_id=${commit_run_id}" >> "$GITHUB_OUTPUT"
 
       - name: Wait for source revision on main
         id: main_guard
@@ -106,16 +160,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve release-unit digest
+      - name: Verify release-unit digest for candidate
         if: ${{ steps.main_guard.outputs.is_on_main == 'true' }}
-        id: release_unit
         run: |
           release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ steps.candidate.outputs.candidate_id }}" | jq -r '.digest')"
           if [ -z "${release_unit_digest}" ] || [ "${release_unit_digest}" = "null" ]; then
             echo "Unable to resolve release-unit digest for ${{ steps.candidate.outputs.candidate_id }}" >&2
             exit 1
           fi
-          echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
+          if [ "${release_unit_digest}" != "${{ steps.candidate.outputs.release_unit_digest }}" ]; then
+            echo "Release-unit digest mismatch for ${{ steps.candidate.outputs.candidate_id }}" >&2
+            echo "metadata=${{ steps.candidate.outputs.release_unit_digest }} resolved=${release_unit_digest}" >&2
+            exit 1
+          fi
 
       - name: Fetch release manifest
         if: ${{ steps.main_guard.outputs.is_on_main == 'true' }}
@@ -220,10 +277,38 @@ jobs:
         uses: actions/attest@v2
         with:
           subject-name: ${{ env.RELEASE_UNITS_REPO }}
-          subject-digest: ${{ steps.release_unit.outputs.release_unit_digest }}
+          subject-digest: ${{ steps.candidate.outputs.release_unit_digest }}
           predicate-type: ${{ env.ACCEPTANCE_PREDICATE_TYPE }}
           predicate-path: .artifacts/attestations/acceptance-predicate.json
           push-to-registry: true
+
+      - name: Write acceptance-stage metadata
+        if: ${{ steps.main_guard.outputs.is_on_main == 'true' }}
+        run: |
+          mkdir -p .artifacts/metadata
+          jq -n \
+            --arg candidateId "${{ steps.candidate.outputs.candidate_id }}" \
+            --arg sourceRevision "${{ steps.candidate.outputs.source_revision }}" \
+            --arg releaseUnitDigest "${{ steps.candidate.outputs.release_unit_digest }}" \
+            --arg verdict "${{ steps.acceptance_run.outputs.verdict }}" \
+            --arg acceptanceRunId "${{ github.run_id }}" \
+            --arg commitRunId "${{ steps.candidate.outputs.commit_run_id }}" \
+            '{
+              candidateId: $candidateId,
+              sourceRevision: $sourceRevision,
+              releaseUnitDigest: $releaseUnitDigest,
+              verdict: $verdict,
+              acceptanceRunId: $acceptanceRunId,
+              commitRunId: $commitRunId
+            }' > .artifacts/metadata/acceptance-stage-metadata.json
+
+      - name: Upload acceptance-stage metadata artifact
+        if: ${{ steps.main_guard.outputs.is_on_main == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-stage-metadata
+          path: .artifacts/metadata/acceptance-stage-metadata.json
+          if-no-files-found: error
 
       - name: Fail acceptance stage when verdict is non-pass
         if: ${{ steps.main_guard.outputs.is_on_main == 'true' && steps.acceptance_run.outputs.verdict != 'pass' }}

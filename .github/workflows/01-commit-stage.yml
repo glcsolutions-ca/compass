@@ -274,7 +274,7 @@ jobs:
 
             EXPECTED_MANIFEST_PATH=".artifacts/release-candidate/manifest.json" \
             EXISTING_MANIFEST_PATH="$RUNNER_TEMP/existing-release-candidate.json" \
-            node <<'NODE'
+            node -e '
             const fs = require("node:fs");
 
             const expected = JSON.parse(fs.readFileSync(process.env.EXPECTED_MANIFEST_PATH, "utf8"));
@@ -303,7 +303,7 @@ jobs:
             }
 
             console.info("Existing candidate manifest matches generated manifest; reusing immutable candidate.");
-            NODE
+            '
 
             echo "manifest_ref=${reference}" >> "$GITHUB_OUTPUT"
             exit 0

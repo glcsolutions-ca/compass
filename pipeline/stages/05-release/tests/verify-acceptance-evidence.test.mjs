@@ -12,7 +12,7 @@ async function writeJson(filePath, payload) {
 function baseEvidence(overrides = {}) {
   return {
     schemaVersion: "acceptance-evidence.v1",
-    candidateId: "main-abcdef1-123456",
+    candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     workflowRunId: "123456",
     environment: "acceptance",
@@ -32,7 +32,7 @@ describe("verify-acceptance-evidence", () => {
     await expect(
       verifyAcceptanceEvidence({
         evidenceDirectory: root,
-        candidateId: "main-abcdef1-123456",
+        candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       })
     ).resolves.toMatchObject({
@@ -47,7 +47,7 @@ describe("verify-acceptance-evidence", () => {
     await expect(
       verifyAcceptanceEvidence({
         evidenceDirectory: root,
-        candidateId: "main-abcdef1-123456",
+        candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         sourceRevision: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
       })
     ).rejects.toThrow(/sourceRevision mismatch/);
@@ -60,7 +60,7 @@ describe("verify-acceptance-evidence", () => {
     await expect(
       verifyAcceptanceEvidence({
         evidenceDirectory: root,
-        candidateId: "main-abcdef1-123456",
+        candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       })
     ).rejects.toThrow(/verdict=fail/);

@@ -5,7 +5,7 @@ import { validateReleaseCandidateDocument } from "../../../shared/scripts/pipeli
 describe("generate-release-candidate", () => {
   it("builds a valid release candidate document", () => {
     const candidate = createReleaseCandidate({
-      candidateId: "main-abcdef1-123456",
+      candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       repository: "glcsolutions-ca/compass",
       sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       apiImage:
@@ -27,7 +27,7 @@ describe("generate-release-candidate", () => {
 
   it("is deterministic for candidateId and source.revision with the same inputs", () => {
     const first = createReleaseCandidate({
-      candidateId: "main-abcdef1-123456",
+      candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       repository: "glcsolutions-ca/compass",
       sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       apiImage:
@@ -44,7 +44,7 @@ describe("generate-release-candidate", () => {
     });
 
     const second = createReleaseCandidate({
-      candidateId: "main-abcdef1-123456",
+      candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       repository: "glcsolutions-ca/compass",
       sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       apiImage:

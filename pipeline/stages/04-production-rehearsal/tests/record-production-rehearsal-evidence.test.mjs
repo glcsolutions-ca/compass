@@ -47,7 +47,7 @@ describe("record-production-rehearsal-evidence", () => {
 
     const evidence = await createProductionRehearsalEvidence({
       deployStatePath,
-      candidateId: "main-abcdef1-123456",
+      candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       workflowRunId: "123456",
       verdict: "pass",

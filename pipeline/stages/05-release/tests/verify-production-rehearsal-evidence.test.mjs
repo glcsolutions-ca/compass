@@ -13,7 +13,7 @@ function baseEvidence(overrides = {}) {
   return {
     schemaVersion: "production-rehearsal-evidence.v1",
     stage: "production-rehearsal",
-    candidateId: "main-abcdef1-123456",
+    candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     workflowRunId: "123456",
     environment: "production",
@@ -60,7 +60,7 @@ describe("verify-production-rehearsal-evidence", () => {
     await expect(
       verifyProductionRehearsalEvidence({
         evidenceDirectory: root,
-        candidateId: "main-abcdef1-123456",
+        candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       })
     ).resolves.toMatchObject({ verdict: "pass" });
@@ -76,7 +76,7 @@ describe("verify-production-rehearsal-evidence", () => {
     await expect(
       verifyProductionRehearsalEvidence({
         evidenceDirectory: root,
-        candidateId: "main-abcdef1-123456",
+        candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       })
     ).rejects.toThrow(/not passed production rehearsal/);

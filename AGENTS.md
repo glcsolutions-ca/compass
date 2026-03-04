@@ -60,9 +60,6 @@ compass/
 │  │  │  │  ├─ record-acceptance-evidence.test.mjs
 │  │  │  │  └─ deploy-verify-from-manifest.test.mjs
 │  │  │  └─ runbook.md
-│  │  ├─ 03-nonfunctional/
-│  │  │  ├─ README.md
-│  │  │  └─ runbook.md
 │  │  ├─ 04-production-rehearsal/
 │  │  │  ├─ README.md
 │  │  │  └─ runbook.md

@@ -1,15 +1,15 @@
-name: 05-release-stage
+name: Release Stage
 
 on:
   workflow_dispatch:
     inputs:
       candidate_id:
-        description: Release candidate id (main-<sha>-<run>)
+        description: Release candidate id (sha-<40-char-source-sha>)
         required: true
         type: string
   workflow_run:
     workflows:
-      - 04-production-rehearsal-stage
+      - Staging / Manual Test Stage (Production Rehearsal Placeholder)
     types:
       - completed
 

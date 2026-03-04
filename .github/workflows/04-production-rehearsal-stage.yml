@@ -1,9 +1,9 @@
-name: 04-production-rehearsal-stage
+name: Staging / Manual Test Stage (Production Rehearsal Placeholder)
 
 on:
   workflow_run:
     workflows:
-      - 02-automated-acceptance-test-stage
+      - Automated Acceptance Test Stage
     types:
       - completed
 
@@ -23,7 +23,7 @@ env:
 
 jobs:
   production_rehearsal:
-    name: Production rehearsal (placeholder)
+    name: Staging / Manual Test Stage (Production Rehearsal Placeholder)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
@@ -104,12 +104,12 @@ jobs:
 
           echo "source_revision=${manifest_source_revision}" >> "$GITHUB_OUTPUT"
 
-          if [ "$manifest_candidate_id" != "${{ steps.acceptance_output.outputs.candidate_id }}" ]; then
+          if [ "${manifest_candidate_id}" != "${{ steps.acceptance_output.outputs.candidate_id }}" ]; then
             echo "Candidate mismatch between acceptance output and manifest" >&2
             exit 1
           fi
 
-          if [ "$manifest_source_revision" != "${{ steps.acceptance_output.outputs.source_revision }}" ]; then
+          if [ "${manifest_source_revision}" != "${{ steps.acceptance_output.outputs.source_revision }}" ]; then
             echo "Source revision mismatch between acceptance output and manifest" >&2
             exit 1
           fi

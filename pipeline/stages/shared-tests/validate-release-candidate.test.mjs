@@ -7,7 +7,7 @@ import { validateReleaseCandidateFile } from "../../shared/scripts/validate-rele
 function baseManifest() {
   return {
     schemaVersion: "rc.v1",
-    candidateId: "main-abcdef1-123456",
+    candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     source: {
       repository: "glcsolutions-ca/compass",
       revision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

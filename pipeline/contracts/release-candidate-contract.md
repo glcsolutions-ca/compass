@@ -77,7 +77,7 @@ For v1, that means the exact artifact references for:
 
 ### Commit Stage
 
-The **Commit Stage** is the first authoritative pipeline stage for a trunk check-in.
+The **Commit Stage** is the first authoritative pipeline stage for an integrated merge-queue candidate.
 
 It is responsible for:
 
@@ -192,7 +192,7 @@ The canonical v1 manifest MUST conform to the following logical shape.
 
 ```yaml
 schemaVersion: rc.v1
-candidateId: main-abcdef1-123456
+candidateId: sha-abcdef1234567890abcdef1234567890abcdef12
 source:
   repository: org/repo
   revision: abcdef1234567890abcdef1234567890abcdef12
@@ -215,7 +215,7 @@ provenance:
 | Field                          | Required | Notes                                                   |
 | ------------------------------ | -------- | ------------------------------------------------------- |
 | `schemaVersion`                | Yes      | MUST be `rc.v1` for this version of the contract.       |
-| `candidateId`                  | Yes      | Unique identifier for the Release Candidate.            |
+| `candidateId`                  | Yes      | Unique identifier for the Release Candidate (`sha-<40-char source SHA>`). |
 | `source.repository`            | Yes      | Repository identifier.                                  |
 | `source.revision`              | Yes      | Exact integrated revision used to build the candidate.  |
 | `source.createdAt`             | Yes      | UTC timestamp of candidate creation.                    |
@@ -490,7 +490,7 @@ promotionHalted: false
 
 For v1, the simplest correct implementation is:
 
-1. **Commit Stage** on each trunk check-in to build `api`, `web`, `worker`, and migrations once.
+1. **Commit Stage** on each merge-queue integrated candidate to build `api`, `web`, `worker`, and migrations once.
 2. **Automated Acceptance Test Stage** to deploy and test that exact candidate.
 3. **Optional Staging / Manual Test Stage** only if additional human or operational checks are needed.
 4. **Release Stage** to deploy the exact same accepted candidate to production.

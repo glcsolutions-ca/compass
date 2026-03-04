@@ -22,7 +22,7 @@
     },
     "candidateId": {
       "type": "string",
-      "pattern": "^main-[a-f0-9]{7,40}-[0-9]{6,}$"
+      "pattern": "^sha-[a-f0-9]{40}$"
     },
     "sourceRevision": {
       "type": "string",

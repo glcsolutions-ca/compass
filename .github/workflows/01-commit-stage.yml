@@ -1,9 +1,9 @@
-name: 01-commit-stage
+name: Commit Stage
 
 on:
-  push:
-    branches:
-      - main
+  merge_group:
+    types:
+      - checks_requested
 
 permissions:
   contents: read
@@ -232,9 +232,7 @@ jobs:
 
       - name: Compute candidate id
         id: candidate
-        run: |
-          candidate_id="$(node pipeline/shared/scripts/build-candidate-id.mjs --source-revision "${GITHUB_SHA}" --run-id "${GITHUB_RUN_ID}")"
-          echo "candidate_id=${candidate_id}" >> "$GITHUB_OUTPUT"
+        run: echo "candidate_id=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Generate release candidate manifest
         run: |
@@ -264,11 +262,58 @@ jobs:
         id: publish_manifest
         run: |
           candidate_id="${{ steps.candidate.outputs.candidate_id }}"
+          reference="${RC_REGISTRY_REPO}:${candidate_id}"
+
+          if oras manifest fetch --descriptor "${reference}" > /dev/null 2>&1; then
+            echo "Candidate manifest already exists for ${candidate_id}; validating immutability before reuse."
+
+            node pipeline/shared/scripts/fetch-release-candidate.mjs \
+              --candidate-id "${candidate_id}" \
+              --registry-repo "${RC_REGISTRY_REPO}" \
+              --out "$RUNNER_TEMP/existing-release-candidate.json"
+
+            EXPECTED_MANIFEST_PATH=".artifacts/release-candidate/manifest.json" \
+            EXISTING_MANIFEST_PATH="$RUNNER_TEMP/existing-release-candidate.json" \
+            node <<'NODE'
+            const fs = require("node:fs");
+
+            const expected = JSON.parse(fs.readFileSync(process.env.EXPECTED_MANIFEST_PATH, "utf8"));
+            const existing = JSON.parse(fs.readFileSync(process.env.EXISTING_MANIFEST_PATH, "utf8"));
+
+            const checks = [
+              ["candidateId", expected.candidateId, existing.candidateId],
+              ["source.revision", expected.source?.revision, existing.source?.revision],
+              ["artifacts.apiImage", expected.artifacts?.apiImage, existing.artifacts?.apiImage],
+              ["artifacts.webImage", expected.artifacts?.webImage, existing.artifacts?.webImage],
+              ["artifacts.workerImage", expected.artifacts?.workerImage, existing.artifacts?.workerImage],
+              [
+                "artifacts.migrationsArtifact",
+                expected.artifacts?.migrationsArtifact,
+                existing.artifacts?.migrationsArtifact
+              ]
+            ];
+
+            const mismatches = checks.filter(([, expectedValue, existingValue]) => expectedValue !== existingValue);
+            if (mismatches.length > 0) {
+              console.error("Immutable candidate tag conflict detected. Existing candidate differs from newly generated manifest.");
+              for (const [field, expectedValue, existingValue] of mismatches) {
+                console.error(`${field}: expected=${expectedValue} existing=${existingValue}`);
+              }
+              process.exit(1);
+            }
+
+            console.info("Existing candidate manifest matches generated manifest; reusing immutable candidate.");
+            NODE
+
+            echo "manifest_ref=${reference}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           cp .artifacts/release-candidate/manifest.json manifest.json
           oras push --artifact-type application/vnd.compass.release-candidate.v1 \
-            "${RC_REGISTRY_REPO}:${candidate_id}" \
+            "${reference}" \
             "manifest.json:application/vnd.compass.release-candidate.v1+json"
-          echo "manifest_ref=${RC_REGISTRY_REPO}:${candidate_id}" >> "$GITHUB_OUTPUT"
+          echo "manifest_ref=${reference}" >> "$GITHUB_OUTPUT"
 
       - name: Capture commit-stage end time
         id: capture_end
@@ -318,3 +363,16 @@ jobs:
           name: commit-stage-metrics-${{ github.run_id }}
           path: .artifacts/commit-stage/commit-stage-metrics.json
           if-no-files-found: error
+
+  commit_stage_gate:
+    name: Commit Stage
+    runs-on: ubuntu-latest
+    needs:
+      - commit_tests
+      - commit_analysis
+      - build_and_publish_images
+      - generate_and_validate_manifest
+      - enforce_commit_stage_slo
+    steps:
+      - name: Confirm commit stage completion
+        run: echo "Commit Stage passed."

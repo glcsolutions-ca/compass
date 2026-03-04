@@ -1,6 +1,14 @@
 name: Commit Stage
 
 on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
   merge_group:
     types:
       - checks_requested
@@ -21,8 +29,20 @@ env:
   RELEASE_UNITS_REPO: ghcr.io/glcsolutions-ca/compass-release-units
 
 jobs:
+  pr_head_commit_stage:
+    name: Commit Stage
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Queue-admission check
+        run: |
+          echo "PR-head Commit Stage check passed."
+          echo "Authoritative candidate build runs once on merge_group."
+
   commit_tests:
     name: Commit tests
+    if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -51,6 +71,7 @@ jobs:
 
   build_and_publish_images:
     name: Build and publish ${{ matrix.image.id }} image
+    if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs:
@@ -113,6 +134,7 @@ jobs:
 
   collect_image_refs:
     name: Collect image refs
+    if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs:
@@ -163,6 +185,7 @@ jobs:
 
   publish_candidate:
     name: Publish candidate to GHCR
+    if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     needs:
@@ -256,6 +279,30 @@ jobs:
 
           echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
 
+      - name: Write commit-stage metadata
+        run: |
+          mkdir -p .artifacts/metadata
+          jq -n \
+            --arg candidateId "${{ steps.candidate.outputs.candidate_id }}" \
+            --arg sourceRevision "${{ github.sha }}" \
+            --arg releaseUnitDigest "${{ steps.release_unit.outputs.release_unit_digest }}" \
+            --arg commitRunId "${{ github.run_id }}" \
+            --arg eventName "${{ github.event_name }}" \
+            '{
+              candidateId: $candidateId,
+              sourceRevision: $sourceRevision,
+              releaseUnitDigest: $releaseUnitDigest,
+              commitRunId: $commitRunId,
+              eventName: $eventName
+            }' > .artifacts/metadata/commit-stage-metadata.json
+
+      - name: Upload commit-stage metadata artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-stage-metadata
+          path: .artifacts/metadata/commit-stage-metadata.json
+          if-no-files-found: error
+
       - name: Attest release-unit build provenance
         uses: actions/attest-build-provenance@v3
         with:
@@ -266,7 +313,7 @@ jobs:
   commit_stage_gate:
     name: Commit Stage
     runs-on: ubuntu-latest
-    if: ${{ always() }}
+    if: ${{ github.event_name == 'merge_group' && always() }}
     needs:
       - commit_tests
       - build_and_publish_images

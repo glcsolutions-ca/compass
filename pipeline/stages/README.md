@@ -52,12 +52,14 @@ Purpose:
 
 Must do:
 
-1. Run on `merge_group` only.
-2. Execute fast commit checks.
-3. Build and push immutable digest-pinned runtime artifacts.
-4. Publish candidate representations to GHCR.
-5. Attach build provenance/SBOM attestations.
-6. Fail closed when any required step fails.
+1. Run authoritatively on `merge_group` only.
+2. Expose a lightweight PR-head `Commit Stage` status check for merge-queue admission (no rebuild, no publication).
+3. Execute fast commit checks for the authoritative run.
+4. Build and push immutable digest-pinned runtime artifacts.
+5. Publish candidate representations to GHCR.
+6. Attach build provenance/SBOM attestations.
+7. Emit commit-stage metadata artifact for downstream stage resolution.
+8. Fail closed when any required step fails.
 
 Must not do:
 
@@ -74,11 +76,13 @@ Purpose:
 Must do:
 
 1. Trigger from successful Commit Stage via `workflow_run`.
-2. Guard against stale candidates by requiring SHA presence on `main`.
-3. Deploy exact candidate digests from GHCR.
-4. Run automated acceptance suites.
-5. Attach acceptance attestation to candidate subject.
-6. Fail closed on test or attestation errors.
+2. Resolve candidate identity from commit-stage metadata on the triggering run.
+3. Guard against stale candidates by requiring SHA presence on `main`.
+4. Deploy exact candidate digests from GHCR.
+5. Run automated acceptance suites.
+6. Attach acceptance attestation to candidate subject.
+7. Emit acceptance-stage metadata artifact for release-stage resolution.
+8. Fail closed on test or attestation errors.
 
 Must not do:
 
@@ -96,10 +100,11 @@ Must do:
 
 1. Trigger automatically from successful Acceptance Stage.
 2. Also support manual `workflow_dispatch` by `candidate_id` for rollback/redeploy.
-3. Verify acceptance attestation is present and `verdict=pass`.
-4. Deploy exact candidate digest set from GHCR.
-5. Run production smoke verification.
-6. Record GitHub deployment status and release attestation.
+3. In auto mode, resolve candidate identity from acceptance-stage metadata on the triggering run.
+4. Verify acceptance attestation is present and `verdict=pass`.
+5. Deploy exact candidate digest set from GHCR.
+6. Run production smoke verification.
+7. Record GitHub deployment status and release attestation.
 
 Must not do:
 

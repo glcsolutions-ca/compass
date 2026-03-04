@@ -112,9 +112,16 @@ export async function verifyCandidateAzure({
     workerAppName
   ]);
 
-  ensureImagePinned(apiShow, manifest.artifacts.apiImage, apiAppName);
-  ensureImagePinned(webShow, manifest.artifacts.webImage, webAppName);
-  ensureImagePinned(workerShow, manifest.artifacts.workerImage, workerAppName);
+  const apiExpectedImage =
+    deployState?.deployment?.api?.candidateImage ?? manifest.artifacts.apiImage;
+  const webExpectedImage =
+    deployState?.deployment?.web?.candidateImage ?? manifest.artifacts.webImage;
+  const workerExpectedImage =
+    deployState?.deployment?.worker?.candidateImage ?? manifest.artifacts.workerImage;
+
+  ensureImagePinned(apiShow, apiExpectedImage, apiAppName);
+  ensureImagePinned(webShow, webExpectedImage, webAppName);
+  ensureImagePinned(workerShow, workerExpectedImage, workerAppName);
 
   if (zeroTraffic) {
     const deployment = deployState?.deployment;

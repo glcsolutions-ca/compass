@@ -42,6 +42,134 @@ function findImageMatch(showDocument, expectedImage) {
   return containers.some((container) => container?.image === expectedImage);
 }
 
+function splitImageRef(imageRef) {
+  if (typeof imageRef !== "string" || imageRef.trim().length === 0) {
+    throw new Error("Image reference is required");
+  }
+
+  const atIndex = imageRef.lastIndexOf("@");
+  if (atIndex <= 0 || atIndex === imageRef.length - 1) {
+    throw new Error(`Image reference must be digest-pinned (got '${imageRef}')`);
+  }
+
+  const repositoryRef = imageRef.slice(0, atIndex);
+  const digest = imageRef.slice(atIndex + 1);
+  const firstSlash = repositoryRef.indexOf("/");
+  if (firstSlash <= 0 || firstSlash === repositoryRef.length - 1) {
+    throw new Error(`Image repository is invalid (got '${repositoryRef}')`);
+  }
+
+  const repositoryPath = repositoryRef.slice(firstSlash + 1);
+  return { repositoryPath, digest };
+}
+
+function normalizeAcrLoginServer(loginServer) {
+  return String(loginServer || "")
+    .trim()
+    .replace(/^https?:\/\//u, "")
+    .replace(/\/+$/u, "");
+}
+
+async function importImageToAcr({
+  sourceImage,
+  candidateId,
+  acrName,
+  acrLoginServer,
+  sourceRegistryUsername,
+  sourceRegistryPassword
+}) {
+  const { repositoryPath } = splitImageRef(sourceImage);
+  const tag = candidateId;
+  const targetImage = `${repositoryPath}:${tag}`;
+
+  const importArgs = [
+    "acr",
+    "import",
+    "--name",
+    acrName,
+    "--source",
+    sourceImage,
+    "--image",
+    targetImage,
+    "--force"
+  ];
+
+  if (sourceRegistryUsername && sourceRegistryPassword) {
+    importArgs.push("--username", sourceRegistryUsername, "--password", sourceRegistryPassword);
+  }
+
+  await runAz(importArgs);
+
+  const importedDigest = await runAz(
+    ["acr", "repository", "show", "--name", acrName, "--image", targetImage, "--query", "digest"],
+    { output: "tsv" }
+  );
+
+  const digest = String(importedDigest || "").trim();
+  if (!digest) {
+    throw new Error(`Unable to resolve imported digest for ${targetImage}`);
+  }
+
+  return `${normalizeAcrLoginServer(acrLoginServer)}/${repositoryPath}@${digest}`;
+}
+
+async function resolveAzureArtifacts({
+  artifacts,
+  candidateId,
+  acrName,
+  acrLoginServer,
+  sourceRegistryUsername,
+  sourceRegistryPassword
+}) {
+  if (!acrName && !acrLoginServer) {
+    return artifacts;
+  }
+
+  if (!acrName || !acrLoginServer) {
+    throw new Error("Both ACR name and ACR login server are required for ACR import");
+  }
+
+  const apiImage = await importImageToAcr({
+    sourceImage: artifacts.apiImage,
+    candidateId,
+    acrName,
+    acrLoginServer,
+    sourceRegistryUsername,
+    sourceRegistryPassword
+  });
+  const webImage = await importImageToAcr({
+    sourceImage: artifacts.webImage,
+    candidateId,
+    acrName,
+    acrLoginServer,
+    sourceRegistryUsername,
+    sourceRegistryPassword
+  });
+  const workerImage = await importImageToAcr({
+    sourceImage: artifacts.workerImage,
+    candidateId,
+    acrName,
+    acrLoginServer,
+    sourceRegistryUsername,
+    sourceRegistryPassword
+  });
+  const migrationsArtifact = await importImageToAcr({
+    sourceImage: artifacts.migrationsArtifact,
+    candidateId,
+    acrName,
+    acrLoginServer,
+    sourceRegistryUsername,
+    sourceRegistryPassword
+  });
+
+  return {
+    apiImage,
+    webImage,
+    workerImage,
+    migrationsArtifact
+  };
+}
+
 async function deployApp({
   resourceGroup,
   appName,
@@ -148,7 +276,11 @@ export async function deployCandidateAzure({
   workerAppName,
   migrationsJobName,
   zeroTraffic,
-  outPath
+  outPath,
+  acrName,
+  acrLoginServer,
+  sourceRegistryUsername,
+  sourceRegistryPassword
 }) {
   const errors = await validateReleaseCandidateFile(manifestPath);
   if (errors.length > 0) {
@@ -159,17 +291,25 @@ export async function deployCandidateAzure({
   await ensureAzLogin();
 
   const manifest = await readJsonFile(manifestPath);
+  const deployedArtifacts = await resolveAzureArtifacts({
+    artifacts: manifest.artifacts,
+    candidateId: manifest.candidateId,
+    acrName,
+    acrLoginServer,
+    sourceRegistryUsername,
+    sourceRegistryPassword
+  });
 
   const migrationResult = await runMigrationsAzure({
     resourceGroup,
     jobName: migrationsJobName,
-    migrationsImage: manifest.artifacts.migrationsArtifact
+    migrationsImage: deployedArtifacts.migrationsArtifact
   });
 
   const api = await deployApp({
     resourceGroup,
     appName: apiAppName,
-    expectedImage: manifest.artifacts.apiImage,
+    expectedImage: deployedArtifacts.apiImage,
     candidateId: manifest.candidateId,
     appKey: "api",
     zeroTraffic
@@ -178,7 +318,7 @@ export async function deployCandidateAzure({
   const web = await deployApp({
     resourceGroup,
     appName: webAppName,
-    expectedImage: manifest.artifacts.webImage,
+    expectedImage: deployedArtifacts.webImage,
     candidateId: manifest.candidateId,
     appKey: "web",
     zeroTraffic
@@ -187,7 +327,7 @@ export async function deployCandidateAzure({
   const worker = await deployApp({
     resourceGroup,
     appName: workerAppName,
-    expectedImage: manifest.artifacts.workerImage,
+    expectedImage: deployedArtifacts.workerImage,
     candidateId: manifest.candidateId,
     appKey: "worker",
     zeroTraffic
@@ -200,6 +340,10 @@ export async function deployCandidateAzure({
     sourceRevision: manifest.source.revision,
     resourceGroup,
     zeroTraffic,
+    artifacts: {
+      source: manifest.artifacts,
+      deployed: deployedArtifacts
+    },
     migrations: migrationResult,
     deployment: {
       api,
@@ -227,7 +371,11 @@ export async function main(argv = process.argv.slice(2)) {
     workerAppName: requireOption(options, "worker-app-name"),
     migrationsJobName: requireOption(options, "migrations-job-name"),
     zeroTraffic: normalizeBoolean(options["zero-traffic"]),
-    outPath
+    outPath,
+    acrName: optionalOption(options, "acr-name"),
+    acrLoginServer: optionalOption(options, "acr-login-server"),
+    sourceRegistryUsername: optionalOption(options, "source-registry-username"),
+    sourceRegistryPassword: optionalOption(options, "source-registry-password")
   });
 
   console.info(`Deployment state written: ${path.resolve(outPath)}`);

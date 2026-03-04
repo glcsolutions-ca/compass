@@ -79,4 +79,14 @@ describe("validate-release-candidate", () => {
     const errors = await validateReleaseCandidateFile(filePath);
     expect(errors.some((entry) => entry.path === "$.candidateId")).toBe(true);
   });
+
+  it("passes when optional provenance.releaseUnitDigest is present and valid", async () => {
+    const manifest = baseManifest();
+    manifest.provenance.releaseUnitDigest =
+      "sha256:1111111111111111111111111111111111111111111111111111111111111111";
+
+    const filePath = await writeManifest(manifest);
+    const errors = await validateReleaseCandidateFile(filePath);
+    expect(errors).toHaveLength(0);
+  });
 });

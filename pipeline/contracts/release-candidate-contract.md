@@ -155,6 +155,11 @@ A candidate MUST include:
 3. Artifact references MUST be immutable digest-pinned references, not mutable tags.
 4. A candidate is defined by its artifact digests. Human-friendly tags MAY exist, but tags are aliases and MUST NOT be treated as identity.
 
+### Cross-workflow handoff
+
+1. The canonical cross-workflow handoff object is the `release-candidate-manifest` artifact.
+2. Acceptance and Release MUST resolve candidate identity from that handoff object (or manual `candidate_id` input for rollback/redeploy), not from `workflow_run.head_sha` alone.
+
 ---
 
 ## Candidate contents
@@ -206,6 +211,7 @@ artifacts:
   migrationsArtifact: ghcr.io/org/app-migrations@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
 provenance:
   commitStageRunId: 123456789
+  releaseUnitDigest: sha256:1111111111111111111111111111111111111111111111111111111111111111
   sbomRefs:
     - oci://ghcr.io/org/app-api-sbom@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
   signatureRefs:
@@ -226,6 +232,7 @@ provenance:
 | `artifacts.workerImage`        | Yes      | Digest-pinned OCI reference.                                              |
 | `artifacts.migrationsArtifact` | Yes      | Digest-pinned reference to migrations package or image.                   |
 | `provenance.commitStageRunId`  | Yes      | CI run that created the candidate.                                        |
+| `provenance.releaseUnitDigest` | No       | Digest of the OCI release-unit subject used for stage attestations.       |
 | `provenance.sbomRefs`          | No       | SHOULD be present when available.                                         |
 | `provenance.signatureRefs`     | No       | SHOULD be present when available.                                         |
 
@@ -250,7 +257,7 @@ The JSON schema files under `pipeline/` are the executable source of truth for c
 - `pipeline/contracts/schemas/acceptance-attestation-predicate.schema.json`
 - `pipeline/contracts/schemas/release-attestation-predicate.schema.json`
 
-Runtime validators MUST use these schemas directly. Custom validation rules SHOULD be added only where schema constraints cannot express required behavior.
+Contract validators and test suites MUST use these schemas directly. Lightweight runtime validators MAY implement an equivalent fail-closed subset for workflow speed.
 
 Current custom exception:
 
@@ -338,7 +345,7 @@ The Automated Acceptance Test Stage MUST:
 1. retrieve the candidate from artifact storage;
 2. deploy the exact candidate into a production-like environment;
 3. run automated deployment, smoke, integration, and acceptance tests;
-4. record acceptance evidence;
+4. record acceptance evidence and attach an acceptance attestation to the candidate subject;
 5. prevent failed candidates from progressing;
 6. run tests against the deployed acceptance endpoints for that candidate and MUST NOT fall back to local source-build servers.
 
@@ -496,12 +503,13 @@ promotionHalted: false
 
 ## Practical guidance for this application
 
-For v1, the simplest correct implementation is:
+For v1, the minimum viable implementation is:
 
 1. **Commit Stage** on each merge-queue integrated candidate to build `api`, `web`, `worker`, and migrations once.
 2. **Automated Acceptance Test Stage** to deploy and test that exact candidate.
-3. **Optional Staging / Manual Test Stage** only if additional human or operational checks are needed.
-4. **Release Stage** to deploy the exact same accepted candidate to production.
+3. **Release Stage** to deploy the exact same accepted candidate to production.
+
+Everything else is optional tooling.
 
 This keeps the pipeline aligned to the core rule:
 

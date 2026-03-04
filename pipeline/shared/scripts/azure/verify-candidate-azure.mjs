@@ -112,8 +112,10 @@ export async function verifyCandidateAzure({
     workerAppName
   ]);
 
-  const apiExpectedImage = deployState?.deployment?.api?.candidateImage ?? manifest.artifacts.apiImage;
-  const webExpectedImage = deployState?.deployment?.web?.candidateImage ?? manifest.artifacts.webImage;
+  const apiExpectedImage =
+    deployState?.deployment?.api?.candidateImage ?? manifest.artifacts.apiImage;
+  const webExpectedImage =
+    deployState?.deployment?.web?.candidateImage ?? manifest.artifacts.webImage;
   const workerExpectedImage =
     deployState?.deployment?.worker?.candidateImage ?? manifest.artifacts.workerImage;
 

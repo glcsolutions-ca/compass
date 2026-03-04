@@ -101,17 +101,7 @@ async function importImageToAcr({
   await runAz(importArgs);
 
   const importedDigest = await runAz(
-    [
-      "acr",
-      "repository",
-      "show",
-      "--name",
-      acrName,
-      "--image",
-      targetImage,
-      "--query",
-      "digest"
-    ],
+    ["acr", "repository", "show", "--name", acrName, "--image", targetImage, "--query", "digest"],
     { output: "tsv" }
   );
 

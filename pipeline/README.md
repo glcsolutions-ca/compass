@@ -6,7 +6,8 @@ This folder defines the canonical deployment pipeline model for Compass.
 
 1. An agent or developer opens a PR.
 2. `PR Intake (Auto-enable Merge when ready)` enables auto-merge for PRs targeting `main`.
-3. Merge queue creates a `merge_group` candidate when the PR is eligible.
+3. `Commit Stage Intake` publishes a lightweight `Commit Stage` eligibility check on the PR head revision.
+4. Merge queue creates a `merge_group` candidate when the PR is eligible.
 
 ## Farley Stage Order
 

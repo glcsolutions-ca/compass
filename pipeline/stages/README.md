@@ -26,6 +26,7 @@ We do that by:
 
 PR open, auto-merge enablement, and merge-queue eligibility are intake/orchestration concerns.
 They are not pipeline stages.
+The lightweight PR `Commit Stage` intake check is eligibility-only; authoritative Commit Stage execution remains on `merge_group`.
 
 ## Stage Order
 

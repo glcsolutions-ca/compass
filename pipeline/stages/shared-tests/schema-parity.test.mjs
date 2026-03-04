@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   validateAcceptanceAttestationPredicateDocument,
-  validateAcceptanceEvidenceDocument,
   validateReleaseCandidateDocument,
-  validateReleaseAttestationPredicateDocument,
-  validateReleaseEvidenceDocument
+  validateReleaseAttestationPredicateDocument
 } from "../../shared/scripts/pipeline-contract-lib.mjs";
 import { validateBySchema } from "../../shared/scripts/schema-validator.mjs";
 
@@ -36,41 +34,6 @@ describe("schema parity", () => {
 
     const helperValid = validateReleaseCandidateDocument(candidate).length === 0;
     const schemaValid = validateBySchema("releaseCandidate", candidate).length === 0;
-    expect(helperValid).toBe(schemaValid);
-  });
-
-  it("keeps acceptance evidence helper verdict parity with schema validator", () => {
-    const evidence = {
-      schemaVersion: "acceptance-evidence.v1",
-      candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      workflowRunId: "123456",
-      environment: "acceptance",
-      verdict: "pass",
-      startedAt: "2026-03-03T18:05:12Z",
-      finishedAt: "2026-03-03T18:10:12Z",
-      summary: "Acceptance passed"
-    };
-
-    const helperValid = validateAcceptanceEvidenceDocument(evidence).length === 0;
-    const schemaValid = validateBySchema("acceptanceEvidence", evidence).length === 0;
-    expect(helperValid).toBe(schemaValid);
-  });
-
-  it("keeps release evidence helper verdict parity with schema validator", () => {
-    const evidence = {
-      schemaVersion: "release-evidence.v1",
-      candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      workflowRunId: "123456",
-      environment: "production",
-      verdict: "pass",
-      releasedAt: "2026-03-03T18:20:12Z",
-      summary: "Release passed"
-    };
-
-    const helperValid = validateReleaseEvidenceDocument(evidence).length === 0;
-    const schemaValid = validateBySchema("releaseEvidence", evidence).length === 0;
     expect(helperValid).toBe(schemaValid);
   });
 

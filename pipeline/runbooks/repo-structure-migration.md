@@ -21,7 +21,6 @@ Migrate to canonical stage-first `pipeline/` layout and standardized test placem
 | `pipeline/scripts/generate-commit-analysis-*`       | `pipeline/stages/01-commit/scripts/*` and `pipeline/stages/01-commit/tests/*`         |
 | `pipeline/scripts/record-acceptance-*`              | `pipeline/stages/02-acceptance/scripts/*` and `pipeline/stages/02-acceptance/tests/*` |
 | `pipeline/scripts/verify-acceptance-*`              | `pipeline/stages/05-release/scripts/*` and `pipeline/stages/05-release/tests/*`       |
-| `pipeline/scripts/record-release-evidence.mjs`      | `pipeline/stages/05-release/scripts/record-release-evidence.mjs`                      |
 | `pipeline/runbooks/commit-stage-operating-model.md` | `pipeline/stages/01-commit/runbook.md`                                                |
 | `pipeline/runbooks/acceptance-gate.md`              | `pipeline/stages/02-acceptance/runbook.md`                                            |
 | `pipeline/runbooks/release-and-rollback.md`         | `pipeline/stages/05-release/runbook.md`                                               |

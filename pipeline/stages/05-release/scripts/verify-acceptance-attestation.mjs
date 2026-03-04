@@ -73,8 +73,13 @@ async function loadVerificationEntries(options) {
     args.push("--signer-workflow", signerWorkflow);
   }
 
+  const commandEnv = { ...process.env };
+  if (!commandEnv.GH_TOKEN && commandEnv.GITHUB_TOKEN) {
+    commandEnv.GH_TOKEN = commandEnv.GITHUB_TOKEN;
+  }
+
   const result = await execFileAsync("gh", args, {
-    env: process.env,
+    env: commandEnv,
     maxBuffer: 20 * 1024 * 1024
   });
 

@@ -48,14 +48,6 @@ export function validateReleaseCandidateDocument(document) {
   return normalizeErrors(errors);
 }
 
-export function validateAcceptanceEvidenceDocument(document) {
-  return normalizeErrors(validateBySchema("acceptanceEvidence", document));
-}
-
-export function validateReleaseEvidenceDocument(document) {
-  return normalizeErrors(validateBySchema("releaseEvidence", document));
-}
-
 export function validateAcceptanceAttestationPredicateDocument(document) {
   return normalizeErrors(validateBySchema("acceptanceAttestationPredicate", document));
 }

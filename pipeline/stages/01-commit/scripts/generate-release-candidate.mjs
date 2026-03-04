@@ -49,12 +49,17 @@ export function createReleaseCandidate(options) {
 
   const sbomRefs = options.sbomRefs ?? [];
   const signatureRefs = options.signatureRefs ?? [];
+  const releaseUnitDigest = options.releaseUnitDigest?.trim();
   if (sbomRefs.length > 0) {
     document.provenance.sbomRefs = sbomRefs;
   }
 
   if (signatureRefs.length > 0) {
     document.provenance.signatureRefs = signatureRefs;
+  }
+
+  if (releaseUnitDigest) {
+    document.provenance.releaseUnitDigest = releaseUnitDigest;
   }
 
   const errors = validateReleaseCandidateDocument(document);
@@ -82,6 +87,7 @@ export async function main(argv = process.argv.slice(2)) {
     migrationsArtifact: requireOption(options, "migrations-artifact"),
     registry: requireOption(options, "registry"),
     commitStageRunId: requireOption(options, "commit-stage-run-id"),
+    releaseUnitDigest: optionalOption(options, "release-unit-digest"),
     createdAt: optionalOption(options, "created-at"),
     sbomRefs: collectListValues(options["sbom-ref"]),
     signatureRefs: collectListValues(options["signature-ref"])

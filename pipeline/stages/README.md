@@ -58,7 +58,7 @@ Must do:
 4. Build and push immutable digest-pinned runtime artifacts.
 5. Publish candidate representations to GHCR.
 6. Attach build provenance/SBOM attestations.
-7. Emit commit-stage metadata artifact for downstream stage resolution.
+7. Emit canonical handoff artifact `release-candidate-manifest` for downstream stage resolution.
 8. Fail closed when any required step fails.
 
 Must not do:
@@ -76,12 +76,12 @@ Purpose:
 Must do:
 
 1. Trigger from successful Commit Stage via `workflow_run`.
-2. Resolve candidate identity from commit-stage metadata on the triggering run.
+2. Resolve candidate identity from `release-candidate-manifest` on the triggering run.
 3. Guard against stale candidates by requiring SHA presence on `main`.
 4. Deploy exact candidate digests from GHCR.
 5. Run automated acceptance suites.
 6. Attach acceptance attestation to candidate subject.
-7. Emit acceptance-stage metadata artifact for release-stage resolution.
+7. Emit the same canonical `release-candidate-manifest` artifact for release-stage resolution.
 8. Fail closed on test or attestation errors.
 
 Must not do:
@@ -100,7 +100,7 @@ Must do:
 
 1. Trigger automatically from successful Acceptance Stage.
 2. Also support manual `workflow_dispatch` by `candidate_id` for rollback/redeploy.
-3. In auto mode, resolve candidate identity from acceptance-stage metadata on the triggering run.
+3. In auto mode, resolve candidate identity from `release-candidate-manifest` on the triggering acceptance run.
 4. Verify acceptance attestation is present and `verdict=pass`.
 5. Deploy exact candidate digest set from GHCR.
 6. Run production smoke verification.
@@ -117,3 +117,8 @@ Must not do:
 2. Stage evidence is attached to the same candidate subject.
 3. Any material artifact change requires a new candidate identity.
 4. Rollback is a candidate re-promotion, not source reconstruction.
+
+## Promotion Policy Boundary
+
+1. Promotion policy gate is the release-unit acceptance attestation (`verdict=pass`).
+2. Per-image build provenance/SBOM attestations are publication metadata for audit and consumers.

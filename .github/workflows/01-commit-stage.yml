@@ -43,21 +43,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout
+      - &checkout_step
+        name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
+      - &setup_pnpm_step
+        name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.30.1
 
-      - name: Setup Node
+      - &setup_node_step
+        name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
 
-      - name: Install dependencies
+      - &install_dependencies_step
+        name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Commit quick gate
@@ -96,13 +100,14 @@ jobs:
             image_name: compass-migrations
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - *checkout_step
 
-      - name: Setup Docker Buildx
+      - &setup_buildx_step
+        name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GHCR
+      - &login_ghcr_step
+        name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -144,33 +149,20 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+      artifact-metadata: write
     needs:
       - commit_tests
       - build_and_publish_images
-    outputs:
-      candidate_id: ${{ steps.candidate.outputs.candidate_id }}
-      release_unit_digest: ${{ steps.release_unit.outputs.release_unit_digest }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - *checkout_step
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.1
+      - *setup_buildx_step
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
+      - *login_ghcr_step
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@v1
 
       - name: Download digest artifacts
         uses: actions/download-artifact@v4
@@ -196,41 +188,6 @@ jobs:
         id: candidate
         run: echo "candidate_id=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Generate release candidate manifest
-        run: |
-          mkdir -p .artifacts/release-candidate
-          node pipeline/stages/01-commit/scripts/generate-release-candidate.mjs \
-            --out .artifacts/release-candidate/manifest.json \
-            --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
-            --repository "${{ github.repository }}" \
-            --source-revision "${{ github.sha }}" \
-            --api-image "${{ steps.refs.outputs.api_image_ref }}" \
-            --web-image "${{ steps.refs.outputs.web_image_ref }}" \
-            --worker-image "${{ steps.refs.outputs.worker_image_ref }}" \
-            --migrations-artifact "${{ steps.refs.outputs.migrations_image_ref }}" \
-            --registry "${{ env.REGISTRY_BASE }}" \
-            --commit-stage-run-id "${{ github.run_id }}"
-
-      - name: Validate release candidate manifest
-        run: node pipeline/shared/scripts/validate-release-candidate.mjs --file .artifacts/release-candidate/manifest.json
-
-      - name: Setup ORAS
-        uses: oras-project/setup-oras@v1
-
-      - name: Login to GHCR (Docker)
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish candidate manifest package
-        run: |
-          cp .artifacts/release-candidate/manifest.json manifest.json
-          oras push --artifact-type application/vnd.compass.release-manifest.v1+json \
-            "${MANIFESTS_REPO}:${{ steps.candidate.outputs.candidate_id }}" \
-            "manifest.json:application/vnd.compass.release-manifest.v1+json"
-
       - name: Publish release-unit index
         id: release_unit
         run: |
@@ -252,28 +209,61 @@ jobs:
 
           echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
 
-      - name: Write commit-stage metadata
+      - name: Generate release candidate manifest
         run: |
-          mkdir -p .artifacts/metadata
+          set -euo pipefail
+
+          mkdir -p .artifacts/release-candidate
+          created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
           jq -n \
             --arg candidateId "${{ steps.candidate.outputs.candidate_id }}" \
+            --arg repository "${{ github.repository }}" \
             --arg sourceRevision "${{ github.sha }}" \
+            --arg createdAt "${created_at}" \
+            --arg apiImage "${{ steps.refs.outputs.api_image_ref }}" \
+            --arg webImage "${{ steps.refs.outputs.web_image_ref }}" \
+            --arg workerImage "${{ steps.refs.outputs.worker_image_ref }}" \
+            --arg migrationsArtifact "${{ steps.refs.outputs.migrations_image_ref }}" \
+            --arg commitStageRunId "${{ github.run_id }}" \
+            --arg registry "${{ env.REGISTRY_BASE }}" \
             --arg releaseUnitDigest "${{ steps.release_unit.outputs.release_unit_digest }}" \
-            --arg commitRunId "${{ github.run_id }}" \
-            --arg eventName "${{ github.event_name }}" \
             '{
+              schemaVersion: "rc.v1",
               candidateId: $candidateId,
-              sourceRevision: $sourceRevision,
-              releaseUnitDigest: $releaseUnitDigest,
-              commitRunId: $commitRunId,
-              eventName: $eventName
-            }' > .artifacts/metadata/commit-stage-metadata.json
+              source: {
+                repository: $repository,
+                revision: $sourceRevision,
+                createdAt: $createdAt
+              },
+              artifacts: {
+                apiImage: $apiImage,
+                webImage: $webImage,
+                workerImage: $workerImage,
+                migrationsArtifact: $migrationsArtifact
+              },
+              provenance: {
+                commitStageRunId: $commitStageRunId,
+                registry: $registry,
+                releaseUnitDigest: $releaseUnitDigest
+              }
+            }' > .artifacts/release-candidate/manifest.json
 
-      - name: Upload commit-stage metadata artifact
+      - name: Validate release candidate manifest
+        run: node pipeline/shared/scripts/validate-release-candidate-runtime.mjs --file .artifacts/release-candidate/manifest.json
+
+      - name: Publish candidate manifest package
+        run: |
+          cp .artifacts/release-candidate/manifest.json manifest.json
+          oras push --artifact-type application/vnd.compass.release-manifest.v1+json \
+            "${MANIFESTS_REPO}:${{ steps.candidate.outputs.candidate_id }}" \
+            "manifest.json:application/vnd.compass.release-manifest.v1+json"
+
+      - name: Upload release candidate handoff artifact
         uses: actions/upload-artifact@v4
         with:
-          name: commit-stage-metadata
-          path: .artifacts/metadata/commit-stage-metadata.json
+          name: release-candidate-manifest
+          path: .artifacts/release-candidate/manifest.json
           if-no-files-found: error
 
       - name: Attest release-unit build provenance

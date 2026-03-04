@@ -56,11 +56,18 @@ Everything outside that purpose is optional tooling.
 
 GHCR is the canonical artifact and stage-evidence store.
 
-1. Commit Stage publishes runtime artifacts and release-unit metadata.
-2. Commit Stage writes `commit-stage-metadata` artifact used as the authoritative candidate handoff to Acceptance.
-3. Acceptance reads that exact candidate, writes acceptance attestation, and writes `acceptance-stage-metadata` for Release.
-4. Release reads that exact candidate plus acceptance attestation, deploys unchanged, and writes release attestation.
-5. PR-head queue admission uses a lightweight `Commit Stage` check only; authoritative candidate publication still happens once on `merge_group`.
+1. Commit Stage publishes runtime artifacts, the release-unit index, and candidate manifest package to GHCR.
+2. Commit Stage uploads one canonical handoff artifact: `release-candidate-manifest`.
+3. Acceptance resolves candidate identity from that handoff artifact, fetches and validates the same candidate from GHCR, and deploys unchanged digests.
+4. Acceptance uploads the same `release-candidate-manifest` as handoff for Release.
+5. Release resolves from that same handoff object, verifies acceptance attestation on the same candidate subject, and deploys unchanged digests.
+6. PR-head queue admission uses a lightweight `Commit Stage` check only; authoritative candidate publication still happens once on `merge_group`.
+
+## Promotion Policy vs Publication Metadata
+
+1. Promotion policy gate: release-unit subject attestation chain (`acceptance` pass required before `release`).
+2. Publication metadata: per-image provenance/SBOM attestations generated at build time.
+3. Promotion decisions use policy attestations; image-level provenance/SBOM remains available for audit and consumer verification.
 
 ## Invariants
 

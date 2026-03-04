@@ -10,12 +10,13 @@ Workflow: `.github/workflows/03-release-stage.yml`.
 
 1. Automatic release trigger is successful Acceptance Stage completion.
 2. Manual rollback/redeploy trigger is `workflow_dispatch` with `candidate_id`.
-3. Auto mode resolves candidate identity from `acceptance-stage-metadata` artifact on the triggering acceptance run.
-4. Candidate manifest must validate before deploy.
-5. Acceptance attestation must exist for candidate subject and `verdict=pass`.
-6. Production deploy uses exact candidate artifacts from GHCR.
-7. Production smoke checks must pass.
-8. Release records GitHub deployment status and release attestation.
+3. Auto mode resolves candidate identity from `release-candidate-manifest` artifact on the triggering acceptance run.
+4. If the handoff artifact is absent (for example non-authoritative upstream run), release exits success as skipped.
+5. Candidate manifest must validate before deploy.
+6. Acceptance attestation must exist for candidate subject and `verdict=pass` (verified with `gh attestation verify` plus candidate/business-rule checks).
+7. Production deploy uses exact candidate artifacts from GHCR.
+8. Production smoke checks must pass.
+9. Release records GitHub deployment status and release attestation.
 
 ## Rollback Rules
 

@@ -6,6 +6,12 @@ Release Stage promotes an accepted candidate to production without rebuilding.
 
 Workflow: `.github/workflows/03-release-stage.yml`.
 
+## Hardening Notes
+
+1. Workflow actions are SHA-pinned and updated by Dependabot.
+2. Release intentionally avoids `pnpm` cache in this privileged stage.
+3. Production environment deployment branch policy is `main` only.
+
 ## Release Rules
 
 1. Automatic release trigger is successful Acceptance Stage completion.

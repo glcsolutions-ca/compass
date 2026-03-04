@@ -6,6 +6,11 @@ Acceptance Stage proves customer-visible behavior for the exact candidate produc
 
 Workflow: `.github/workflows/02-acceptance-stage.yml`.
 
+## Hardening Notes
+
+1. Workflow actions are SHA-pinned and updated by Dependabot.
+2. Acceptance intentionally avoids `pnpm` cache in this privileged `workflow_run` stage.
+
 ## Entry Criteria
 
 1. Trigger is successful `workflow_run` of Commit Stage.

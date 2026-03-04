@@ -11,6 +11,11 @@ Workflows:
 1. `.github/workflows/00-queue-admission.yml` (PR-head queue admission only, non-authoritative).
 2. `.github/workflows/01-commit-stage.yml` (authoritative `merge_group` commit stage).
 
+## Hardening Notes
+
+1. Workflow actions are SHA-pinned and updated by Dependabot.
+2. Commit Stage may retain dependency cache to optimize authoritative build latency.
+
 ## Entry Criteria
 
 1. For authoritative candidate publication, trigger event is `merge_group` (`checks_requested`).

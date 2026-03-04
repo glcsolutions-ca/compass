@@ -1,4 +1,5 @@
 name: Acceptance Stage
+run-name: Acceptance Stage (${{ github.event.workflow_run.head_sha }})
 
 on:
   workflow_run:
@@ -20,34 +21,26 @@ env:
   ACCEPTANCE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/acceptance/v1
 
 jobs:
-  acceptance:
-    name: Acceptance Stage
+  resolve_candidate:
+    name: Resolve acceptance candidate
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    environment: acceptance
     permissions:
       actions: read
       contents: read
-      packages: write
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-
+    outputs:
+      run_acceptance: ${{ steps.decision.outputs.run_acceptance }}
+      skip_reason: ${{ steps.decision.outputs.skip_reason }}
+      candidate_id: ${{ steps.resolve.outputs.candidate_id }}
+      source_revision: ${{ steps.resolve.outputs.source_revision }}
+      release_unit_digest_hint: ${{ steps.resolve.outputs.release_unit_digest_hint }}
     steps:
-      - name: Capture acceptance stage start time
-        id: acceptance_start
-        run: echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
-      - &checkout_step
-        name: Checkout
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Download release candidate handoff from triggering run
-        id: handoff_artifact
-        continue-on-error: true
+      - name: Download release candidate handoff from Commit Stage
         uses: actions/download-artifact@v4
         with:
           name: release-candidate-manifest
@@ -55,8 +48,8 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ runner.temp }}/triggering-run
 
-      - name: Resolve authoritative handoff
-        id: handoff
+      - name: Resolve candidate from handoff manifest
+        id: resolve
         run: |
           set -euo pipefail
 
@@ -66,30 +59,12 @@ jobs:
           fi
 
           if [ -z "${manifest_file}" ] || [ ! -f "${manifest_file}" ]; then
-            echo "authoritative=false" >> "$GITHUB_OUTPUT"
-            echo "skip_reason=non-authoritative Commit Stage run (no release-candidate-manifest artifact)" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "release-candidate-manifest artifact is missing from triggering Commit Stage run ${GITHUB_RUN_ID}" >&2
+            exit 1
           fi
 
-          echo "authoritative=true" >> "$GITHUB_OUTPUT"
-          echo "manifest_path=${manifest_file}" >> "$GITHUB_OUTPUT"
+          node pipeline/shared/scripts/validate-release-candidate-runtime.mjs --file "${manifest_file}"
 
-      - name: Skip non-authoritative Commit Stage run
-        if: ${{ steps.handoff.outputs.authoritative != 'true' }}
-        run: |
-          echo "Skipping Acceptance: ${{ steps.handoff.outputs.skip_reason }}"
-
-      - name: Validate handoff manifest (runtime validator)
-        if: ${{ steps.handoff.outputs.authoritative == 'true' }}
-        run: node pipeline/shared/scripts/validate-release-candidate-runtime.mjs --file "${{ steps.handoff.outputs.manifest_path }}"
-
-      - name: Resolve candidate from handoff manifest
-        if: ${{ steps.handoff.outputs.authoritative == 'true' }}
-        id: candidate
-        run: |
-          set -euo pipefail
-
-          manifest_file="${{ steps.handoff.outputs.manifest_path }}"
           candidate_id="$(jq -r '.candidateId // empty' "${manifest_file}")"
           source_revision="$(jq -r '.source.revision // empty' "${manifest_file}")"
           release_unit_digest_hint="$(jq -r '.provenance.releaseUnitDigest // empty' "${manifest_file}")"
@@ -114,12 +89,11 @@ jobs:
           echo "release_unit_digest_hint=${release_unit_digest_hint}" >> "$GITHUB_OUTPUT"
 
       - name: Wait for source revision on main
-        if: ${{ steps.handoff.outputs.authoritative == 'true' }}
         id: main_guard
         run: |
           set -euo pipefail
 
-          source_revision="${{ steps.candidate.outputs.source_revision }}"
+          source_revision="${{ steps.resolve.outputs.source_revision }}"
           deadline=$(( $(date +%s) + 600 ))
           is_on_main=false
 
@@ -134,21 +108,58 @@ jobs:
 
           echo "is_on_main=${is_on_main}" >> "$GITHUB_OUTPUT"
 
-      - name: Skip stale candidate not merged to main
-        if: ${{ steps.handoff.outputs.authoritative == 'true' && steps.main_guard.outputs.is_on_main != 'true' }}
+      - name: Finalize acceptance decision
+        id: decision
         run: |
-          echo "Skipping stale candidate ${{ steps.candidate.outputs.candidate_id }} because source revision is not on main."
+          if [ "${{ steps.main_guard.outputs.is_on_main }}" = "true" ]; then
+            echo "run_acceptance=true" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_acceptance=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=stale candidate source revision not merged to main" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write resolver summary
+        run: |
+          {
+            echo "## Acceptance Resolver"
+            echo "- Candidate: ${{ steps.resolve.outputs.candidate_id }}"
+            echo "- Source revision: ${{ steps.resolve.outputs.source_revision }}"
+            echo "- Run acceptance: ${{ steps.decision.outputs.run_acceptance }}"
+            if [ -n "${{ steps.decision.outputs.skip_reason }}" ]; then
+              echo "- Skip reason: ${{ steps.decision.outputs.skip_reason }}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  acceptance:
+    name: Acceptance Stage
+    needs:
+      - resolve_candidate
+    if: ${{ needs.resolve_candidate.outputs.run_acceptance == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: acceptance
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+
+    steps:
+      - &checkout_step
+        name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - &setup_pnpm_step
         name: Setup pnpm
-        if: ${{ steps.handoff.outputs.authoritative == 'true' && steps.main_guard.outputs.is_on_main == 'true' }}
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.1
 
       - &setup_node_step
         name: Setup Node
-        if: ${{ steps.handoff.outputs.authoritative == 'true' && steps.main_guard.outputs.is_on_main == 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -156,17 +167,14 @@ jobs:
 
       - &install_dependencies_step
         name: Install dependencies
-        if: ${{ steps.handoff.outputs.authoritative == 'true' && steps.main_guard.outputs.is_on_main == 'true' }}
         run: pnpm install --frozen-lockfile
 
       - &setup_oras_step
         name: Setup ORAS
-        if: ${{ steps.handoff.outputs.authoritative == 'true' && steps.main_guard.outputs.is_on_main == 'true' }}
         uses: oras-project/setup-oras@v1
 
       - &login_ghcr_step
         name: Login to GHCR
-        if: ${{ steps.handoff.outputs.authoritative == 'true' && steps.main_guard.outputs.is_on_main == 'true' }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -174,38 +182,39 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Fetch release manifest from GHCR
-        if: ${{ steps.handoff.outputs.authoritative == 'true' && steps.main_guard.outputs.is_on_main == 'true' }}
         run: |
           node pipeline/shared/scripts/fetch-release-candidate.mjs \
-            --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
+            --candidate-id "${{ needs.resolve_candidate.outputs.candidate_id }}" \
             --registry-repo "${{ env.MANIFESTS_REPO }}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
-      - name: Validate GHCR release manifest
-        if: ${{ steps.handoff.outputs.authoritative == 'true' && steps.main_guard.outputs.is_on_main == 'true' }}
+      - name: Validate release manifest
         run: node pipeline/shared/scripts/validate-release-candidate.mjs --file "$RUNNER_TEMP/release-candidate.json"
 
-      - name: Verify handoff manifest matches GHCR manifest
-        if: ${{ steps.handoff.outputs.authoritative == 'true' && steps.main_guard.outputs.is_on_main == 'true' }}
+      - name: Verify source revision matches resolved candidate
         run: |
           set -euo pipefail
-          diff -u <(jq -S . "${{ steps.handoff.outputs.manifest_path }}") <(jq -S . "$RUNNER_TEMP/release-candidate.json")
+          manifest_source_revision="$(jq -r '.source.revision // empty' "$RUNNER_TEMP/release-candidate.json")"
+          if [ "${manifest_source_revision}" != "${{ needs.resolve_candidate.outputs.source_revision }}" ]; then
+            echo "Manifest source revision mismatch for candidate ${{ needs.resolve_candidate.outputs.candidate_id }}" >&2
+            echo "manifest=${manifest_source_revision} expected=${{ needs.resolve_candidate.outputs.source_revision }}" >&2
+            exit 1
+          fi
 
       - name: Resolve and verify release-unit digest
-        if: ${{ steps.handoff.outputs.authoritative == 'true' && steps.main_guard.outputs.is_on_main == 'true' }}
         id: release_unit
         run: |
           set -euo pipefail
 
-          resolved_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ steps.candidate.outputs.candidate_id }}" | jq -r '.digest')"
+          resolved_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ needs.resolve_candidate.outputs.candidate_id }}" | jq -r '.digest')"
           if [ -z "${resolved_digest}" ] || [ "${resolved_digest}" = "null" ]; then
-            echo "Unable to resolve release-unit digest for ${{ steps.candidate.outputs.candidate_id }}" >&2
+            echo "Unable to resolve release-unit digest for ${{ needs.resolve_candidate.outputs.candidate_id }}" >&2
             exit 1
           fi
 
-          hint="${{ steps.candidate.outputs.release_unit_digest_hint }}"
+          hint="${{ needs.resolve_candidate.outputs.release_unit_digest_hint }}"
           if [ -n "${hint}" ] && [ "${hint}" != "${resolved_digest}" ]; then
-            echo "Release-unit digest mismatch for ${{ steps.candidate.outputs.candidate_id }}" >&2
+            echo "Release-unit digest mismatch for ${{ needs.resolve_candidate.outputs.candidate_id }}" >&2
             echo "manifest=${hint} resolved=${resolved_digest}" >&2
             exit 1
           fi
@@ -213,7 +222,6 @@ jobs:
           echo "release_unit_digest=${resolved_digest}" >> "$GITHUB_OUTPUT"
 
       - name: Deploy and run acceptance suites
-        if: ${{ steps.handoff.outputs.authoritative == 'true' && steps.main_guard.outputs.is_on_main == 'true' }}
         id: acceptance_run
         run: |
           set +e
@@ -229,6 +237,7 @@ jobs:
           verify_status=1
           system_status=1
           browser_status=1
+          playwright_install_status=1
 
           if [ "${deploy_status}" -eq 0 ]; then
             node pipeline/stages/02-acceptance/scripts/verify-candidate-github.mjs \
@@ -241,11 +250,11 @@ jobs:
 
           if [ "${deploy_status}" -eq 0 ] && [ "${verify_status}" -eq 0 ]; then
             pnpm exec playwright install --with-deps chromium
-            playwright_status=$?
-            if [ "${playwright_status}" -eq 0 ]; then
+            playwright_install_status=$?
+            if [ "${playwright_install_status}" -eq 0 ]; then
               (
-                HEAD_SHA="${{ steps.candidate.outputs.source_revision }}" \
-                TESTED_SHA="${{ steps.candidate.outputs.source_revision }}" \
+                HEAD_SHA="${{ needs.resolve_candidate.outputs.source_revision }}" \
+                TESTED_SHA="${{ needs.resolve_candidate.outputs.source_revision }}" \
                 BASE_URL="http://127.0.0.1:3001" \
                 TARGET_API_BASE_URL="http://127.0.0.1:3001" \
                 pnpm test:acceptance:system
@@ -267,29 +276,27 @@ jobs:
           fi
 
           verdict="fail"
-          if [ "${deploy_status}" -eq 0 ] && [ "${verify_status}" -eq 0 ] && [ "${system_status}" -eq 0 ] && [ "${browser_status}" -eq 0 ]; then
+          if [ "${deploy_status}" -eq 0 ] && [ "${verify_status}" -eq 0 ] && [ "${playwright_install_status}" -eq 0 ] && [ "${system_status}" -eq 0 ] && [ "${browser_status}" -eq 0 ]; then
             verdict="pass"
           fi
 
-          summary="deploy=${deploy_status} verify=${verify_status} system=${system_status} browser=${browser_status}"
+          summary="deploy=${deploy_status} verify=${verify_status} playwrightInstall=${playwright_install_status} system=${system_status} browser=${browser_status}"
           echo "verdict=${verdict}" >> "$GITHUB_OUTPUT"
           echo "suite_summary=${summary}" >> "$GITHUB_OUTPUT"
 
       - name: Generate acceptance attestation predicate
-        if: ${{ steps.handoff.outputs.authoritative == 'true' && steps.main_guard.outputs.is_on_main == 'true' }}
         run: |
           mkdir -p .artifacts/attestations
           node pipeline/stages/02-acceptance/scripts/generate-acceptance-attestation-predicate.mjs \
             --out .artifacts/attestations/acceptance-predicate.json \
-            --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
-            --source-revision "${{ steps.candidate.outputs.source_revision }}" \
+            --candidate-id "${{ needs.resolve_candidate.outputs.candidate_id }}" \
+            --source-revision "${{ needs.resolve_candidate.outputs.source_revision }}" \
             --verdict "${{ steps.acceptance_run.outputs.verdict }}" \
             --workflow-run-id "${{ github.run_id }}" \
             --tested-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --suite-summary "${{ steps.acceptance_run.outputs.suite_summary }}"
 
       - name: Attest acceptance verdict to candidate subject
-        if: ${{ steps.handoff.outputs.authoritative == 'true' && steps.main_guard.outputs.is_on_main == 'true' }}
         uses: actions/attest@v2
         with:
           subject-name: ${{ env.RELEASE_UNITS_REPO }}
@@ -299,15 +306,57 @@ jobs:
           push-to-registry: true
 
       - name: Upload release candidate handoff for Release Stage
-        if: ${{ steps.handoff.outputs.authoritative == 'true' && steps.main_guard.outputs.is_on_main == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: release-candidate-manifest
           path: ${{ runner.temp }}/release-candidate.json
           if-no-files-found: error
+          retention-days: 3
+
+      - name: Upload acceptance diagnostics on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-diagnostics-${{ github.run_id }}
+          path: |
+            .artifacts/acceptance
+            .artifacts/attestations
+            playwright-report
+            test-results
+            ${{ runner.temp }}/acceptance-deploy-state.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Write acceptance summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo "## Acceptance Stage"
+            echo "- Candidate: ${{ needs.resolve_candidate.outputs.candidate_id }}"
+            echo "- Source revision: ${{ needs.resolve_candidate.outputs.source_revision }}"
+            echo "- Release unit digest: ${{ steps.release_unit.outputs.release_unit_digest }}"
+            echo "- Verdict: ${{ steps.acceptance_run.outputs.verdict }}"
+            echo "- Suite summary: ${{ steps.acceptance_run.outputs.suite_summary }}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail acceptance stage when verdict is non-pass
-        if: ${{ steps.handoff.outputs.authoritative == 'true' && steps.main_guard.outputs.is_on_main == 'true' && steps.acceptance_run.outputs.verdict != 'pass' }}
+        if: ${{ steps.acceptance_run.outputs.verdict != 'pass' }}
         run: |
-          echo "Acceptance failed for candidate ${{ steps.candidate.outputs.candidate_id }}: ${{ steps.acceptance_run.outputs.suite_summary }}" >&2
+          echo "Acceptance failed for candidate ${{ needs.resolve_candidate.outputs.candidate_id }}: ${{ steps.acceptance_run.outputs.suite_summary }}" >&2
           exit 1
+
+  acceptance_skip:
+    name: Acceptance Stage (skipped)
+    needs:
+      - resolve_candidate
+    if: ${{ needs.resolve_candidate.outputs.run_acceptance != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record skip
+        run: |
+          {
+            echo "## Acceptance Stage"
+            echo "- Candidate: ${{ needs.resolve_candidate.outputs.candidate_id }}"
+            echo "- Result: skipped"
+            echo "- Reason: ${{ needs.resolve_candidate.outputs.skip_reason }}"
+          } >> "$GITHUB_STEP_SUMMARY"

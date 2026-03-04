@@ -53,7 +53,7 @@ Purpose:
 Must do:
 
 1. Run authoritatively on `merge_group` only.
-2. Expose a lightweight PR-head `Commit Stage` status check for merge-queue admission (no rebuild, no publication).
+2. Pair with a lightweight PR-head queue-admission workflow that reports `Commit Stage` for merge-queue admission (no rebuild, no publication).
 3. Execute fast commit checks for the authoritative run.
 4. Build and push immutable digest-pinned runtime artifacts.
 5. Publish candidate representations to GHCR.

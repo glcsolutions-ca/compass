@@ -52,6 +52,10 @@ Everything outside that purpose is optional tooling.
 2. `Acceptance Stage`
 3. `Release Stage`
 
+## Queue Admission
+
+`pull_request` queue admission is handled by `.github/workflows/00-queue-admission.yml` and is intentionally non-authoritative. The authoritative candidate build/publish path remains `.github/workflows/01-commit-stage.yml` on `merge_group` only.
+
 ## System of Record
 
 GHCR is the canonical artifact and stage-evidence store.

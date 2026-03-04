@@ -11,7 +11,7 @@ describe("schema parity", () => {
   it("keeps release candidate helper verdict parity with schema validator", () => {
     const candidate = {
       schemaVersion: "rc.v1",
-      candidateId: "main-abcdef1-123456",
+      candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       source: {
         repository: "glcsolutions-ca/compass",
         revision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -41,7 +41,7 @@ describe("schema parity", () => {
   it("keeps acceptance evidence helper verdict parity with schema validator", () => {
     const evidence = {
       schemaVersion: "acceptance-evidence.v1",
-      candidateId: "main-abcdef1-123456",
+      candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       workflowRunId: "123456",
       environment: "acceptance",
@@ -59,7 +59,7 @@ describe("schema parity", () => {
   it("keeps release evidence helper verdict parity with schema validator", () => {
     const evidence = {
       schemaVersion: "release-evidence.v1",
-      candidateId: "main-abcdef1-123456",
+      candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       workflowRunId: "123456",
       environment: "production",
@@ -77,7 +77,7 @@ describe("schema parity", () => {
     const evidence = {
       schemaVersion: "production-rehearsal-evidence.v1",
       stage: "production-rehearsal",
-      candidateId: "main-abcdef1-123456",
+      candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       workflowRunId: "123456",
       environment: "production",

@@ -2,16 +2,15 @@ import { pathToFileURL } from "node:url";
 import { buildCandidateId } from "./pipeline-contract-lib.mjs";
 import { parseCliArgs, requireOption } from "./cli-utils.mjs";
 
-export function computeCandidateId({ sourceRevision, runId }) {
-  return buildCandidateId(sourceRevision, runId);
+export function computeCandidateId({ sourceRevision }) {
+  return buildCandidateId(sourceRevision);
 }
 
 export async function main(argv = process.argv.slice(2)) {
   const options = parseCliArgs(argv);
   const sourceRevision = requireOption(options, "source-revision");
-  const runId = requireOption(options, "run-id");
 
-  const candidateId = computeCandidateId({ sourceRevision, runId });
+  const candidateId = computeCandidateId({ sourceRevision });
   process.stdout.write(candidateId);
 }
 

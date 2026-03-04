@@ -1,6 +1,6 @@
-# Stage 04: Production Rehearsal (Zero Traffic)
+# Staging / Manual Test Stage (Production Rehearsal Placeholder)
 
-This stage deploys the accepted candidate into production with zero traffic,
-verifies candidate revision health directly, and records rehearsal evidence.
+This stage currently acts as the Farley Staging / Manual Test Stage placeholder.
+It verifies candidate/evidence identity integrity and records rehearsal evidence.
 
-It is the final automated confidence step before release promotion.
+Real zero-traffic production rehearsal automation will replace this placeholder implementation.

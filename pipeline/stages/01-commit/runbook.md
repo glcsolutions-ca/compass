@@ -2,24 +2,32 @@
 
 ## Purpose
 
-This runbook defines how the team operates the authoritative `commit-stage` pipeline on `main`.
-It formalizes stop-the-line behavior, ownership, escalation, and weekly optimization discipline.
-It covers `01-commit` responsibilities only.
+This runbook defines team operating behavior for the authoritative Commit Stage.
+Commit Stage is the only pre-merge gate in the merge queue path.
 
-## Policy: Developers Wait for Commit Stage
+Workflow: `.github/workflows/01-commit-stage.yml` (`name: Commit Stage`, trigger: `merge_group`).
 
-1. Every change merged to `main` is followed by a `commit-stage` run.
-2. The developer(s) responsible for the merged change remain accountable until the run is green.
-3. If `commit-stage` is red, new work pauses until the failure is fixed forward or backed out.
-4. A release candidate exists only when commit-stage passes candidate generation and publication.
+## Policy: Commit Stage Is Authoritative
 
-## Red Trunk Rules
+1. Merge-queue candidates must pass Commit Stage before merge to `main`.
+2. Commit Stage is the only stage that builds and publishes the release candidate.
+3. A release candidate exists only when Commit Stage passes manifest generation/publication.
+4. Post-merge stages consume that exact candidate; they do not rebuild.
 
-1. First priority is restoring green `main`.
+## Candidate Identity
+
+1. `candidateId` is `sha-<40-char-source-sha>`.
+2. Candidate identity is immutable digest-pinned artifacts plus source revision.
+3. Re-runs for the same `candidateId` must be byte-for-byte equivalent for source/artifact identity.
+4. Tag conflicts with different artifact identity fail closed.
+
+## Red Candidate Rules
+
+1. First priority is restoring a passing Commit Stage for the queued candidate.
 2. Preferred recovery order:
-   1. fast forward-fix in the smallest possible change;
-   2. backout candidate when forward-fix is not immediate;
-   3. follow-up hardening change after trunk is restored.
+   1. smallest forward fix;
+   2. backout when forward fix is not immediate;
+   3. follow-up hardening after green is restored.
 3. Do not bypass gates or mutate candidate identity to force progression.
 
 ## Ownership and Escalation
@@ -31,28 +39,8 @@ It covers `01-commit` responsibilities only.
 | Image build/publish                                                 | Platform/Delivery | App owner         | 20 minutes     | <= 45 minutes     |
 | Candidate manifest generation/validation                            | Platform/Delivery | App owner         | 15 minutes     | <= 30 minutes     |
 
-## Failure Taxonomy
-
-| Code    | Class                      | Typical Signal                                    | Immediate Action                                                        |
-| ------- | -------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------- |
-| CMT-001 | Compilation/type failure   | `typecheck` step failed                           | Fix forward/backout immediately                                         |
-| CMT-002 | Commit test failure        | `test:commit:candidate` failed                    | Fix test or defect; re-run                                              |
-| CMT-003 | Analysis threshold breach  | `commit-analysis` verdict `fail`                  | Improve coverage/reduce duplication or adjust approved threshold change |
-| CMT-006 | Complexity/cycle breach    | `rc:check:complexity` or `rc:check:cycles` failed | Refactor to reduce branch complexity and break import cycles            |
-| CMT-004 | Build/publish failure      | Docker/registry error                             | Repair build config or registry auth and re-run                         |
-| CMT-005 | Candidate contract failure | manifest validation failed                        | Fix generator/schema mismatch; do not promote                           |
-
 ## Weekly Reliability Review (Required)
 
-Run this weekly with Platform + app owners:
-
-1. Review top acceptance failures from the week.
-2. Select at least one recurrent late-stage failure class.
-3. Add a fast commit-stage detector for that class.
-4. Track the change in failure discovery stage over time.
-
-### Required Output
-
-1. One moved-left failure rule per cycle (minimum).
-2. Updated threshold/guardrail rationale where changed.
-3. Link to implementing PR and resulting metric delta.
+1. Review recurring acceptance/release failures.
+2. Move at least one recurring late failure left into Commit Stage.
+3. Track reduction in late-stage discovery over time.

@@ -9,7 +9,7 @@
 5. Release records evidence linked to `candidateId` and `sourceRevision`.
 6. Release gate is fail-closed; promotion must not run when evidence checks fail.
 7. Release supports two entry modes:
-   - automatic trigger from successful `04-production-rehearsal-stage`;
+   - automatic trigger from successful `Staging / Manual Test Stage (Production Rehearsal Placeholder)`;
    - manual `workflow_dispatch` for rollback/redeploy.
 
 ## Rollback Rules

@@ -25,7 +25,7 @@ export function createReleaseCandidate(options) {
   const candidateId =
     options.candidateId?.trim() && options.candidateId.trim().length > 0
       ? options.candidateId.trim()
-      : buildCandidateId(sourceRevision, runId);
+      : buildCandidateId(sourceRevision);
 
   const document = {
     schemaVersion: "rc.v1",

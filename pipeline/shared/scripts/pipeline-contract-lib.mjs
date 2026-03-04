@@ -3,11 +3,10 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { validateBySchema } from "./schema-validator.mjs";
 
 export const PATTERNS = {
-  candidateId: /^main-[a-f0-9]{7,40}-[0-9]{6,}$/u,
+  candidateId: /^sha-[a-f0-9]{40}$/u,
   sourceRevision: /^[a-f0-9]{40}$/u,
   digestPinnedOciRef:
-    /^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*@sha256:[a-f0-9]{64}$/u,
-  numericString: /^[0-9]+$/u
+    /^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*@sha256:[a-f0-9]{64}$/u
 };
 
 const FORBIDDEN_RELEASE_FIELDS = new Set([
@@ -72,19 +71,14 @@ export async function writeJsonFile(filePath, document) {
   await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, "utf8");
 }
 
-export function buildCandidateId(sourceRevision, runId) {
+export function buildCandidateId(sourceRevision) {
   const normalizedRevision = String(sourceRevision || "")
     .trim()
     .toLowerCase();
-  const normalizedRunId = String(runId || "").trim();
 
   if (!PATTERNS.sourceRevision.test(normalizedRevision)) {
     throw new Error("sourceRevision must be a 40-char lowercase SHA");
   }
 
-  if (!PATTERNS.numericString.test(normalizedRunId) || normalizedRunId.length < 6) {
-    throw new Error("runId must be numeric and at least 6 digits");
-  }
-
-  return `main-${normalizedRevision.slice(0, 7)}-${normalizedRunId}`;
+  return `sha-${normalizedRevision}`;
 }

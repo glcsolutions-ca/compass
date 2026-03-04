@@ -1,50 +1,49 @@
 # Pipeline Stages (Farley Stage Model)
 
 This document defines the canonical stage model for `pipeline/stages`.
-It is intentionally normative: this is how release candidates move from check-in to release.
 
 ## Why this exists
 
-The deployment pipeline exists to answer one question with evidence:
+The deployment pipeline answers one question with evidence:
 
 Can we safely release this exact candidate now?
 
 We do that by:
 
-1. creating a release candidate once in commit stage;
+1. creating a release candidate once in Commit Stage;
 2. promoting that same candidate unchanged through later stages;
-3. rejecting candidates as early as possible when evidence says "not fit."
+3. rejecting candidates as early as possible when evidence says "not fit".
 
 ## Core Principles (Non-Negotiable)
 
 1. Build once, promote unchanged.
-2. Fast feedback first; catch obvious breakage early.
-3. The pipeline is the system of record, not opinion or meetings.
-4. Each stage has a clear purpose and pass/fail signal.
-5. Failed candidates do not progress.
-6. Release and rollback use the same automated mechanisms.
-7. Developers own red pipeline outcomes and fix quickly.
+2. Fast feedback first.
+3. Each stage has a clear purpose and pass/fail signal.
+4. Failed candidates do not progress.
+5. Release and rollback use the same automated mechanism.
+
+## Intake vs Stages
+
+PR open, auto-merge enablement, and merge-queue eligibility are intake/orchestration concerns.
+They are not pipeline stages.
 
 ## Stage Order
 
-1. `01-commit-stage`
-2. `02-automated-acceptance-test-stage`
-3. `03-nonfunctional` (optional, may be gate or advisory)
-4. `04-production-rehearsal-stage` (optional but recommended)
-5. `05-release-stage`
-
-Later stages consume only candidates that passed required earlier stages.
+1. `Commit Stage`
+2. `Automated Acceptance Test Stage`
+3. `Staging / Manual Test Stage` (current implementation: production rehearsal placeholder)
+4. `Release Stage`
 
 ```mermaid
 flowchart LR
-  C["01-commit-stage\n(build once)"] --> A["02-automated-acceptance-test-stage\n(real gate)"]
-  A --> R["04-production-rehearsal-stage\nplaceholder gate"]
-  R --> L["05-release-stage\ndeploy accepted candidate"]
+  C["Commit Stage\nmerge_group authoritative gate"] --> A["Automated Acceptance Test Stage\npush main"]
+  A --> S["Staging / Manual Test Stage\nproduction rehearsal placeholder"]
+  S --> R["Release Stage\npromote unchanged candidate"]
 ```
 
 ## Stage Contracts
 
-### 01-commit-stage (Authoritative Candidate Creation)
+### Commit Stage (Authoritative Candidate Creation)
 
 Purpose:
 
@@ -53,135 +52,84 @@ Purpose:
 
 Must do:
 
-1. Compile/build code.
-2. Run fast commit tests (mostly unit + a small high-value fast slice of other tests).
-3. Run code health analysis thresholds.
-4. Build deployable artifacts for the releasable unit.
-5. Publish immutable artifact digests.
-6. Generate and validate candidate manifest.
+1. Run fast commit checks.
+2. Build deployable artifacts exactly once.
+3. Publish immutable digest references.
+4. Generate and validate the release-candidate manifest.
+5. Publish the candidate by `candidateId=sha-<source-sha-40>`.
 
 Must not do:
 
 1. Long-running end-to-end suites.
 2. Manual checks.
-3. Rebuild candidate later to "fix" stage failures.
-
-Timing target:
-
-- Ideal: under 5 minutes.
-- Maximum: under 10 minutes.
+3. Rebuild later to repair downstream failures.
 
 Exit:
 
-- Pass: candidate exists and is promotable to acceptance.
-- Fail: no valid candidate for promotion.
+- Pass: candidate is eligible to merge and progress.
+- Fail: candidate is rejected and does not merge.
 
-### 02-automated-acceptance-test-stage (Second Major Gate)
+### Automated Acceptance Test Stage
 
 Purpose:
 
-- Prove the candidate delivers expected behavior in a controlled acceptance environment.
-- Prove deployment works with the same candidate that was built in commit stage.
+- Prove customer-visible behavior for the exact merged candidate.
+- Prove deployment works using the published manifest (no rebuild).
 
 Must do:
 
-1. Fetch and validate the published candidate manifest.
-2. Deploy exact digest-pinned artifacts from that manifest into runner-local resources.
-3. Run deployment verification and smoke checks.
-4. Run automated acceptance tests (cross-service/business outcomes).
-5. Record acceptance evidence tied to `candidateId` and `sourceRevision`.
+1. Fetch and validate the candidate manifest by `candidateId`.
+2. Verify `manifest.source.revision == push SHA`.
+3. Deploy exact digest-pinned artifacts from that manifest.
+4. Run automated acceptance suites.
+5. Record acceptance evidence per `candidateId` + `sourceRevision`.
 
 Must not do:
 
-1. Rebuild images/artifacts.
+1. Rebuild artifacts.
 2. Substitute different versions.
-3. Treat failing acceptance as "warning only."
+3. Treat acceptance failure as warning-only.
 
 Exit:
 
-- Pass: candidate eligible for rehearsal and release decision.
+- Pass: candidate can progress to Staging / Manual Test Stage.
 - Fail: candidate is non-promotable.
 
-### 03-nonfunctional (Optional)
+### Staging / Manual Test Stage (Current: Production Rehearsal Placeholder)
 
 Purpose:
 
-- Evaluate nonfunctional attributes (capacity/performance/security/reliability).
-
-Guidance:
-
-1. Use as a gate when nonfunctional thresholds are strict.
-2. Use as advisory evidence where human judgment is required.
-3. Keep candidate identity unchanged; only add stage evidence.
-
-### 04-production-rehearsal-stage (Temporary Placeholder)
-
-Purpose:
-
-- Provide a temporary integrity/evidence gate between acceptance and release.
+- Provide an integrity/evidence gate between acceptance and release.
 
 Rules:
 
-1. Consume only accepted candidates.
+1. Consume only candidates that passed Automated Acceptance Test Stage.
 2. Verify candidate and evidence identity integrity.
-3. Publish `production-rehearsal-evidence` with explicit placeholder summary.
-4. Trigger release automation only on successful placeholder completion.
+3. Record production-rehearsal evidence (placeholder semantics today).
 
-### 05-release-stage (Production Promotion)
+### Release Stage
 
 Purpose:
 
-- Deploy a previously accepted candidate to production from its manifest in the bare-minimum phase.
+- Promote a previously accepted candidate to production without rebuilding.
 
 Must do:
 
-1. Verify candidate contract and acceptance evidence.
-2. Verify production rehearsal evidence.
-3. Deploy candidate artifacts to production without rebuilding.
-4. Run production smoke verification.
-5. Record release evidence.
-
-Rollback/backout:
-
-1. Redeploy a previously accepted candidate using the same mechanism.
-2. Do not use a special "one-off rollback process."
+1. Verify candidate contract.
+2. Verify acceptance evidence pass.
+3. Verify staging/manual test (rehearsal) evidence pass.
+4. Deploy/promote from manifest.
+5. Run production smoke verification.
+6. Record release evidence.
 
 ## Promotion Invariants
 
-1. Candidate identity is artifact digests + source revision.
+1. Candidate identity is `candidateId` + digest-pinned artifacts + source revision.
 2. Environment config may vary; candidate artifacts may not.
 3. Stage evidence is separate from candidate manifest.
 4. Any material artifact change creates a new candidate.
 
-## Temporary Baseline Debt
-
-1. Worker runtime is placeholder-only in acceptance.
-2. Production rehearsal is placeholder-only and does not perform real zero-traffic deployment.
-3. Release currently deploys directly from manifest until real rehearsal automation is introduced.
-
-## Team Operating Discipline
-
-1. Trunk stays releasable.
-2. Developers wait for commit-stage result and fix red pipeline immediately.
-3. Acceptance failures are owned and fixed with same urgency.
-4. Keep moving recurring late failures left into commit stage over time.
-
 ## Stage Boundary
 
-Authoritative candidate creation starts at `01-commit-stage` on trunk check-in.
-Everything after that is candidate promotion and evidence collection.
-
-## Ownership Boundaries in this folder
-
-- `pipeline/contracts`: release-candidate + evidence contracts/schemas.
-- `pipeline/shared/scripts`: reusable pipeline mechanics.
-- `pipeline/stages/01-commit..05-release`: stage-specific scripts, tests, runbooks.
-- `.github/workflows`: orchestration only.
-
-## References
-
-- [The Commit Stage (Humble/Farley)](https://www.informit.com/articles/article.aspx?p=1621865&seqNum=4)
-- [Automated Acceptance Test Stage (Humble/Farley)](https://www.informit.com/articles/article.aspx?p=1621865&seqNum=5)
-- [Subsequent Test Stages (Humble/Farley)](https://www.informit.com/articles/article.aspx?p=1621865&seqNum=6)
-- [Preparing to Release (Humble/Farley)](https://www.informit.com/articles/article.aspx?p=1621865&seqNum=7)
-- [Deployment Pipeline Paper (Dave Farley, 2007)](https://continuousdelivery.com/wp-content/uploads/2010/01/The-Deployment-Pipeline-by-Dave-Farley-2007.pdf)
+Authoritative candidate creation starts in `Commit Stage` on merge-group integrated candidates.
+Everything after that is promotion and evidence collection.

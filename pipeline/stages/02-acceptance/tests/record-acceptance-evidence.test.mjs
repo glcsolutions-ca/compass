@@ -4,7 +4,7 @@ import { createAcceptanceEvidence } from "../scripts/record-acceptance-evidence.
 describe("record-acceptance-evidence", () => {
   it("creates valid acceptance evidence", () => {
     const evidence = createAcceptanceEvidence({
-      candidateId: "main-abcdef1-123456",
+      candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       workflowRunId: "123456",
       verdict: "pass",
@@ -21,7 +21,7 @@ describe("record-acceptance-evidence", () => {
   it("fails for invalid verdict", () => {
     expect(() =>
       createAcceptanceEvidence({
-        candidateId: "main-abcdef1-123456",
+        candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         workflowRunId: "123456",
         verdict: "unknown",

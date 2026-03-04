@@ -1,14 +1,7 @@
 name: Commit Stage
+run-name: Commit Stage (merge_group @ ${{ github.sha }})
 
 on:
-  pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
   merge_group:
     types:
       - checks_requested
@@ -26,32 +19,20 @@ env:
   RELEASE_UNITS_REPO: ghcr.io/glcsolutions-ca/compass-release-units
 
 jobs:
-  pr_head_commit_stage:
-    name: Commit Stage
-    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == false }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Queue-admission check
-        run: |
-          echo "PR-head Commit Stage check passed."
-          echo "Authoritative candidate build runs once on merge_group."
-
   commit_tests:
     name: Commit tests
-    if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - &checkout_step
         name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - &setup_pnpm_step
         name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.1
 
       - &setup_node_step
         name: Setup Node
@@ -72,7 +53,6 @@ jobs:
 
   build_and_publish_images:
     name: Build and publish ${{ matrix.image.id }} image
-    if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -138,10 +118,10 @@ jobs:
           name: image-digest-${{ matrix.image.id }}
           path: .artifacts/image-digests/${{ matrix.image.id }}.digest
           if-no-files-found: error
+          retention-days: 3
 
   publish_candidate:
     name: Publish candidate to GHCR
-    if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -265,6 +245,18 @@ jobs:
           name: release-candidate-manifest
           path: .artifacts/release-candidate/manifest.json
           if-no-files-found: error
+          retention-days: 3
+
+      - name: Write commit summary
+        run: |
+          {
+            echo "## Commit Stage"
+            echo "- Candidate: ${{ steps.candidate.outputs.candidate_id }}"
+            echo "- Source revision: ${{ github.sha }}"
+            echo "- Release unit digest: ${{ steps.release_unit.outputs.release_unit_digest }}"
+            echo "- Manifest package: ${MANIFESTS_REPO}:${{ steps.candidate.outputs.candidate_id }}"
+            echo "- Release-unit package: ${RELEASE_UNITS_REPO}:${{ steps.candidate.outputs.candidate_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Attest release-unit build provenance
         uses: actions/attest-build-provenance@v3
@@ -276,7 +268,7 @@ jobs:
   commit_stage_gate:
     name: Commit Stage
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'merge_group' && always() }}
+    if: ${{ always() }}
     needs:
       - commit_tests
       - build_and_publish_images

@@ -10,7 +10,7 @@ Workflow: `.github/workflows/02-acceptance-stage.yml`.
 
 1. Trigger is successful `workflow_run` of Commit Stage.
 2. Candidate identity is resolved from `release-candidate-manifest` artifact on the triggering run.
-3. If the handoff artifact is absent (for example PR-head non-authoritative run), Acceptance exits success as skipped.
+3. Missing handoff artifact is fail-closed.
 4. Candidate SHA is confirmed on `main` (stale candidates are skipped).
 5. Candidate manifest exists in GHCR and validates.
 

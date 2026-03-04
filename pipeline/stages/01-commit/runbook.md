@@ -4,9 +4,12 @@
 
 Commit Stage is the only authoritative pre-merge stage.
 It builds the candidate exactly once for the merge-queue integrated SHA and publishes it to GHCR.
-For merge-queue admission, the same workflow also exposes a lightweight PR-head `Commit Stage` check that does not rebuild or publish artifacts.
+For merge-queue admission, a separate workflow exposes a lightweight PR-head `Commit Stage` check that does not rebuild or publish artifacts.
 
-Workflow: `.github/workflows/01-commit-stage.yml`.
+Workflows:
+
+1. `.github/workflows/00-queue-admission.yml` (PR-head queue admission only, non-authoritative).
+2. `.github/workflows/01-commit-stage.yml` (authoritative `merge_group` commit stage).
 
 ## Entry Criteria
 

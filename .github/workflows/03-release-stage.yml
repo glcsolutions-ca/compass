@@ -1,4 +1,5 @@
 name: Release Stage
+run-name: Release Stage (${{ github.event_name == 'workflow_dispatch' && inputs.candidate_id || github.event.workflow_run.head_sha }})
 
 on:
   workflow_dispatch:
@@ -27,71 +28,65 @@ env:
   RELEASE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/release/v1
 
 jobs:
-  release:
-    name: Release Stage
-    runs-on: ubuntu-latest
-    timeout-minutes: 75
-    environment: production
-    permissions:
-      actions: read
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-      deployments: write
-      artifact-metadata: write
+  resolve_candidate:
+    name: Resolve release candidate
     if: |
       ${{
         github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
       }}
-
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      run_release: ${{ steps.resolve.outputs.run_release }}
+      skip_reason: ${{ steps.resolve.outputs.skip_reason }}
+      candidate_id: ${{ steps.resolve.outputs.candidate_id }}
+      source_revision_hint: ${{ steps.resolve.outputs.source_revision_hint }}
+      release_unit_digest_hint: ${{ steps.resolve.outputs.release_unit_digest_hint }}
     steps:
-      - name: Capture release start time
-        id: release_start
-        run: echo "released_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
-      - &checkout_step
-        name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Resolve release mode
-        id: mode
+      - name: Enforce manual-release branch guard
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
-          set -euo pipefail
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "mode=manual" >> "$GITHUB_OUTPUT"
-            echo "candidate_id_input=${{ inputs.candidate_id }}" >> "$GITHUB_OUTPUT"
-            echo "acceptance_run_id=" >> "$GITHUB_OUTPUT"
-          else
-            echo "mode=auto" >> "$GITHUB_OUTPUT"
-            echo "candidate_id_input=" >> "$GITHUB_OUTPUT"
-            echo "acceptance_run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.ref_name }}" != "main" ]; then
+            echo "Manual release is only allowed when workflow is run from main. Current ref: ${{ github.ref_name }}" >&2
+            exit 1
           fi
 
       - name: Download release candidate handoff from triggering Acceptance run
-        if: ${{ steps.mode.outputs.mode == 'auto' }}
-        id: handoff_artifact
-        continue-on-error: true
+        if: ${{ github.event_name == 'workflow_run' }}
+        id: handoff_presence
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          artifact_ids="$(gh api \
+            repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}/artifacts \
+            --jq '.artifacts[] | select(.name == "release-candidate-manifest") | .id')"
+
+          if [ -n "${artifact_ids}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download release candidate handoff from triggering Acceptance run
+        if: ${{ github.event_name == 'workflow_run' && steps.handoff_presence.outputs.present == 'true' }}
         uses: actions/download-artifact@v4
         with:
           name: release-candidate-manifest
-          run-id: ${{ steps.mode.outputs.acceptance_run_id }}
+          run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ runner.temp }}/triggering-run
 
       - name: Resolve candidate context
-        id: candidate
+        id: resolve
         run: |
           set -euo pipefail
 
-          mode="${{ steps.mode.outputs.mode }}"
-
-          if [ "${mode}" = "manual" ]; then
-            candidate_id="${{ steps.mode.outputs.candidate_id_input }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            candidate_id="${{ inputs.candidate_id }}"
             if ! echo "${candidate_id}" | grep -Eq '^sha-[0-9a-f]{40}$'; then
               echo "Invalid manual candidate_id: ${candidate_id}" >&2
               exit 1
@@ -105,6 +100,15 @@ jobs:
             exit 0
           fi
 
+          if [ "${{ steps.handoff_presence.outputs.present }}" != "true" ]; then
+            echo "run_release=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=acceptance run did not publish release-candidate-manifest (stale or skipped candidate)" >> "$GITHUB_OUTPUT"
+            echo "candidate_id=" >> "$GITHUB_OUTPUT"
+            echo "source_revision_hint=" >> "$GITHUB_OUTPUT"
+            echo "release_unit_digest_hint=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           manifest_file="${RUNNER_TEMP}/triggering-run/manifest.json"
           if [ ! -f "${manifest_file}" ]; then
             manifest_file="$(find "${RUNNER_TEMP}/triggering-run" -maxdepth 3 -type f -name '*.json' | head -n 1 || true)"
@@ -112,7 +116,7 @@ jobs:
 
           if [ -z "${manifest_file}" ] || [ ! -f "${manifest_file}" ]; then
             echo "run_release=false" >> "$GITHUB_OUTPUT"
-            echo "skip_reason=non-authoritative Acceptance Stage run (no release-candidate-manifest artifact)" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=acceptance run did not publish release-candidate-manifest (stale or skipped candidate)" >> "$GITHUB_OUTPUT"
             echo "candidate_id=" >> "$GITHUB_OUTPUT"
             echo "source_revision_hint=" >> "$GITHUB_OUTPUT"
             echo "release_unit_digest_hint=" >> "$GITHUB_OUTPUT"
@@ -140,51 +144,60 @@ jobs:
             exit 1
           fi
 
-          deadline=$(( $(date +%s) + 600 ))
-          is_on_main=false
-          while [ "$(date +%s)" -lt "${deadline}" ]; do
-            git fetch --no-tags origin main
-            if git merge-base --is-ancestor "${source_revision}" origin/main >/dev/null 2>&1; then
-              is_on_main=true
-              break
-            fi
-            sleep 30
-          done
-
-          if [ "${is_on_main}" != "true" ]; then
-            echo "run_release=false" >> "$GITHUB_OUTPUT"
-            echo "skip_reason=stale candidate source revision not merged to main" >> "$GITHUB_OUTPUT"
-            echo "candidate_id=${candidate_id}" >> "$GITHUB_OUTPUT"
-            echo "source_revision_hint=${source_revision}" >> "$GITHUB_OUTPUT"
-            echo "release_unit_digest_hint=${release_unit_digest_hint}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
           echo "run_release=true" >> "$GITHUB_OUTPUT"
           echo "skip_reason=" >> "$GITHUB_OUTPUT"
           echo "candidate_id=${candidate_id}" >> "$GITHUB_OUTPUT"
           echo "source_revision_hint=${source_revision}" >> "$GITHUB_OUTPUT"
           echo "release_unit_digest_hint=${release_unit_digest_hint}" >> "$GITHUB_OUTPUT"
 
-      - name: Skip release for non-authoritative or stale candidate
-        if: ${{ steps.candidate.outputs.run_release != 'true' }}
+      - name: Write resolver summary
         run: |
-          candidate_id="${{ steps.candidate.outputs.candidate_id }}"
-          if [ -z "${candidate_id}" ]; then
-            candidate_id="<unknown>"
-          fi
-          echo "Skipping Release for ${candidate_id}: ${{ steps.candidate.outputs.skip_reason }}"
+          {
+            echo "## Release Resolver"
+            echo "- Mode: ${{ github.event_name == 'workflow_dispatch' && 'manual' || 'auto' }}"
+            echo "- Candidate: ${{ steps.resolve.outputs.candidate_id }}"
+            echo "- Run release: ${{ steps.resolve.outputs.run_release }}"
+            if [ -n "${{ steps.resolve.outputs.skip_reason }}" ]; then
+              echo "- Skip reason: ${{ steps.resolve.outputs.skip_reason }}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Release Stage
+    needs:
+      - resolve_candidate
+    if: ${{ needs.resolve_candidate.outputs.run_release == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      deployments: write
+      artifact-metadata: write
+
+    steps:
+      - name: Capture release start time
+        id: release_start
+        run: echo "released_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - &checkout_step
+        name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - &setup_pnpm_step
         name: Setup pnpm
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.1
 
       - &setup_node_step
         name: Setup Node
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -192,17 +205,14 @@ jobs:
 
       - &install_dependencies_step
         name: Install dependencies
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         run: pnpm install --frozen-lockfile
 
       - &setup_oras_step
         name: Setup ORAS
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         uses: oras-project/setup-oras@v1
 
       - &login_ghcr_step
         name: Login to GHCR
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -210,19 +220,16 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Fetch release manifest from GHCR
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         run: |
           node pipeline/shared/scripts/fetch-release-candidate.mjs \
-            --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
+            --candidate-id "${{ needs.resolve_candidate.outputs.candidate_id }}" \
             --registry-repo "${{ env.MANIFESTS_REPO }}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
       - name: Validate release manifest
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         run: node pipeline/shared/scripts/validate-release-candidate.mjs --file "$RUNNER_TEMP/release-candidate.json"
 
       - name: Capture source revision and verify handoff consistency
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         id: source
         run: |
           set -euo pipefail
@@ -234,13 +241,13 @@ jobs:
           fi
 
           candidate_id_from_manifest="$(jq -r '.candidateId // empty' "$RUNNER_TEMP/release-candidate.json")"
-          if [ "${candidate_id_from_manifest}" != "${{ steps.candidate.outputs.candidate_id }}" ]; then
+          if [ "${candidate_id_from_manifest}" != "${{ needs.resolve_candidate.outputs.candidate_id }}" ]; then
             echo "Candidate id mismatch between resolved context and GHCR manifest." >&2
-            echo "resolved=${{ steps.candidate.outputs.candidate_id }} manifest=${candidate_id_from_manifest}" >&2
+            echo "resolved=${{ needs.resolve_candidate.outputs.candidate_id }} manifest=${candidate_id_from_manifest}" >&2
             exit 1
           fi
 
-          source_hint="${{ steps.candidate.outputs.source_revision_hint }}"
+          source_hint="${{ needs.resolve_candidate.outputs.source_revision_hint }}"
           if [ -n "${source_hint}" ] && [ "${source_hint}" != "${source_revision}" ]; then
             echo "Source revision mismatch between acceptance handoff and GHCR manifest." >&2
             echo "handoff=${source_hint} manifest=${source_revision}" >&2
@@ -250,18 +257,17 @@ jobs:
           echo "source_revision=${source_revision}" >> "$GITHUB_OUTPUT"
 
       - name: Resolve and verify release-unit digest
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         id: release_unit
         run: |
           set -euo pipefail
 
-          resolved_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ steps.candidate.outputs.candidate_id }}" | jq -r '.digest')"
+          resolved_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ needs.resolve_candidate.outputs.candidate_id }}" | jq -r '.digest')"
           if [ -z "${resolved_digest}" ] || [ "${resolved_digest}" = "null" ]; then
-            echo "Unable to resolve release-unit digest for ${{ steps.candidate.outputs.candidate_id }}" >&2
+            echo "Unable to resolve release-unit digest for ${{ needs.resolve_candidate.outputs.candidate_id }}" >&2
             exit 1
           fi
 
-          handoff_hint="${{ steps.candidate.outputs.release_unit_digest_hint }}"
+          handoff_hint="${{ needs.resolve_candidate.outputs.release_unit_digest_hint }}"
           if [ -n "${handoff_hint}" ] && [ "${handoff_hint}" != "${resolved_digest}" ]; then
             echo "Release-unit digest mismatch between acceptance handoff and registry descriptor." >&2
             echo "handoff=${handoff_hint} resolved=${resolved_digest}" >&2
@@ -278,7 +284,6 @@ jobs:
           echo "release_unit_digest=${resolved_digest}" >> "$GITHUB_OUTPUT"
 
       - name: Verify acceptance attestation bundle
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -291,16 +296,14 @@ jobs:
             --format json > "$RUNNER_TEMP/acceptance-attestation-verification.json"
 
       - name: Enforce acceptance attestation business rule
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         run: |
           node pipeline/stages/05-release/scripts/verify-acceptance-attestation.mjs \
             --verification-json "$RUNNER_TEMP/acceptance-attestation-verification.json" \
             --predicate-type "${{ env.ACCEPTANCE_PREDICATE_TYPE }}" \
-            --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
+            --candidate-id "${{ needs.resolve_candidate.outputs.candidate_id }}" \
             --source-revision "${{ steps.source.outputs.source_revision }}"
 
       - name: Assert required production environment config
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         env:
           API_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
           WEB_BASE_URL: ${{ vars.PRODUCTION_WEB_BASE_URL }}
@@ -326,7 +329,6 @@ jobs:
             --required AZURE_SUBSCRIPTION_ID
 
       - name: Azure login (OIDC)
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
@@ -334,7 +336,6 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy candidate and run production smoke checks
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         id: release_run
         env:
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
@@ -391,12 +392,11 @@ jobs:
           echo "release_summary=${summary}" >> "$GITHUB_OUTPUT"
 
       - name: Generate release attestation predicate
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         run: |
           mkdir -p .artifacts/attestations
           node pipeline/stages/05-release/scripts/generate-release-attestation-predicate.mjs \
             --out .artifacts/attestations/release-predicate.json \
-            --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
+            --candidate-id "${{ needs.resolve_candidate.outputs.candidate_id }}" \
             --source-revision "${{ steps.source.outputs.source_revision }}" \
             --verdict "${{ steps.release_run.outputs.verdict }}" \
             --workflow-run-id "${{ github.run_id }}" \
@@ -404,7 +404,6 @@ jobs:
             --deployment-ref "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
       - name: Attest release verdict to candidate subject
-        if: ${{ steps.candidate.outputs.run_release == 'true' }}
         uses: actions/attest@v2
         with:
           subject-name: ${{ env.RELEASE_UNITS_REPO }}
@@ -413,8 +412,50 @@ jobs:
           predicate-path: .artifacts/attestations/release-predicate.json
           push-to-registry: true
 
-      - name: Fail release stage when verdict is non-pass
-        if: ${{ steps.candidate.outputs.run_release == 'true' && steps.release_run.outputs.verdict != 'pass' }}
+      - name: Upload release diagnostics on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-diagnostics-${{ github.run_id }}
+          path: |
+            .artifacts/release
+            .artifacts/attestations
+            ${{ runner.temp }}/production-deploy-state.json
+            ${{ runner.temp }}/acceptance-attestation-verification.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Write release summary
+        if: ${{ always() }}
         run: |
-          echo "Release failed for candidate ${{ steps.candidate.outputs.candidate_id }}: ${{ steps.release_run.outputs.release_summary }}" >&2
+          {
+            echo "## Release Stage"
+            echo "- Candidate: ${{ needs.resolve_candidate.outputs.candidate_id }}"
+            echo "- Source revision: ${{ steps.source.outputs.source_revision }}"
+            echo "- Release unit digest: ${{ steps.release_unit.outputs.release_unit_digest }}"
+            echo "- Verdict: ${{ steps.release_run.outputs.verdict }}"
+            echo "- Summary: ${{ steps.release_run.outputs.release_summary }}"
+            echo "- Production URL: ${{ vars.PRODUCTION_WEB_BASE_URL }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail release stage when verdict is non-pass
+        if: ${{ steps.release_run.outputs.verdict != 'pass' }}
+        run: |
+          echo "Release failed for candidate ${{ needs.resolve_candidate.outputs.candidate_id }}: ${{ steps.release_run.outputs.release_summary }}" >&2
           exit 1
+
+  release_skip:
+    name: Release Stage (skipped)
+    needs:
+      - resolve_candidate
+    if: ${{ needs.resolve_candidate.outputs.run_release != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record skip
+        run: |
+          {
+            echo "## Release Stage"
+            echo "- Candidate: ${{ needs.resolve_candidate.outputs.candidate_id }}"
+            echo "- Result: skipped"
+            echo "- Reason: ${{ needs.resolve_candidate.outputs.skip_reason }}"
+          } >> "$GITHUB_STEP_SUMMARY"

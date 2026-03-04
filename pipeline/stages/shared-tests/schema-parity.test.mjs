@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  validateAcceptanceAttestationPredicateDocument,
   validateAcceptanceEvidenceDocument,
-  validateProductionRehearsalEvidenceDocument,
   validateReleaseCandidateDocument,
+  validateReleaseAttestationPredicateDocument,
   validateReleaseEvidenceDocument
 } from "../../shared/scripts/pipeline-contract-lib.mjs";
 import { validateBySchema } from "../../shared/scripts/schema-validator.mjs";
@@ -73,49 +74,37 @@ describe("schema parity", () => {
     expect(helperValid).toBe(schemaValid);
   });
 
-  it("keeps production rehearsal evidence helper verdict parity with schema validator", () => {
-    const evidence = {
-      schemaVersion: "production-rehearsal-evidence.v1",
-      stage: "production-rehearsal",
+  it("keeps acceptance attestation helper verdict parity with schema validator", () => {
+    const attestation = {
+      schemaVersion: "acceptance-attestation.v1",
       candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       workflowRunId: "123456",
-      environment: "production",
       verdict: "pass",
-      startedAt: "2026-03-03T18:20:12Z",
-      finishedAt: "2026-03-03T18:25:12Z",
-      summary: "Production rehearsal passed",
-      deployment: {
-        resourceGroup: "rg-compass",
-        zeroTraffic: true,
-        apps: {
-          api: {
-            appName: "api-app",
-            candidateRevision: "api--abc",
-            previousRevision: "api--prev",
-            candidateImage:
-              "ghcr.io/glcsolutions-ca/compass-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-          },
-          web: {
-            appName: "web-app",
-            candidateRevision: "web--abc",
-            previousRevision: "web--prev",
-            candidateImage:
-              "ghcr.io/glcsolutions-ca/compass-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-          },
-          worker: {
-            appName: "worker-app",
-            candidateRevision: "worker--abc",
-            previousRevision: "worker--prev",
-            candidateImage:
-              "ghcr.io/glcsolutions-ca/compass-worker@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-          }
-        }
-      }
+      testedAt: "2026-03-03T18:25:12Z",
+      suiteSummary: "system=pass browser=pass"
     };
 
-    const helperValid = validateProductionRehearsalEvidenceDocument(evidence).length === 0;
-    const schemaValid = validateBySchema("productionRehearsalEvidence", evidence).length === 0;
+    const helperValid = validateAcceptanceAttestationPredicateDocument(attestation).length === 0;
+    const schemaValid =
+      validateBySchema("acceptanceAttestationPredicate", attestation).length === 0;
+    expect(helperValid).toBe(schemaValid);
+  });
+
+  it("keeps release attestation helper verdict parity with schema validator", () => {
+    const attestation = {
+      schemaVersion: "release-attestation.v1",
+      candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      workflowRunId: "123456",
+      verdict: "pass",
+      releasedAt: "2026-03-03T18:30:12Z",
+      environment: "production",
+      deploymentRef: "https://github.com/glcsolutions-ca/compass/actions/runs/123456"
+    };
+
+    const helperValid = validateReleaseAttestationPredicateDocument(attestation).length === 0;
+    const schemaValid = validateBySchema("releaseAttestationPredicate", attestation).length === 0;
     expect(helperValid).toBe(schemaValid);
   });
 });

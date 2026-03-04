@@ -1,136 +1,114 @@
-# Pipeline Stages (Farley Stage Model)
+# Pipeline Stages (Farley 3-Stage Model)
 
 This document defines the canonical stage model for `pipeline/stages`.
 
-## Why this exists
+## Minimum Viable Farley 3-Stage Requirements
 
-The deployment pipeline answers one question with evidence:
+1. One immutable candidate identity per integrated SHA.
+2. One authoritative Commit Stage build that writes that candidate to GHCR.
+3. One acceptance verdict bound to that exact candidate.
+4. One production deployment of that same candidate.
+5. One rollback path to a previously accepted candidate.
+6. Commit Stage runs once per candidate (no duplicate PR run).
+7. Acceptance runs via `workflow_run` from successful Commit Stage.
+8. Release is fully automatic after acceptance success.
+9. Production rehearsal evidence and commit SLO gating are removed.
 
-Can we safely release this exact candidate now?
-
-We do that by:
-
-1. creating a release candidate once in Commit Stage;
-2. promoting that same candidate unchanged through later stages;
-3. rejecting candidates as early as possible when evidence says "not fit".
-
-## Core Principles (Non-Negotiable)
-
-1. Build once, promote unchanged.
-2. Fast feedback first.
-3. Each stage has a clear purpose and pass/fail signal.
-4. Failed candidates do not progress.
-5. Release and rollback use the same automated mechanism.
-
-## Intake vs Stages
-
-PR open, auto-merge enablement, and merge-queue eligibility are intake/orchestration concerns.
-They are not pipeline stages.
-The lightweight PR `Commit Stage` intake check is eligibility-only; authoritative Commit Stage execution remains on `merge_group`.
-
-## Stage Order
-
-1. `Commit Stage`
-2. `Automated Acceptance Test Stage`
-3. `Staging / Manual Test Stage` (current implementation: production rehearsal placeholder)
-4. `Release Stage`
+## Canonical Flow
 
 ```mermaid
-flowchart LR
-  C["Commit Stage\nmerge_group authoritative gate"] --> A["Automated Acceptance Test Stage\npush main"]
-  A --> S["Staging / Manual Test Stage\nproduction rehearsal placeholder"]
-  S --> R["Release Stage\npromote unchanged candidate"]
+flowchart TD
+  A["Merge Queue Integrated SHA"] --> B["Commit Stage (single run)"]
+  B --> C["Write Release Unit to GHCR (immutable digest identity)"]
+  B --> D["Attach build provenance/SBOM attestation"]
+
+  C --> E["Acceptance Stage (workflow_run)"]
+  E --> E1{"Guard: SHA is on main?"}
+  E1 -- "No" --> X["Skip stale candidate"]
+  E1 -- "Yes" --> F["Deploy exact GHCR candidate digest"]
+  F --> G["Run acceptance tests"]
+  G --> H["Attach acceptance attestation to same candidate subject"]
+
+  H --> I["Release Stage (auto)"]
+  I --> J["Verify candidate + acceptance attestation"]
+  J --> K["Deploy same candidate to production"]
+  K --> L["Record GitHub deployment status + release attestation"]
+
+  M["Rollback (workflow_dispatch candidate_id)"] --> N["Select prior accepted candidate"]
+  N --> K
 ```
+
+## What We Actually Need
+
+The deployment pipeline only needs to prove that the exact integrated candidate can be promoted to production unchanged. Everything else is optional tooling.
 
 ## Stage Contracts
 
-### Commit Stage (Authoritative Candidate Creation)
+### Commit Stage
 
 Purpose:
 
-- Eliminate unfit changes quickly.
-- Create the authoritative release candidate.
+- Build and publish one authoritative candidate for one integrated SHA.
 
 Must do:
 
-1. Run fast commit checks.
-2. Build deployable artifacts exactly once.
-3. Publish immutable digest references.
-4. Generate and validate the release-candidate manifest.
-5. Publish the candidate by `candidateId=sha-<source-sha-40>`.
+1. Run on `merge_group` only.
+2. Execute fast commit checks.
+3. Build and push immutable digest-pinned runtime artifacts.
+4. Publish candidate representations to GHCR.
+5. Attach build provenance/SBOM attestations.
+6. Fail closed when any required step fails.
 
 Must not do:
 
-1. Long-running end-to-end suites.
-2. Manual checks.
-3. Rebuild later to repair downstream failures.
+1. Run on PR as a second authoritative path.
+2. Depend on downstream environment state.
+3. Introduce nonessential gates (for example commit-stage SLO blocking).
 
-Exit:
-
-- Pass: candidate is eligible to merge and progress.
-- Fail: candidate is rejected and does not merge.
-
-### Automated Acceptance Test Stage
+### Acceptance Stage
 
 Purpose:
 
-- Prove customer-visible behavior for the exact merged candidate.
-- Prove deployment works using the published manifest (no rebuild).
+- Prove that the exact candidate from Commit Stage behaves correctly.
 
 Must do:
 
-1. Fetch and validate the candidate manifest by `candidateId`.
-2. Verify `manifest.source.revision == push SHA`.
-3. Deploy exact digest-pinned artifacts from that manifest.
+1. Trigger from successful Commit Stage via `workflow_run`.
+2. Guard against stale candidates by requiring SHA presence on `main`.
+3. Deploy exact candidate digests from GHCR.
 4. Run automated acceptance suites.
-5. Record acceptance evidence per `candidateId` + `sourceRevision`.
+5. Attach acceptance attestation to candidate subject.
+6. Fail closed on test or attestation errors.
 
 Must not do:
 
 1. Rebuild artifacts.
-2. Substitute different versions.
-3. Treat acceptance failure as warning-only.
-
-Exit:
-
-- Pass: candidate can progress to Staging / Manual Test Stage.
-- Fail: candidate is non-promotable.
-
-### Staging / Manual Test Stage (Current: Production Rehearsal Placeholder)
-
-Purpose:
-
-- Provide an integrity/evidence gate between acceptance and release.
-
-Rules:
-
-1. Consume only candidates that passed Automated Acceptance Test Stage.
-2. Verify candidate and evidence identity integrity.
-3. Record production-rehearsal evidence (placeholder semantics today).
+2. Substitute versions.
+3. Emit warning-only verdicts.
 
 ### Release Stage
 
 Purpose:
 
-- Promote a previously accepted candidate to production without rebuilding.
+- Promote the exact accepted candidate to production.
 
 Must do:
 
-1. Verify candidate contract.
-2. Verify acceptance evidence pass.
-3. Verify staging/manual test (rehearsal) evidence pass.
-4. Deploy/promote from manifest.
+1. Trigger automatically from successful Acceptance Stage.
+2. Also support manual `workflow_dispatch` by `candidate_id` for rollback/redeploy.
+3. Verify acceptance attestation is present and `verdict=pass`.
+4. Deploy exact candidate digest set from GHCR.
 5. Run production smoke verification.
-6. Record release evidence.
+6. Record GitHub deployment status and release attestation.
+
+Must not do:
+
+1. Rebuild artifacts.
+2. Depend on any out-of-band gate outside Commit/Acceptance/Release.
 
 ## Promotion Invariants
 
-1. Candidate identity is `candidateId` + digest-pinned artifacts + source revision.
-2. Environment config may vary; candidate artifacts may not.
-3. Stage evidence is separate from candidate manifest.
-4. Any material artifact change creates a new candidate.
-
-## Stage Boundary
-
-Authoritative candidate creation starts in `Commit Stage` on merge-group integrated candidates.
-Everything after that is promotion and evidence collection.
+1. Candidate identity is immutable and digest-based.
+2. Stage evidence is attached to the same candidate subject.
+3. Any material artifact change requires a new candidate identity.
+4. Rollback is a candidate re-promotion, not source reconstruction.

@@ -1,38 +1,35 @@
 # Release and Rollback Runbook
 
+## Purpose
+
+Release Stage promotes an accepted candidate to production without rebuilding.
+
+Workflow: `.github/workflows/03-release-stage.yml`.
+
 ## Release Rules
 
-1. Release can promote only candidates with acceptance evidence `verdict=pass`.
-2. Release can promote only candidates with production rehearsal evidence `verdict=pass`.
-3. Candidate and evidence identity must match (`candidateId`, `sourceRevision`).
-4. Release deploys production directly from the release candidate manifest in this bare-minimum phase (no rebuild, no source redeploy).
-5. Release records evidence linked to `candidateId` and `sourceRevision`.
-6. Release gate is fail-closed; promotion must not run when evidence checks fail.
-7. Release supports two entry modes:
-   - automatic trigger from successful `Staging / Manual Test Stage (Production Rehearsal Placeholder)`;
-   - manual `workflow_dispatch` for rollback/redeploy.
+1. Automatic release trigger is successful Acceptance Stage completion.
+2. Manual rollback/redeploy trigger is `workflow_dispatch` with `candidate_id`.
+3. Candidate manifest must validate before deploy.
+4. Acceptance attestation must exist for candidate subject and `verdict=pass`.
+5. Production deploy uses exact candidate artifacts from GHCR.
+6. Production smoke checks must pass.
+7. Release records GitHub deployment status and release attestation.
 
 ## Rollback Rules
 
-1. Roll back by redeploying a previously accepted candidate.
-2. Do not perform incremental rollback procedures outside the normal deploy path.
-3. Record rollback evidence using the same pipeline mechanism.
+1. Rollback means redeploying a previously accepted candidate.
+2. Rollback uses the same deploy-from-manifest path as normal release.
+3. No source rebuild is allowed for rollback.
 
 ## Minimum Operational Checklist
 
 1. Candidate manifest fetched and validated.
-2. Acceptance evidence fetched and validated.
-3. Production rehearsal evidence fetched and validated.
-4. Deploy-from-manifest + smoke checks executed.
-5. Evidence publication confirmed.
+2. Acceptance attestation verified.
+3. Deploy and smoke checks executed.
+4. Deployment status and release attestation recorded.
 
-## Temporary Debt (Explicit)
+## Non-Goals
 
-1. Automatic release depends on placeholder rehearsal, not real production rehearsal.
-2. Release currently performs direct deploy-from-manifest because rehearsal is placeholder-only.
-
-## Exit Criteria for Removing Temporary Debt
-
-1. Replace placeholder rehearsal with real zero-traffic rehearsal.
-2. Shift release from direct deploy to promotion of already rehearsed revision.
-3. Keep manual fallback path for rollback/redeploy by candidate id.
+1. No production rehearsal gate in the required release path.
+2. No commit-stage SLO gate participation in release decisions.

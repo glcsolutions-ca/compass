@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://compass/pipeline/contracts/schemas/release-attestation-predicate.schema.json",
+  "title": "Release Attestation Predicate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "candidateId",
+    "sourceRevision",
+    "verdict",
+    "workflowRunId",
+    "releasedAt",
+    "environment",
+    "deploymentRef"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "release-attestation.v1"
+    },
+    "candidateId": {
+      "type": "string",
+      "pattern": "^sha-[a-f0-9]{40}$"
+    },
+    "sourceRevision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail"]
+    },
+    "workflowRunId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "releasedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "environment": {
+      "type": "string",
+      "const": "production"
+    },
+    "deploymentRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    }
+  }
+}

@@ -1,9 +1,11 @@
 # Release Candidate Contract (v1)
 
-**Status:** Proposed v1  
+**Status:** Active v1 (updated 2026-03-04 for GHCR-native 3-stage flow)  
 **Owner:** Platform / Delivery Engineering  
 **Applies to:** `api`, `web`, `worker`, and database migrations  
 **Canonical location:** `pipeline/contracts/release-candidate-contract.md`
+
+**Update note (2026-03-04):** The required promotion path is now strict 3-stage (`Commit -> Acceptance -> Release`), with no required production-rehearsal stage. Stage outcomes are recorded as attestations attached to the candidate subject in GHCR.
 
 ---
 
@@ -247,6 +249,8 @@ The JSON schema files under `pipeline/` are the executable source of truth for c
 - `pipeline/contracts/schemas/release-candidate.schema.json`
 - `pipeline/contracts/schemas/acceptance-evidence.schema.json`
 - `pipeline/contracts/schemas/release-evidence.schema.json`
+- `pipeline/contracts/schemas/acceptance-attestation-predicate.schema.json`
+- `pipeline/contracts/schemas/release-attestation-predicate.schema.json`
 
 Runtime validators MUST use these schemas directly. Custom validation rules SHOULD be added only where schema constraints cannot express required behavior.
 
@@ -354,8 +358,14 @@ The Release Stage MUST:
 
 1. deploy the exact same candidate that passed earlier required stages;
 2. use the same deployment process as earlier environments, with only environment-specific configuration varying;
-3. record release evidence;
-4. leave a clear audit trail linking the production deployment back to `candidateId` and `source.revision`.
+3. verify a passing acceptance attestation bound to the same candidate subject;
+4. record release evidence/attestation bound to that same candidate subject;
+5. leave a clear audit trail linking the production deployment back to `candidateId` and `source.revision`.
+
+### Production rehearsal policy
+
+Production rehearsal MAY exist as optional tooling, but it is not a required promotion prerequisite for v1.
+If present, it MUST NOT change candidate identity or require rebuilds.
 
 ---
 

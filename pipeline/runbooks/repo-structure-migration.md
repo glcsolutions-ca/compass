@@ -18,7 +18,6 @@ Migrate to canonical stage-first `pipeline/` layout and standardized test placem
 | `pipeline/scripts/verify-from-manifest.mjs`         | `pipeline/shared/scripts/verify-from-manifest.mjs`                                    |
 | `pipeline/policies/commit-analysis.config.json`     | `pipeline/stages/01-commit/policies/commit-analysis.config.json`                      |
 | `pipeline/scripts/generate-release-candidate*`      | `pipeline/stages/01-commit/scripts/*` and `pipeline/stages/01-commit/tests/*`         |
-| `pipeline/scripts/enforce-commit-stage-slo*`        | `pipeline/stages/01-commit/scripts/*` and `pipeline/stages/01-commit/tests/*`         |
 | `pipeline/scripts/generate-commit-analysis-*`       | `pipeline/stages/01-commit/scripts/*` and `pipeline/stages/01-commit/tests/*`         |
 | `pipeline/scripts/record-acceptance-*`              | `pipeline/stages/02-acceptance/scripts/*` and `pipeline/stages/02-acceptance/tests/*` |
 | `pipeline/scripts/verify-acceptance-*`              | `pipeline/stages/05-release/scripts/*` and `pipeline/stages/05-release/tests/*`       |

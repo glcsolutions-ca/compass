@@ -212,20 +212,20 @@ provenance:
 
 ### Required fields
 
-| Field                          | Required | Notes                                                   |
-| ------------------------------ | -------- | ------------------------------------------------------- |
-| `schemaVersion`                | Yes      | MUST be `rc.v1` for this version of the contract.       |
+| Field                          | Required | Notes                                                                     |
+| ------------------------------ | -------- | ------------------------------------------------------------------------- |
+| `schemaVersion`                | Yes      | MUST be `rc.v1` for this version of the contract.                         |
 | `candidateId`                  | Yes      | Unique identifier for the Release Candidate (`sha-<40-char source SHA>`). |
-| `source.repository`            | Yes      | Repository identifier.                                  |
-| `source.revision`              | Yes      | Exact integrated revision used to build the candidate.  |
-| `source.createdAt`             | Yes      | UTC timestamp of candidate creation.                    |
-| `artifacts.apiImage`           | Yes      | Digest-pinned OCI reference.                            |
-| `artifacts.webImage`           | Yes      | Digest-pinned OCI reference.                            |
-| `artifacts.workerImage`        | Yes      | Digest-pinned OCI reference.                            |
-| `artifacts.migrationsArtifact` | Yes      | Digest-pinned reference to migrations package or image. |
-| `provenance.commitStageRunId`  | Yes      | CI run that created the candidate.                      |
-| `provenance.sbomRefs`          | No       | SHOULD be present when available.                       |
-| `provenance.signatureRefs`     | No       | SHOULD be present when available.                       |
+| `source.repository`            | Yes      | Repository identifier.                                                    |
+| `source.revision`              | Yes      | Exact integrated revision used to build the candidate.                    |
+| `source.createdAt`             | Yes      | UTC timestamp of candidate creation.                                      |
+| `artifacts.apiImage`           | Yes      | Digest-pinned OCI reference.                                              |
+| `artifacts.webImage`           | Yes      | Digest-pinned OCI reference.                                              |
+| `artifacts.workerImage`        | Yes      | Digest-pinned OCI reference.                                              |
+| `artifacts.migrationsArtifact` | Yes      | Digest-pinned reference to migrations package or image.                   |
+| `provenance.commitStageRunId`  | Yes      | CI run that created the candidate.                                        |
+| `provenance.sbomRefs`          | No       | SHOULD be present when available.                                         |
+| `provenance.signatureRefs`     | No       | SHOULD be present when available.                                         |
 
 ### Forbidden fields in the candidate manifest
 

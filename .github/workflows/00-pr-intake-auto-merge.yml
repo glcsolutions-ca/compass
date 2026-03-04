@@ -58,5 +58,11 @@ jobs:
                 core.info(`Auto-merge already enabled for PR #${pr.number}.`);
                 return;
               }
+              if (message.includes("Resource not accessible by integration")) {
+                core.warning(
+                  `Skipping auto-merge enable for PR #${pr.number}; token lacks permission in this context.`
+                );
+                return;
+              }
               throw error;
             }

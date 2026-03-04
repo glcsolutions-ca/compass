@@ -1,0 +1,308 @@
+name: Release Stage
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_id:
+        description: Release candidate id (sha-<40-char-source-sha>)
+        required: true
+        type: string
+  workflow_run:
+    workflows:
+      - Acceptance Stage
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+  deployments: write
+
+concurrency:
+  group: production-environment
+  cancel-in-progress: false
+
+env:
+  MANIFESTS_REPO: ghcr.io/glcsolutions-ca/compass-release-manifests
+  RELEASE_UNITS_REPO: ghcr.io/glcsolutions-ca/compass-release-units
+  ACCEPTANCE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/acceptance/v1
+  RELEASE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/release/v1
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    environment: production
+    if: |
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'workflow_run' &&
+          github.event.workflow_run.conclusion == 'success'
+        )
+      }}
+
+    steps:
+      - name: Capture release start time
+        id: release_start
+        run: echo "released_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve mode and candidate id
+        id: candidate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=manual" >> "$GITHUB_OUTPUT"
+            echo "candidate_id=${{ inputs.candidate_id }}" >> "$GITHUB_OUTPUT"
+            echo "source_revision_hint=" >> "$GITHUB_OUTPUT"
+          else
+            source_revision="${{ github.event.workflow_run.head_sha }}"
+            echo "mode=auto" >> "$GITHUB_OUTPUT"
+            echo "source_revision_hint=${source_revision}" >> "$GITHUB_OUTPUT"
+            echo "candidate_id=sha-${source_revision}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Determine whether release should execute
+        id: release_guard
+        run: |
+          set -euo pipefail
+
+          mode="${{ steps.candidate.outputs.mode }}"
+          run_release=true
+          reason=""
+
+          if [ "${mode}" = "auto" ]; then
+            source_revision="${{ steps.candidate.outputs.source_revision_hint }}"
+            deadline=$(( $(date +%s) + 600 ))
+            is_on_main=false
+
+            while [ "$(date +%s)" -lt "${deadline}" ]; do
+              git fetch --no-tags origin main
+              if git merge-base --is-ancestor "${source_revision}" origin/main >/dev/null 2>&1; then
+                is_on_main=true
+                break
+              fi
+              sleep 30
+            done
+
+            if [ "${is_on_main}" != "true" ]; then
+              run_release=false
+              reason="stale candidate source revision not merged to main"
+            fi
+          fi
+
+          echo "run_release=${run_release}" >> "$GITHUB_OUTPUT"
+          echo "skip_reason=${reason}" >> "$GITHUB_OUTPUT"
+
+      - name: Skip stale candidate release
+        if: ${{ steps.release_guard.outputs.run_release != 'true' }}
+        run: |
+          echo "Skipping release for ${{ steps.candidate.outputs.candidate_id }}: ${{ steps.release_guard.outputs.skip_reason }}"
+
+      - name: Setup pnpm
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - name: Setup Node
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup ORAS
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        uses: oras-project/setup-oras@v1
+
+      - name: Login to GHCR (ORAS)
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Login to GHCR (Docker)
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch release manifest
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        run: |
+          node pipeline/shared/scripts/fetch-release-candidate.mjs \
+            --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
+            --registry-repo "${{ env.MANIFESTS_REPO }}" \
+            --out "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Validate release manifest
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        run: node pipeline/shared/scripts/validate-release-candidate.mjs --file "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Capture source revision from manifest
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        id: source
+        run: |
+          source_revision="$(node -e 'const fs=require("fs");const doc=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(doc.source.revision);' "$RUNNER_TEMP/release-candidate.json")"
+          echo "source_revision=${source_revision}" >> "$GITHUB_OUTPUT"
+
+          source_hint="${{ steps.candidate.outputs.source_revision_hint }}"
+          if [ -n "${source_hint}" ] && [ "${source_hint}" != "${source_revision}" ]; then
+            echo "Source revision mismatch between acceptance trigger and release manifest." >&2
+            echo "trigger=${source_hint} manifest=${source_revision}" >&2
+            exit 1
+          fi
+
+      - name: Resolve release-unit digest
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        id: release_unit
+        run: |
+          release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ steps.candidate.outputs.candidate_id }}" | jq -r '.digest')"
+          if [ -z "${release_unit_digest}" ] || [ "${release_unit_digest}" = "null" ]; then
+            echo "Unable to resolve release-unit digest for ${{ steps.candidate.outputs.candidate_id }}" >&2
+            exit 1
+          fi
+          echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify acceptance attestation pass
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        run: |
+          node pipeline/stages/05-release/scripts/verify-acceptance-attestation.mjs \
+            --subject "oci://${{ env.RELEASE_UNITS_REPO }}@${{ steps.release_unit.outputs.release_unit_digest }}" \
+            --repo "${{ github.repository }}" \
+            --predicate-type "${{ env.ACCEPTANCE_PREDICATE_TYPE }}" \
+            --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
+            --source-revision "${{ steps.source.outputs.source_revision }}" \
+            --signer-workflow "${{ github.repository }}/.github/workflows/02-acceptance-stage.yml"
+
+      - name: Assert required production environment config
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        env:
+          API_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.PRODUCTION_WEB_BASE_URL }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_CONTAINERAPP_API_NAME: ${{ vars.ACA_API_APP_NAME }}
+          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
+          AZURE_MIGRATION_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          node pipeline/shared/scripts/assert-environment-config.mjs \
+            --required API_BASE_URL \
+            --required WEB_BASE_URL \
+            --required AZURE_RESOURCE_GROUP \
+            --required AZURE_CONTAINERAPP_API_NAME \
+            --required AZURE_CONTAINERAPP_WEB_NAME \
+            --required AZURE_CONTAINERAPP_WORKER_NAME \
+            --required AZURE_MIGRATION_JOB_NAME \
+            --required AZURE_CLIENT_ID \
+            --required AZURE_TENANT_ID \
+            --required AZURE_SUBSCRIPTION_ID
+
+      - name: Azure login (OIDC)
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy candidate and run production smoke checks
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        id: release_run
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_CONTAINERAPP_API_NAME: ${{ vars.ACA_API_APP_NAME }}
+          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
+          AZURE_MIGRATION_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          ACR_LOGIN_SERVER: ${{ format('{0}.azurecr.io', vars.ACR_NAME) }}
+          SOURCE_REGISTRY_USERNAME: ${{ github.actor }}
+          SOURCE_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          API_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.PRODUCTION_WEB_BASE_URL }}
+        run: |
+          set +e
+
+          mkdir -p .artifacts/release
+
+          node pipeline/stages/05-release/scripts/deploy-production-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --api-app-name "$AZURE_CONTAINERAPP_API_NAME" \
+            --web-app-name "$AZURE_CONTAINERAPP_WEB_NAME" \
+            --worker-app-name "$AZURE_CONTAINERAPP_WORKER_NAME" \
+            --migrations-job-name "$AZURE_MIGRATION_JOB_NAME" \
+            --acr-name "$ACR_NAME" \
+            --acr-login-server "$ACR_LOGIN_SERVER" \
+            --source-registry-username "$SOURCE_REGISTRY_USERNAME" \
+            --source-registry-password "$SOURCE_REGISTRY_PASSWORD" \
+            --out "$RUNNER_TEMP/production-deploy-state.json"
+          deploy_status=$?
+
+          smoke_status=1
+          if [ "${deploy_status}" -eq 0 ]; then
+            node pipeline/stages/05-release/scripts/verify-production-candidate.mjs \
+              --manifest "$RUNNER_TEMP/release-candidate.json" \
+              --deploy-state "$RUNNER_TEMP/production-deploy-state.json" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --api-app-name "$AZURE_CONTAINERAPP_API_NAME" \
+              --web-app-name "$AZURE_CONTAINERAPP_WEB_NAME" \
+              --worker-app-name "$AZURE_CONTAINERAPP_WORKER_NAME" \
+              --api-base-url "$API_BASE_URL" \
+              --web-base-url "$WEB_BASE_URL"
+            smoke_status=$?
+          fi
+
+          verdict="fail"
+          if [ "${deploy_status}" -eq 0 ] && [ "${smoke_status}" -eq 0 ]; then
+            verdict="pass"
+          fi
+
+          summary="deploy=${deploy_status} smoke=${smoke_status}"
+          echo "verdict=${verdict}" >> "$GITHUB_OUTPUT"
+          echo "release_summary=${summary}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release attestation predicate
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        run: |
+          mkdir -p .artifacts/attestations
+          node pipeline/stages/05-release/scripts/generate-release-attestation-predicate.mjs \
+            --out .artifacts/attestations/release-predicate.json \
+            --candidate-id "${{ steps.candidate.outputs.candidate_id }}" \
+            --source-revision "${{ steps.source.outputs.source_revision }}" \
+            --verdict "${{ steps.release_run.outputs.verdict }}" \
+            --workflow-run-id "${{ github.run_id }}" \
+            --released-at "${{ steps.release_start.outputs.released_at }}" \
+            --deployment-ref "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Attest release verdict to candidate subject
+        if: ${{ steps.release_guard.outputs.run_release == 'true' }}
+        uses: actions/attest@v2
+        with:
+          subject-name: ${{ env.RELEASE_UNITS_REPO }}
+          subject-digest: ${{ steps.release_unit.outputs.release_unit_digest }}
+          predicate-type: ${{ env.RELEASE_PREDICATE_TYPE }}
+          predicate-path: .artifacts/attestations/release-predicate.json
+          push-to-registry: true
+
+      - name: Fail release stage when verdict is non-pass
+        if: ${{ steps.release_guard.outputs.run_release == 'true' && steps.release_run.outputs.verdict != 'pass' }}
+        run: |
+          echo "Release failed for candidate ${{ steps.candidate.outputs.candidate_id }}: ${{ steps.release_run.outputs.release_summary }}" >&2
+          exit 1

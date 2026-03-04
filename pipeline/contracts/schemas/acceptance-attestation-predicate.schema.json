@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://compass/pipeline/contracts/schemas/acceptance-attestation-predicate.schema.json",
+  "title": "Acceptance Attestation Predicate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "candidateId",
+    "sourceRevision",
+    "verdict",
+    "workflowRunId",
+    "testedAt",
+    "suiteSummary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "acceptance-attestation.v1"
+    },
+    "candidateId": {
+      "type": "string",
+      "pattern": "^sha-[a-f0-9]{40}$"
+    },
+    "sourceRevision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail"]
+    },
+    "workflowRunId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "testedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "suiteSummary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    }
+  }
+}

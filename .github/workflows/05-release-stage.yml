@@ -152,14 +152,14 @@ jobs:
 
       - name: Assert required production environment config
         env:
-          API_BASE_URL: ${{ vars.API_BASE_URL }}
-          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          API_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.PRODUCTION_WEB_BASE_URL }}
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          AZURE_CONTAINERAPP_API_NAME: ${{ vars.AZURE_CONTAINERAPP_API_NAME }}
-          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.AZURE_CONTAINERAPP_WEB_NAME }}
-          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.AZURE_CONTAINERAPP_WORKER_NAME }}
-          AZURE_MIGRATION_JOB_NAME: ${{ vars.AZURE_MIGRATION_JOB_NAME }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CONTAINERAPP_API_NAME: ${{ vars.ACA_API_APP_NAME }}
+          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
+          AZURE_MIGRATION_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
         run: |
@@ -178,17 +178,17 @@ jobs:
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy candidate to production from manifest
         env:
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          AZURE_CONTAINERAPP_API_NAME: ${{ vars.AZURE_CONTAINERAPP_API_NAME }}
-          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.AZURE_CONTAINERAPP_WEB_NAME }}
-          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.AZURE_CONTAINERAPP_WORKER_NAME }}
-          AZURE_MIGRATION_JOB_NAME: ${{ vars.AZURE_MIGRATION_JOB_NAME }}
+          AZURE_CONTAINERAPP_API_NAME: ${{ vars.ACA_API_APP_NAME }}
+          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
+          AZURE_MIGRATION_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
         run: |
           node pipeline/stages/05-release/scripts/deploy-production-candidate.mjs \
             --manifest "$RUNNER_TEMP/release-candidate.json" \
@@ -201,12 +201,12 @@ jobs:
 
       - name: Production smoke checks
         env:
-          API_BASE_URL: ${{ vars.API_BASE_URL }}
-          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          API_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.PRODUCTION_WEB_BASE_URL }}
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          AZURE_CONTAINERAPP_API_NAME: ${{ vars.AZURE_CONTAINERAPP_API_NAME }}
-          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.AZURE_CONTAINERAPP_WEB_NAME }}
-          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.AZURE_CONTAINERAPP_WORKER_NAME }}
+          AZURE_CONTAINERAPP_API_NAME: ${{ vars.ACA_API_APP_NAME }}
+          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+          AZURE_CONTAINERAPP_WORKER_NAME: ${{ vars.ACA_WORKER_APP_NAME }}
         run: |
           node pipeline/stages/05-release/scripts/verify-production-candidate.mjs \
             --manifest "$RUNNER_TEMP/release-candidate.json" \

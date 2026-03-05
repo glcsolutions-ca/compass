@@ -313,9 +313,10 @@ jobs:
 
       - name: Generate acceptance attestation predicate
         run: |
-          mkdir -p .artifacts/attestations
+          predicate_path="${GITHUB_WORKSPACE}/.artifacts/attestations/acceptance-predicate.json"
+          mkdir -p "$(dirname "${predicate_path}")"
           pnpm --filter @compass/pipeline-tools run acceptance:predicate:generate -- \
-            --out "${GITHUB_WORKSPACE}/.artifacts/attestations/acceptance-predicate.json" \
+            --out "${predicate_path}" \
             --candidate-id "${{ needs.resolve_candidate.outputs.candidate_id }}" \
             --source-revision "${{ needs.resolve_candidate.outputs.source_revision }}" \
             --verdict "${{ steps.acceptance_run.outputs.verdict }}" \

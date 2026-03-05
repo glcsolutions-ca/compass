@@ -2,6 +2,12 @@
 
 Purpose: Terraform-managed Entra identity and federation wiring.
 
+Current production identity model:
+
+1. `compass-deploy-prod` is the canonical GitHub Actions deploy principal for production.
+2. GitHub environments `production` and `production-rehearsal` must both use that principal via `AZURE_DEPLOY_CLIENT_ID`.
+3. The bootstrap app is not the production release workflow identity.
+
 ## Start Here
 
 - terraform root: `infra/identity`
@@ -28,8 +34,20 @@ Terraform merges all callback URIs with `web_redirect_uris` and removes duplicat
 
 1. `production` remains the manual approval environment for promotion.
 2. `production-rehearsal` is a second federated environment for the 0%-traffic rehearsal workflow.
-3. The deploy app registration must trust both environment subjects before the rehearsal workflow can log into Azure.
-4. GitHub environment vars/secrets must exist for both environments; the OIDC federated credential alone is not enough.
+3. `compass-deploy-prod` must trust both environment subjects before the rehearsal workflow can log into Azure.
+4. GitHub environment secret `AZURE_DEPLOY_CLIENT_ID` must equal Terraform output `deploy_application_client_id` for both environments.
+5. GitHub environment vars/secrets must exist for both environments; the OIDC federated credential alone is not enough.
+
+## Bootstrap Boundary
+
+1. [bootstrap-cloud-environment.mjs](/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/infra/bootstrap-cloud-environment.mjs) now prefers `AZURE_DEPLOY_CLIENT_ID`.
+2. `AZURE_GITHUB_CLIENT_ID` remains a deprecated fallback for older bootstrap invocations.
+3. Bootstrap/manual infra operations may still use the bootstrap app, but production release workflows must not.
+
+## Legacy Identities
+
+1. `compass-smoke-prod` is not used by the current release workflows.
+2. Keep it only until an external-consumer audit confirms it can be removed safely.
 
 ## Derived Redirect URIs
 

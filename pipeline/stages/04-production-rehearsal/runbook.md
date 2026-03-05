@@ -16,6 +16,7 @@ Workflow: `.github/workflows/04-production-rehearsal-stage.yml`.
 6. Rehearsal does not deploy worker.
 7. Rehearsal keeps active label traffic at `100` and inactive label traffic at `0`.
 8. Only the newest rehearsed candidate remains promotable.
+9. GitHub environment `production-rehearsal` must authenticate with the canonical deploy app via `AZURE_DEPLOY_CLIENT_ID`.
 
 ## Output
 
@@ -31,6 +32,7 @@ Workflow: `.github/workflows/04-production-rehearsal-stage.yml`.
 3. Confirm `/v1/auth/entra/start` redirects with the inactive web callback URI.
 4. Confirm the preview web talks to the preview API.
 5. If validation passes, manually dispatch `05-release-stage.yml` with the candidate id.
+6. Use rehearsal as the safe identity-cutover verification step because it moves `0%` production traffic.
 
 ## Failure Handling
 

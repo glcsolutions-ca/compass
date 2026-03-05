@@ -10,22 +10,23 @@ Workflow: `.github/workflows/05-release-stage.yml`.
 
 1. Release is manual only: `workflow_dispatch` with `candidate_id`.
 2. GitHub `production` environment approval is the human promotion gate.
-3. Candidate manifest must validate before deploy.
-4. Acceptance attestation must exist for the same candidate subject with `verdict=pass`.
-5. Release must verify the requested candidate is still rehearsed on the inactive label.
-6. Release reruns inactive-slot smoke before production mutation.
-7. Release runs migrations before traffic shift.
-8. Release deploys worker before traffic shift.
-9. Release promotes by flipping API and Web label traffic to the rehearsed label.
-10. Release then runs production smoke checks.
-11. Release deactivates old active API and Web revisions so only blue and green remain active.
-12. Release records GitHub deployment status and release attestation.
+3. GitHub environments `production` and `production-rehearsal` must use the same canonical deploy principal via `AZURE_DEPLOY_CLIENT_ID`.
+4. Candidate manifest must validate before deploy.
+5. Acceptance attestation must exist for the same candidate subject with `verdict=pass`.
+6. Release must verify the requested candidate is still rehearsed on the inactive label.
+7. Release reruns inactive-slot smoke before production mutation.
+8. Release runs migrations before traffic shift.
+9. Release deploys worker before traffic shift.
+10. Release promotes by flipping API and Web label traffic to the rehearsed label.
+11. Release then runs production smoke checks.
+12. Release deactivates old active API and Web revisions so only blue and green remain active.
+13. Release records GitHub deployment status and release attestation.
 
 ## Rollback Rules
 
 1. Fast rollback is API/Web label traffic reversal.
 2. Fast rollback is only valid until the next rehearsal overwrites the inactive label.
-3. Worker rollback is not covered by label reversal.
+3. Worker rollback is not covered by label reversal; compatible worker changes are still required for fast API/Web rollback.
 4. Durable rollback is: rehearse a prior accepted candidate, then promote it.
 5. No source rebuild is allowed for rollback.
 

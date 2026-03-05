@@ -7,6 +7,8 @@ import { validateReleaseCandidateFile } from "../../../shared/scripts/validate-r
 
 const execFileAsync = promisify(execFile);
 const REQUEST_TIMEOUT_MS = 10_000;
+const READINESS_TIMEOUT_MS = 60_000;
+const READINESS_INTERVAL_MS = 2_000;
 
 async function runDocker(args) {
   try {
@@ -36,14 +38,76 @@ async function assertContainerRunning(containerName) {
   }
 }
 
+function formatErrorDetails(error) {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+
+  const cause = error.cause;
+  if (!cause || typeof cause !== "object") {
+    return error.message;
+  }
+
+  const causeCode = typeof cause.code === "string" ? cause.code : undefined;
+  const causeMessage = typeof cause.message === "string" ? cause.message : undefined;
+  if (!causeCode && !causeMessage) {
+    return error.message;
+  }
+
+  return [error.message, causeCode, causeMessage].filter(Boolean).join(" | ");
+}
+
 async function assertHttpOk(url, label) {
-  const response = await fetch(url, {
-    method: "GET",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+    });
+  } catch (error) {
+    throw new Error(`${label} check failed for ${url}: ${formatErrorDetails(error)}`);
+  }
+
   if (!response.ok) {
     throw new Error(`${label} check failed for ${url} (HTTP ${response.status})`);
   }
+}
+
+export async function assertHttpOkEventually(
+  url,
+  label,
+  { timeoutMs = READINESS_TIMEOUT_MS, intervalMs = READINESS_INTERVAL_MS } = {}
+) {
+  const deadline = Date.now() + timeoutMs;
+  let attempt = 0;
+  let lastError;
+
+  while (Date.now() < deadline) {
+    attempt += 1;
+    try {
+      await assertHttpOk(url, label);
+      if (attempt > 1) {
+        console.info(`${label} became ready after ${attempt} attempts: ${url}`);
+      }
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+  }
+
+  const detail = formatErrorDetails(lastError);
+  throw new Error(
+    `${label} did not become ready within ${timeoutMs}ms at ${url}. Last error: ${detail}`
+  );
+}
+
+export function normalizeBaseUrl(url) {
+  if (typeof url !== "string") {
+    throw new Error("Base URL must be a string");
+  }
+
+  return url.replace(/\/$/u, "");
 }
 
 export async function verifyCandidateGithub({
@@ -85,8 +149,8 @@ export async function verifyCandidateGithub({
   await assertContainerRunning(deployState.containers?.api?.name);
   await assertContainerRunning(deployState.containers?.web?.name);
 
-  await assertHttpOk(`${apiBaseUrl.replace(/\/$/u, "")}/health`, "API health");
-  await assertHttpOk(`${webBaseUrl.replace(/\/$/u, "")}/`, "Web root");
+  await assertHttpOkEventually(`${normalizeBaseUrl(apiBaseUrl)}/health`, "API health");
+  await assertHttpOkEventually(`${normalizeBaseUrl(webBaseUrl)}/`, "Web root");
 }
 
 export async function main(argv = process.argv.slice(2)) {

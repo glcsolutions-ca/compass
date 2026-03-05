@@ -26,6 +26,12 @@ Workflow: `.github/workflows/02-acceptance-stage.yml`.
 4. Acceptance emits one attestation bound to candidate subject with `verdict=pass|fail`.
 5. Missing candidate or failed suites are fail-closed.
 
+## Local Runner Readiness
+
+1. GitHub acceptance verification polls local API and web endpoints until they are ready (up to 60 seconds).
+2. Readiness retries absorb short container startup races instead of failing immediately with transient connection errors.
+3. Persistent readiness failures remain fail-closed and surface explicit network/error context in logs.
+
 ## Exit Criteria
 
 1. `pass`: release automation may promote the candidate.

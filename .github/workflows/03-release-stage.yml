@@ -559,9 +559,10 @@ jobs:
 
       - name: Generate release attestation predicate
         run: |
-          mkdir -p .artifacts/attestations
+          predicate_path="${GITHUB_WORKSPACE}/.artifacts/attestations/release-predicate.json"
+          mkdir -p "$(dirname "${predicate_path}")"
           pnpm --filter @compass/pipeline-tools run release:predicate:generate -- \
-            --out "${GITHUB_WORKSPACE}/.artifacts/attestations/release-predicate.json" \
+            --out "${predicate_path}" \
             --candidate-id "${{ needs.resolve_candidate.outputs.candidate_id }}" \
             --source-revision "${{ needs.resolve_candidate.outputs.source_revision }}" \
             --verdict "${{ steps.release_run.outputs.verdict }}" \

@@ -315,7 +315,7 @@ jobs:
         run: |
           mkdir -p .artifacts/attestations
           pnpm --filter @compass/pipeline-tools run acceptance:predicate:generate -- \
-            --out .artifacts/attestations/acceptance-predicate.json \
+            --out "${GITHUB_WORKSPACE}/.artifacts/attestations/acceptance-predicate.json" \
             --candidate-id "${{ needs.resolve_candidate.outputs.candidate_id }}" \
             --source-revision "${{ needs.resolve_candidate.outputs.source_revision }}" \
             --verdict "${{ steps.acceptance_run.outputs.verdict }}" \
@@ -329,7 +329,7 @@ jobs:
           subject-name: ${{ env.RELEASE_UNITS_REPO }}
           subject-digest: ${{ steps.release_unit.outputs.release_unit_digest }}
           predicate-type: ${{ env.ACCEPTANCE_PREDICATE_TYPE }}
-          predicate-path: .artifacts/attestations/acceptance-predicate.json
+          predicate-path: ${{ github.workspace }}/.artifacts/attestations/acceptance-predicate.json
           push-to-registry: true
 
       - name: Upload release candidate handoff for Release Stage

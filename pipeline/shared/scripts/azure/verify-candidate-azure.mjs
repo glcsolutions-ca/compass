@@ -1,24 +1,24 @@
-import { pathToFileURL } from 'node:url';
-import { parseCliArgs, optionalOption, requireOption } from '../cli-utils.mjs';
-import { readJsonFile } from '../pipeline-contract-lib.mjs';
-import { validateReleaseCandidateFile } from '../validate-release-candidate.mjs';
-import { ensureAzLogin } from './az-command.mjs';
-import { findLabelTraffic, showContainerApp } from './blue-green-utils.mjs';
+import { pathToFileURL } from "node:url";
+import { parseCliArgs, optionalOption, requireOption } from "../cli-utils.mjs";
+import { readJsonFile } from "../pipeline-contract-lib.mjs";
+import { validateReleaseCandidateFile } from "../validate-release-candidate.mjs";
+import { ensureAzLogin } from "./az-command.mjs";
+import { findLabelTraffic, showContainerApp } from "./blue-green-utils.mjs";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
 function normalizeBaseUrl(urlString) {
-  return String(urlString || '').replace(/\/$/u, '');
+  return String(urlString || "").replace(/\/$/u, "");
 }
 
 function parseExpectedWeight(value) {
-  if (typeof value === 'undefined') {
+  if (typeof value === "undefined") {
     return undefined;
   }
 
   const parsed = Number.parseInt(String(value).trim(), 10);
   if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
-    throw new Error('--slot-weight must be an integer between 0 and 100');
+    throw new Error("--slot-weight must be an integer between 0 and 100");
   }
 
   return parsed;
@@ -48,11 +48,15 @@ function ensureZeroTrafficWeight(showDocument, candidateRevision, appName) {
 
   const candidateTraffic = traffic.find((entry) => entry?.revisionName === candidateRevision);
   if (!candidateTraffic) {
-    throw new Error(`Container app ${appName} does not expose candidate revision ${candidateRevision}`);
+    throw new Error(
+      `Container app ${appName} does not expose candidate revision ${candidateRevision}`
+    );
   }
 
   if (Number(candidateTraffic.weight || 0) !== 0) {
-    throw new Error(`Container app ${appName} candidate revision ${candidateRevision} is receiving traffic`);
+    throw new Error(
+      `Container app ${appName} candidate revision ${candidateRevision} is receiving traffic`
+    );
   }
 }
 
@@ -68,7 +72,7 @@ function assertSlotLabel(showDocument, slotLabel, appName, expectedRevision, exp
     );
   }
 
-  if (typeof expectedWeight === 'number' && Number(slotTraffic.weight || 0) !== expectedWeight) {
+  if (typeof expectedWeight === "number" && Number(slotTraffic.weight || 0) !== expectedWeight) {
     throw new Error(
       `Container app ${appName} slot '${slotLabel}' has unexpected traffic weight ${Number(slotTraffic.weight || 0)} (expected ${expectedWeight})`
     );
@@ -88,7 +92,7 @@ export function assertBlueGreenLabelWeights({ showDocument, appName, activeLabel
 
 async function assertUrlResponds(url) {
   const response = await fetch(url, {
-    method: 'GET',
+    method: "GET",
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
   });
 
@@ -100,22 +104,24 @@ async function assertUrlResponds(url) {
 async function assertEntraStartRedirect({ webBaseUrl, expectedCallbackBaseUrl }) {
   const authStartUrl = `${normalizeBaseUrl(webBaseUrl)}/v1/auth/entra/start?returnTo=%2F`;
   const response = await fetch(authStartUrl, {
-    method: 'GET',
-    redirect: 'manual',
+    method: "GET",
+    redirect: "manual",
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
   });
 
   if (response.status < 300 || response.status >= 400) {
-    throw new Error(`Expected /v1/auth/entra/start to redirect for ${webBaseUrl}, got HTTP ${response.status}`);
+    throw new Error(
+      `Expected /v1/auth/entra/start to redirect for ${webBaseUrl}, got HTTP ${response.status}`
+    );
   }
 
-  const location = response.headers.get('location');
+  const location = response.headers.get("location");
   if (!location) {
     throw new Error(`Missing redirect location from /v1/auth/entra/start at ${webBaseUrl}`);
   }
 
   const redirectLocation = new URL(location);
-  const redirectUri = redirectLocation.searchParams.get('redirect_uri') || '';
+  const redirectUri = redirectLocation.searchParams.get("redirect_uri") || "";
   const expectedRedirectUri = `${normalizeBaseUrl(expectedCallbackBaseUrl)}/v1/auth/entra/callback`;
 
   if (redirectUri !== expectedRedirectUri) {
@@ -127,9 +133,9 @@ async function assertEntraStartRedirect({ webBaseUrl, expectedCallbackBaseUrl })
 
 function resolveExpectedImages(deployState) {
   return {
-    api: deployState?.deployment?.api?.candidateImage ?? '',
-    web: deployState?.deployment?.web?.candidateImage ?? '',
-    worker: deployState?.deployment?.worker?.candidateImage ?? ''
+    api: deployState?.deployment?.api?.candidateImage ?? "",
+    web: deployState?.deployment?.web?.candidateImage ?? "",
+    worker: deployState?.deployment?.worker?.candidateImage ?? ""
   };
 }
 
@@ -148,7 +154,7 @@ export async function verifyCandidateAzure({
 }) {
   const errors = await validateReleaseCandidateFile(manifestPath);
   if (errors.length > 0) {
-    const details = errors.map((entry) => `- ${entry.path}: ${entry.message}`).join('\n');
+    const details = errors.map((entry) => `- ${entry.path}: ${entry.message}`).join("\n");
     throw new Error(`Manifest validation failed for Azure verify:\n${details}`);
   }
 
@@ -186,7 +192,7 @@ export async function verifyCandidateAzure({
     );
 
     if (!apiBaseUrl || !webBaseUrl) {
-      throw new Error('slot label verification requires --api-base-url and --web-base-url');
+      throw new Error("slot label verification requires --api-base-url and --web-base-url");
     }
 
     await assertUrlResponds(`${normalizeBaseUrl(apiBaseUrl)}/health`);
@@ -205,13 +211,15 @@ export async function verifyCandidateAzure({
     const webRevisionFqdn = deployState?.deployment?.web?.candidateRevisionFqdn;
 
     if (!apiRevision || !webRevision || !apiRevisionFqdn || !webRevisionFqdn) {
-      throw new Error('Deploy state candidate revisions and revision FQDNs are required for zero-traffic verification');
+      throw new Error(
+        "Deploy state candidate revisions and revision FQDNs are required for zero-traffic verification"
+      );
     }
 
     ensureZeroTrafficWeight(apiShow, apiRevision, apiAppName);
     ensureZeroTrafficWeight(webShow, webRevision, webAppName);
-    await assertUrlResponds(`https://${apiRevisionFqdn.replace(/\/$/u, '')}/health`);
-    await assertUrlResponds(`https://${webRevisionFqdn.replace(/\/$/u, '')}/`);
+    await assertUrlResponds(`https://${apiRevisionFqdn.replace(/\/$/u, "")}/health`);
+    await assertUrlResponds(`https://${webRevisionFqdn.replace(/\/$/u, "")}/`);
     return;
   }
 
@@ -247,21 +255,21 @@ export async function main(argv = process.argv.slice(2)) {
   const options = parseCliArgs(argv);
 
   await verifyCandidateAzure({
-    manifestPath: requireOption(options, 'manifest'),
-    deployStatePath: optionalOption(options, 'deploy-state'),
-    resourceGroup: requireOption(options, 'resource-group'),
-    apiAppName: requireOption(options, 'api-app-name'),
-    webAppName: requireOption(options, 'web-app-name'),
-    workerAppName: optionalOption(options, 'worker-app-name'),
-    apiBaseUrl: optionalOption(options, 'api-base-url'),
-    webBaseUrl: optionalOption(options, 'web-base-url'),
-    zeroTraffic: options['zero-traffic'] === true,
-    slotLabel: optionalOption(options, 'slot-label'),
-    slotWeight: optionalOption(options, 'slot-weight')
+    manifestPath: requireOption(options, "manifest"),
+    deployStatePath: optionalOption(options, "deploy-state"),
+    resourceGroup: requireOption(options, "resource-group"),
+    apiAppName: requireOption(options, "api-app-name"),
+    webAppName: requireOption(options, "web-app-name"),
+    workerAppName: optionalOption(options, "worker-app-name"),
+    apiBaseUrl: optionalOption(options, "api-base-url"),
+    webBaseUrl: optionalOption(options, "web-base-url"),
+    zeroTraffic: options["zero-traffic"] === true,
+    slotLabel: optionalOption(options, "slot-label"),
+    slotWeight: optionalOption(options, "slot-weight")
   });
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
+if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
   main().catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);

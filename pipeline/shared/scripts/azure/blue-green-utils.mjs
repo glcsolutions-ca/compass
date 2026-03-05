@@ -1,14 +1,16 @@
-import { runAz } from './az-command.mjs';
+import { runAz } from "./az-command.mjs";
 
 function normalizeAppName(appName) {
-  return String(appName || '').trim().toLowerCase();
+  return String(appName || "")
+    .trim()
+    .toLowerCase();
 }
 
 export function normalizeAppFqdn(fqdn) {
-  return String(fqdn || '')
+  return String(fqdn || "")
     .trim()
-    .replace(/^https?:\/\//u, '')
-    .replace(/\/+$/u, '');
+    .replace(/^https?:\/\//u, "")
+    .replace(/\/+$/u, "");
 }
 
 function splitAppFqdn(appName, appFqdn) {
@@ -110,13 +112,13 @@ export function findCurrentTrafficRevision(showDocument) {
   const traffic = showDocument?.properties?.configuration?.ingress?.traffic;
   if (Array.isArray(traffic)) {
     const active = traffic.find((entry) => Number(entry?.weight || 0) > 0 && entry?.revisionName);
-    if (typeof active?.revisionName === 'string' && active.revisionName.trim().length > 0) {
+    if (typeof active?.revisionName === "string" && active.revisionName.trim().length > 0) {
       return active.revisionName.trim();
     }
   }
 
   const latest = showDocument?.properties?.latestRevisionName;
-  if (typeof latest === 'string' && latest.trim().length > 0) {
+  if (typeof latest === "string" && latest.trim().length > 0) {
     return latest.trim();
   }
 
@@ -129,15 +131,17 @@ export function findRevisionByName(revisions, revisionName) {
 
 export function listActiveRevisionNames(revisions) {
   return revisions
-    .filter((entry) => entry?.properties?.active === true && typeof entry?.name === 'string')
+    .filter((entry) => entry?.properties?.active === true && typeof entry?.name === "string")
     .map((entry) => entry.name);
 }
 
 export function determineRevisionsToDeactivate({ activeRevisionNames, keepRevisionNames }) {
   const keep = new Set((keepRevisionNames || []).filter(Boolean));
-  return (activeRevisionNames || []).filter((revisionName) => revisionName && !keep.has(revisionName));
+  return (activeRevisionNames || []).filter(
+    (revisionName) => revisionName && !keep.has(revisionName)
+  );
 }
 
 export async function showContainerApp({ resourceGroup, appName }) {
-  return runAz(['containerapp', 'show', '--resource-group', resourceGroup, '--name', appName]);
+  return runAz(["containerapp", "show", "--resource-group", resourceGroup, "--name", appName]);
 }

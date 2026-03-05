@@ -58,9 +58,11 @@ The pipeline needs to prove one thing: the exact integrated candidate can be reh
 ### Commit Stage
 
 Purpose:
+
 - Build and publish one authoritative candidate for one integrated SHA.
 
 Must do:
+
 1. Run authoritatively on `merge_group` only.
 2. Execute fast commit checks.
 3. Build and push immutable digest-pinned runtime artifacts.
@@ -70,9 +72,11 @@ Must do:
 ### Acceptance Stage
 
 Purpose:
+
 - Prove that the exact candidate from Commit Stage behaves correctly in non-prod.
 
 Must do:
+
 1. Trigger from successful Commit Stage via `workflow_run`.
 2. Resolve candidate identity from GHCR.
 3. Guard against stale candidates by requiring SHA presence on `main`.
@@ -83,9 +87,11 @@ Must do:
 ### Production Rehearsal Stage
 
 Purpose:
+
 - Deploy the exact accepted candidate to the inactive production label at `0%` traffic and prove it via real URLs.
 
 Must do:
+
 1. Trigger automatically from successful Acceptance Stage.
 2. Also support manual `workflow_dispatch` by `candidate_id`.
 3. Verify acceptance attestation before mutating production.
@@ -98,9 +104,11 @@ Must do:
 ### Release Stage
 
 Purpose:
+
 - Manually promote the exact rehearsed candidate to production.
 
 Must do:
+
 1. Trigger only by manual `workflow_dispatch` with `candidate_id`.
 2. Use the GitHub `production` environment as the approval boundary.
 3. Verify acceptance attestation again.

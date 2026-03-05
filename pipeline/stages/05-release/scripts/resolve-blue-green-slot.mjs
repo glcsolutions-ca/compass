@@ -1,9 +1,9 @@
-import path from 'node:path';
-import { appendFile } from 'node:fs/promises';
-import { pathToFileURL } from 'node:url';
-import { parseCliArgs, optionalOption, requireOption } from '../../../shared/scripts/cli-utils.mjs';
-import { writeJsonFile } from '../../../shared/scripts/pipeline-contract-lib.mjs';
-import { ensureAzLogin, runAz } from '../../../shared/scripts/azure/az-command.mjs';
+import path from "node:path";
+import { appendFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
+import { parseCliArgs, optionalOption, requireOption } from "../../../shared/scripts/cli-utils.mjs";
+import { writeJsonFile } from "../../../shared/scripts/pipeline-contract-lib.mjs";
+import { ensureAzLogin, runAz } from "../../../shared/scripts/azure/az-command.mjs";
 import {
   buildSlotBaseUrl,
   findCurrentTrafficRevision,
@@ -12,10 +12,12 @@ import {
   resolveGlobalActiveLabel,
   resolveInactiveLabel,
   showContainerApp
-} from '../../../shared/scripts/azure/blue-green-utils.mjs';
+} from "../../../shared/scripts/azure/blue-green-utils.mjs";
 
 function normalizeLabel(label, optionName) {
-  const normalized = String(label || '').trim().toLowerCase();
+  const normalized = String(label || "")
+    .trim()
+    .toLowerCase();
 
   if (!normalized) {
     throw new Error(`${optionName} is required`);
@@ -28,26 +30,32 @@ function normalizeLabel(label, optionName) {
   return normalized;
 }
 
-async function ensureLabelAssignment({ resourceGroup, appName, label, revisionName, showDocument }) {
+async function ensureLabelAssignment({
+  resourceGroup,
+  appName,
+  label,
+  revisionName,
+  showDocument
+}) {
   const currentLabel = findLabelTraffic(showDocument, label);
   if (currentLabel?.revisionName === revisionName) {
     return;
   }
 
   await runAz([
-    'containerapp',
-    'revision',
-    'label',
-    'add',
-    '--resource-group',
+    "containerapp",
+    "revision",
+    "label",
+    "add",
+    "--resource-group",
     resourceGroup,
-    '--name',
+    "--name",
     appName,
-    '--label',
+    "--label",
     label,
-    '--revision',
+    "--revision",
     revisionName,
-    '--yes'
+    "--yes"
   ]);
 }
 
@@ -75,8 +83,8 @@ async function convergeAppLabelBaseline({ resourceGroup, appName, activeLabel, i
   return {
     appName,
     fqdn,
-    activeLabelRevision: findLabelTraffic(finalState, activeLabel)?.revisionName ?? '',
-    inactiveLabelRevision: findLabelTraffic(finalState, inactiveLabel)?.revisionName ?? ''
+    activeLabelRevision: findLabelTraffic(finalState, activeLabel)?.revisionName ?? "",
+    inactiveLabelRevision: findLabelTraffic(finalState, inactiveLabel)?.revisionName ?? ""
   };
 }
 
@@ -84,18 +92,18 @@ export async function resolveBlueGreenSlot({
   resourceGroup,
   apiAppName,
   webAppName,
-  blueLabel = 'blue',
-  greenLabel = 'green',
-  preferredActiveLabel = 'blue'
+  blueLabel = "blue",
+  greenLabel = "green",
+  preferredActiveLabel = "blue"
 }) {
   await ensureAzLogin();
 
-  const normalizedBlueLabel = normalizeLabel(blueLabel, 'blueLabel');
-  const normalizedGreenLabel = normalizeLabel(greenLabel, 'greenLabel');
-  const normalizedPreferredActive = normalizeLabel(preferredActiveLabel, 'preferredActiveLabel');
+  const normalizedBlueLabel = normalizeLabel(blueLabel, "blueLabel");
+  const normalizedGreenLabel = normalizeLabel(greenLabel, "greenLabel");
+  const normalizedPreferredActive = normalizeLabel(preferredActiveLabel, "preferredActiveLabel");
 
   if (normalizedBlueLabel === normalizedGreenLabel) {
-    throw new Error('blueLabel and greenLabel must be different');
+    throw new Error("blueLabel and greenLabel must be different");
   }
 
   const apiShow = await showContainerApp({ resourceGroup, appName: apiAppName });
@@ -108,7 +116,11 @@ export async function resolveBlueGreenSlot({
     blueLabel: normalizedBlueLabel,
     greenLabel: normalizedGreenLabel
   });
-  const inactiveLabel = resolveInactiveLabel(activeLabel, normalizedBlueLabel, normalizedGreenLabel);
+  const inactiveLabel = resolveInactiveLabel(
+    activeLabel,
+    normalizedBlueLabel,
+    normalizedGreenLabel
+  );
 
   const api = await convergeAppLabelBaseline({
     resourceGroup,
@@ -144,16 +156,16 @@ export async function resolveBlueGreenSlot({
 
 export async function main(argv = process.argv.slice(2)) {
   const options = parseCliArgs(argv);
-  const outputPath = optionalOption(options, 'out');
-  const githubOutputPath = optionalOption(options, 'github-output');
+  const outputPath = optionalOption(options, "out");
+  const githubOutputPath = optionalOption(options, "github-output");
 
   const resolution = await resolveBlueGreenSlot({
-    resourceGroup: requireOption(options, 'resource-group'),
-    apiAppName: requireOption(options, 'api-app-name'),
-    webAppName: requireOption(options, 'web-app-name'),
-    blueLabel: optionalOption(options, 'blue-label') ?? 'blue',
-    greenLabel: optionalOption(options, 'green-label') ?? 'green',
-    preferredActiveLabel: optionalOption(options, 'preferred-active-label') ?? 'blue'
+    resourceGroup: requireOption(options, "resource-group"),
+    apiAppName: requireOption(options, "api-app-name"),
+    webAppName: requireOption(options, "web-app-name"),
+    blueLabel: optionalOption(options, "blue-label") ?? "blue",
+    greenLabel: optionalOption(options, "green-label") ?? "green",
+    preferredActiveLabel: optionalOption(options, "preferred-active-label") ?? "blue"
   });
 
   if (outputPath) {
@@ -171,9 +183,9 @@ export async function main(argv = process.argv.slice(2)) {
       `inactive_api_base_url=${resolution.urls.inactiveApiBaseUrl}`,
       `active_web_base_url=${resolution.urls.activeWebBaseUrl}`,
       `inactive_web_base_url=${resolution.urls.inactiveWebBaseUrl}`
-    ].join('\n');
+    ].join("\n");
 
-    await appendFile(githubOutputPath, `${outputLines}\n`, 'utf8');
+    await appendFile(githubOutputPath, `${outputLines}\n`, "utf8");
   }
 
   if (!outputPath) {
@@ -181,7 +193,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
+if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
   main().catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);

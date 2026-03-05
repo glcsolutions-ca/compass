@@ -155,10 +155,12 @@ A candidate MUST include:
 3. Artifact references MUST be immutable digest-pinned references, not mutable tags.
 4. A candidate is defined by its artifact digests. Human-friendly tags MAY exist, but tags are aliases and MUST NOT be treated as identity.
 
-### Cross-workflow handoff
+### Cross-workflow candidate resolution
 
-1. The canonical cross-workflow handoff object is the `release-candidate-manifest` artifact.
-2. Acceptance and Release MUST resolve candidate identity from that handoff object (or manual `candidate_id` input for rollback/redeploy), not from `workflow_run.head_sha` alone.
+1. The canonical cross-workflow source of truth is the GHCR manifest package keyed by `candidateId` plus the GHCR release-unit subject.
+2. In automatic mode, Acceptance and Release derive candidate identity from the triggering run (`candidateId=sha-<workflow_run.head_sha>`) and then fetch and validate the GHCR manifest.
+3. In manual mode, Release accepts explicit `candidate_id` input and resolves the same GHCR manifest.
+4. Stage jobs MUST checkout and deploy using `source.revision` from the resolved manifest, not default-branch tip.
 
 ---
 

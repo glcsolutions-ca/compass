@@ -67,11 +67,10 @@ Everything outside that purpose is optional tooling.
 GHCR is the canonical artifact and stage-evidence store.
 
 1. Commit Stage publishes runtime artifacts, the release-unit index, and candidate manifest package to GHCR.
-2. Commit Stage uploads one canonical handoff artifact: `release-candidate-manifest`.
-3. Acceptance resolves candidate identity from that handoff artifact, fetches and validates the same candidate from GHCR, and deploys unchanged digests.
-4. Acceptance uploads the same `release-candidate-manifest` as handoff for Release.
-5. Release resolves from that same handoff object, verifies acceptance attestation on the same candidate subject, and deploys unchanged digests.
-6. PR-head queue admission uses a lightweight `Commit Stage` check only; authoritative candidate publication still happens once on `merge_group`.
+2. Acceptance derives `candidateId=sha-<workflow_run.head_sha>`, fetches and validates the canonical manifest from GHCR, and deploys unchanged digests.
+3. Release does the same (auto mode from triggering Acceptance run, manual mode from `candidate_id` input).
+4. Release promotion is gated by acceptance attestation on the release-unit digest for that candidate.
+5. PR-head queue admission uses a lightweight `Commit Stage` check only; authoritative candidate publication still happens once on `merge_group`.
 
 ## Promotion Policy vs Publication Metadata
 

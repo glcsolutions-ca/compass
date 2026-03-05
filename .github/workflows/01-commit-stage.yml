@@ -239,14 +239,6 @@ jobs:
             "${MANIFESTS_REPO}:${{ steps.candidate.outputs.candidate_id }}" \
             "manifest.json:application/vnd.compass.release-manifest.v1+json"
 
-      - name: Upload release candidate handoff artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: release-candidate-manifest
-          path: .artifacts/release-candidate/manifest.json
-          if-no-files-found: error
-          retention-days: 3
-
       - name: Write commit summary
         run: |
           {

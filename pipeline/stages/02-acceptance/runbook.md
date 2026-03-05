@@ -14,10 +14,9 @@ Workflow: `.github/workflows/02-acceptance-stage.yml`.
 ## Entry Criteria
 
 1. Trigger is successful `workflow_run` of Commit Stage.
-2. Candidate identity is resolved from `release-candidate-manifest` artifact on the triggering run.
-3. Missing handoff artifact is fail-closed.
-4. Candidate SHA is confirmed on `main` (stale candidates are skipped).
-5. Candidate manifest exists in GHCR and validates.
+2. Candidate identity is resolved from triggering `workflow_run.head_sha` and canonical GHCR manifest.
+3. Candidate SHA is confirmed on `main` (stale candidates are skipped).
+4. Candidate manifest exists in GHCR and validates.
 
 ## Rules
 
@@ -25,8 +24,7 @@ Workflow: `.github/workflows/02-acceptance-stage.yml`.
 2. Acceptance must not rebuild artifacts.
 3. Acceptance runs system and browser suites.
 4. Acceptance emits one attestation bound to candidate subject with `verdict=pass|fail`.
-5. Acceptance emits the same canonical `release-candidate-manifest` artifact for release-stage resolution.
-6. Missing candidate or failed suites are fail-closed.
+5. Missing candidate or failed suites are fail-closed.
 
 ## Exit Criteria
 

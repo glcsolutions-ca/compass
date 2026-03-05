@@ -275,6 +275,7 @@ describe("API app", () => {
         process.env.WEB_BASE_URL = previousWebBaseUrl;
       }
     }
+  });
 
   it("allows same-origin state-changing requests on forwarded custom domains", async () => {
     const authService = {

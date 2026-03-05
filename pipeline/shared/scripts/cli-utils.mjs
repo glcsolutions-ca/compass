@@ -6,6 +6,10 @@ export function parseCliArgs(argv = process.argv.slice(2)) {
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
 
+    if (token === "--") {
+      continue;
+    }
+
     if (!token.startsWith("--")) {
       parsed._.push(token);
       continue;

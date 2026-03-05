@@ -236,7 +236,7 @@ jobs:
             }' > .artifacts/release-candidate/manifest.json
 
       - name: Validate release candidate manifest
-        run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file .artifacts/release-candidate/manifest.json
+        run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file ../.artifacts/release-candidate/manifest.json
 
       - name: Publish candidate manifest package
         run: |

@@ -49,6 +49,17 @@ Terraform merges all callback URIs with `web_redirect_uris` and removes duplicat
 1. `compass-smoke-prod` is not used by the current release workflows.
 2. Keep it only until an external-consumer audit confirms it can be removed safely.
 
+## Audit Commands
+
+```bash
+terraform -chdir=infra/identity output -raw deploy_application_client_id
+az ad app federated-credential list --id "$(terraform -chdir=infra/identity output -raw deploy_application_client_id)"
+az ad sp show --id "$(terraform -chdir=infra/identity output -raw deploy_application_client_id)" --query id -o tsv
+az role assignment list \
+  --assignee-object-id "$(az ad sp show --id "$(terraform -chdir=infra/identity output -raw deploy_application_client_id)" --query id -o tsv)" \
+  --scope "/subscriptions/<subscription-id>/resourceGroups/<resource-group>"
+```
+
 ## Derived Redirect URIs
 
 1. Custom domains:

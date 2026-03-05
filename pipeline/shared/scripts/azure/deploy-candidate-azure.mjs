@@ -48,7 +48,9 @@ function normalizeAppFqdn(fqdn, optionName) {
 }
 
 function splitAppFqdn(appName, appFqdn) {
-  const normalizedName = String(appName || "").trim().toLowerCase();
+  const normalizedName = String(appName || "")
+    .trim()
+    .toLowerCase();
   const normalizedFqdn = normalizeAppFqdn(appFqdn, "appFqdn");
   const prefix = `${normalizedName}.`;
 
@@ -650,11 +652,7 @@ export async function deployCandidateAzure({
               normalizedActiveLabel,
               normalizedApiFqdn
             ),
-            activeWebBaseUrl: buildSlotBaseUrl(
-              webAppName,
-              normalizedActiveLabel,
-              normalizedWebFqdn
-            )
+            activeWebBaseUrl: buildSlotBaseUrl(webAppName, normalizedActiveLabel, normalizedWebFqdn)
           }
         }
       : {

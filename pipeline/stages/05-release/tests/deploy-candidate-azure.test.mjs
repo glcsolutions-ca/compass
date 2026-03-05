@@ -14,16 +14,8 @@ describe("deploy-candidate-azure revision suffix", () => {
 
   it("produces stable, different suffixes for different candidates", () => {
     const appName = "ca-compass-web-prd-cc-02";
-    const first = toRevisionSuffix(
-      "sha-1111111111111111111111111111111111111111",
-      "web",
-      appName
-    );
-    const second = toRevisionSuffix(
-      "sha-2222222222222222222222222222222222222222",
-      "web",
-      appName
-    );
+    const first = toRevisionSuffix("sha-1111111111111111111111111111111111111111", "web", appName);
+    const second = toRevisionSuffix("sha-2222222222222222222222222222222222222222", "web", appName);
 
     expect(first).not.toBe(second);
   });

@@ -38,5 +38,5 @@ Migrate to canonical stage-first `pipeline/` layout and standardized test placem
 
 1. Revert latest migration commit.
 2. Restore previous directory paths and command targets.
-3. Re-run `pnpm test:quick` and `pnpm test:rc`.
+3. Re-run `pnpm check` and `pnpm --filter @compass/pipeline-tools run test`.
 4. Re-apply migration incrementally with failing reference fixed first.

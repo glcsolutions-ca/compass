@@ -12,6 +12,6 @@ Purpose: runtime applications and their local start points.
 
 ```bash
 pnpm dev
-pnpm dev:all
-pnpm dev:worker
+pnpm dev:down
+pnpm --filter @compass/worker dev
 ```

@@ -3,6 +3,7 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveDatabaseUrlFromSources } from "../../db/scripts/constants.mjs";
 
 const PORT_RANGE_START = 41_000;
 const PORT_RANGE_END = 60_999;
@@ -387,10 +388,12 @@ export async function resolveLocalEnvValues({
     `http://127.0.0.1:${resolvedPorts.SESSION_RUNTIME_PORT}`;
   const runtimeEngine =
     normalizeValue(env.SESSION_RUNTIME_ENGINE) ?? existingRuntimeEngine ?? "codex";
-  const databaseUrl =
-    explicitDatabaseUrl ??
-    existingDatabaseUrl ??
-    `postgres://compass:compass@localhost:${resolvedPorts.POSTGRES_PORT}/compass`;
+  const databaseUrl = resolveDatabaseUrlFromSources({
+    envDatabaseUrl: explicitDatabaseUrl,
+    dbEnvDatabaseUrl: existingDatabaseUrl,
+    dbEnvPostgresPort: existingPorts.POSTGRES_PORT,
+    fallbackPostgresPort: String(resolvedPorts.POSTGRES_PORT)
+  });
 
   return {
     ports: resolvedPorts,

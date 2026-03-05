@@ -1,6 +1,7 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { Client } from "pg";
+import { resolveDatabaseUrl } from "../../db/scripts/constants.mjs";
 
 function normalize(value) {
   if (typeof value !== "string") {
@@ -75,17 +76,17 @@ async function canReachRuntime(endpoint) {
 async function main() {
   const rootDir = process.cwd();
   const apiEnv = await readEnvFile(path.resolve(rootDir, "apps/api/.env"));
-  const dbEnv = await readEnvFile(path.resolve(rootDir, "db/postgres/.env"));
   const runtimeEnv = await readEnvFile(path.resolve(rootDir, "apps/codex-session-runtime/.env"));
 
-  const databaseUrl =
-    normalize(process.env.DATABASE_URL) ??
-    normalize(apiEnv.DATABASE_URL) ??
-    normalize(dbEnv.DATABASE_URL);
-  if (!databaseUrl || !(await canConnectPostgres(databaseUrl))) {
-    console.error("local-dev preflight: Postgres is not reachable.");
+  const databaseUrl = resolveDatabaseUrl({
+    env: process.env,
+    postgresEnvPath: path.resolve(rootDir, "db/postgres/.env")
+  });
+
+  if (!(await canConnectPostgres(databaseUrl))) {
+    console.error(`dev:check: Postgres is not reachable for ${databaseUrl}.`);
     console.error("Fix:");
-    console.error("  pnpm db:postgres:up");
+    console.error("  pnpm --filter @compass/db-tools run postgres:up");
     process.exitCode = 1;
     return;
   }
@@ -110,16 +111,16 @@ async function main() {
   if (requiresLocalRuntime) {
     if (!runtimeEndpoint || !(await canReachRuntime(runtimeEndpoint))) {
       console.error(
-        `local-dev preflight: local runtime provider (${runtimeProvider}) is configured but runtime is not reachable.`
+        `dev:check: local runtime provider (${runtimeProvider}) is configured but runtime is not reachable.`
       );
       console.error("Fix:");
-      console.error("  pnpm runtime:session:up");
+      console.error("  pnpm --filter @compass/codex-session-runtime run session:up");
       process.exitCode = 1;
       return;
     }
   }
 
-  console.info("local-dev preflight passed.");
+  console.info("dev:check passed.");
 }
 
 await main().catch((error) => {

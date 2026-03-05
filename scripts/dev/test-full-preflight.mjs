@@ -65,7 +65,11 @@ function createBackendPrereqError() {
     code: "FULL001",
     summary: "backend prerequisites missing",
     details: ["- DATABASE_URL not resolvable or Postgres not reachable"],
-    guidance: ["pnpm db:postgres:up", "pnpm test:full", "pnpm db:postgres:down"]
+    guidance: [
+      "pnpm --filter @compass/db-tools run postgres:up",
+      "pnpm test:full",
+      "pnpm --filter @compass/db-tools run postgres:down"
+    ]
   });
 }
 

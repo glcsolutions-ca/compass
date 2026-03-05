@@ -2,7 +2,11 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_DATABASE_URL, resolveDatabaseUrl } from "./constants.mjs";
+import {
+  DEFAULT_DATABASE_URL,
+  resolveDatabaseUrl,
+  resolveDatabaseUrlFromSources
+} from "./constants.mjs";
 
 async function withTempDir(run) {
   const baseDir = await mkdtemp(path.join(os.tmpdir(), "db-constants-"));
@@ -67,5 +71,15 @@ describe("resolveDatabaseUrl", () => {
     });
 
     expect(resolved).toBe(DEFAULT_DATABASE_URL);
+  });
+});
+
+describe("resolveDatabaseUrlFromSources", () => {
+  it("builds a fallback URL from the provided fallback port", () => {
+    const resolved = resolveDatabaseUrlFromSources({
+      fallbackPostgresPort: "6543"
+    });
+
+    expect(resolved).toBe("postgres://compass:compass@localhost:6543/compass");
   });
 });

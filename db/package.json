@@ -1,0 +1,20 @@
+{
+  "name": "@compass/db-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "migrate:create": "cd .. && node db/scripts/migrate-create.mjs",
+    "migrate:check": "cd .. && node db/scripts/check-migration-policy.mjs",
+    "migrate:checksums:update": "cd .. && node db/scripts/check-migration-policy.mjs --write",
+    "migrate:up": "cd .. && node db/scripts/check-migration-policy.mjs && node db/scripts/migrate.mjs up",
+    "migrate:down": "cd .. && node db/scripts/check-migration-policy.mjs && node db/scripts/migrate.mjs down",
+    "migrate:status": "cd .. && node db/scripts/migrate-status.mjs",
+    "seed": "cd .. && node db/scripts/seed-postgres.mjs",
+    "postgres:wait": "cd .. && node db/scripts/wait-for-postgres.mjs",
+    "postgres:up": "cd .. && node scripts/dev/ensure-local-env.mjs && (docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml up -d --wait postgres || docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml up -d postgres) && node db/scripts/wait-for-postgres.mjs && node db/scripts/check-migration-policy.mjs && node db/scripts/migrate.mjs up && node db/scripts/seed-postgres.mjs",
+    "postgres:down": "cd .. && node scripts/dev/ensure-local-env.mjs && docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml down",
+    "postgres:reset": "cd .. && node scripts/dev/ensure-local-env.mjs && docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml down --volumes && node scripts/dev/ensure-local-env.mjs && (docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml up -d --wait postgres || docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml up -d postgres) && node db/scripts/wait-for-postgres.mjs && node db/scripts/check-migration-policy.mjs && node db/scripts/migrate.mjs up && node db/scripts/seed-postgres.mjs",
+    "postgres:logs": "cd .. && node scripts/dev/ensure-local-env.mjs && docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml logs -f postgres"
+  }
+}

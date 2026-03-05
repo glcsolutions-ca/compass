@@ -1,0 +1,24 @@
+{
+  "name": "@compass/pipeline-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run stages/shared-tests/validate-release-candidate.test.mjs stages/shared-tests/validate-release-candidate-runtime.test.mjs stages/01-commit/tests/generate-release-candidate.test.mjs stages/02-acceptance/tests/deploy-verify-from-manifest.test.mjs stages/02-acceptance/tests/generate-acceptance-attestation-predicate.test.mjs stages/shared-tests/fetch-release-candidate.test.mjs stages/05-release/tests/verify-acceptance-attestation.test.mjs stages/05-release/tests/generate-release-attestation-predicate.test.mjs stages/shared-tests/schema-parity.test.mjs stages/shared-tests/build-candidate-id.test.mjs --silent=passed-only --reporter=dot",
+    "analysis": "node stages/01-commit/scripts/check-complexity.mjs && node stages/01-commit/scripts/check-dependency-cycles.mjs && node stages/01-commit/scripts/generate-commit-analysis-report.mjs",
+    "manifest:validate": "node shared/scripts/validate-release-candidate.mjs --file",
+    "manifest:validate:runtime": "node shared/scripts/validate-release-candidate-runtime.mjs --file",
+    "manifest:generate": "node stages/01-commit/scripts/generate-release-candidate.mjs",
+    "manifest:fetch": "node shared/scripts/fetch-release-candidate.mjs",
+    "attest:verify-acceptance": "node stages/05-release/scripts/verify-acceptance-attestation.mjs",
+    "env:assert": "node shared/scripts/assert-environment-config.mjs",
+    "deploy": "node shared/scripts/deploy-from-manifest.mjs",
+    "verify": "node shared/scripts/verify-from-manifest.mjs",
+    "acceptance:deploy:github": "node stages/02-acceptance/scripts/deploy-candidate-github.mjs",
+    "acceptance:verify:github": "node stages/02-acceptance/scripts/verify-candidate-github.mjs",
+    "acceptance:predicate:generate": "node stages/02-acceptance/scripts/generate-acceptance-attestation-predicate.mjs",
+    "release:deploy:production": "node stages/05-release/scripts/deploy-production-candidate.mjs",
+    "release:verify:production": "node stages/05-release/scripts/verify-production-candidate.mjs",
+    "release:predicate:generate": "node stages/05-release/scripts/generate-release-attestation-predicate.mjs"
+  }
+}

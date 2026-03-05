@@ -12,15 +12,19 @@ Requirements:
 
 ```bash
 pnpm install
-pnpm db:postgres:up
-pnpm runtime:session:up
 pnpm dev
+```
+
+When finished:
+
+```bash
+pnpm dev:down
 ```
 
 ## Run And Test
 
 ```bash
-pnpm test:quick
+pnpm check
 pnpm test:full
 pnpm build
 ```

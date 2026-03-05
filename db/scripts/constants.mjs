@@ -73,25 +73,45 @@ function buildDatabaseUrlFromPort(portValue) {
   return `postgres://compass:compass@localhost:${parsed}/compass`;
 }
 
-export function resolveDatabaseUrl({
-  env = process.env,
-  postgresEnvPath = DEFAULT_POSTGRES_ENV_PATH
+export function resolveDatabaseUrlFromSources({
+  envDatabaseUrl,
+  dbEnvDatabaseUrl,
+  dbEnvPostgresPort,
+  fallbackPostgresPort,
+  defaultDatabaseUrl = DEFAULT_DATABASE_URL
 } = {}) {
-  const explicitUrl = normalizeValue(env.DATABASE_URL);
+  const explicitUrl = normalizeValue(envDatabaseUrl);
   if (explicitUrl) {
     return explicitUrl;
   }
 
-  const postgresEnv = readEnvFile(postgresEnvPath);
-  const fileDatabaseUrl = normalizeValue(postgresEnv.DATABASE_URL);
+  const fileDatabaseUrl = normalizeValue(dbEnvDatabaseUrl);
   if (fileDatabaseUrl) {
     return fileDatabaseUrl;
   }
 
-  const derivedUrl = buildDatabaseUrlFromPort(postgresEnv.POSTGRES_PORT);
-  if (derivedUrl) {
-    return derivedUrl;
+  const derivedFromFile = buildDatabaseUrlFromPort(dbEnvPostgresPort);
+  if (derivedFromFile) {
+    return derivedFromFile;
   }
 
-  return DEFAULT_DATABASE_URL;
+  const derivedFromFallbackPort = buildDatabaseUrlFromPort(fallbackPostgresPort);
+  if (derivedFromFallbackPort) {
+    return derivedFromFallbackPort;
+  }
+
+  return defaultDatabaseUrl;
+}
+
+export function resolveDatabaseUrl({
+  env = process.env,
+  postgresEnvPath = DEFAULT_POSTGRES_ENV_PATH
+} = {}) {
+  const postgresEnv = readEnvFile(postgresEnvPath);
+
+  return resolveDatabaseUrlFromSources({
+    envDatabaseUrl: env.DATABASE_URL,
+    dbEnvDatabaseUrl: postgresEnv.DATABASE_URL,
+    dbEnvPostgresPort: postgresEnv.POSTGRES_PORT
+  });
 }

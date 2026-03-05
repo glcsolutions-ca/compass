@@ -6,7 +6,7 @@ Remove stale GitHub Actions variables/secrets while keeping release safety high.
 
 ## Active Workflow References
 
-As of 2026-03-04, the three-stage workflows reference only:
+As of 2026-03-05, the 4-stage production flow references only:
 
 - Vars: `ACA_API_APP_NAME`, `ACA_MIGRATE_JOB_NAME`, `ACA_WEB_APP_NAME`, `ACA_WORKER_APP_NAME`, `ACR_NAME`, `AZURE_RESOURCE_GROUP`, `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`, `PRODUCTION_API_BASE_URL`, `PRODUCTION_WEB_BASE_URL`
 - Secrets: `AZURE_DEPLOY_CLIENT_ID`, `GITHUB_TOKEN`
@@ -20,9 +20,9 @@ Deleted from environments `acceptance` and `production`:
 - Vars: `API_SMOKE_ALLOWED_TENANT_ID`, `API_SMOKE_DENIED_TENANT_ID`
 - Secrets: `API_SMOKE_ALLOWED_CLIENT_ID`, `API_SMOKE_ALLOWED_CLIENT_SECRET`, `API_SMOKE_DENIED_CLIENT_ID`, `API_SMOKE_DENIED_CLIENT_SECRET`
 
-## Pass B (After One Successful Post-Cleanup Release Cycle)
+## Pass B (After One Successful Post-Cleanup Rehearsal + Release Cycle)
 
-After one successful end-to-end `Commit -> Acceptance -> Release` cycle:
+After one successful end-to-end `Commit -> Acceptance -> Production Rehearsal -> Release` cycle:
 
 1. Recompute referenced vars/secrets from `.github/workflows/*.yml`.
 2. Recompute current repo/environment vars/secrets.
@@ -38,6 +38,15 @@ gh variable list --repo glcsolutions-ca/compass
 gh secret list --repo glcsolutions-ca/compass
 gh variable list --repo glcsolutions-ca/compass --env production
 gh secret list --repo glcsolutions-ca/compass --env production
+gh variable list --repo glcsolutions-ca/compass --env production-rehearsal
+gh secret list --repo glcsolutions-ca/compass --env production-rehearsal
 gh variable list --repo glcsolutions-ca/compass --env acceptance
 gh secret list --repo glcsolutions-ca/compass --env acceptance
 ```
+
+## Current State
+
+1. `production` vars/secrets match the live workflow references.
+2. `production-rehearsal` vars/secrets match the live workflow references.
+3. The remaining production config cleanup item is identity convergence:
+   - `AZURE_DEPLOY_CLIENT_ID` in both production environments must point to Terraform output `deploy_application_client_id`.

@@ -22,6 +22,28 @@ function requireEnv(name) {
   return value;
 }
 
+function resolveDeployClientId() {
+  const deployClientId = process.env.AZURE_DEPLOY_CLIENT_ID?.trim();
+  if (deployClientId) {
+    return {
+      value: deployClientId,
+      source: "AZURE_DEPLOY_CLIENT_ID"
+    };
+  }
+
+  const legacyClientId = process.env.AZURE_GITHUB_CLIENT_ID?.trim();
+  if (legacyClientId) {
+    return {
+      value: legacyClientId,
+      source: "AZURE_GITHUB_CLIENT_ID"
+    };
+  }
+
+  throw new Error(
+    "Missing required environment variable: AZURE_DEPLOY_CLIENT_ID (or deprecated fallback AZURE_GITHUB_CLIENT_ID)"
+  );
+}
+
 function readStringParam(source, name) {
   const pattern = new RegExp(`^\\s*param\\s+${name}\\s*=\\s*'([^']*)'\\s*$`, "m");
   const match = String(source || "").match(pattern);
@@ -263,7 +285,7 @@ async function ensureKeyVault({ resourceGroup, location, keyVaultName }) {
 async function main() {
   const subscriptionId = requireEnv("AZURE_SUBSCRIPTION_ID");
   const resourceGroup = requireEnv("AZURE_RESOURCE_GROUP");
-  const deployClientId = requireEnv("AZURE_GITHUB_CLIENT_ID");
+  const deployClientId = resolveDeployClientId();
   const paramsFile =
     process.env.CLOUD_BICEPPARAM_PATH?.trim() || "infra/azure/environments/cloud.bicepparam";
   const overwriteExistingSecrets =
@@ -276,6 +298,8 @@ async function main() {
   const keyVaultName = readStringParam(source, "keyVaultName");
 
   await az(["account", "set", "--subscription", subscriptionId, "--output", "none"]);
+
+  console.info(`Using deploy client id from ${deployClientId.source}.`);
 
   await az([
     "group",
@@ -293,14 +317,14 @@ async function main() {
     "sp",
     "show",
     "--id",
-    deployClientId,
+    deployClientId.value,
     "--query",
     "id",
     "--output",
     "tsv"
   ]);
   if (!deployPrincipalObjectId) {
-    throw new Error(`Unable to resolve service principal object id for ${deployClientId}`);
+    throw new Error(`Unable to resolve service principal object id for ${deployClientId.value}`);
   }
 
   const resourceGroupScope = `/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}`;

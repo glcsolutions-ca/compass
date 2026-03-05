@@ -296,7 +296,7 @@ jobs:
             --suite-summary "${{ steps.acceptance_run.outputs.suite_summary }}"
 
       - name: Attest acceptance verdict to candidate subject
-        uses: actions/attest@ce27ba3b4a9a139d9a20a4a07d69fabb52f1e5bc # v2
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-name: ${{ env.RELEASE_UNITS_REPO }}
           subject-digest: ${{ steps.release_unit.outputs.release_unit_digest }}

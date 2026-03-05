@@ -42,13 +42,22 @@ Workflow: `.github/workflows/03-release-stage.yml`.
 
 ## Entra Redirect URI Checklist
 
-1. Ensure Terraform `web_containerapp_fqdn` is set in `infra/identity/env/prod.tfvars`.
-2. Apply `infra/identity` before enabling production blue/green release.
-3. Confirm Entra web app redirect URIs include both:
+1. Ensure Terraform `web_custom_domains` is set in `infra/identity/env/prod.tfvars`.
+2. Ensure Terraform `web_containerapp_fqdn` is set in `infra/identity/env/prod.tfvars`.
+3. Apply `infra/identity` before enabling production blue/green release.
+4. Confirm Entra web app redirect URIs include:
+   - One callback for each custom domain in `web_custom_domains`
    - `https://<web_app_name>---blue.<containerapps_env_domain>/v1/auth/entra/callback`
    - `https://<web_app_name>---green.<containerapps_env_domain>/v1/auth/entra/callback`
-4. Keep production custom-domain callback URI configured as well.
 5. If SSO smoke fails with `AADSTS50011`, verify redirect URI list first.
+
+## Domain Onboarding Checklist
+
+1. Add the web domain to your ACA custom-domain binding process for production web ingress.
+2. Apply `infra/identity` before enabling production blue/green release.
+3. Add the domain to `web_custom_domains` in `infra/identity/env/prod.tfvars`.
+4. Run `terraform -chdir=infra/identity plan` and `terraform -chdir=infra/identity apply`.
+5. Smoke `GET https://<new-domain>/v1/auth/entra/start` and confirm Entra authorize URL uses `redirect_uri=https://<new-domain>/v1/auth/entra/callback`.
 
 ## Manual Promotion / Rollback Commands
 

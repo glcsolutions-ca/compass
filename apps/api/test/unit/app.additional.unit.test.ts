@@ -14,34 +14,52 @@ function activeSessionRecord() {
 
 describe("API app additional route coverage", () => {
   it("starts admin consent and redirects", async () => {
+    const startAdminConsent = vi.fn(async () => ({
+      redirectUrl: "https://login.microsoftonline.com/adminconsent"
+    }));
     const app = buildApiApp({
       authService: {
-        startAdminConsent: vi.fn(async () => ({
-          redirectUrl: "https://login.microsoftonline.com/adminconsent"
-        }))
+        startAdminConsent
       } as unknown as AuthService
     });
 
-    const response = await request(app).get("/v1/auth/entra/admin-consent/start");
+    const response = await request(app)
+      .get("/v1/auth/entra/admin-consent/start")
+      .set("x-forwarded-host", "compass.glcsolutions.ca")
+      .set("x-forwarded-proto", "https");
     expect(response.status).toBe(302);
     expect(response.headers.location).toContain("adminconsent");
+    expect(startAdminConsent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        redirectUri: "https://compass.glcsolutions.ca/v1/auth/entra/callback"
+      })
+    );
   });
 
   it("handles entra callback success and sets session cookie", async () => {
+    const handleEntraCallback = vi.fn(async () => ({
+      redirectTo: "/chat",
+      sessionToken: "session-1"
+    }));
     const app = buildApiApp({
       authService: {
-        handleEntraCallback: vi.fn(async () => ({
-          redirectTo: "/chat",
-          sessionToken: "session-1"
-        })),
+        handleEntraCallback,
         createSessionCookie: vi.fn(() => "__Host-compass_session=session-1; Path=/; HttpOnly")
       } as unknown as AuthService
     });
 
-    const response = await request(app).get("/v1/auth/entra/callback?state=s1&code=c1");
+    const response = await request(app)
+      .get("/v1/auth/entra/callback?state=s1&code=c1")
+      .set("x-forwarded-host", "compass.glcsolutions.ca")
+      .set("x-forwarded-proto", "https");
     expect(response.status).toBe(302);
     expect(response.headers.location).toBe("/chat");
     expect(response.headers["set-cookie"]?.[0]).toContain("__Host-compass_session");
+    expect(handleEntraCallback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        redirectUri: "https://compass.glcsolutions.ca/v1/auth/entra/callback"
+      })
+    );
   });
 
   it("completes desktop auth callback and redirects", async () => {

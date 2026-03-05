@@ -15,13 +15,18 @@ terraform -chdir=infra/identity plan
 terraform -chdir=infra/identity apply
 ```
 
-## Blue/Green Redirect URIs
+## Redirect URI Inputs
 
-To support production blue/green SSO smoke checks, set `web_containerapp_fqdn` and keep default `release_slot_labels = ["blue","green"]`.
+1. `web_custom_domains` defines production/custom-domain callback hosts.
+2. `web_custom_domain` is still accepted for backward compatibility (legacy single-domain input).
+3. `web_containerapp_fqdn` with `release_slot_labels = ["blue","green"]` adds blue/green slot callback URIs for release smoke checks.
 
-Terraform derives these callback URIs automatically:
+Terraform merges all callback URIs with `web_redirect_uris` and removes duplicates via `distinct(...)`.
 
-1. `https://<web_app_name>---blue.<containerapps_env_domain>/v1/auth/entra/callback`
-2. `https://<web_app_name>---green.<containerapps_env_domain>/v1/auth/entra/callback`
+## Derived Redirect URIs
 
-These are merged with existing redirect URIs (`web_redirect_uris` and custom-domain callback).
+1. Custom domains:
+   - `https://<custom_domain>/v1/auth/entra/callback`
+2. Blue/green slots:
+   - `https://<web_app_name>---blue.<containerapps_env_domain>/v1/auth/entra/callback`
+   - `https://<web_app_name>---green.<containerapps_env_domain>/v1/auth/entra/callback`

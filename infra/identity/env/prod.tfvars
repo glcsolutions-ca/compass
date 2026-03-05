@@ -16,5 +16,8 @@ web_redirect_uris = [
   "http://127.0.0.1:3000/v1/auth/entra/callback"
 ]
 web_custom_domain = "compass.glcsolutions.ca"
+web_custom_domains = [
+  "compass.glcsolutions.ca"
+]
 
 web_containerapp_fqdn = "ca-compass-web-prd-cc-02.mangorock-f84bc8a0.canadacentral.azurecontainerapps.io"

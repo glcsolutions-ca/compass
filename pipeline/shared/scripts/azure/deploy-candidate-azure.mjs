@@ -69,6 +69,14 @@ function buildSlotBaseUrl(appName, label, appFqdn) {
   return `https://${parsed.appName}---${label}.${parsed.domainSuffix}`;
 }
 
+export function buildBlueGreenSlotEnv({ appKey, inactiveApiBaseUrl }) {
+  if (appKey === "web") {
+    return [`API_BASE_URL=${inactiveApiBaseUrl}`, `VITE_API_BASE_URL=${inactiveApiBaseUrl}`];
+  }
+
+  return [];
+}
+
 export function toRevisionSuffix(candidateId, appKey, appName) {
   const normalizedAppName = String(appName || "")
     .trim()
@@ -586,7 +594,10 @@ export async function deployCandidateAzure({
         appKey: "api",
         activeLabel: normalizedActiveLabel,
         inactiveLabel: normalizedInactiveLabel,
-        slotEnvVars: [`WEB_BASE_URL=${inactiveWebBaseUrl}`]
+        slotEnvVars: buildBlueGreenSlotEnv({
+          appKey: "api",
+          inactiveApiBaseUrl
+        })
       })
     : await deployApp({
         resourceGroup,
@@ -606,11 +617,10 @@ export async function deployCandidateAzure({
         appKey: "web",
         activeLabel: normalizedActiveLabel,
         inactiveLabel: normalizedInactiveLabel,
-        slotEnvVars: [
-          `API_BASE_URL=${inactiveApiBaseUrl}`,
-          `VITE_API_BASE_URL=${inactiveApiBaseUrl}`,
-          `WEB_BASE_URL=${inactiveWebBaseUrl}`
-        ]
+        slotEnvVars: buildBlueGreenSlotEnv({
+          appKey: "web",
+          inactiveApiBaseUrl
+        })
       })
     : await deployApp({
         resourceGroup,

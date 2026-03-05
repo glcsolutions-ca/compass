@@ -92,9 +92,15 @@ variable "web_redirect_uris" {
 }
 
 variable "web_custom_domain" {
-  description = "Primary web custom domain used to derive the cloud redirect URI"
+  description = "Legacy single web custom domain input (kept for backward compatibility)"
   type        = string
   default     = ""
+}
+
+variable "web_custom_domains" {
+  description = "Web custom domains used to derive cloud redirect URIs"
+  type        = list(string)
+  default     = []
 }
 
 variable "web_containerapp_fqdn" {

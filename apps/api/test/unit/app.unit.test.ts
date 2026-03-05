@@ -96,6 +96,50 @@ describe("API app", () => {
     });
   });
 
+  it("passes browser-facing callback URL to Entra start", async () => {
+    const startEntraLogin = vi.fn(async () => ({
+      redirectUrl: "https://login.microsoftonline.com/test"
+    }));
+    const authService = {
+      startEntraLogin
+    } as unknown as AuthService;
+
+    const app = buildApiApp({ authService });
+    const response = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-host", "compass.clac.ca:443, internal-gateway")
+      .set("x-forwarded-proto", "https,http");
+
+    expect(response.status).toBe(302);
+    expect(startEntraLogin).toHaveBeenCalledWith(
+      expect.objectContaining({
+        redirectUri: "https://compass.clac.ca/v1/auth/entra/callback"
+      })
+    );
+  });
+
+  it("fails closed when callback host cannot be resolved", async () => {
+    const startEntraLogin = vi.fn(async () => ({
+      redirectUrl: "https://login.microsoftonline.com/test"
+    }));
+    const authService = {
+      startEntraLogin
+    } as unknown as AuthService;
+
+    const app = buildApiApp({ authService });
+    const response = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-host", "bad host")
+      .set("x-forwarded-proto", "https");
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      code: "INVALID_REQUEST_HOST",
+      message: "Unable to resolve callback host for authentication request"
+    });
+    expect(startEntraLogin).not.toHaveBeenCalled();
+  });
+
   it("sets session cookie when Entra start returns a session token", async () => {
     const authService = {
       startEntraLogin: vi.fn(async () => ({
@@ -231,6 +275,23 @@ describe("API app", () => {
         process.env.WEB_BASE_URL = previousWebBaseUrl;
       }
     }
+
+  it("allows same-origin state-changing requests on forwarded custom domains", async () => {
+    const authService = {
+      logout: vi.fn(async () => {}),
+      clearSessionCookie: vi.fn(() => "__Host-compass_session=; Path=/; Max-Age=0")
+    } as unknown as AuthService;
+
+    const app = buildApiApp({ authService });
+
+    const response = await request(app)
+      .post("/v1/auth/logout")
+      .set("cookie", "__Host-compass_session=test")
+      .set("origin", "https://compass.clac.ca")
+      .set("x-forwarded-host", "compass.clac.ca")
+      .set("x-forwarded-proto", "https");
+
+    expect(response.status).toBe(204);
   });
 
   it("redacts unexpected auth handler errors and emits structured logs with request id", async () => {

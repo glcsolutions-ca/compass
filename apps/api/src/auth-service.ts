@@ -1919,6 +1919,7 @@ export class AuthService {
   async startEntraLogin(input: {
     returnTo?: string;
     client?: AuthClient;
+    redirectUri?: string;
     userAgent: string | undefined;
     ip: string;
     now: Date;
@@ -1959,7 +1960,7 @@ export class AuthService {
         state,
         nonce,
         codeChallenge,
-        redirectUri: this.requiredRedirectUri()
+        redirectUri: this.requiredRedirectUri(input.redirectUri)
       })
     };
   }
@@ -1968,6 +1969,7 @@ export class AuthService {
     tenantHint?: string;
     returnTo?: string;
     client?: AuthClient;
+    redirectUri?: string;
     now: Date;
   }): Promise<{ redirectUrl: string }> {
     this.assertEntraMode();
@@ -1994,7 +1996,7 @@ export class AuthService {
     return {
       redirectUrl: this.oidcClient.buildAdminConsentUrl({
         tenantHint: input.tenantHint,
-        redirectUri: this.requiredRedirectUri(),
+        redirectUri: this.requiredRedirectUri(input.redirectUri),
         state
       })
     };
@@ -2008,6 +2010,7 @@ export class AuthService {
     scope?: string;
     error?: string;
     errorDescription?: string;
+    redirectUri?: string;
     userAgent: string | undefined;
     ip: string;
     now: Date;
@@ -2048,6 +2051,7 @@ export class AuthService {
 
     return this.handleEntraLoginSuccess({
       code: input.code,
+      redirectUri: input.redirectUri,
       userAgent: input.userAgent,
       ip: input.ip,
       now: input.now,
@@ -2193,6 +2197,7 @@ export class AuthService {
 
   private async handleEntraLoginSuccess(input: {
     code: string;
+    redirectUri?: string;
     userAgent: string | undefined;
     ip: string;
     now: Date;
@@ -2213,7 +2218,7 @@ export class AuthService {
 
     const idToken = await this.oidcClient.exchangeCodeForIdToken({
       code: input.code,
-      redirectUri: this.requiredRedirectUri(),
+      redirectUri: this.requiredRedirectUri(input.redirectUri),
       codeVerifier: oidcSecrets.pkceVerifier
     });
     const claims = await this.oidcClient.verifyIdToken({
@@ -2708,13 +2713,23 @@ export class AuthService {
     };
   }
 
-  private requiredRedirectUri(): string {
-    const redirectUri = asStringOrNull(this.config.redirectUri);
+  private requiredRedirectUri(overrideRedirectUri?: string): string {
+    const redirectUri =
+      asStringOrNull(overrideRedirectUri) ?? asStringOrNull(this.config.redirectUri);
     if (!redirectUri) {
       throw new ApiError(503, "ENTRA_CONFIG_REQUIRED", "ENTRA_REDIRECT_URI is required");
     }
 
-    return redirectUri;
+    try {
+      const parsed = new URL(redirectUri);
+      if (!/^https?:$/u.test(parsed.protocol)) {
+        throw new Error("unsupported redirect URI scheme");
+      }
+
+      return parsed.toString();
+    } catch {
+      throw new ApiError(400, "INVALID_REQUEST", "Auth redirect URI is invalid");
+    }
   }
 
   private requiredOidcStateEncryptionKey(): Buffer {

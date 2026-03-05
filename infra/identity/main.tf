@@ -1,7 +1,11 @@
 locals {
-  repo_slug                   = "${var.github_organization}/${var.github_repository}"
-  deploy_subject              = "repo:${local.repo_slug}:environment:${var.github_environment_name}"
-  web_custom_domain           = trimspace(var.web_custom_domain)
+  repo_slug      = "${var.github_organization}/${var.github_repository}"
+  deploy_subject = "repo:${local.repo_slug}:environment:${var.github_environment_name}"
+  normalized_web_custom_domains = distinct([
+    for domain in concat(var.web_custom_domains, [var.web_custom_domain]) :
+    lower(trimsuffix(trimprefix(trimprefix(trimspace(domain), "https://"), "http://"), "/"))
+    if trimspace(domain) != ""
+  ])
   web_containerapp_fqdn       = trimsuffix(trimprefix(trimprefix(trimspace(var.web_containerapp_fqdn), "https://"), "http://"), "/")
   web_containerapp_fqdn_parts = local.web_containerapp_fqdn != "" ? split(".", local.web_containerapp_fqdn) : []
   web_containerapp_app_name   = length(local.web_containerapp_fqdn_parts) > 0 ? local.web_containerapp_fqdn_parts[0] : ""
@@ -9,14 +13,15 @@ locals {
     ".",
     slice(local.web_containerapp_fqdn_parts, 1, length(local.web_containerapp_fqdn_parts))
   ) : ""
-  entra_redirect_uri         = local.web_custom_domain != "" ? "https://${local.web_custom_domain}/v1/auth/entra/callback" : ""
-  web_redirect_uris_from_env = local.entra_redirect_uri != "" ? [local.entra_redirect_uri] : []
+  web_redirect_uris_from_domains = [
+    for domain in local.normalized_web_custom_domains : "https://${domain}/v1/auth/entra/callback"
+  ]
   slot_redirect_uris = local.web_containerapp_app_name != "" && local.web_containerapp_domain_suffix != "" ? [
     for label in var.release_slot_labels : "https://${local.web_containerapp_app_name}---${lower(trimspace(label))}.${local.web_containerapp_domain_suffix}/v1/auth/entra/callback"
     if trimspace(label) != ""
   ] : []
   web_redirect_uris = distinct(
-    concat(var.web_redirect_uris, local.web_redirect_uris_from_env, local.slot_redirect_uris)
+    concat(var.web_redirect_uris, local.web_redirect_uris_from_domains, local.slot_redirect_uris)
   )
   # Scratch-drill trigger marker: intentionally non-functional.
   # Final-proof scratch-drill marker: intentionally non-functional.

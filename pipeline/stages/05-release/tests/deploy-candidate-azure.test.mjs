@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { toRevisionSuffix } from "../../../shared/scripts/azure/deploy-candidate-azure.mjs";
+import {
+  buildBlueGreenSlotEnv,
+  toRevisionSuffix
+} from "../../../shared/scripts/azure/deploy-candidate-azure.mjs";
 
 describe("deploy-candidate-azure revision suffix", () => {
   it("keeps full revision name within ACA max length", () => {
@@ -18,5 +21,26 @@ describe("deploy-candidate-azure revision suffix", () => {
     const second = toRevisionSuffix("sha-2222222222222222222222222222222222222222", "web", appName);
 
     expect(first).not.toBe(second);
+  });
+});
+
+describe("deploy-candidate-azure blue/green slot env", () => {
+  it("only sets web slot API env vars", () => {
+    expect(
+      buildBlueGreenSlotEnv({
+        appKey: "api",
+        inactiveApiBaseUrl: "https://api-slot.example.com"
+      })
+    ).toEqual([]);
+
+    expect(
+      buildBlueGreenSlotEnv({
+        appKey: "web",
+        inactiveApiBaseUrl: "https://api-slot.example.com"
+      })
+    ).toEqual([
+      "API_BASE_URL=https://api-slot.example.com",
+      "VITE_API_BASE_URL=https://api-slot.example.com"
+    ]);
   });
 });

@@ -1186,4 +1186,44 @@ describe("API auth integration", () => {
       await inspector.end();
     }
   });
+
+  it("uses forwarded custom host for browser redirect_uri and callback exchange", async () => {
+    const authService = new AuthService({
+      config: buildConfig(),
+      repository,
+      oidcClient: new FakeOidcClient({
+        claimsByCode: {
+          "code-user-1": buildClaims(
+            "11111111-1111-1111-1111-111111111111",
+            "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "owner@acme.test",
+            "Owner User"
+          )
+        }
+      })
+    });
+
+    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+
+    const start = await request(app)
+      .get("/v1/auth/entra/start?returnTo=%2Fchat")
+      .set("x-forwarded-host", "compass.clac.ca:443, gateway.internal")
+      .set("x-forwarded-proto", "https,http");
+    expect(start.status).toBe(302);
+
+    const startLocation = parseRedirectLocation(start.headers.location);
+    expect(startLocation.searchParams.get("redirect_uri")).toBe(
+      "https://compass.clac.ca/v1/auth/entra/callback"
+    );
+    const state = startLocation.searchParams.get("state");
+    expect(state).toBeTruthy();
+
+    const callback = await request(app)
+      .get(`/v1/auth/entra/callback?code=code-user-1&state=${encodeURIComponent(String(state))}`)
+      .set("x-forwarded-host", "compass.clac.ca")
+      .set("x-forwarded-proto", "https");
+    expect(callback.status).toBe(302);
+    expect(callback.headers.location).toBe("/chat");
+    expect(callback.headers["set-cookie"]?.[0]).toContain("__Host-compass_session=");
+  });
 });

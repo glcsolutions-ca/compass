@@ -160,21 +160,27 @@ function createRepositoryStub(overrides: Partial<RepositoryStub> = {}): Reposito
 
 function createOidcClientStub() {
   const stub = {
-    buildAuthorizeUrl: vi.fn((input: { state: string; nonce: string; codeChallenge: string }) => {
-      const url = new URL("https://login.microsoftonline.com/oauth2/v2.0/authorize");
-      url.searchParams.set("state", input.state);
-      url.searchParams.set("nonce", input.nonce);
-      url.searchParams.set("code_challenge", input.codeChallenge);
-      return url.toString();
-    }),
-    buildAdminConsentUrl: vi.fn((input: { state: string; tenantHint?: string }) => {
-      const url = new URL("https://login.microsoftonline.com/adminconsent");
-      url.searchParams.set("state", input.state);
-      if (input.tenantHint) {
-        url.searchParams.set("tenant", input.tenantHint);
+    buildAuthorizeUrl: vi.fn(
+      (input: { state: string; nonce: string; codeChallenge: string; redirectUri: string }) => {
+        const url = new URL("https://login.microsoftonline.com/oauth2/v2.0/authorize");
+        url.searchParams.set("state", input.state);
+        url.searchParams.set("nonce", input.nonce);
+        url.searchParams.set("code_challenge", input.codeChallenge);
+        url.searchParams.set("redirect_uri", input.redirectUri);
+        return url.toString();
       }
-      return url.toString();
-    }),
+    ),
+    buildAdminConsentUrl: vi.fn(
+      (input: { state: string; tenantHint?: string; redirectUri: string }) => {
+        const url = new URL("https://login.microsoftonline.com/adminconsent");
+        url.searchParams.set("state", input.state);
+        url.searchParams.set("redirect_uri", input.redirectUri);
+        if (input.tenantHint) {
+          url.searchParams.set("tenant", input.tenantHint);
+        }
+        return url.toString();
+      }
+    ),
     exchangeCodeForIdToken: vi.fn(async () => "id-token"),
     verifyIdToken: vi.fn(async () => ({
       tid: "tenant-1",
@@ -404,8 +410,45 @@ describe("AuthService flows", () => {
     });
 
     expect(result.redirectUrl).toContain("state=");
+    expect(result.redirectUrl).toContain(
+      "redirect_uri=https%3A%2F%2Fcompass.glcsolutions.ca%2Fv1%2Fauth%2Fentra%2Fcallback"
+    );
     expect(repository.createOidcRequest).toHaveBeenCalledTimes(1);
     expect(oidcClient.buildAuthorizeUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses runtime redirect URI overrides for start and callback token exchange", async () => {
+    const { service, oidcClient } = buildService({});
+    const now = new Date("2026-03-03T00:00:00.000Z");
+    const runtimeRedirectUri = "https://compass.clac.ca/v1/auth/entra/callback";
+
+    const start = await service.startEntraLogin({
+      returnTo: "/chat",
+      client: "browser",
+      redirectUri: runtimeRedirectUri,
+      userAgent: "browser",
+      ip: "203.0.113.7",
+      now
+    });
+
+    expect(start.redirectUrl).toContain(
+      "redirect_uri=https%3A%2F%2Fcompass.clac.ca%2Fv1%2Fauth%2Fentra%2Fcallback"
+    );
+
+    await service.handleEntraCallback({
+      state: readState(start.redirectUrl),
+      code: "code-1",
+      redirectUri: runtimeRedirectUri,
+      userAgent: "browser",
+      ip: "203.0.113.7",
+      now
+    });
+
+    expect(oidcClient.exchangeCodeForIdToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        redirectUri: runtimeRedirectUri
+      })
+    );
   });
 
   it("handles admin consent callbacks", async () => {

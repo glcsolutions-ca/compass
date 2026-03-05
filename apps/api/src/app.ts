@@ -184,6 +184,139 @@ function parseOrReply<T>(value: unknown, schema: z.ZodSchema<T>, response: Respo
   return null;
 }
 
+function readHeaderValue(value: unknown): string | null {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    const first = value.find((entry) => typeof entry === "string");
+    return typeof first === "string" ? first : null;
+  }
+
+  return null;
+}
+
+function readForwardedToken(value: unknown): string | null {
+  const headerValue = readHeaderValue(value);
+  if (!headerValue?.trim()) {
+    return null;
+  }
+
+  const firstToken = headerValue
+    .split(",")
+    .map((entry) => entry.trim())
+    .find((entry) => entry.length > 0);
+
+  return firstToken ?? null;
+}
+
+function normalizeRequestProtocol(value: string | null): "http" | "https" | null {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "http" || normalized === "https") {
+    return normalized;
+  }
+
+  return null;
+}
+
+function isValidRequestHostname(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  if (normalized === "localhost") {
+    return true;
+  }
+
+  if (/^(?:\d{1,3}\.){3}\d{1,3}$/u.test(normalized)) {
+    return normalized.split(".").every((entry) => Number(entry) >= 0 && Number(entry) <= 255);
+  }
+
+  return /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$/u.test(
+    normalized
+  );
+}
+
+function parseRequestHost(value: string | null): { hostname: string; port: string } | null {
+  if (!value) {
+    return null;
+  }
+
+  const candidate = value.trim().toLowerCase();
+  if (!candidate || /[\s/@\\?#]/u.test(candidate)) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(`https://${candidate}`);
+    if (
+      parsed.pathname !== "/" ||
+      parsed.search ||
+      parsed.hash ||
+      parsed.username ||
+      parsed.password
+    ) {
+      return null;
+    }
+
+    if (!isValidRequestHostname(parsed.hostname)) {
+      return null;
+    }
+
+    if (parsed.port) {
+      const numericPort = Number(parsed.port);
+      if (!Number.isInteger(numericPort) || numericPort < 1 || numericPort > 65535) {
+        return null;
+      }
+    }
+
+    return {
+      hostname: parsed.hostname,
+      port: parsed.port
+    };
+  } catch {
+    return null;
+  }
+}
+
+function resolveBrowserFacingOrigin(request: express.Request): string | null {
+  const forwardedProto = readForwardedToken(request.headers["x-forwarded-proto"]);
+  const protocol =
+    normalizeRequestProtocol(forwardedProto) ?? normalizeRequestProtocol(request.protocol);
+  if (!protocol) {
+    return null;
+  }
+
+  const forwardedHost = readForwardedToken(request.headers["x-forwarded-host"]);
+  const hostHeader = readHeaderValue(request.headers.host);
+  const host = parseRequestHost(forwardedHost ?? hostHeader);
+  if (!host) {
+    return null;
+  }
+
+  const includePort =
+    host.port.length > 0 &&
+    !((protocol === "https" && host.port === "443") || (protocol === "http" && host.port === "80"));
+  const authority = includePort ? `${host.hostname}:${host.port}` : host.hostname;
+
+  return `${protocol}://${authority}`;
+}
+
+function resolveAuthRedirectUri(request: express.Request): string | null {
+  const origin = resolveBrowserFacingOrigin(request);
+  if (!origin) {
+    return null;
+  }
+
+  return `${origin}/v1/auth/entra/callback`;
+}
+
 function currentSessionToken(request: express.Request): string | null {
   const cookieHeader = request.headers.cookie;
   if (Array.isArray(cookieHeader)) {
@@ -312,19 +445,6 @@ function buildAllowedOrigins(
 }
 
 function readRequestOrigin(request: express.Request): string | null {
-  const readHeaderValue = (value: unknown): string | null => {
-    if (typeof value === "string") {
-      return value;
-    }
-
-    if (Array.isArray(value)) {
-      const first = value.find((entry) => typeof entry === "string");
-      return typeof first === "string" ? first : null;
-    }
-
-    return null;
-  };
-
   const origin = readHeaderValue(request.headers.origin);
   if (origin?.trim()) {
     return origin.trim();
@@ -442,6 +562,12 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       return;
     }
 
+    const browserOrigin = resolveBrowserFacingOrigin(request);
+    if (browserOrigin && requestOrigin === browserOrigin) {
+      next();
+      return;
+    }
+
     response.status(403).json({
       code: "CSRF_ORIGIN_DENIED",
       message: "Cross-origin state-changing requests are not allowed"
@@ -479,6 +605,15 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       return;
     }
 
+    const redirectUri = resolveAuthRedirectUri(request);
+    if (!redirectUri) {
+      response.status(400).json({
+        code: "INVALID_REQUEST_HOST",
+        message: "Unable to resolve callback host for authentication request"
+      });
+      return;
+    }
+
     const actor = actorContextFromRequest(request);
     const rateResult = authRateLimiter.check({
       key: `entra-start:${actor.ip}`,
@@ -497,6 +632,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       const result = await authService.startEntraLogin({
         returnTo: query.returnTo,
         client: query.client,
+        redirectUri,
         userAgent: actor.userAgent,
         ip: actor.ip,
         now: now()
@@ -523,6 +659,15 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
       return;
     }
 
+    const redirectUri = resolveAuthRedirectUri(request);
+    if (!redirectUri) {
+      response.status(400).json({
+        code: "INVALID_REQUEST_HOST",
+        message: "Unable to resolve callback host for authentication request"
+      });
+      return;
+    }
+
     const actor = actorContextFromRequest(request);
     const rateResult = authRateLimiter.check({
       key: `entra-admin-consent:${actor.ip}`,
@@ -542,6 +687,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
         tenantHint: query.tenantHint,
         returnTo: query.returnTo,
         client: query.client,
+        redirectUri,
         now: now()
       });
       response.redirect(302, result.redirectUrl);
@@ -558,6 +704,15 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
 
     const query = parseOrReply(request.query, EntraCallbackQuerySchema, response);
     if (!query) {
+      return;
+    }
+
+    const redirectUri = resolveAuthRedirectUri(request);
+    if (!redirectUri) {
+      response.status(400).json({
+        code: "INVALID_REQUEST_HOST",
+        message: "Unable to resolve callback host for authentication request"
+      });
       return;
     }
 
@@ -584,6 +739,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
         scope: query.scope,
         error: query.error,
         errorDescription: query.error_description,
+        redirectUri,
         userAgent: actorContext.userAgent,
         ip: actorContext.ip,
         now: now()

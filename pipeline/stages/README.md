@@ -64,7 +64,7 @@ Must do:
 4. Build and push immutable digest-pinned runtime artifacts.
 5. Publish candidate representations to GHCR.
 6. Attach build provenance/SBOM attestations.
-7. Emit canonical handoff artifact `release-candidate-manifest` for downstream stage resolution.
+7. Publish one canonical manifest package in GHCR for downstream stage resolution.
 8. Fail closed when any required step fails.
 
 Must not do:
@@ -82,13 +82,12 @@ Purpose:
 Must do:
 
 1. Trigger from successful Commit Stage via `workflow_run`.
-2. Resolve candidate identity from `release-candidate-manifest` on the triggering run.
+2. Resolve candidate identity from `workflow_run.head_sha` and canonical GHCR manifest.
 3. Guard against stale candidates by requiring SHA presence on `main`.
 4. Deploy exact candidate digests from GHCR.
 5. Run automated acceptance suites.
 6. Attach acceptance attestation to candidate subject.
-7. Emit the same canonical `release-candidate-manifest` artifact for release-stage resolution.
-8. Fail closed on test or attestation errors.
+7. Fail closed on test or attestation errors.
 
 Must not do:
 
@@ -106,7 +105,7 @@ Must do:
 
 1. Trigger automatically from successful Acceptance Stage.
 2. Also support manual `workflow_dispatch` by `candidate_id` for rollback/redeploy.
-3. In auto mode, resolve candidate identity from `release-candidate-manifest` on the triggering acceptance run.
+3. In auto mode, resolve candidate identity from `workflow_run.head_sha` and canonical GHCR manifest.
 4. Verify acceptance attestation is present and `verdict=pass`.
 5. Deploy exact candidate digest set from GHCR.
 6. Run production smoke verification.

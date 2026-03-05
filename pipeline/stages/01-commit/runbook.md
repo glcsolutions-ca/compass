@@ -28,7 +28,6 @@ Workflows:
 3. Candidate JSON manifest in GHCR (`compass-release-manifests:<candidateId>`).
 4. Candidate OCI release-unit representation in GHCR (`compass-release-units:<candidateId>`).
 5. Build provenance/SBOM attestations bound to candidate artifacts.
-6. Canonical handoff artifact (`release-candidate-manifest`) containing the release candidate manifest used by Acceptance and Release.
 
 ## Rules
 

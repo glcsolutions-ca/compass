@@ -16,8 +16,8 @@ Workflow: `.github/workflows/03-release-stage.yml`.
 
 1. Automatic release trigger is successful Acceptance Stage completion.
 2. Manual rollback/redeploy trigger is `workflow_dispatch` with `candidate_id`.
-3. Auto mode resolves candidate identity from `release-candidate-manifest` artifact on the triggering acceptance run.
-4. If the handoff artifact is absent (for example stale/skip acceptance path), release exits success as skipped.
+3. Auto mode resolves candidate identity from triggering `workflow_run.head_sha` and canonical GHCR manifest.
+4. Stale candidates whose source revision is not on `main` are skipped.
 5. Candidate manifest must validate before deploy.
 6. Acceptance attestation must exist for candidate subject and `verdict=pass` (verified with `gh attestation verify` plus candidate/business-rule checks).
 7. Production deploy uses exact candidate artifacts from GHCR.

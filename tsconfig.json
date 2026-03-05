@@ -19,9 +19,6 @@
     },
     {
       "path": "./apps/web/tsconfig.ref.json"
-    },
-    {
-      "path": "./apps/desktop/tsconfig.ref.json"
     }
   ]
 }

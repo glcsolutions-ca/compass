@@ -1,14 +1,6 @@
-# Desktop App
+# Desktop Placeholder
 
-Purpose: local runtime host and desktop packaging target.
+The desktop app is intentionally not implemented right now.
 
-## Start Here
-
-- source: `apps/desktop/src`
-
-## Run And Test
-
-```bash
-pnpm --filter @compass/desktop dev:run
-pnpm --filter @compass/desktop test
-```
+This directory is reserved for a future desktop shell. There is no
+workspace package here, so root installs and checks should ignore it.

@@ -1,5 +1,5 @@
 import { pathToFileURL } from "node:url";
-import { parseCliArgs, requireOption } from "../../../shared/scripts/cli-utils.mjs";
+import { optionalOption, parseCliArgs, requireOption } from "../../../shared/scripts/cli-utils.mjs";
 import { deployCandidateAzure } from "../../../shared/scripts/azure/deploy-candidate-azure.mjs";
 
 export async function deployProductionCandidate({
@@ -11,6 +11,10 @@ export async function deployProductionCandidate({
   migrationsJobName,
   outPath,
   zeroTraffic,
+  activeLabel,
+  inactiveLabel,
+  apiFqdn,
+  webFqdn,
   acrName,
   acrLoginServer,
   sourceRegistryUsername,
@@ -25,6 +29,10 @@ export async function deployProductionCandidate({
     migrationsJobName,
     outPath,
     zeroTraffic,
+    activeLabel,
+    inactiveLabel,
+    apiFqdn,
+    webFqdn,
     acrName,
     acrLoginServer,
     sourceRegistryUsername,
@@ -44,10 +52,14 @@ export async function main(argv = process.argv.slice(2)) {
     migrationsJobName: requireOption(options, "migrations-job-name"),
     outPath: requireOption(options, "out"),
     zeroTraffic: options["zero-traffic"] === true,
-    acrName: options["acr-name"],
-    acrLoginServer: options["acr-login-server"],
-    sourceRegistryUsername: options["source-registry-username"],
-    sourceRegistryPassword: options["source-registry-password"]
+    activeLabel: optionalOption(options, "active-label"),
+    inactiveLabel: optionalOption(options, "inactive-label"),
+    apiFqdn: optionalOption(options, "api-fqdn"),
+    webFqdn: optionalOption(options, "web-fqdn"),
+    acrName: optionalOption(options, "acr-name"),
+    acrLoginServer: optionalOption(options, "acr-login-server"),
+    sourceRegistryUsername: optionalOption(options, "source-registry-username"),
+    sourceRegistryPassword: optionalOption(options, "source-registry-password")
   });
 }
 

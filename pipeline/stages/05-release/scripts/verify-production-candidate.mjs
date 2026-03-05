@@ -11,7 +11,9 @@ export async function verifyProductionCandidate({
   workerAppName,
   apiBaseUrl,
   webBaseUrl,
-  zeroTraffic
+  zeroTraffic,
+  slotLabel,
+  slotWeight
 }) {
   await verifyCandidateAzure({
     manifestPath,
@@ -22,7 +24,9 @@ export async function verifyProductionCandidate({
     workerAppName,
     apiBaseUrl,
     webBaseUrl,
-    zeroTraffic
+    zeroTraffic,
+    slotLabel,
+    slotWeight
   });
 }
 
@@ -38,7 +42,9 @@ export async function main(argv = process.argv.slice(2)) {
     workerAppName: requireOption(options, "worker-app-name"),
     apiBaseUrl: requireOption(options, "api-base-url"),
     webBaseUrl: optionalOption(options, "web-base-url"),
-    zeroTraffic: options["zero-traffic"] === true
+    zeroTraffic: options["zero-traffic"] === true,
+    slotLabel: optionalOption(options, "slot-label"),
+    slotWeight: optionalOption(options, "slot-weight")
   });
 }
 

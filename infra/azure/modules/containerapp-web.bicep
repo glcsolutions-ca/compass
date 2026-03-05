@@ -2,6 +2,11 @@ param location string
 param containerAppName string
 param managedEnvironmentId string
 param image string
+@allowed([
+  'single'
+  'multiple'
+])
+param activeRevisionsMode string = 'multiple'
 param registryServer string
 param registryIdentityResourceId string
 param keyVaultUri string
@@ -40,8 +45,8 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
   properties: {
     managedEnvironmentId: managedEnvironmentId
     configuration: {
-      activeRevisionsMode: 'single'
-      maxInactiveRevisions: 2
+      activeRevisionsMode: activeRevisionsMode
+      maxInactiveRevisions: 10
       ingress: {
         external: true
         targetPort: 3000

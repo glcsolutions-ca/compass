@@ -96,3 +96,15 @@ variable "web_custom_domain" {
   type        = string
   default     = ""
 }
+
+variable "web_containerapp_fqdn" {
+  description = "Container App ingress FQDN for web app (used to derive blue/green label callback URIs)"
+  type        = string
+  default     = ""
+}
+
+variable "release_slot_labels" {
+  description = "Stable blue/green labels used for release slot callback URIs"
+  type        = list(string)
+  default     = ["blue", "green"]
+}

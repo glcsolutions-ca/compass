@@ -45,6 +45,7 @@ param postgresStorageMb = 32768
 param apiImage = 'acrcompassprodcc024514.azurecr.io/compass-api:bootstrap'
 param webImage = 'acrcompassprodcc024514.azurecr.io/compass-web:bootstrap'
 param workerImage = 'acrcompassprodcc024514.azurecr.io/compass-worker:bootstrap'
+param containerAppsActiveRevisionsMode = 'multiple'
 param dynamicSessionsRuntimeImage = 'acrcompassprodcc024514.azurecr.io/compass-codex-session-runtime:bootstrap'
 param authMode = 'entra'
 param entraClientId = '0f3ba6d0-5415-441a-b8af-357699d364d1'

@@ -340,7 +340,21 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Deploy candidate and run production smoke checks
+      - name: Resolve blue/green slot baseline
+        id: slot_context
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_CONTAINERAPP_API_NAME: ${{ vars.ACA_API_APP_NAME }}
+          AZURE_CONTAINERAPP_WEB_NAME: ${{ vars.ACA_WEB_APP_NAME }}
+        run: |
+          node pipeline/stages/05-release/scripts/resolve-blue-green-slot.mjs \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --api-app-name "$AZURE_CONTAINERAPP_API_NAME" \
+            --web-app-name "$AZURE_CONTAINERAPP_WEB_NAME" \
+            --out "$RUNNER_TEMP/blue-green-slot.json" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Deploy candidate and run production blue/green checks
         id: release_run
         env:
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
@@ -354,10 +368,51 @@ jobs:
           SOURCE_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           API_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
           WEB_BASE_URL: ${{ vars.PRODUCTION_WEB_BASE_URL }}
+          ACTIVE_LABEL: ${{ steps.slot_context.outputs.active_label }}
+          INACTIVE_LABEL: ${{ steps.slot_context.outputs.inactive_label }}
+          API_FQDN: ${{ steps.slot_context.outputs.api_fqdn }}
+          WEB_FQDN: ${{ steps.slot_context.outputs.web_fqdn }}
+          INACTIVE_API_BASE_URL: ${{ steps.slot_context.outputs.inactive_api_base_url }}
+          INACTIVE_WEB_BASE_URL: ${{ steps.slot_context.outputs.inactive_web_base_url }}
         run: |
           set +e
 
           mkdir -p .artifacts/release
+
+          set_label_traffic() {
+            local app_name="$1"
+            local primary_label="$2"
+            local primary_weight="$3"
+            local secondary_label="$4"
+            local secondary_weight="$5"
+            local attempts=0
+            local max_attempts=3
+
+            while [ "$attempts" -lt "$max_attempts" ]; do
+              attempts=$((attempts + 1))
+
+              az containerapp ingress traffic set \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --name "$app_name" \
+                --label-weight "${primary_label}=${primary_weight}" "${secondary_label}=${secondary_weight}" >/dev/null 2>&1
+
+              traffic_json="$(az containerapp show \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --name "$app_name" \
+                --query 'properties.configuration.ingress.traffic' -o json 2>/dev/null)"
+
+              current_primary="$(echo "${traffic_json}" | jq -r --arg label "$primary_label" '[.[] | select(.label == $label)][0].weight // -1')"
+              current_secondary="$(echo "${traffic_json}" | jq -r --arg label "$secondary_label" '[.[] | select(.label == $label)][0].weight // -1')"
+
+              if [ "${current_primary}" = "${primary_weight}" ] && [ "${current_secondary}" = "${secondary_weight}" ]; then
+                return 0
+              fi
+
+              sleep $((attempts * 5))
+            done
+
+            return 1
+          }
 
           node pipeline/stages/05-release/scripts/deploy-production-candidate.mjs \
             --manifest "$RUNNER_TEMP/release-candidate.json" \
@@ -370,11 +425,54 @@ jobs:
             --acr-login-server "$ACR_LOGIN_SERVER" \
             --source-registry-username "$SOURCE_REGISTRY_USERNAME" \
             --source-registry-password "$SOURCE_REGISTRY_PASSWORD" \
+            --active-label "$ACTIVE_LABEL" \
+            --inactive-label "$INACTIVE_LABEL" \
+            --api-fqdn "$API_FQDN" \
+            --web-fqdn "$WEB_FQDN" \
             --out "$RUNNER_TEMP/production-deploy-state.json"
           deploy_status=$?
 
-          smoke_status=1
+          slot_smoke_status=1
           if [ "${deploy_status}" -eq 0 ]; then
+            node pipeline/stages/05-release/scripts/verify-production-candidate.mjs \
+              --manifest "$RUNNER_TEMP/release-candidate.json" \
+              --deploy-state "$RUNNER_TEMP/production-deploy-state.json" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --api-app-name "$AZURE_CONTAINERAPP_API_NAME" \
+              --web-app-name "$AZURE_CONTAINERAPP_WEB_NAME" \
+              --worker-app-name "$AZURE_CONTAINERAPP_WORKER_NAME" \
+              --api-base-url "$INACTIVE_API_BASE_URL" \
+              --web-base-url "$INACTIVE_WEB_BASE_URL" \
+              --slot-label "$INACTIVE_LABEL" \
+              --slot-weight "0"
+            slot_smoke_status=$?
+          fi
+
+          promote_status=1
+          if [ "${deploy_status}" -eq 0 ] && [ "${slot_smoke_status}" -eq 0 ]; then
+            set_label_traffic \
+              "$AZURE_CONTAINERAPP_API_NAME" \
+              "$INACTIVE_LABEL" \
+              "100" \
+              "$ACTIVE_LABEL" \
+              "0"
+            api_promote_status=$?
+
+            set_label_traffic \
+              "$AZURE_CONTAINERAPP_WEB_NAME" \
+              "$INACTIVE_LABEL" \
+              "100" \
+              "$ACTIVE_LABEL" \
+              "0"
+            web_promote_status=$?
+
+            if [ "${api_promote_status}" -eq 0 ] && [ "${web_promote_status}" -eq 0 ]; then
+              promote_status=0
+            fi
+          fi
+
+          smoke_status=1
+          if [ "${promote_status}" -eq 0 ]; then
             node pipeline/stages/05-release/scripts/verify-production-candidate.mjs \
               --manifest "$RUNNER_TEMP/release-candidate.json" \
               --deploy-state "$RUNNER_TEMP/production-deploy-state.json" \
@@ -387,12 +485,35 @@ jobs:
             smoke_status=$?
           fi
 
+          rollback_status=0
+          if [ "${promote_status}" -eq 0 ] && [ "${smoke_status}" -ne 0 ]; then
+            set_label_traffic \
+              "$AZURE_CONTAINERAPP_API_NAME" \
+              "$ACTIVE_LABEL" \
+              "100" \
+              "$INACTIVE_LABEL" \
+              "0"
+            api_rollback_status=$?
+
+            set_label_traffic \
+              "$AZURE_CONTAINERAPP_WEB_NAME" \
+              "$ACTIVE_LABEL" \
+              "100" \
+              "$INACTIVE_LABEL" \
+              "0"
+            web_rollback_status=$?
+
+            if [ "${api_rollback_status}" -ne 0 ] || [ "${web_rollback_status}" -ne 0 ]; then
+              rollback_status=1
+            fi
+          fi
+
           verdict="fail"
-          if [ "${deploy_status}" -eq 0 ] && [ "${smoke_status}" -eq 0 ]; then
+          if [ "${deploy_status}" -eq 0 ] && [ "${slot_smoke_status}" -eq 0 ] && [ "${promote_status}" -eq 0 ] && [ "${smoke_status}" -eq 0 ]; then
             verdict="pass"
           fi
 
-          summary="deploy=${deploy_status} smoke=${smoke_status}"
+          summary="deploy=${deploy_status} slot_smoke=${slot_smoke_status} promote=${promote_status} smoke=${smoke_status} rollback=${rollback_status} active=${ACTIVE_LABEL} inactive=${INACTIVE_LABEL}"
           echo "verdict=${verdict}" >> "$GITHUB_OUTPUT"
           echo "release_summary=${summary}" >> "$GITHUB_OUTPUT"
 
@@ -426,6 +547,7 @@ jobs:
             .artifacts/release
             .artifacts/attestations
             ${{ runner.temp }}/production-deploy-state.json
+            ${{ runner.temp }}/blue-green-slot.json
             ${{ runner.temp }}/acceptance-attestation-verification.json
           if-no-files-found: ignore
           retention-days: 7
@@ -440,6 +562,9 @@ jobs:
             echo "- Release unit digest: ${{ steps.release_unit.outputs.release_unit_digest }}"
             echo "- Verdict: ${{ steps.release_run.outputs.verdict }}"
             echo "- Summary: ${{ steps.release_run.outputs.release_summary }}"
+            echo "- Active slot label: ${{ steps.slot_context.outputs.active_label }}"
+            echo "- Inactive slot label: ${{ steps.slot_context.outputs.inactive_label }}"
+            echo "- Inactive slot web URL: ${{ steps.slot_context.outputs.inactive_web_base_url }}"
             echo "- Production URL: ${{ vars.PRODUCTION_WEB_BASE_URL }}"
           } >> "$GITHUB_STEP_SUMMARY"
 

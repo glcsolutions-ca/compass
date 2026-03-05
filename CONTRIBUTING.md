@@ -6,16 +6,16 @@ Purpose: standard local workflow while the delivery pipeline is being rebuilt.
 
 ```bash
 pnpm install
-pnpm test:quick
+pnpm check
 pnpm build
 ```
 
-If database work is involved:
+For integration-only runs:
 
 ```bash
-pnpm db:postgres:up
+pnpm --filter @compass/db-tools run postgres:up
 pnpm test:integration
-pnpm db:postgres:down
+pnpm --filter @compass/db-tools run postgres:down
 ```
 
 ## Branching

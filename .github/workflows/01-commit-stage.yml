@@ -46,10 +46,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Commit quick gate
-        run: pnpm test:commit:candidate
+        run: pnpm check:ci
 
       - name: Pipeline script tests
-        run: pnpm test:commit:pipeline
+        run: pnpm --filter @compass/pipeline-tools run test
 
   build_and_publish_images:
     name: Build and publish ${{ matrix.image.id }} image
@@ -136,6 +136,12 @@ jobs:
 
     steps:
       - *checkout_step
+
+      - *setup_pnpm_step
+
+      - *setup_node_step
+
+      - *install_dependencies_step
 
       - *setup_buildx_step
 
@@ -230,7 +236,7 @@ jobs:
             }' > .artifacts/release-candidate/manifest.json
 
       - name: Validate release candidate manifest
-        run: node pipeline/shared/scripts/validate-release-candidate-runtime.mjs --file .artifacts/release-candidate/manifest.json
+        run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file ../.artifacts/release-candidate/manifest.json
 
       - name: Publish candidate manifest package
         run: |

@@ -2839,6 +2839,43 @@ export const __internalAuthService = {
   toWorkspaceRole
 };
 
+function parseRequiredUrl(value: string, name: string): URL {
+  try {
+    return new URL(value);
+  } catch {
+    throw new Error(`${name} must be a valid absolute URL (received '${value}')`);
+  }
+}
+
+function resolveAuthUrls({
+  webBaseUrlCandidate,
+  redirectUriCandidate
+}: {
+  webBaseUrlCandidate: string;
+  redirectUriCandidate?: string;
+}): { webBaseUrl: string; redirectUri: string } {
+  const webUrl = parseRequiredUrl(webBaseUrlCandidate, "WEB_BASE_URL");
+  const webBaseUrl = webUrl.origin;
+  const redirectUri =
+    redirectUriCandidate ?? `${webBaseUrl.replace(/\/+$/u, "")}/v1/auth/entra/callback`;
+  const redirectUrl = parseRequiredUrl(redirectUri, "ENTRA_REDIRECT_URI");
+
+  if (redirectUrl.origin !== webBaseUrl) {
+    throw new Error(
+      `ENTRA_REDIRECT_URI origin (${redirectUrl.origin}) must match WEB_BASE_URL origin (${webBaseUrl})`
+    );
+  }
+
+  if (redirectUrl.pathname !== "/v1/auth/entra/callback") {
+    throw new Error("ENTRA_REDIRECT_URI path must be '/v1/auth/entra/callback'");
+  }
+
+  return {
+    webBaseUrl,
+    redirectUri: redirectUrl.toString()
+  };
+}
+
 export function buildEntraAuthConfig(env: NodeJS.ProcessEnv): EntraAuthConfig {
   const rawAuthMode = asStringOrNull(env.AUTH_MODE)?.toLowerCase();
   if (rawAuthMode && rawAuthMode !== "mock" && rawAuthMode !== "entra") {
@@ -2846,8 +2883,10 @@ export function buildEntraAuthConfig(env: NodeJS.ProcessEnv): EntraAuthConfig {
   }
 
   const authMode: AuthMode = rawAuthMode === "entra" ? "entra" : "mock";
-  const webBaseUrl = asStringOrNull(env.WEB_BASE_URL) ?? "http://localhost:3000";
-  const defaultRedirectUri = `${webBaseUrl.replace(/\/+$/u, "")}/v1/auth/entra/callback`;
+  const { webBaseUrl, redirectUri } = resolveAuthUrls({
+    webBaseUrlCandidate: asStringOrNull(env.WEB_BASE_URL) ?? "http://localhost:3000",
+    redirectUriCandidate: asStringOrNull(env.ENTRA_REDIRECT_URI) ?? undefined
+  });
 
   const parseSeconds = (value: string | undefined, fallback: number): number => {
     if (!value || value.trim().length === 0) {
@@ -2878,7 +2917,7 @@ export function buildEntraAuthConfig(env: NodeJS.ProcessEnv): EntraAuthConfig {
     clientId: asStringOrNull(env.ENTRA_CLIENT_ID) ?? undefined,
     clientSecret: asStringOrNull(env.ENTRA_CLIENT_SECRET) ?? undefined,
     oidcStateEncryptionKey: asStringOrNull(env.AUTH_OIDC_STATE_ENCRYPTION_KEY) ?? undefined,
-    redirectUri: asStringOrNull(env.ENTRA_REDIRECT_URI) ?? defaultRedirectUri,
+    redirectUri,
     authorityHost: asStringOrNull(env.ENTRA_AUTHORITY_HOST) ?? "https://login.microsoftonline.com",
     tenantSegment: asStringOrNull(env.ENTRA_TENANT_SEGMENT) ?? "organizations",
     allowedTenantIds: parseCommaList(env.ENTRA_ALLOWED_TENANT_IDS),

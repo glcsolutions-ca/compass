@@ -23,6 +23,12 @@ const mocks = vi.hoisted(() => {
     service: { agent: "service" },
     close: closeAgent
   }));
+  const existsSync = vi.fn(() => false);
+  const loadEnvFile = vi.fn();
+  const requireDatabaseUrl = vi.fn(
+    (value: string | undefined) => value ?? "postgres://local:test@127.0.0.1:5432/compass"
+  );
+  const verifyDatabaseReadiness = vi.fn(async () => {});
   const loadApiConfig = vi.fn(() => ({
     host: "127.0.0.1",
     port: 3101,
@@ -40,7 +46,23 @@ const mocks = vi.hoisted(() => {
     buildApiApp,
     buildDefaultAuthService,
     buildDefaultAgentService,
+    existsSync,
+    loadEnvFile,
+    requireDatabaseUrl,
+    verifyDatabaseReadiness,
     loadApiConfig
+  };
+});
+
+vi.mock("node:fs", () => ({
+  existsSync: mocks.existsSync
+}));
+
+vi.mock("node:process", async () => {
+  const actual = await vi.importActual("node:process");
+  return {
+    ...actual,
+    loadEnvFile: mocks.loadEnvFile
   };
 });
 
@@ -68,6 +90,11 @@ vi.mock("../../src/agent-websocket.js", () => ({
   attachAgentWebSocketGateway: mocks.attachGateway
 }));
 
+vi.mock("../../src/startup-env.js", () => ({
+  requireDatabaseUrl: mocks.requireDatabaseUrl,
+  verifyDatabaseReadiness: mocks.verifyDatabaseReadiness
+}));
+
 describe("API entrypoint", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -88,6 +115,8 @@ describe("API entrypoint", () => {
       await import("../../src/index.js");
 
       expect(mocks.loadApiConfig).toHaveBeenCalledTimes(1);
+      expect(mocks.requireDatabaseUrl).toHaveBeenCalledTimes(1);
+      expect(mocks.verifyDatabaseReadiness).toHaveBeenCalledTimes(1);
       expect(mocks.buildDefaultAuthService).toHaveBeenCalledTimes(1);
       expect(mocks.buildDefaultAgentService).toHaveBeenCalledTimes(1);
       expect(mocks.buildApiApp).toHaveBeenCalledTimes(1);

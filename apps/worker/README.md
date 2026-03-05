@@ -9,7 +9,6 @@ Purpose: background processing for queue-driven runtime work.
 ## Run And Test
 
 ```bash
-pnpm dev:worker
 pnpm --filter @compass/worker dev
 pnpm --filter @compass/worker test
 ```

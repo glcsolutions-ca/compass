@@ -11,11 +11,11 @@ Purpose: migrations, local Postgres runtime, and seed workflow.
 ## Run
 
 ```bash
-pnpm db:postgres:up
-pnpm db:migrate:check
-pnpm db:migrate:up
-pnpm db:migrate:status
-pnpm db:postgres:down
+pnpm --filter @compass/db-tools run postgres:up
+pnpm --filter @compass/db-tools run migrate:check
+pnpm --filter @compass/db-tools run migrate:up
+pnpm --filter @compass/db-tools run migrate:status
+pnpm --filter @compass/db-tools run postgres:down
 ```
 
 ## Source Of Truth

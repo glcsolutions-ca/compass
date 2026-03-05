@@ -2,22 +2,23 @@
 
 This repository uses a stage-aligned test taxonomy:
 
-1. Commit-stage candidate tests (fast, releasable unit only).
-2. Acceptance tests (cross-service/system + browser).
-3. Integration tests (app-local integration behavior).
-4. Nonfunctional tests (performance/security scaffolds).
+1. Unit tests.
+2. Integration tests (app-local integration behavior).
+3. Acceptance tests (cross-service/system + browser).
+4. Pipeline tooling tests.
+5. Nonfunctional tests (performance/security scaffolds).
 
 ## Core Commands
 
 ```bash
-pnpm test:commit:candidate
-pnpm test:commit:pipeline
-pnpm test:commit:analysis
-pnpm test:quick
+pnpm test
 pnpm test:integration
-pnpm test:acceptance:system
-pnpm test:acceptance:browser
+pnpm test:system
+pnpm test:e2e
 pnpm test:full
+pnpm check
+pnpm check:ci
+pnpm --filter @compass/pipeline-tools run test
 ```
 
 ## Directory Model

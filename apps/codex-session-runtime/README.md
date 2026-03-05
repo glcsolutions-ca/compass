@@ -10,10 +10,8 @@ Purpose: local or cloud container runtime for agent session execution.
 ## Run And Test
 
 ```bash
-pnpm runtime:session:up
-pnpm runtime:session:status
-pnpm runtime:session:logs
-pnpm runtime:session:down
+pnpm --filter @compass/codex-session-runtime run session:up
+pnpm --filter @compass/codex-session-runtime run session:down
 ```
 
 ## Source Of Truth

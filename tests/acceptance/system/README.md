@@ -5,7 +5,7 @@ Purpose: system-level smoke checks for runtime health.
 ## Run
 
 ```bash
-pnpm test:acceptance:system
+pnpm test:system
 ```
 
 Set target endpoint via:

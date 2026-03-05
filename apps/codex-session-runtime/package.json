@@ -8,6 +8,8 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "vitest run --config vitest.config.mts"
+    "test": "vitest run --config vitest.config.mts",
+    "session:up": "node ../../scripts/dev/runtime-session.mjs up",
+    "session:down": "node ../../scripts/dev/runtime-session.mjs down"
   }
 }

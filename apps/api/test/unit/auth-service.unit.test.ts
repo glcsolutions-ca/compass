@@ -42,6 +42,22 @@ describe("buildEntraAuthConfig", () => {
     expect(config.oidcStateEncryptionKey).toBe("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
   });
 
+  it("requires ENTRA_REDIRECT_URI to match WEB_BASE_URL origin and callback path", () => {
+    expect(() =>
+      buildEntraAuthConfig({
+        WEB_BASE_URL: "https://compass.glcsolutions.ca",
+        ENTRA_REDIRECT_URI: "https://other.example.com/v1/auth/entra/callback"
+      })
+    ).toThrow("ENTRA_REDIRECT_URI origin");
+
+    expect(() =>
+      buildEntraAuthConfig({
+        WEB_BASE_URL: "https://compass.glcsolutions.ca",
+        ENTRA_REDIRECT_URI: "https://compass.glcsolutions.ca/callback"
+      })
+    ).toThrow("ENTRA_REDIRECT_URI path must be '/v1/auth/entra/callback'");
+  });
+
   it("parses AUTH_MODE and rejects unsupported values", () => {
     expect(buildEntraAuthConfig({ AUTH_MODE: "entra" }).authMode).toBe("entra");
     expect(buildEntraAuthConfig({ AUTH_MODE: "mock" }).authMode).toBe("mock");

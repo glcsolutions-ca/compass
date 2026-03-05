@@ -10,8 +10,6 @@
     "start": "node server.mjs",
     "test": "vitest run --config vitest.config.mts",
     "session:up": "node ../../scripts/dev/runtime-session.mjs up",
-    "session:down": "node ../../scripts/dev/runtime-session.mjs down",
-    "session:status": "node ../../scripts/dev/runtime-session.mjs status",
-    "session:logs": "node ../../scripts/dev/runtime-session.mjs logs"
+    "session:down": "node ../../scripts/dev/runtime-session.mjs down"
   }
 }

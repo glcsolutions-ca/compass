@@ -175,6 +175,64 @@ describe("API app", () => {
     });
   });
 
+  it("allows state-changing requests when origin matches WEB_BASE_URL", async () => {
+    const previousWebBaseUrl = process.env.WEB_BASE_URL;
+    process.env.WEB_BASE_URL = "http://localhost:59160";
+
+    try {
+      const authService = {
+        logout: vi.fn(async () => {}),
+        clearSessionCookie: vi.fn(() => "__Host-compass_session=; Path=/; Max-Age=0")
+      } as unknown as AuthService;
+
+      const app = buildApiApp({ authService });
+
+      const response = await request(app)
+        .post("/v1/auth/logout")
+        .set("cookie", "__Host-compass_session=test")
+        .set("origin", "http://localhost:59160");
+
+      expect(response.status).toBe(204);
+    } finally {
+      if (previousWebBaseUrl === undefined) {
+        delete process.env.WEB_BASE_URL;
+      } else {
+        process.env.WEB_BASE_URL = previousWebBaseUrl;
+      }
+    }
+  });
+
+  it("rejects state-changing requests when origin does not match WEB_BASE_URL", async () => {
+    const previousWebBaseUrl = process.env.WEB_BASE_URL;
+    process.env.WEB_BASE_URL = "http://localhost:59160";
+
+    try {
+      const authService = {
+        logout: vi.fn(async () => {}),
+        clearSessionCookie: vi.fn(() => "__Host-compass_session=; Path=/; Max-Age=0")
+      } as unknown as AuthService;
+
+      const app = buildApiApp({ authService });
+
+      const response = await request(app)
+        .post("/v1/auth/logout")
+        .set("cookie", "__Host-compass_session=test")
+        .set("origin", "http://localhost:59161");
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({
+        code: "CSRF_ORIGIN_DENIED",
+        message: "Cross-origin state-changing requests are not allowed"
+      });
+    } finally {
+      if (previousWebBaseUrl === undefined) {
+        delete process.env.WEB_BASE_URL;
+      } else {
+        process.env.WEB_BASE_URL = previousWebBaseUrl;
+      }
+    }
+  });
+
   it("redacts unexpected auth handler errors and emits structured logs with request id", async () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const authService = {

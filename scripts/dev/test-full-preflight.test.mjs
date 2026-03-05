@@ -46,7 +46,7 @@ describe("resolveDatabaseUrlForFullTest", () => {
     });
   });
 
-  it("builds local URL from POSTGRES_PORT when DATABASE_URL is absent in db/postgres/.env", async () => {
+  it("builds local URL from layered POSTGRES_PORT when DATABASE_URL is absent", async () => {
     const repoDir = await createTempRepo();
     await writePostgresEnv(repoDir, "POSTGRES_PORT=55432\n");
 
@@ -91,10 +91,7 @@ describe("runTestFullPreflight", () => {
 
   it("passes when connection succeeds", async () => {
     const repoDir = await createTempRepo();
-    await writePostgresEnv(
-      repoDir,
-      "DATABASE_URL=postgres://compass:compass@localhost:55432/compass\n"
-    );
+    await writePostgresEnv(repoDir, "POSTGRES_PORT=55432\n");
 
     await expect(
       runTestFullPreflight({

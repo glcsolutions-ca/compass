@@ -1,54 +1,13 @@
-import { access, readFile } from "node:fs/promises";
-import path from "node:path";
 import { Client } from "pg";
-import { resolveDatabaseUrl } from "../../db/scripts/constants.mjs";
+import { resolveLocalDevEnv } from "./local-env.mjs";
 
 function normalize(value) {
   if (typeof value !== "string") {
     return undefined;
   }
+
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function parseEnvText(content) {
-  const parsed = {};
-
-  for (const line of content.split(/\r?\n/u)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-
-    const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/u);
-    if (!match) {
-      continue;
-    }
-
-    const [, key, rawValue] = match;
-    parsed[key] = rawValue.trim().replace(/^['"]|['"]$/gu, "");
-  }
-
-  return parsed;
-}
-
-async function readEnvFile(filePath) {
-  try {
-    await access(filePath);
-  } catch {
-    return {};
-  }
-
-  const content = await readFile(filePath, "utf8");
-  return parseEnvText(content);
-}
-
-function parseFlag(value, fallback = false) {
-  const normalized = normalize(value);
-  if (!normalized) {
-    return fallback;
-  }
-  return normalized.toLowerCase() === "true";
 }
 
 async function canConnectPostgres(databaseUrl) {
@@ -75,52 +34,32 @@ async function canReachRuntime(endpoint) {
 
 async function main() {
   const rootDir = process.cwd();
-  const apiEnv = await readEnvFile(path.resolve(rootDir, "apps/api/.env"));
-  const runtimeEnv = await readEnvFile(path.resolve(rootDir, "apps/codex-session-runtime/.env"));
+  const resolved = await resolveLocalDevEnv({ rootDir, env: process.env });
 
-  const databaseUrl = resolveDatabaseUrl({
-    env: process.env,
-    postgresEnvPath: path.resolve(rootDir, "db/postgres/.env")
-  });
-
-  if (!(await canConnectPostgres(databaseUrl))) {
-    console.error(`dev:check: Postgres is not reachable for ${databaseUrl}.`);
+  const databaseUrl = normalize(resolved.env.DATABASE_URL);
+  if (!databaseUrl || !(await canConnectPostgres(databaseUrl))) {
+    console.error(
+      `env:doctor: Postgres is not reachable for ${databaseUrl ?? "<missing DATABASE_URL>"}.`
+    );
     console.error("Fix:");
-    console.error("  pnpm --filter @compass/db-tools run postgres:up");
+    console.error("  pnpm dev");
+    console.error("  or pnpm --filter @compass/db-tools run postgres:up");
     process.exitCode = 1;
     return;
   }
 
-  const agentGatewayEnabled = parseFlag(
-    process.env.AGENT_GATEWAY_ENABLED ?? apiEnv.AGENT_GATEWAY_ENABLED,
-    false
-  );
-  const runtimeProvider =
-    normalize(process.env.AGENT_RUNTIME_PROVIDER ?? apiEnv.AGENT_RUNTIME_PROVIDER) ??
-    "dynamic_sessions";
-  const runtimeHost = normalize(process.env.HOST ?? runtimeEnv.HOST) ?? "127.0.0.1";
-  const runtimePort = normalize(process.env.SESSION_RUNTIME_PORT ?? runtimeEnv.PORT);
-  const runtimeEndpoint =
-    normalize(process.env.AGENT_RUNTIME_ENDPOINT ?? apiEnv.AGENT_RUNTIME_ENDPOINT) ??
-    (runtimePort ? `http://${runtimeHost}:${runtimePort}` : undefined);
-
-  const requiresLocalRuntime =
-    agentGatewayEnabled &&
-    (runtimeProvider === "local_process" || runtimeProvider === "local_docker");
-
-  if (requiresLocalRuntime) {
-    if (!runtimeEndpoint || !(await canReachRuntime(runtimeEndpoint))) {
-      console.error(
-        `dev:check: local runtime provider (${runtimeProvider}) is configured but runtime is not reachable.`
-      );
-      console.error("Fix:");
-      console.error("  pnpm --filter @compass/codex-session-runtime run session:up");
-      process.exitCode = 1;
-      return;
-    }
+  const runtimeEndpoint = normalize(resolved.env.AGENT_RUNTIME_ENDPOINT);
+  if (!runtimeEndpoint || !(await canReachRuntime(runtimeEndpoint))) {
+    console.error("env:doctor: session runtime is not reachable.");
+    console.error("Fix:");
+    console.error("  pnpm dev");
+    process.exitCode = 1;
+    return;
   }
 
-  console.info("dev:check passed.");
+  console.info(
+    `env:doctor passed (web/api/postgres/runtime: ${resolved.ports.WEB_PORT}/${resolved.ports.API_PORT}/${resolved.ports.POSTGRES_PORT}/${resolved.ports.SESSION_RUNTIME_PORT}).`
+  );
 }
 
 await main().catch((error) => {

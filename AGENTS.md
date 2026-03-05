@@ -104,15 +104,16 @@ compass/
 ## Main commands
 
 - `pnpm install` — install workspace dependencies
-- `pnpm dev` — run local apps/services
-- `pnpm dev:down` — stop local dev services
+- `pnpm dev` — run full local stack in foreground (Ctrl+C tears down apps + deps)
+- `pnpm dev:up` — start full local stack in background, wait for health checks, return when ready
+- `pnpm dev:down` — manual recovery stop for local dev dependencies
 - `pnpm build` — build all apps/packages
 - `pnpm check` — baseline local quality gate
 - `pnpm test:full` — check + integration + e2e
 
 ## Local Postgres (for integration)
 
-- `pnpm --filter @compass/db-tools run postgres:up` — start local Postgres, apply migrations, seed data
+- `pnpm --filter @compass/db-tools run postgres:up` — start local Postgres, apply migrations, seed data (ephemeral by default)
 - `pnpm --filter @compass/db-tools run postgres:down` — stop local Postgres
 
 ## Working style

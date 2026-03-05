@@ -1,6 +1,7 @@
 import { defineConfig } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { parseEnv } from "node:util";
 
 const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
 
@@ -9,33 +10,7 @@ function parseEnvFile(filePath: string): Record<string, string> {
     return {};
   }
 
-  const values: Record<string, string> = {};
-  const content = readFileSync(filePath, "utf8");
-  const lines = content.split(/\r?\n/u);
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-
-    const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/u);
-    if (!match) {
-      continue;
-    }
-
-    const key = match[1];
-    const rawValue = match[2].trim();
-    const value =
-      rawValue.length > 1 &&
-      ((rawValue.startsWith('"') && rawValue.endsWith('"')) ||
-        (rawValue.startsWith("'") && rawValue.endsWith("'")))
-        ? rawValue.slice(1, -1)
-        : rawValue;
-    values[key] = value;
-  }
-
-  return values;
+  return parseEnv(readFileSync(filePath, "utf8"));
 }
 
 function resolveBaseUrl(): string {
@@ -45,6 +20,12 @@ function resolveBaseUrl(): string {
 
   if (process.env.WEB_PORT) {
     return `http://127.0.0.1:${process.env.WEB_PORT}`;
+  }
+
+  const webEnvLocalPath = path.resolve(REPO_ROOT, "apps/web/.env.local");
+  const webEnvLocal = parseEnvFile(webEnvLocalPath);
+  if (webEnvLocal.WEB_PORT) {
+    return `http://127.0.0.1:${webEnvLocal.WEB_PORT}`;
   }
 
   const webEnvPath = path.resolve(REPO_ROOT, "apps/web/.env");

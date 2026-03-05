@@ -1,36 +1,7 @@
-import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { Client } from "pg";
-
-function normalizeValue(value) {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function parseEnvText(content) {
-  const parsed = {};
-
-  for (const line of content.split(/\r?\n/u)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-
-    const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/u);
-    if (!match) {
-      continue;
-    }
-
-    parsed[match[1]] = match[2].trim().replace(/^['"]|['"]$/gu, "");
-  }
-
-  return parsed;
-}
+import { normalizeEnvValue, readEnvLayer, resolveLayeredEnvValue } from "../shared/env-files.mjs";
 
 function buildLocalDatabaseUrlFromPort(port) {
   return `postgres://compass:compass@localhost:${port}/compass`;
@@ -65,12 +36,26 @@ function createBackendPrereqError() {
     code: "FULL001",
     summary: "backend prerequisites missing",
     details: ["- DATABASE_URL not resolvable or Postgres not reachable"],
-    guidance: [
-      "pnpm --filter @compass/db-tools run postgres:up",
-      "pnpm test:full",
-      "pnpm --filter @compass/db-tools run postgres:down"
-    ]
+    guidance: ["pnpm dev", "pnpm test:full", "pnpm dev:down"]
   });
+}
+
+function parsePort(value) {
+  const normalized = normalizeEnvValue(value);
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (!/^\d+$/u.test(normalized)) {
+    throw createBackendPrereqError();
+  }
+
+  const parsed = Number(normalized);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65_535) {
+    throw createBackendPrereqError();
+  }
+
+  return parsed;
 }
 
 export async function canConnect(databaseUrl) {
@@ -87,53 +72,43 @@ export async function canConnect(databaseUrl) {
   }
 }
 
-async function pathExists(filePath, accessFn) {
-  try {
-    await accessFn(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function resolveDatabaseUrlForFullTest({
   rootDir = process.cwd(),
-  env = process.env,
-  readFileFn = readFile,
-  accessFn = access
+  env = process.env
 } = {}) {
-  const explicitUrl = normalizeValue(env.DATABASE_URL);
-  if (explicitUrl) {
-    ensurePostgresUrlSyntax(explicitUrl);
-    return { databaseUrl: explicitUrl, source: "DATABASE_URL" };
-  }
-
   const postgresEnvPath = path.resolve(rootDir, "db/postgres/.env");
-  const hasPostgresEnv = await pathExists(postgresEnvPath, accessFn);
-  if (!hasPostgresEnv) {
-    throw createBackendPrereqError();
-  }
+  const layer = await readEnvLayer(postgresEnvPath);
 
-  const fileContent = await readFileFn(postgresEnvPath, "utf8");
-  const values = parseEnvText(fileContent);
-  const fromFile = normalizeValue(values.DATABASE_URL);
-  if (fromFile) {
-    ensurePostgresUrlSyntax(fromFile);
+  const fromEnvDatabaseUrl = normalizeEnvValue(env.DATABASE_URL);
+  if (fromEnvDatabaseUrl) {
+    ensurePostgresUrlSyntax(fromEnvDatabaseUrl);
     return {
-      databaseUrl: fromFile,
-      source: "db/postgres/.env DATABASE_URL"
+      databaseUrl: fromEnvDatabaseUrl,
+      source: "DATABASE_URL"
     };
   }
 
-  const postgresPort = normalizeValue(values.POSTGRES_PORT);
-  if (!postgresPort || !/^\d+$/u.test(postgresPort)) {
+  const layeredPort =
+    parsePort(
+      resolveLayeredEnvValue({
+        key: "POSTGRES_PORT",
+        processEnv: env,
+        envLocalValues: layer.envLocalValues,
+        envValues: layer.envValues
+      })
+    ) ?? undefined;
+
+  if (!layeredPort) {
     throw createBackendPrereqError();
   }
 
-  const localUrl = buildLocalDatabaseUrlFromPort(postgresPort);
   return {
-    databaseUrl: localUrl,
-    source: "db/postgres/.env POSTGRES_PORT"
+    databaseUrl: buildLocalDatabaseUrlFromPort(layeredPort),
+    source: normalizeEnvValue(env.POSTGRES_PORT)
+      ? "POSTGRES_PORT"
+      : normalizeEnvValue(layer.envLocalValues.POSTGRES_PORT)
+        ? "db/postgres/.env.local POSTGRES_PORT"
+        : "db/postgres/.env POSTGRES_PORT"
   };
 }
 
@@ -152,15 +127,11 @@ export async function runTestFullPreflight({
   rootDir = process.cwd(),
   env = process.env,
   logger = console,
-  readFileFn = readFile,
-  accessFn = access,
   connectFn = canConnect
 } = {}) {
   const { databaseUrl, source } = await resolveDatabaseUrlForFullTest({
     rootDir,
-    env,
-    readFileFn,
-    accessFn
+    env
   });
 
   const reachable = await connectFn(databaseUrl);

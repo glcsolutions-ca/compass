@@ -7,14 +7,14 @@
     "migrate:create": "cd .. && node db/scripts/migrate-create.mjs",
     "migrate:check": "cd .. && node db/scripts/check-migration-policy.mjs",
     "migrate:checksums:update": "cd .. && node db/scripts/check-migration-policy.mjs --write",
-    "migrate:up": "cd .. && node db/scripts/check-migration-policy.mjs && node db/scripts/migrate.mjs up",
-    "migrate:down": "cd .. && node db/scripts/check-migration-policy.mjs && node db/scripts/migrate.mjs down",
-    "migrate:status": "cd .. && node db/scripts/migrate-status.mjs",
-    "seed": "cd .. && node db/scripts/seed-postgres.mjs",
-    "postgres:wait": "cd .. && node db/scripts/wait-for-postgres.mjs",
-    "postgres:up": "cd .. && node scripts/dev/ensure-local-env.mjs && (docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml up -d --wait postgres || docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml up -d postgres) && node db/scripts/wait-for-postgres.mjs && node db/scripts/check-migration-policy.mjs && node db/scripts/migrate.mjs up && node db/scripts/seed-postgres.mjs",
-    "postgres:down": "cd .. && node scripts/dev/ensure-local-env.mjs && docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml down",
-    "postgres:reset": "cd .. && node scripts/dev/ensure-local-env.mjs && docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml down --volumes && node scripts/dev/ensure-local-env.mjs && (docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml up -d --wait postgres || docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml up -d postgres) && node db/scripts/wait-for-postgres.mjs && node db/scripts/check-migration-policy.mjs && node db/scripts/migrate.mjs up && node db/scripts/seed-postgres.mjs",
-    "postgres:logs": "cd .. && node scripts/dev/ensure-local-env.mjs && docker compose --env-file db/postgres/.env -f db/postgres/docker-compose.yml logs -f postgres"
+    "migrate:up": "cd .. && pnpm env:setup && node db/scripts/check-migration-policy.mjs && node --env-file=db/postgres/.env --env-file-if-exists=db/postgres/.env.local db/scripts/migrate.mjs up",
+    "migrate:down": "cd .. && pnpm env:setup && node db/scripts/check-migration-policy.mjs && node --env-file=db/postgres/.env --env-file-if-exists=db/postgres/.env.local db/scripts/migrate.mjs down",
+    "migrate:status": "cd .. && pnpm env:setup && node --env-file=db/postgres/.env --env-file-if-exists=db/postgres/.env.local db/scripts/migrate-status.mjs",
+    "seed": "cd .. && pnpm env:setup && node --env-file=db/postgres/.env --env-file-if-exists=db/postgres/.env.local db/scripts/seed-postgres.mjs",
+    "postgres:wait": "cd .. && pnpm env:setup && node --env-file=db/postgres/.env --env-file-if-exists=db/postgres/.env.local db/scripts/wait-for-postgres.mjs",
+    "postgres:up": "cd .. && pnpm env:setup && node db/scripts/postgres-compose.mjs up -d --wait postgres && node db/scripts/check-migration-policy.mjs && node --env-file=db/postgres/.env --env-file-if-exists=db/postgres/.env.local db/scripts/migrate.mjs up && node --env-file=db/postgres/.env --env-file-if-exists=db/postgres/.env.local db/scripts/seed-postgres.mjs",
+    "postgres:down": "cd .. && pnpm env:setup && node db/scripts/postgres-compose.mjs down",
+    "postgres:reset": "cd .. && pnpm env:setup && node db/scripts/postgres-compose.mjs down --volumes && node db/scripts/postgres-compose.mjs up -d --wait postgres && node db/scripts/check-migration-policy.mjs && node --env-file=db/postgres/.env --env-file-if-exists=db/postgres/.env.local db/scripts/migrate.mjs up && node --env-file=db/postgres/.env --env-file-if-exists=db/postgres/.env.local db/scripts/seed-postgres.mjs",
+    "postgres:logs": "cd .. && pnpm env:setup && node db/scripts/postgres-compose.mjs logs -f postgres"
   }
 }

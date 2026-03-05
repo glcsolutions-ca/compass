@@ -29,7 +29,9 @@ function normalizeAppFqdn(fqdn) {
 }
 
 function splitAppFqdn(appName, appFqdn) {
-  const normalizedName = String(appName || "").trim().toLowerCase();
+  const normalizedName = String(appName || "")
+    .trim()
+    .toLowerCase();
   const normalizedFqdn = normalizeAppFqdn(appFqdn);
   const prefix = `${normalizedName}.`;
 

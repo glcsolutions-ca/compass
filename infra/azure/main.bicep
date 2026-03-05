@@ -44,6 +44,11 @@ param postgresStorageMb int = 32768
 param apiImage string = 'SET_IN_GITHUB_ENV'
 param webImage string = 'SET_IN_GITHUB_ENV'
 param workerImage string = 'SET_IN_GITHUB_ENV'
+@allowed([
+  'single'
+  'multiple'
+])
+param containerAppsActiveRevisionsMode string = 'multiple'
 param dynamicSessionsRuntimeImage string = 'SET_IN_GITHUB_ENV'
 param authMode string = 'entra'
 param entraClientId string = ''
@@ -238,6 +243,7 @@ module api './modules/containerapp-api.bicep' = {
     containerAppName: apiAppName
     managedEnvironmentId: containerEnvironment.outputs.environmentId
     image: apiImage
+    activeRevisionsMode: containerAppsActiveRevisionsMode
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
     sessionExecutorIdentityResourceId: dynamicSessionsExecutorIdentity.id
@@ -276,6 +282,7 @@ module web './modules/containerapp-web.bicep' = {
     containerAppName: webAppName
     managedEnvironmentId: containerEnvironment.outputs.environmentId
     image: webImage
+    activeRevisionsMode: containerAppsActiveRevisionsMode
     registryServer: acr.outputs.loginServer
     registryIdentityResourceId: acrPullIdentity.id
     keyVaultUri: keyVaultUri

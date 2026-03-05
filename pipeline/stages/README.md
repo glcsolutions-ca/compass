@@ -1,129 +1,128 @@
-# Pipeline Stages (Farley 3-Stage Model)
+# Pipeline Stages (Farley 4-Stage Model)
 
 This document defines the canonical stage model for `pipeline/stages`.
 
-## Minimum Viable Farley 3-Stage Requirements
+## Required Flow
 
 1. One immutable candidate identity per integrated SHA.
 2. One authoritative Commit Stage build that writes that candidate to GHCR.
 3. One acceptance verdict bound to that exact candidate.
-4. One production deployment of that same candidate.
-5. One rollback path to a previously accepted candidate.
-6. Commit Stage runs once per candidate (no duplicate PR run).
-7. Acceptance runs via `workflow_run` from successful Commit Stage.
-8. Release is fully automatic after acceptance success.
-9. Production rehearsal evidence and commit SLO gating are removed.
+4. One production rehearsal of that same candidate at `0%` traffic.
+5. One manual production promotion of that same rehearsed candidate.
+6. One rollback path to a previously accepted candidate.
+7. Commit Stage runs once per candidate.
+8. Acceptance runs via `workflow_run` from successful Commit Stage.
+9. Production rehearsal runs via `workflow_run` from successful Acceptance Stage.
+10. Production release runs via manual `workflow_dispatch` with GitHub environment approval.
 
 ## Canonical Flow
 
 ```mermaid
 flowchart TD
-  A["Merge Queue Integrated SHA"] --> B["Commit Stage (single run)"]
-  B --> C["Write Release Unit to GHCR (immutable digest identity)"]
-  B --> D["Attach build provenance/SBOM attestation"]
+  A["Merge Queue Integrated SHA"] --> B["Commit Stage"]
+  B --> C["Write immutable release candidate to GHCR"]
+  C --> D["Acceptance Stage"]
+  D --> E{"Accepted and still on main?"}
+  E -- "No" --> X["Skip stale candidate"]
+  E -- "Yes" --> F["Production Rehearsal Stage"]
+  F --> G["Deploy API/Web to inactive blue-green label at 0%"]
+  G --> H["Smoke inactive label URL"]
+  H --> I["Publish rehearsal evidence + URL"]
 
-  C --> E["Acceptance Stage (workflow_run)"]
-  E --> E1{"Guard: SHA is on main?"}
-  E1 -- "No" --> X["Skip stale candidate"]
-  E1 -- "Yes" --> F["Deploy exact GHCR candidate digest"]
-  F --> G["Run acceptance tests"]
-  G --> H["Attach acceptance attestation to same candidate subject"]
+  I --> J["Manual Release Stage"]
+  J --> K["Verify candidate is still rehearsed"]
+  K --> L["Run migrations + deploy worker"]
+  L --> M["Flip API/Web label traffic"]
+  M --> N["Smoke production"]
+  N --> O["Deactivate old active revisions"]
+  O --> P["Record release attestation"]
 
-  H --> I["Release Stage (auto)"]
-  I --> J["Verify candidate + acceptance attestation"]
-  J --> K["Deploy same candidate to production"]
-  K --> L["Record GitHub deployment status + release attestation"]
-
-  M["Rollback (workflow_dispatch candidate_id)"] --> N["Select prior accepted candidate"]
-  N --> K
+  Q["Fast rollback"] --> R["Flip label traffic back"]
+  S["Durable rollback"] --> T["Rehearse prior accepted candidate"]
+  T --> J
 ```
 
 ## What We Actually Need
 
-The deployment pipeline only needs to prove that the exact integrated candidate can be promoted to production unchanged. Everything else is optional tooling.
+The pipeline needs to prove one thing: the exact integrated candidate can be rehearsed unchanged, then promoted unchanged, then rolled back quickly if needed.
 
 ## Hardening Baseline
 
-1. `.github/workflows` stage orchestration actions are pinned to full commit SHAs and maintained via Dependabot.
-2. Privileged downstream stages (`Acceptance`, `Release`) do not use `pnpm` cache by default.
+1. `.github/workflows` orchestration actions are pinned to full SHAs and maintained via Dependabot.
+2. Privileged downstream stages do not use `pnpm` cache by default.
 3. Production deployments are constrained to `main` via GitHub environment branch policy.
+4. Release approval lives in GitHub Environments, not a bespoke control plane.
 
 ## Stage Contracts
 
 ### Commit Stage
 
 Purpose:
-
 - Build and publish one authoritative candidate for one integrated SHA.
 
 Must do:
-
 1. Run authoritatively on `merge_group` only.
-2. Pair with a lightweight PR-head queue-admission workflow that reports `Commit Stage` for merge-queue admission (no rebuild, no publication).
-3. Execute fast commit checks for the authoritative run.
-4. Build and push immutable digest-pinned runtime artifacts.
-5. Publish candidate representations to GHCR.
-6. Attach build provenance/SBOM attestations.
-7. Publish one canonical manifest package in GHCR for downstream stage resolution.
-8. Fail closed when any required step fails.
-
-Must not do:
-
-1. Run on PR as a second authoritative path.
-2. Depend on downstream environment state.
-3. Introduce nonessential gates (for example commit-stage SLO blocking).
+2. Execute fast commit checks.
+3. Build and push immutable digest-pinned runtime artifacts.
+4. Publish one canonical manifest package in GHCR.
+5. Attach build provenance/SBOM attestations.
 
 ### Acceptance Stage
 
 Purpose:
-
-- Prove that the exact candidate from Commit Stage behaves correctly.
+- Prove that the exact candidate from Commit Stage behaves correctly in non-prod.
 
 Must do:
-
 1. Trigger from successful Commit Stage via `workflow_run`.
-2. Resolve candidate identity from `workflow_run.head_sha` and canonical GHCR manifest.
+2. Resolve candidate identity from GHCR.
 3. Guard against stale candidates by requiring SHA presence on `main`.
 4. Deploy exact candidate digests from GHCR.
 5. Run automated acceptance suites.
-6. Attach acceptance attestation to candidate subject.
-7. Fail closed on test or attestation errors.
+6. Attach acceptance attestation to the candidate subject.
 
-Must not do:
+### Production Rehearsal Stage
 
-1. Rebuild artifacts.
-2. Substitute versions.
-3. Emit warning-only verdicts.
+Purpose:
+- Deploy the exact accepted candidate to the inactive production label at `0%` traffic and prove it via real URLs.
+
+Must do:
+1. Trigger automatically from successful Acceptance Stage.
+2. Also support manual `workflow_dispatch` by `candidate_id`.
+3. Verify acceptance attestation before mutating production.
+4. Resolve active and inactive blue/green labels.
+5. Deploy only API and Web to the inactive label at `0%` traffic.
+6. Smoke the inactive label URLs and Entra redirect behavior.
+7. Publish rehearsal evidence and the rehearsal URL.
+8. Supersede any older unreleased rehearsal for the inactive label.
 
 ### Release Stage
 
 Purpose:
-
-- Promote the exact accepted candidate to production.
+- Manually promote the exact rehearsed candidate to production.
 
 Must do:
-
-1. Trigger automatically from successful Acceptance Stage.
-2. Also support manual `workflow_dispatch` by `candidate_id` for rollback/redeploy.
-3. In auto mode, resolve candidate identity from `workflow_run.head_sha` and canonical GHCR manifest.
-4. Verify acceptance attestation is present and `verdict=pass`.
-5. Deploy exact candidate digest set from GHCR.
-6. Run production smoke verification.
-7. Record GitHub deployment status and release attestation.
-
-Must not do:
-
-1. Rebuild artifacts.
-2. Depend on any out-of-band gate outside Commit/Acceptance/Release.
+1. Trigger only by manual `workflow_dispatch` with `candidate_id`.
+2. Use the GitHub `production` environment as the approval boundary.
+3. Verify acceptance attestation again.
+4. Verify the requested candidate is still the one rehearsed on the inactive label.
+5. Rerun inactive-slot smoke before production mutation.
+6. Run migrations.
+7. Deploy worker.
+8. Flip API/Web label traffic.
+9. Smoke production URLs.
+10. Deactivate old active revisions and leave only blue/green active.
+11. Record release attestation.
 
 ## Promotion Invariants
 
 1. Candidate identity is immutable and digest-based.
-2. Stage evidence is attached to the same candidate subject.
-3. Any material artifact change requires a new candidate identity.
-4. Rollback is a candidate re-promotion, not source reconstruction.
+2. Acceptance evidence and release evidence are bound to the same candidate subject.
+3. Production rehearsal and production release never rebuild artifacts.
+4. Fast rollback is a traffic flip, not a rebuild.
+5. Durable rollback is a re-rehearsal and re-promotion of a previously accepted candidate.
 
 ## Promotion Policy Boundary
 
-1. Promotion policy gate is the release-unit acceptance attestation (`verdict=pass`).
-2. Per-image build provenance/SBOM attestations are publication metadata for audit and consumers.
+1. The hard promotion gate is the acceptance attestation (`verdict=pass`).
+2. The human approval gate is the GitHub `production` environment.
+3. Rehearsal evidence is operational evidence, not a registry attestation.

@@ -51,6 +51,52 @@ var userAssignedIdentities = empty(sessionExecutorIdentityResourceId)
         '${sessionExecutorIdentityResourceId}': {}
       }
     )
+var ingressConfig = {
+  external: true
+  targetPort: 3001
+  allowInsecure: false
+  transport: 'auto'
+  customDomains: empty(customDomainName)
+    ? []
+    : [
+        {
+          name: customDomainName
+          bindingType: 'Auto'
+        }
+      ]
+}
+var configuration = {
+  activeRevisionsMode: activeRevisionsMode
+  maxInactiveRevisions: 10
+  ingress: ingressConfig
+  registries: [
+    {
+      server: registryServer
+      identity: registryIdentityResourceId
+    }
+  ]
+  secrets: concat([
+    {
+      name: 'database-url'
+      value: databaseUrl
+    }
+    {
+      name: 'oauth-token-signing-secret'
+      keyVaultUrl: '${keyVaultSecretBaseUrl}/oauth-token-signing-secret'
+      identity: registryIdentityResourceId
+    }
+    {
+      name: 'entra-client-secret'
+      keyVaultUrl: '${keyVaultSecretBaseUrl}/entra-client-secret'
+      identity: registryIdentityResourceId
+    }
+    {
+      name: 'auth-oidc-state-encryption-key'
+      keyVaultUrl: '${keyVaultSecretBaseUrl}/auth-oidc-state-encryption-key'
+      identity: registryIdentityResourceId
+    }
+  ])
+}
 
 resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
   name: containerAppName
@@ -61,51 +107,7 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
   }
   properties: {
     managedEnvironmentId: managedEnvironmentId
-    configuration: {
-      activeRevisionsMode: activeRevisionsMode
-      maxInactiveRevisions: 10
-      ingress: {
-        external: true
-        targetPort: 3001
-        allowInsecure: false
-        transport: 'auto'
-        customDomains: empty(customDomainName)
-          ? []
-          : [
-              {
-                name: customDomainName
-                bindingType: 'Auto'
-              }
-            ]
-      }
-      registries: [
-        {
-          server: registryServer
-          identity: registryIdentityResourceId
-        }
-      ]
-      secrets: concat([
-        {
-          name: 'database-url'
-          value: databaseUrl
-        }
-        {
-          name: 'oauth-token-signing-secret'
-          keyVaultUrl: '${keyVaultSecretBaseUrl}/oauth-token-signing-secret'
-          identity: registryIdentityResourceId
-        }
-        {
-          name: 'entra-client-secret'
-          keyVaultUrl: '${keyVaultSecretBaseUrl}/entra-client-secret'
-          identity: registryIdentityResourceId
-        }
-        {
-          name: 'auth-oidc-state-encryption-key'
-          keyVaultUrl: '${keyVaultSecretBaseUrl}/auth-oidc-state-encryption-key'
-          identity: registryIdentityResourceId
-        }
-      ])
-    }
+    configuration: configuration
     template: {
       containers: [
         {

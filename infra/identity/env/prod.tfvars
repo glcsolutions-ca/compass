@@ -1,6 +1,9 @@
 environment_name    = "prod"
 github_organization = "glcsolutions-ca"
 github_repository   = "compass"
+github_additional_environment_names = [
+  "production-rehearsal"
+]
 
 api_identifier_uri  = "api://compass-api"
 required_scope_name = "compass.user"

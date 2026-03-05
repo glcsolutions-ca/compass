@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest run stages/shared-tests/validate-release-candidate.test.mjs stages/shared-tests/validate-release-candidate-runtime.test.mjs stages/shared-tests/cli-utils.test.mjs stages/01-commit/tests/generate-release-candidate.test.mjs stages/02-acceptance/tests/deploy-verify-from-manifest.test.mjs stages/02-acceptance/tests/generate-acceptance-attestation-predicate.test.mjs stages/shared-tests/fetch-release-candidate.test.mjs stages/05-release/tests/verify-acceptance-attestation.test.mjs stages/05-release/tests/generate-release-attestation-predicate.test.mjs stages/shared-tests/schema-parity.test.mjs stages/shared-tests/build-candidate-id.test.mjs --silent=passed-only --reporter=dot",
+    "test": "vitest run stages/shared-tests/validate-release-candidate.test.mjs stages/shared-tests/validate-release-candidate-runtime.test.mjs stages/shared-tests/cli-utils.test.mjs stages/01-commit/tests/generate-release-candidate.test.mjs stages/02-acceptance/tests/deploy-verify-from-manifest.test.mjs stages/02-acceptance/tests/generate-acceptance-attestation-predicate.test.mjs stages/04-production-rehearsal/tests/record-production-rehearsal-evidence.test.mjs stages/shared-tests/fetch-release-candidate.test.mjs stages/05-release/tests/deploy-candidate-azure.test.mjs stages/05-release/tests/resolve-blue-green-slot.test.mjs stages/05-release/tests/verify-acceptance-attestation.test.mjs stages/05-release/tests/generate-release-attestation-predicate.test.mjs stages/05-release/tests/verify-candidate-azure.test.mjs stages/05-release/tests/assert-rehearsed-candidate.test.mjs stages/05-release/tests/cleanup-blue-green-revisions.test.mjs stages/shared-tests/schema-parity.test.mjs stages/shared-tests/build-candidate-id.test.mjs --silent=passed-only --reporter=dot",
     "analysis": "node stages/01-commit/scripts/check-complexity.mjs && node stages/01-commit/scripts/check-dependency-cycles.mjs && node stages/01-commit/scripts/generate-commit-analysis-report.mjs",
     "manifest:validate": "node shared/scripts/validate-release-candidate.mjs",
     "manifest:validate:runtime": "node shared/scripts/validate-release-candidate-runtime.mjs",
@@ -17,8 +17,13 @@
     "acceptance:deploy:github": "node stages/02-acceptance/scripts/deploy-candidate-github.mjs",
     "acceptance:verify:github": "node stages/02-acceptance/scripts/verify-candidate-github.mjs",
     "acceptance:predicate:generate": "node stages/02-acceptance/scripts/generate-acceptance-attestation-predicate.mjs",
-    "release:deploy:production": "node stages/05-release/scripts/deploy-production-candidate.mjs",
+    "rehearsal:deploy:production": "node stages/04-production-rehearsal/scripts/deploy-production-rehearsal.mjs",
+    "rehearsal:verify:production": "node stages/04-production-rehearsal/scripts/verify-production-rehearsal.mjs",
+    "rehearsal:evidence:record": "node stages/04-production-rehearsal/scripts/record-production-rehearsal-evidence.mjs",
+    "release:assert-rehearsed": "node stages/05-release/scripts/assert-rehearsed-candidate.mjs",
+    "release:promote:production": "node stages/05-release/scripts/promote-production-candidate.mjs",
     "release:verify:production": "node stages/05-release/scripts/verify-production-candidate.mjs",
+    "release:cleanup:production": "node stages/05-release/scripts/cleanup-production-revisions.mjs",
     "release:predicate:generate": "node stages/05-release/scripts/generate-release-attestation-predicate.mjs"
   }
 }

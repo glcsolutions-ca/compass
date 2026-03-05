@@ -20,6 +20,12 @@ variable "github_environment_name" {
   default     = "production"
 }
 
+variable "github_additional_environment_names" {
+  description = "Additional GitHub environment names allowed for deploy federation"
+  type        = list(string)
+  default     = ["production-rehearsal"]
+}
+
 variable "federated_audience" {
   description = "OIDC audience for GitHub Actions federation"
   type        = string

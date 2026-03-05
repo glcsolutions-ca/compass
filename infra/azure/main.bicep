@@ -287,7 +287,6 @@ module web './modules/containerapp-web.bicep' = {
     registryIdentityResourceId: acrPullIdentity.id
     keyVaultUri: keyVaultUri
     apiBaseUrl: apiBaseUrl
-    webBaseUrl: webBaseUrl
     authMode: authMode
     entraClientId: entraClientId
     entraAllowedTenantIds: entraAllowedTenantIds

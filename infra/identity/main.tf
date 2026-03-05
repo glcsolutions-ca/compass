@@ -1,6 +1,10 @@
 locals {
-  repo_slug      = "${var.github_organization}/${var.github_repository}"
-  deploy_subject = "repo:${local.repo_slug}:environment:${var.github_environment_name}"
+  repo_slug = "${var.github_organization}/${var.github_repository}"
+  deploy_environment_names = distinct([
+    for environment_name in concat([var.github_environment_name], var.github_additional_environment_names) :
+    trimspace(environment_name)
+    if trimspace(environment_name) != ""
+  ])
   normalized_web_custom_domains = distinct([
     for domain in concat(var.web_custom_domains, [var.web_custom_domain]) :
     lower(trimsuffix(trimprefix(trimprefix(trimspace(domain), "https://"), "http://"), "/"))
@@ -27,6 +31,16 @@ locals {
   # Final-proof scratch-drill marker: intentionally non-functional.
   # Post-infra-fix scratch-drill marker: intentionally non-functional.
   # Post-cert-order-fix final-proof marker: intentionally non-functional.
+}
+
+moved {
+  from = azuread_application_federated_identity_credential.deploy_main
+  to   = azuread_application_federated_identity_credential.deploy["production"]
+}
+
+moved {
+  from = azuread_application_federated_identity_credential.smoke_main
+  to   = azuread_application_federated_identity_credential.smoke["production"]
 }
 
 resource "azuread_application" "api" {
@@ -156,20 +170,30 @@ resource "azuread_service_principal" "smoke" {
   owners    = var.owners
 }
 
-resource "azuread_application_federated_identity_credential" "deploy_main" {
+resource "azuread_application_federated_identity_credential" "deploy" {
+  for_each = {
+    for environment_name in local.deploy_environment_names :
+    environment_name => "repo:${local.repo_slug}:environment:${environment_name}"
+  }
+
   application_id = azuread_application.deploy.id
-  display_name   = "github-main-deploy"
+  display_name   = each.key == var.github_environment_name ? "github-main-deploy" : "github-${each.key}-deploy"
   audiences      = [var.federated_audience]
   issuer         = "https://token.actions.githubusercontent.com"
-  subject        = local.deploy_subject
+  subject        = each.value
 }
 
-resource "azuread_application_federated_identity_credential" "smoke_main" {
+resource "azuread_application_federated_identity_credential" "smoke" {
+  for_each = {
+    for environment_name in local.deploy_environment_names :
+    environment_name => "repo:${local.repo_slug}:environment:${environment_name}"
+  }
+
   application_id = azuread_application.smoke.id
-  display_name   = "github-main-smoke"
+  display_name   = each.key == var.github_environment_name ? "github-main-smoke" : "github-${each.key}-smoke"
   audiences      = [var.federated_audience]
   issuer         = "https://token.actions.githubusercontent.com"
-  subject        = local.deploy_subject
+  subject        = each.value
 }
 
 resource "azuread_app_role_assignment" "smoke_timesync_admin" {

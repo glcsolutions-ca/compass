@@ -2,55 +2,43 @@
 
 This folder defines the canonical deployment pipeline model for Compass.
 
-## Minimum Viable Farley 3-Stage Requirements
+## Required 4-Stage Flow
 
 1. One immutable candidate identity per integrated SHA.
 2. One authoritative Commit Stage build that writes that candidate to GHCR.
 3. One acceptance verdict bound to that exact candidate.
-4. One production deployment of that same candidate.
-5. One rollback path to a previously accepted candidate.
-6. Commit Stage runs once per candidate (no duplicate PR run).
-7. Acceptance runs via `workflow_run` from successful Commit Stage.
-8. Release is fully automatic after acceptance success.
-9. Production rehearsal evidence and commit SLO gating are removed.
+4. One production rehearsal of that same candidate at `0%` traffic.
+5. One manual production promotion of that same rehearsed candidate.
+6. One rollback path to a previously accepted candidate.
 
 ## Canonical Flow
 
 ```mermaid
 flowchart TD
-  A["Merge Queue Integrated SHA"] --> B["Commit Stage (single run)"]
-  B --> C["Write Release Unit to GHCR (immutable digest identity)"]
-  B --> D["Attach build provenance/SBOM attestation"]
-
-  C --> E["Acceptance Stage (workflow_run)"]
-  E --> E1{"Guard: SHA is on main?"}
-  E1 -- "No" --> X["Skip stale candidate"]
-  E1 -- "Yes" --> F["Deploy exact GHCR candidate digest"]
-  F --> G["Run acceptance tests"]
-  G --> H["Attach acceptance attestation to same candidate subject"]
-
-  H --> I["Release Stage (auto)"]
-  I --> J["Verify candidate + acceptance attestation"]
-  J --> K["Deploy same candidate to production"]
-  K --> L["Record GitHub deployment status + release attestation"]
-
-  M["Rollback (workflow_dispatch candidate_id)"] --> N["Select prior accepted candidate"]
-  N --> K
+  A["Merge Queue Integrated SHA"] --> B["Commit Stage"]
+  B --> C["Publish immutable candidate to GHCR"]
+  C --> D["Acceptance Stage"]
+  D --> E{"Accepted and still on main?"}
+  E -- "No" --> X["Skip stale candidate"]
+  E -- "Yes" --> F["Production Rehearsal Stage"]
+  F --> G["Deploy API/Web to inactive label at 0%"]
+  G --> H["Smoke inactive URLs"]
+  H --> I["Publish rehearsal URL and evidence"]
+  I --> J["Manual Release Stage"]
+  J --> K["Verify candidate is still rehearsed"]
+  K --> L["Run migrations + deploy worker"]
+  L --> M["Flip label traffic"]
+  M --> N["Smoke production"]
+  N --> O["Deactivate old active revisions"]
+  O --> P["Record release attestation"]
 ```
-
-## What We Actually Need
-
-The pipeline exists to answer one question:
-
-Can we safely release this exact integrated candidate now?
-
-Everything outside that purpose is optional tooling.
 
 ## Stage Order
 
 1. `Commit Stage`
 2. `Acceptance Stage`
-3. `Release Stage`
+3. `Production Rehearsal Stage`
+4. `Release Stage`
 
 ## Queue Admission
 
@@ -58,39 +46,34 @@ Everything outside that purpose is optional tooling.
 
 ## Hardening Baseline
 
-1. Pipeline workflow actions are pinned to full commit SHAs and updated through Dependabot (`.github/dependabot.yml`).
-2. Acceptance and Release intentionally do not use `pnpm` cache in privileged `workflow_run` paths.
-3. Production deployments are restricted to `main` via GitHub environment deployment branch policy.
+1. Pipeline workflow actions are pinned to full commit SHAs and updated through Dependabot.
+2. Privileged downstream stages avoid `pnpm` cache by default.
+3. Production deployments are restricted to `main` via GitHub environment branch policy.
+4. Human promotion approval lives in GitHub Environments.
 
 ## System of Record
 
 GHCR is the canonical artifact and stage-evidence store.
 
-1. Commit Stage publishes runtime artifacts, the release-unit index, and candidate manifest package to GHCR.
-2. Acceptance derives `candidateId=sha-<workflow_run.head_sha>`, fetches and validates the canonical manifest from GHCR, and deploys unchanged digests.
-3. Release does the same (auto mode from triggering Acceptance run, manual mode from `candidate_id` input).
-4. Release promotion is gated by acceptance attestation on the release-unit digest for that candidate.
-5. PR-head queue admission uses a lightweight `Commit Stage` check only; authoritative candidate publication still happens once on `merge_group`.
-
-## Promotion Policy vs Publication Metadata
-
-1. Promotion policy gate: release-unit subject attestation chain (`acceptance` pass required before `release`).
-2. Publication metadata: per-image provenance/SBOM attestations generated at build time.
-3. Promotion decisions use policy attestations; image-level provenance/SBOM remains available for audit and consumer verification.
+1. Commit Stage publishes runtime artifacts, the release-unit index, and the candidate manifest package to GHCR.
+2. Acceptance resolves the candidate from GHCR and attaches acceptance attestation.
+3. Production Rehearsal resolves the same candidate from GHCR and records workflow evidence.
+4. Release resolves the same candidate from GHCR and attaches release attestation.
+5. Promotion is gated by acceptance attestation plus GitHub `production` environment approval.
 
 ## Invariants
 
-1. Build once in `Commit Stage`.
+1. Build once in Commit Stage.
 2. Promote unchanged digest-pinned artifacts.
 3. Candidate identity is `candidateId=sha-<40-char source SHA>`.
-4. Acceptance must fail closed.
-5. Release must fail closed if acceptance attestation is missing or non-pass.
-6. Rollback uses previously accepted candidate identity, not source rebuilds.
+4. API and Web promotion is a traffic switch.
+5. Fast rollback is a traffic switch back.
+6. Durable rollback is re-promoting a previously accepted candidate.
 
 ## Ownership Boundaries
 
 - `.github/workflows` orchestrates CI/CD execution.
-- `pipeline/contracts` defines candidate and attestation predicate contracts.
+- `pipeline/contracts` defines candidate and evidence contracts.
 - `pipeline/shared/scripts` contains reusable mechanics.
-- `pipeline/stages/*` contains stage-specific scripts/tests/runbooks.
-- `pipeline/runbooks` contains operational procedures (including GitHub Actions config cleanup).
+- `pipeline/stages/*` contains stage-specific scripts, tests, and runbooks.
+- `pipeline/runbooks` contains operational procedures.

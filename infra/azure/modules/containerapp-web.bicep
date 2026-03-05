@@ -11,7 +11,6 @@ param registryServer string
 param registryIdentityResourceId string
 param keyVaultUri string
 param apiBaseUrl string
-param webBaseUrl string
 @allowed([
   'mock'
   'entra'
@@ -32,6 +31,49 @@ var entraClientSecretRef = includeEntraClientSecret
       }
     ]
   : []
+var ingressConfig = {
+  external: true
+  targetPort: 3000
+  allowInsecure: false
+  transport: 'auto'
+  customDomains: empty(customDomainName)
+    ? []
+    : [
+        {
+          name: customDomainName
+          bindingType: 'Auto'
+        }
+      ]
+}
+var configuration = {
+  activeRevisionsMode: activeRevisionsMode
+  maxInactiveRevisions: 10
+  ingress: ingressConfig
+  registries: [
+    {
+      server: registryServer
+      identity: registryIdentityResourceId
+    }
+  ]
+  secrets: concat(
+    [
+      {
+        name: 'web-session-secret'
+        keyVaultUrl: '${keyVaultSecretBaseUrl}/web-session-secret'
+        identity: registryIdentityResourceId
+      }
+    ],
+    includeEntraClientSecret
+      ? [
+          {
+            name: 'entra-client-secret'
+            keyVaultUrl: '${keyVaultSecretBaseUrl}/entra-client-secret'
+            identity: registryIdentityResourceId
+          }
+        ]
+      : []
+  )
+}
 
 resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
   name: containerAppName
@@ -44,48 +86,7 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
   }
   properties: {
     managedEnvironmentId: managedEnvironmentId
-    configuration: {
-      activeRevisionsMode: activeRevisionsMode
-      maxInactiveRevisions: 10
-      ingress: {
-        external: true
-        targetPort: 3000
-        allowInsecure: false
-        transport: 'auto'
-        customDomains: empty(customDomainName)
-          ? []
-          : [
-              {
-                name: customDomainName
-                bindingType: 'Auto'
-              }
-            ]
-      }
-      registries: [
-        {
-          server: registryServer
-          identity: registryIdentityResourceId
-        }
-      ]
-      secrets: concat(
-        [
-          {
-            name: 'web-session-secret'
-            keyVaultUrl: '${keyVaultSecretBaseUrl}/web-session-secret'
-            identity: registryIdentityResourceId
-          }
-        ],
-        includeEntraClientSecret
-          ? [
-              {
-                name: 'entra-client-secret'
-                keyVaultUrl: '${keyVaultSecretBaseUrl}/entra-client-secret'
-                identity: registryIdentityResourceId
-              }
-            ]
-          : []
-      )
-    }
+    configuration: configuration
     template: {
       containers: [
         {
@@ -106,16 +107,8 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
                 value: entraClientId
               }
               {
-                name: 'WEB_BASE_URL'
-                value: webBaseUrl
-              }
-              {
                 name: 'ENTRA_ALLOWED_TENANT_IDS'
                 value: entraAllowedTenantIds
-              }
-              {
-                name: 'VITE_API_BASE_URL'
-                value: apiBaseUrl
               }
             ],
             entraClientSecretRef

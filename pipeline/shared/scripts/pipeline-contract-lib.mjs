@@ -52,6 +52,10 @@ export function validateAcceptanceAttestationPredicateDocument(document) {
   return normalizeErrors(validateBySchema("acceptanceAttestationPredicate", document));
 }
 
+export function validateProductionRehearsalEvidenceDocument(document) {
+  return normalizeErrors(validateBySchema("productionRehearsalEvidence", document));
+}
+
 export function validateReleaseAttestationPredicateDocument(document) {
   return normalizeErrors(validateBySchema("releaseAttestationPredicate", document));
 }

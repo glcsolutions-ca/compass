@@ -200,7 +200,7 @@ jobs:
             exit 0
           fi
 
-          pnpm --filter @compass/pipeline-tools run manifest:validate:runtime -- --file "${manifest_file}"
+          pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "${manifest_file}"
 
           candidate_id="$(jq -r '.candidateId // empty' "${manifest_file}")"
           source_revision="$(jq -r '.source.revision // empty' "${manifest_file}")"
@@ -316,7 +316,7 @@ jobs:
             --out "$RUNNER_TEMP/release-candidate.json"
 
       - name: Validate release manifest
-        run: pnpm --filter @compass/pipeline-tools run manifest:validate -- --file "$RUNNER_TEMP/release-candidate.json"
+        run: pnpm --filter @compass/pipeline-tools run manifest:validate --file "$RUNNER_TEMP/release-candidate.json"
 
       - name: Verify manifest matches resolved candidate context
         run: |

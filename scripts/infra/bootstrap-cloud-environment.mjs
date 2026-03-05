@@ -22,6 +22,15 @@ function requireEnv(name) {
   return value;
 }
 
+function readStringParam(source, name) {
+  const pattern = new RegExp(`^\\s*param\\s+${name}\\s*=\\s*'([^']*)'\\s*$`, "m");
+  const match = String(source || "").match(pattern);
+  if (!match) {
+    throw new Error(`Unable to find string param '${name}' in cloud.bicepparam`);
+  }
+  return match[1];
+}
+
 async function az(args, options = {}) {
   const { stdout } = await execFileAsync("az", args, {
     encoding: "utf8",
@@ -34,15 +43,6 @@ async function az(args, options = {}) {
 async function azJson(args) {
   const output = await az([...args, "--output", "json"]);
   return output ? JSON.parse(output) : {};
-}
-
-function readStringParam(source, name) {
-  const pattern = new RegExp(`^param\\s+${name}\\s*=\\s*'([^']*)'\\s*$`, "m");
-  const match = source.match(pattern);
-  if (!match) {
-    throw new Error(`Could not resolve string parameter '${name}' in cloud.bicepparam`);
-  }
-  return match[1];
 }
 
 function sleep(ms) {

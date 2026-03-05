@@ -3,7 +3,7 @@ import {
   buildSlotBaseUrl,
   resolveGlobalActiveLabel,
   resolveInactiveLabel
-} from "../scripts/resolve-blue-green-slot.mjs";
+} from "../../../shared/scripts/azure/blue-green-utils.mjs";
 
 function showWithWeights({ blue = 0, green = 0 } = {}) {
   const traffic = [];

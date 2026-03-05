@@ -2,27 +2,33 @@ import { pathToFileURL } from "node:url";
 import { parseCliArgs, optionalOption, requireOption } from "../cli-utils.mjs";
 import { readJsonFile } from "../pipeline-contract-lib.mjs";
 import { validateReleaseCandidateFile } from "../validate-release-candidate.mjs";
-import { ensureAzLogin, runAz } from "./az-command.mjs";
+import { ensureAzLogin } from "./az-command.mjs";
+import { findLabelTraffic, showContainerApp } from "./blue-green-utils.mjs";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
-function normalizeBoolean(value) {
-  if (value === true) {
-    return true;
-  }
-
-  if (typeof value !== "string") {
-    return false;
-  }
-
-  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+function normalizeBaseUrl(urlString) {
+  return String(urlString || "").replace(/\/$/u, "");
 }
 
-function normalizeBaseUrl(urlString) {
-  return urlString.replace(/\/$/u, "");
+function parseExpectedWeight(value) {
+  if (typeof value === "undefined") {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(String(value).trim(), 10);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+    throw new Error("--slot-weight must be an integer between 0 and 100");
+  }
+
+  return parsed;
 }
 
 function ensureImagePinned(showDocument, expectedImage, appName) {
+  if (!expectedImage) {
+    return;
+  }
+
   const containers = showDocument?.properties?.template?.containers;
   if (!Array.isArray(containers)) {
     throw new Error(`Container app ${appName} has no container template`);
@@ -54,26 +60,34 @@ function ensureZeroTrafficWeight(showDocument, candidateRevision, appName) {
   }
 }
 
-function findLabelTraffic(showDocument, label) {
-  const traffic = showDocument?.properties?.configuration?.ingress?.traffic;
-  if (!Array.isArray(traffic)) {
-    return undefined;
+function assertSlotLabel(showDocument, slotLabel, appName, expectedRevision, expectedWeight) {
+  const slotTraffic = findLabelTraffic(showDocument, slotLabel);
+  if (!slotTraffic?.revisionName) {
+    throw new Error(`Container app ${appName} does not expose slot label '${slotLabel}'`);
   }
 
-  return traffic.find((entry) => entry?.label === label);
+  if (expectedRevision && slotTraffic.revisionName !== expectedRevision) {
+    throw new Error(
+      `Container app ${appName} slot '${slotLabel}' revision mismatch. expected=${expectedRevision} actual=${slotTraffic.revisionName}`
+    );
+  }
+
+  if (typeof expectedWeight === "number" && Number(slotTraffic.weight || 0) !== expectedWeight) {
+    throw new Error(
+      `Container app ${appName} slot '${slotLabel}' has unexpected traffic weight ${Number(slotTraffic.weight || 0)} (expected ${expectedWeight})`
+    );
+  }
 }
 
-function parseExpectedWeight(value) {
-  if (typeof value === "undefined") {
-    return undefined;
-  }
+export function assertBlueGreenLabelWeights({ showDocument, appName, activeLabel, inactiveLabel }) {
+  const activeWeight = Number(findLabelTraffic(showDocument, activeLabel)?.weight || 0);
+  const inactiveWeight = Number(findLabelTraffic(showDocument, inactiveLabel)?.weight || 0);
 
-  const parsed = Number.parseInt(String(value).trim(), 10);
-  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
-    throw new Error("--slot-weight must be an integer between 0 and 100");
+  if (activeWeight !== 100 || inactiveWeight !== 0) {
+    throw new Error(
+      `Container app ${appName} has unexpected label weights ${activeLabel}=${activeWeight} ${inactiveLabel}=${inactiveWeight}`
+    );
   }
-
-  return parsed;
 }
 
 async function assertUrlResponds(url) {
@@ -117,6 +131,14 @@ async function assertEntraStartRedirect({ webBaseUrl, expectedCallbackBaseUrl })
   }
 }
 
+function resolveExpectedImages(deployState) {
+  return {
+    api: deployState?.deployment?.api?.candidateImage ?? "",
+    web: deployState?.deployment?.web?.candidateImage ?? "",
+    worker: deployState?.deployment?.worker?.candidateImage ?? ""
+  };
+}
+
 export async function verifyCandidateAzure({
   manifestPath,
   deployStatePath,
@@ -126,7 +148,7 @@ export async function verifyCandidateAzure({
   workerAppName,
   apiBaseUrl,
   webBaseUrl,
-  zeroTraffic,
+  zeroTraffic = false,
   slotLabel,
   slotWeight
 }) {
@@ -138,88 +160,36 @@ export async function verifyCandidateAzure({
 
   await ensureAzLogin();
 
-  const manifest = await readJsonFile(manifestPath);
-  const deployState = deployStatePath ? await readJsonFile(deployStatePath) : undefined;
   const expectedSlotWeight = parseExpectedWeight(slotWeight);
+  const deployState = deployStatePath ? await readJsonFile(deployStatePath) : undefined;
+  const expectedImages = resolveExpectedImages(deployState);
 
-  const apiShow = await runAz([
-    "containerapp",
-    "show",
-    "--resource-group",
-    resourceGroup,
-    "--name",
-    apiAppName
-  ]);
-  const webShow = await runAz([
-    "containerapp",
-    "show",
-    "--resource-group",
-    resourceGroup,
-    "--name",
-    webAppName
-  ]);
-  const workerShow = await runAz([
-    "containerapp",
-    "show",
-    "--resource-group",
-    resourceGroup,
-    "--name",
-    workerAppName
-  ]);
+  const apiShow = await showContainerApp({ resourceGroup, appName: apiAppName });
+  const webShow = await showContainerApp({ resourceGroup, appName: webAppName });
 
-  const apiExpectedImage =
-    deployState?.deployment?.api?.candidateImage ?? manifest.artifacts.apiImage;
-  const webExpectedImage =
-    deployState?.deployment?.web?.candidateImage ?? manifest.artifacts.webImage;
-  const workerExpectedImage =
-    deployState?.deployment?.worker?.candidateImage ?? manifest.artifacts.workerImage;
+  ensureImagePinned(apiShow, expectedImages.api, apiAppName);
+  ensureImagePinned(webShow, expectedImages.web, webAppName);
 
-  ensureImagePinned(apiShow, apiExpectedImage, apiAppName);
-  ensureImagePinned(webShow, webExpectedImage, webAppName);
-  ensureImagePinned(workerShow, workerExpectedImage, workerAppName);
+  if (workerAppName && expectedImages.worker) {
+    const workerShow = await showContainerApp({ resourceGroup, appName: workerAppName });
+    ensureImagePinned(workerShow, expectedImages.worker, workerAppName);
+  }
 
   if (slotLabel) {
-    const deployment = deployState?.deployment;
-    if (!deployment?.api?.candidateRevision || !deployment?.web?.candidateRevision) {
-      throw new Error("Deploy state candidate revisions are required for slot label verification");
-    }
-
-    const apiSlotTraffic = findLabelTraffic(apiShow, slotLabel);
-    const webSlotTraffic = findLabelTraffic(webShow, slotLabel);
-
-    if (!apiSlotTraffic?.revisionName) {
-      throw new Error(`API app ${apiAppName} does not expose slot label '${slotLabel}'`);
-    }
-
-    if (!webSlotTraffic?.revisionName) {
-      throw new Error(`Web app ${webAppName} does not expose slot label '${slotLabel}'`);
-    }
-
-    if (apiSlotTraffic.revisionName !== deployment.api.candidateRevision) {
-      throw new Error(
-        `API slot '${slotLabel}' revision mismatch. expected=${deployment.api.candidateRevision} actual=${apiSlotTraffic.revisionName}`
-      );
-    }
-
-    if (webSlotTraffic.revisionName !== deployment.web.candidateRevision) {
-      throw new Error(
-        `Web slot '${slotLabel}' revision mismatch. expected=${deployment.web.candidateRevision} actual=${webSlotTraffic.revisionName}`
-      );
-    }
-
-    if (typeof expectedSlotWeight === "number") {
-      if (Number(apiSlotTraffic.weight || 0) !== expectedSlotWeight) {
-        throw new Error(
-          `API slot '${slotLabel}' has unexpected traffic weight ${Number(apiSlotTraffic.weight || 0)} (expected ${expectedSlotWeight})`
-        );
-      }
-
-      if (Number(webSlotTraffic.weight || 0) !== expectedSlotWeight) {
-        throw new Error(
-          `Web slot '${slotLabel}' has unexpected traffic weight ${Number(webSlotTraffic.weight || 0)} (expected ${expectedSlotWeight})`
-        );
-      }
-    }
+    assertSlotLabel(
+      apiShow,
+      slotLabel,
+      apiAppName,
+      deployState?.deployment?.api?.candidateRevision,
+      expectedSlotWeight
+    );
+    assertSlotLabel(
+      webShow,
+      slotLabel,
+      webAppName,
+      deployState?.deployment?.web?.candidateRevision,
+      expectedSlotWeight
+    );
 
     if (!apiBaseUrl || !webBaseUrl) {
       throw new Error("slot label verification requires --api-base-url and --web-base-url");
@@ -231,32 +201,41 @@ export async function verifyCandidateAzure({
       webBaseUrl,
       expectedCallbackBaseUrl: webBaseUrl
     });
-
     return;
   }
 
   if (zeroTraffic) {
-    const deployment = deployState?.deployment;
-    if (!deployment?.api?.candidateRevision || !deployment?.web?.candidateRevision) {
+    const apiRevision = deployState?.deployment?.api?.candidateRevision;
+    const webRevision = deployState?.deployment?.web?.candidateRevision;
+    const apiRevisionFqdn = deployState?.deployment?.api?.candidateRevisionFqdn;
+    const webRevisionFqdn = deployState?.deployment?.web?.candidateRevisionFqdn;
+
+    if (!apiRevision || !webRevision || !apiRevisionFqdn || !webRevisionFqdn) {
       throw new Error(
-        "Deploy state with candidate revisions is required for zero-traffic verification"
+        "Deploy state candidate revisions and revision FQDNs are required for zero-traffic verification"
       );
     }
 
-    ensureZeroTrafficWeight(apiShow, deployment.api.candidateRevision, apiAppName);
-    ensureZeroTrafficWeight(webShow, deployment.web.candidateRevision, webAppName);
-
-    const apiRevisionFqdn = deployment.api.candidateRevisionFqdn;
-    const webRevisionFqdn = deployment.web.candidateRevisionFqdn;
-
-    if (!apiRevisionFqdn || !webRevisionFqdn) {
-      throw new Error("Candidate revision FQDN values are required for zero-traffic verification");
-    }
-
+    ensureZeroTrafficWeight(apiShow, apiRevision, apiAppName);
+    ensureZeroTrafficWeight(webShow, webRevision, webAppName);
     await assertUrlResponds(`https://${apiRevisionFqdn.replace(/\/$/u, "")}/health`);
     await assertUrlResponds(`https://${webRevisionFqdn.replace(/\/$/u, "")}/`);
-
     return;
+  }
+
+  if (deployState?.blueGreen?.enabled) {
+    assertBlueGreenLabelWeights({
+      showDocument: apiShow,
+      appName: apiAppName,
+      activeLabel: deployState.blueGreen.activeLabel,
+      inactiveLabel: deployState.blueGreen.inactiveLabel
+    });
+    assertBlueGreenLabelWeights({
+      showDocument: webShow,
+      appName: webAppName,
+      activeLabel: deployState.blueGreen.activeLabel,
+      inactiveLabel: deployState.blueGreen.inactiveLabel
+    });
   }
 
   if (apiBaseUrl) {
@@ -265,6 +244,10 @@ export async function verifyCandidateAzure({
 
   if (webBaseUrl) {
     await assertUrlResponds(`${normalizeBaseUrl(webBaseUrl)}/`);
+    await assertEntraStartRedirect({
+      webBaseUrl,
+      expectedCallbackBaseUrl: webBaseUrl
+    });
   }
 }
 
@@ -277,15 +260,13 @@ export async function main(argv = process.argv.slice(2)) {
     resourceGroup: requireOption(options, "resource-group"),
     apiAppName: requireOption(options, "api-app-name"),
     webAppName: requireOption(options, "web-app-name"),
-    workerAppName: requireOption(options, "worker-app-name"),
+    workerAppName: optionalOption(options, "worker-app-name"),
     apiBaseUrl: optionalOption(options, "api-base-url"),
     webBaseUrl: optionalOption(options, "web-base-url"),
-    zeroTraffic: normalizeBoolean(options["zero-traffic"]),
+    zeroTraffic: options["zero-traffic"] === true,
     slotLabel: optionalOption(options, "slot-label"),
     slotWeight: optionalOption(options, "slot-weight")
   });
-
-  console.info("Azure candidate verification passed.");
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {

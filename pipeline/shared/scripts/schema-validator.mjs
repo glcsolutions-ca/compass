@@ -18,6 +18,9 @@ const SCHEMAS = {
   acceptanceAttestationPredicate: loadSchema(
     "pipeline/contracts/schemas/acceptance-attestation-predicate.schema.json"
   ),
+  productionRehearsalEvidence: loadSchema(
+    "pipeline/contracts/schemas/production-rehearsal-evidence.schema.json"
+  ),
   releaseAttestationPredicate: loadSchema(
     "pipeline/contracts/schemas/release-attestation-predicate.schema.json"
   )
@@ -32,6 +35,7 @@ addFormats(ajv);
 const VALIDATORS = {
   releaseCandidate: ajv.compile(SCHEMAS.releaseCandidate),
   acceptanceAttestationPredicate: ajv.compile(SCHEMAS.acceptanceAttestationPredicate),
+  productionRehearsalEvidence: ajv.compile(SCHEMAS.productionRehearsalEvidence),
   releaseAttestationPredicate: ajv.compile(SCHEMAS.releaseAttestationPredicate)
 };
 

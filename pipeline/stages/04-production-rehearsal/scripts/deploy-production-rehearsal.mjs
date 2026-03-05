@@ -2,7 +2,7 @@ import { pathToFileURL } from "node:url";
 import { optionalOption, parseCliArgs, requireOption } from "../../../shared/scripts/cli-utils.mjs";
 import { deployCandidateAzure } from "../../../shared/scripts/azure/deploy-candidate-azure.mjs";
 
-export async function deployProductionCandidate({
+export async function deployProductionRehearsal({
   manifestPath,
   resourceGroup,
   apiAppName,
@@ -10,7 +10,6 @@ export async function deployProductionCandidate({
   workerAppName,
   migrationsJobName,
   outPath,
-  zeroTraffic,
   activeLabel,
   inactiveLabel,
   apiFqdn,
@@ -28,7 +27,6 @@ export async function deployProductionCandidate({
     workerAppName,
     migrationsJobName,
     outPath,
-    zeroTraffic,
     activeLabel,
     inactiveLabel,
     apiFqdn,
@@ -36,14 +34,18 @@ export async function deployProductionCandidate({
     acrName,
     acrLoginServer,
     sourceRegistryUsername,
-    sourceRegistryPassword
+    sourceRegistryPassword,
+    deployApi: true,
+    deployWeb: true,
+    deployWorker: false,
+    runMigrations: false
   });
 }
 
 export async function main(argv = process.argv.slice(2)) {
   const options = parseCliArgs(argv);
 
-  await deployProductionCandidate({
+  await deployProductionRehearsal({
     manifestPath: requireOption(options, "manifest"),
     resourceGroup: requireOption(options, "resource-group"),
     apiAppName: requireOption(options, "api-app-name"),
@@ -51,11 +53,10 @@ export async function main(argv = process.argv.slice(2)) {
     workerAppName: requireOption(options, "worker-app-name"),
     migrationsJobName: requireOption(options, "migrations-job-name"),
     outPath: requireOption(options, "out"),
-    zeroTraffic: options["zero-traffic"] === true,
-    activeLabel: optionalOption(options, "active-label"),
-    inactiveLabel: optionalOption(options, "inactive-label"),
-    apiFqdn: optionalOption(options, "api-fqdn"),
-    webFqdn: optionalOption(options, "web-fqdn"),
+    activeLabel: requireOption(options, "active-label"),
+    inactiveLabel: requireOption(options, "inactive-label"),
+    apiFqdn: requireOption(options, "api-fqdn"),
+    webFqdn: requireOption(options, "web-fqdn"),
     acrName: optionalOption(options, "acr-name"),
     acrLoginServer: optionalOption(options, "acr-login-server"),
     sourceRegistryUsername: optionalOption(options, "source-registry-username"),

@@ -2,95 +2,77 @@
 
 ## Purpose
 
-Release Stage promotes an accepted candidate to production without rebuilding.
+Release Stage manually promotes an already rehearsed candidate to production without rebuilding API or Web.
 
-Workflow: `.github/workflows/03-release-stage.yml`.
-
-## Hardening Notes
-
-1. Workflow actions are SHA-pinned and updated by Dependabot.
-2. Release intentionally avoids `pnpm` cache in this privileged stage.
-3. Production environment deployment branch policy is `main` only.
+Workflow: `.github/workflows/05-release-stage.yml`.
 
 ## Release Rules
 
-1. Automatic release trigger is successful Acceptance Stage completion.
-2. Manual rollback/redeploy trigger is `workflow_dispatch` with `candidate_id`.
-3. Auto mode resolves candidate identity from triggering `workflow_run.head_sha` and canonical GHCR manifest.
-4. Stale candidates whose source revision is not on `main` are skipped.
-5. Candidate manifest must validate before deploy.
-6. Acceptance attestation must exist for candidate subject and `verdict=pass` (verified with `gh attestation verify` plus candidate/business-rule checks).
-7. Production deploy uses exact candidate artifacts from GHCR.
-8. Release resolves blue/green slot state, deploys candidate to the inactive slot label (`blue|green`) at `0%` traffic, then runs inactive-slot smoke checks.
-9. Release promotes by switching label traffic to `inactive=100 active=0` for both API and Web.
-10. Post-promotion production smoke checks must pass.
-11. On post-promotion smoke failure, release attempts automatic rollback by flipping traffic back to the previous active label.
+1. Release is manual only: `workflow_dispatch` with `candidate_id`.
+2. GitHub `production` environment approval is the human promotion gate.
+3. Candidate manifest must validate before deploy.
+4. Acceptance attestation must exist for the same candidate subject with `verdict=pass`.
+5. Release must verify the requested candidate is still rehearsed on the inactive label.
+6. Release reruns inactive-slot smoke before production mutation.
+7. Release runs migrations before traffic shift.
+8. Release deploys worker before traffic shift.
+9. Release promotes by flipping API and Web label traffic to the rehearsed label.
+10. Release then runs production smoke checks.
+11. Release deactivates old active API and Web revisions so only blue and green remain active.
 12. Release records GitHub deployment status and release attestation.
 
 ## Rollback Rules
 
-1. Rollback means redeploying a previously accepted candidate.
-2. Rollback uses label traffic reversal first (fast path), then candidate redeploy only if needed.
-3. No source rebuild is allowed for rollback.
+1. Fast rollback is API/Web label traffic reversal.
+2. Fast rollback is only valid until the next rehearsal overwrites the inactive label.
+3. Worker rollback is not covered by label reversal.
+4. Durable rollback is: rehearse a prior accepted candidate, then promote it.
+5. No source rebuild is allowed for rollback.
 
-## Blue/Green Slot Baseline
+## Blue/Green Rules
 
 1. Release labels are `blue` and `green`.
-2. Release resolves the currently active label from API/Web traffic weights.
-3. If labels are missing, release bootstraps baseline labels by assigning the active label to the currently serving revision and enforcing `active=100`.
-4. Candidate deploy always targets the inactive label before promotion.
+2. Rehearsal always targets the inactive label at `0%`.
+3. Release always promotes the rehearsed inactive label to `100%`.
+4. Cleanup must leave exactly two active revisions per app: one behind `blue`, one behind `green`.
 
 ## Entra Redirect URI Checklist
 
-1. Ensure Terraform `web_custom_domains` is set in `infra/identity/env/prod.tfvars`.
-2. Ensure Terraform `web_containerapp_fqdn` is set in `infra/identity/env/prod.tfvars`.
-3. Apply `infra/identity` before enabling production blue/green release.
-4. Confirm Entra web app redirect URIs include:
-   - One callback for each custom domain in `web_custom_domains`
-   - `https://<web_app_name>---blue.<containerapps_env_domain>/v1/auth/entra/callback`
-   - `https://<web_app_name>---green.<containerapps_env_domain>/v1/auth/entra/callback`
-5. If SSO smoke fails with `AADSTS50011`, verify redirect URI list first.
+1. `infra/identity` must include slot callback URIs for `blue` and `green`.
+2. All custom domains must be present in `web_custom_domains`.
+3. If SSO smoke fails with `AADSTS50011`, verify the Entra redirect URI list first.
 
-## Domain Onboarding Checklist
-
-1. Add the web domain to your ACA custom-domain binding process for production web ingress.
-2. Apply `infra/identity` before enabling production blue/green release.
-3. Add the domain to `web_custom_domains` in `infra/identity/env/prod.tfvars`.
-4. Run `terraform -chdir=infra/identity plan` and `terraform -chdir=infra/identity apply`.
-5. Smoke `GET https://<new-domain>/v1/auth/entra/start` and confirm Entra authorize URL uses `redirect_uri=https://<new-domain>/v1/auth/entra/callback`.
-
-## Manual Promotion / Rollback Commands
+## Fast Rollback Commands
 
 ```bash
-# Promote inactive slot to active (example: promote green)
-az containerapp ingress traffic set \
-  --resource-group "$AZURE_RESOURCE_GROUP" \
-  --name "$ACA_API_APP_NAME" \
-  --label-weight green=100 blue=0
-az containerapp ingress traffic set \
-  --resource-group "$AZURE_RESOURCE_GROUP" \
-  --name "$ACA_WEB_APP_NAME" \
-  --label-weight green=100 blue=0
-
-# Roll back to prior active slot (example: restore blue)
 az containerapp ingress traffic set \
   --resource-group "$AZURE_RESOURCE_GROUP" \
   --name "$ACA_API_APP_NAME" \
   --label-weight blue=100 green=0
+
 az containerapp ingress traffic set \
   --resource-group "$AZURE_RESOURCE_GROUP" \
   --name "$ACA_WEB_APP_NAME" \
   --label-weight blue=100 green=0
 ```
 
+Swap `blue` and `green` as needed for the current incident.
+
+## Durable Rollback Steps
+
+1. Identify the previous accepted `candidate_id`.
+2. Manually run `.github/workflows/04-production-rehearsal-stage.yml` with that `candidate_id`.
+3. Validate the rehearsal URL.
+4. Manually run `.github/workflows/05-release-stage.yml` with that `candidate_id`.
+
 ## Minimum Operational Checklist
 
 1. Candidate manifest fetched and validated.
 2. Acceptance attestation verified.
-3. Deploy and smoke checks executed.
-4. Deployment status and release attestation recorded.
-
-## Non-Goals
-
-1. No production rehearsal gate in the required release path.
-2. No commit-stage SLO gate participation in release decisions.
+3. Candidate confirmed as the currently rehearsed inactive label.
+4. Inactive-slot smoke checks executed.
+5. Migrations completed.
+6. Worker deployed.
+7. Production smoke checks executed.
+8. Cleanup completed so only blue and green remain active.
+9. Release attestation recorded.

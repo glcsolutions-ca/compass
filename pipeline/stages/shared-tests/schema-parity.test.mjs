@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   validateAcceptanceAttestationPredicateDocument,
+  validateProductionRehearsalEvidenceDocument,
   validateReleaseCandidateDocument,
   validateReleaseAttestationPredicateDocument
 } from "../../shared/scripts/pipeline-contract-lib.mjs";
@@ -51,6 +52,29 @@ describe("schema parity", () => {
     const helperValid = validateAcceptanceAttestationPredicateDocument(attestation).length === 0;
     const schemaValid =
       validateBySchema("acceptanceAttestationPredicate", attestation).length === 0;
+    expect(helperValid).toBe(schemaValid);
+  });
+
+  it("keeps rehearsal evidence helper verdict parity with schema validator", () => {
+    const evidence = {
+      schemaVersion: "production-rehearsal-evidence.v1",
+      candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      workflowRunId: "123456",
+      rehearsedAt: "2026-03-03T18:28:12Z",
+      verdict: "pass",
+      environment: "production-rehearsal",
+      activeLabel: "green",
+      inactiveLabel: "blue",
+      apiBaseUrl: "https://ca-compass-api-prd-cc-02---blue.example.com",
+      webBaseUrl: "https://ca-compass-web-prd-cc-02---blue.example.com",
+      apiRevision: "ca-compass-api-prd-cc-02--api-aaaaaaaaaaaaaaaaaaaaaaaa",
+      webRevision: "ca-compass-web-prd-cc-02--web-aaaaaaaaaaaaaaaaaaaaaaaa",
+      summary: "deploy=0 verify=0"
+    };
+
+    const helperValid = validateProductionRehearsalEvidenceDocument(evidence).length === 0;
+    const schemaValid = validateBySchema("productionRehearsalEvidence", evidence).length === 0;
     expect(helperValid).toBe(schemaValid);
   });
 

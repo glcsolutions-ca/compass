@@ -6,6 +6,12 @@ export function parseCliArgs(argv = process.argv.slice(2)) {
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
 
+    // pnpm forwards script arguments as: node script -- --flag value
+    // Treat standalone separators as no-op so downstream options still parse.
+    if (token === "--") {
+      continue;
+    }
+
     if (!token.startsWith("--")) {
       parsed._.push(token);
       continue;

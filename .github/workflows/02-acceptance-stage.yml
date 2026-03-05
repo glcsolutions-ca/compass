@@ -322,6 +322,14 @@ jobs:
           predicate-path: .artifacts/attestations/acceptance-predicate.json
           push-to-registry: true
 
+      - name: Upload release candidate handoff for Release Stage
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: release-candidate-manifest
+          path: ${{ runner.temp }}/release-candidate.json
+          if-no-files-found: error
+          retention-days: 3
+
       - name: Upload acceptance diagnostics on failure
         if: ${{ !cancelled() && (failure() || steps.acceptance_run.outputs.verdict != 'pass') }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0

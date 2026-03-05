@@ -454,6 +454,21 @@ jobs:
 
           mkdir -p .artifacts/release
 
+          set_label_traffic() {
+            local app_name="$1"
+            local primary_label="$2"
+            local primary_weight="$3"
+            local secondary_label="$4"
+            local secondary_weight="$5"
+
+            az containerapp ingress traffic set \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$app_name" \
+              --label-weight \
+                "${primary_label}=${primary_weight}" \
+                "${secondary_label}=${secondary_weight}"
+          }
+
           pnpm --filter @compass/pipeline-tools run release:deploy:production -- \
             --manifest "$RUNNER_TEMP/release-candidate.json" \
             --resource-group "$AZURE_RESOURCE_GROUP" \

@@ -306,9 +306,10 @@ jobs:
 
       - name: Generate release attestation predicate
         run: |
-          mkdir -p .artifacts/attestations
+          predicate_path="${GITHUB_WORKSPACE}/.artifacts/attestations/release-predicate.json"
+          mkdir -p "$(dirname "$predicate_path")"
           pnpm --filter @compass/pipeline-tools run release:predicate:generate -- \
-            --out .artifacts/attestations/release-predicate.json \
+            --out "$predicate_path" \
             --candidate-id "${{ needs.resolve_candidate.outputs.candidate_id }}" \
             --source-revision "${{ needs.resolve_candidate.outputs.source_revision }}" \
             --verdict pass \
@@ -329,7 +330,7 @@ jobs:
           subject-name: ${{ env.RELEASE_UNITS_REPO }}
           subject-digest: ${{ steps.release_unit.outputs.release_unit_digest }}
           predicate-type: ${{ env.RELEASE_PREDICATE_TYPE }}
-          predicate-path: .artifacts/attestations/release-predicate.json
+          predicate-path: ${{ github.workspace }}/.artifacts/attestations/release-predicate.json
           push-to-registry: true
 
       - name: Upload release diagnostics

@@ -1,15 +1,7 @@
-name: Development Pipeline
-run-name: ${{ github.event_name == 'workflow_dispatch' && format('Development Pipeline (recovery {0})', inputs.candidate_id) || format('Development Pipeline ({0})', github.sha) }}
+name: Cloud Development Pipeline
+run-name: ${{ github.event_name == 'workflow_dispatch' && format('Cloud Development Pipeline (recovery {0})', inputs.candidate_id) || format('Cloud Development Pipeline ({0})', github.sha) }}
 
 on:
-  pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
   merge_group:
     types:
       - checks_requested
@@ -34,46 +26,10 @@ env:
   RELEASE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/release/v2
 
 concurrency:
-  group: development-pipeline-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && inputs.candidate_id || github.sha }}
+  group: cloud-development-pipeline-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && inputs.candidate_id || github.sha }}
   cancel-in-progress: false
 
 jobs:
-  queue_admission:
-    name: Queue Admission
-    if: ${{ github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: 22
-
-      - name: Install actionlint
-        run: |
-          install_dir="$RUNNER_TEMP/actionlint-bin"
-          mkdir -p "$install_dir"
-          (
-            cd "$install_dir"
-            curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash \
-              | bash -s -- 1.7.8
-          )
-          echo "$install_dir" >> "$GITHUB_PATH"
-
-      - name: Workflow lint
-        run: actionlint
-
-      - name: Validate Bicep templates
-        run: node scripts/dev/validate-bicep-templates.mjs
-
-      - name: Audit retired references
-        run: node scripts/dev/audit-legacy-references.mjs
-
   commit_code_gate:
     name: Commit Stage / Code Gate
     if: ${{ github.event_name == 'merge_group' }}
@@ -801,7 +757,6 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     needs:
-      - queue_admission
       - commit_code_gate
       - commit_pipeline_gate
       - build_candidate_images
@@ -813,7 +768,6 @@ jobs:
       - name: Assert expected path succeeded
         env:
           EVENT_NAME: ${{ github.event_name }}
-          QUEUE_ADMISSION: ${{ needs.queue_admission.result }}
           COMMIT_CODE_GATE: ${{ needs.commit_code_gate.result }}
           COMMIT_PIPELINE_GATE: ${{ needs.commit_pipeline_gate.result }}
           BUILD_CANDIDATE_IMAGES: ${{ needs.build_candidate_images.result }}
@@ -834,9 +788,6 @@ jobs:
           }
 
           case "$EVENT_NAME" in
-            pull_request)
-              assert_success "queue_admission" "$QUEUE_ADMISSION"
-              ;;
             merge_group)
               assert_success "commit_code_gate" "$COMMIT_CODE_GATE"
               assert_success "commit_pipeline_gate" "$COMMIT_PIPELINE_GATE"
@@ -859,9 +810,7 @@ jobs:
         run: |
           {
             echo '## Pipeline Complete'
-            if [ "${{ github.event_name }}" = 'pull_request' ]; then
-              echo '- Queue Admission: pass'
-            elif [ "${{ github.event_name }}" = 'workflow_dispatch' ]; then
+            if [ "${{ github.event_name }}" = 'workflow_dispatch' ]; then
               echo '- Recovery Candidate Resolution: pass'
               echo '- Release Stage: pass'
               echo "- Release elapsed: ${{ needs.release.outputs.duration_seconds }}s"

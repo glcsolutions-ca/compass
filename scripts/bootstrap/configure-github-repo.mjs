@@ -9,6 +9,7 @@ import { loadProductionConfig } from "../infra/platform-config.mjs";
 const execFileAsync = promisify(execFile);
 const ENTRA_OUTPUT_PATH = path.resolve("bootstrap/.artifacts/entra-apps.json");
 const ENVIRONMENTS_CONFIG_PATH = path.resolve("bootstrap/config/github-environments.json");
+const LABELS_CONFIG_PATH = path.resolve("bootstrap/config/github-labels.json");
 const RULESET_CONFIG_PATH = path.resolve("bootstrap/config/repository-rules.json");
 
 async function gh(args, { input } = {}) {
@@ -74,6 +75,51 @@ async function configureRuleset(repository, ruleset, apply) {
   await withTempJson("compass-gh-ruleset-", ruleset, (inputPath) =>
     gh(["api", "--method", method, endpoint, "--input", inputPath])
   );
+}
+
+async function configureLabels(repository, labels, apply) {
+  const existingLabels = JSON.parse(
+    (await gh(["label", "list", "--repo", repository, "--json", "name,color,description"])) || "[]"
+  );
+  const existingByName = new Map(existingLabels.map((entry) => [entry.name, entry]));
+
+  for (const label of labels) {
+    const current = existingByName.get(label.name);
+    const desiredColor = String(label.color || "")
+      .replace(/^#/, "")
+      .trim();
+    const desiredDescription = String(label.description || "").trim();
+    const currentColor = String(current?.color || "")
+      .replace(/^#/, "")
+      .trim();
+    const currentDescription = String(current?.description || "").trim();
+    const needsUpdate =
+      !current ||
+      currentColor.toLowerCase() !== desiredColor.toLowerCase() ||
+      currentDescription !== desiredDescription;
+
+    if (!needsUpdate) {
+      continue;
+    }
+
+    if (!apply) {
+      console.info(`[check] ensure label ${label.name}`);
+      continue;
+    }
+
+    await gh([
+      "label",
+      "create",
+      label.name,
+      "--repo",
+      repository,
+      "--color",
+      desiredColor,
+      "--description",
+      desiredDescription,
+      "--force"
+    ]);
+  }
 }
 
 async function configureEnvironment(repository, environmentConfig, apply) {
@@ -232,6 +278,7 @@ export async function configureGithubRepo({ apply = false } = {}) {
   const config = await loadProductionConfig();
   const entra = await readJson(ENTRA_OUTPUT_PATH);
   const environmentsConfig = await readJson(ENVIRONMENTS_CONFIG_PATH);
+  const labelsConfig = await readJson(LABELS_CONFIG_PATH);
   const rulesetConfig = await readJson(RULESET_CONFIG_PATH);
   const environmentConfig = (environmentsConfig.environments || []).find(
     (entry) => entry.name === config.githubEnvironment
@@ -241,6 +288,7 @@ export async function configureGithubRepo({ apply = false } = {}) {
     throw new Error(`No GitHub environment config found for ${config.githubEnvironment}`);
   }
 
+  await configureLabels(config.repository, labelsConfig.labels || [], apply);
   await configureMergeSettings(config.repository, rulesetConfig.merge_settings, apply);
   await configureRuleset(config.repository, rulesetConfig.main_ruleset, apply);
   await configureEnvironment(config.repository, environmentConfig, apply);

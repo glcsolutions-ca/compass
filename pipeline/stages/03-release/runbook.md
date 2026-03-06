@@ -8,12 +8,12 @@ Release takes an accepted candidate and deploys it to production before GitHub a
 
 Normal delivery:
 
-- `merge_group` inside `01 Development Pipeline`
+- `merge_group` inside `01 Cloud Development Pipeline`
 
 Manual recovery redeploy:
 
 ```sh
-gh workflow run 01-development-pipeline.yml --ref main -f candidate_id=sha-<previous-released-candidate>
+gh workflow run 01-cloud-development-pipeline.yml --ref main -f candidate_id=sha-<previous-released-candidate>
 ```
 
 ## Sequence
@@ -61,7 +61,7 @@ Manual recovery redeploy is a rare fallback. It is only supported for a previous
 Use the unified development pipeline with a previously released candidate:
 
 ```sh
-gh workflow run 01-development-pipeline.yml --ref main -f candidate_id=sha-<previous-released-candidate>
+gh workflow run 01-cloud-development-pipeline.yml --ref main -f candidate_id=sha-<previous-released-candidate>
 ```
 
 That redeploys the previous API and Web artifacts through the same stage -> prod flow used by a normal release, but with the stateful mutation steps removed:

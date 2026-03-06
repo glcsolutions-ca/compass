@@ -34,5 +34,6 @@ Bootstrap is a manual admin workflow. It creates the control plane and the initi
 
 - `ensure-entra-apps.mjs --reset-web-client-secret` writes the generated web client secret to `bootstrap/.artifacts/entra-apps.json` so it can be seeded into Key Vault.
 - `bootstrap/.artifacts` is local-only and ignored by git.
+- `configure-github-repo.mjs` also ensures the repository labels required by `.github/labeler.yml` exist.
 - GitHub currently exposes container package visibility changes through the UI. The bootstrap path treats public GHCR package visibility as a one-time admin action and verifies it in CI/CD.
 - The real delivery pipeline runs only after a change is added to the GitHub merge queue.

@@ -1,0 +1,55 @@
+scope:infra:
+  - changed-files:
+      - any-glob-to-any-file:
+          - infra/azure/**
+          - infra/azure/environments/**
+          - bootstrap/config/production.json
+          - scripts/bootstrap/**
+
+scope:runtime-api-web:
+  - changed-files:
+      - any-glob-to-any-file:
+          - apps/api/**
+          - apps/web/**
+          - db/**
+          - tests/acceptance/**
+
+scope:packages:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/**
+
+scope:docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - README.md
+          - AGENTS.md
+          - bootstrap/README.md
+          - pipeline/**/*.md
+          - infra/**/*.md
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/workflows/**
+          - .github/actions/**
+          - pipeline/**
+          - scripts/dev/**
+
+risk:pipeline:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/workflows/**
+          - .github/actions/**
+          - pipeline/**
+          - scripts/bootstrap/configure-github-repo.mjs
+
+risk:high:
+  - changed-files:
+      - any-glob-to-any-file:
+          - infra/azure/**
+          - db/migrations/**
+          - scripts/bootstrap/ensure-entra-apps.mjs
+          - scripts/bootstrap/configure-web-domain.mjs
+          - bootstrap/config/production.json
+          - infra/azure/environments/production.parameters.json

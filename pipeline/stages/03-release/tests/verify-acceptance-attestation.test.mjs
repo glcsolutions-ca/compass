@@ -1,9 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { findPassingAcceptanceAttestation } from "../scripts/verify-acceptance-attestation.mjs";
+import {
+  findPassingAcceptanceAttestation,
+  normalizeOciSubject
+} from "../scripts/verify-acceptance-attestation.mjs";
 
 const predicateType = "https://compass.glcsolutions.ca/pipeline/attestations/acceptance/v1";
 
 describe("verify-acceptance-attestation", () => {
+  it("normalizes plain OCI subjects", () => {
+    expect(
+      normalizeOciSubject(
+        "ghcr.io/glcsolutions-ca/compass-release-units@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      )
+    ).toBe(
+      "oci://ghcr.io/glcsolutions-ca/compass-release-units@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    );
+  });
+
   it("finds a matching pass attestation", () => {
     const entries = [
       {

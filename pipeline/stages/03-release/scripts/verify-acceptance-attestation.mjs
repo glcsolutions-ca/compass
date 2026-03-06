@@ -35,13 +35,20 @@ export function findPassingAcceptanceAttestation(entries, options) {
   );
 }
 
+export function normalizeOciSubject(subject) {
+  if (typeof subject !== "string" || subject.length === 0) {
+    throw new Error("Attestation subject must be a non-empty string.");
+  }
+  return subject.startsWith("oci://") ? subject : `oci://${subject}`;
+}
+
 async function loadVerificationEntries(options) {
   const verificationJsonPath = optionalOption(options, "verification-json");
   if (verificationJsonPath) {
     return readJsonFile(verificationJsonPath);
   }
 
-  const subject = requireOption(options, "subject");
+  const subject = normalizeOciSubject(requireOption(options, "subject"));
   const repo = requireOption(options, "repo");
   const predicateType = requireOption(options, "predicate-type");
   const signerWorkflow = optionalOption(options, "signer-workflow");

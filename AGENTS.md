@@ -53,3 +53,10 @@ The current target architecture is:
 - Treat `scripts/bootstrap/*` as admin-only control-plane tooling.
 - Treat `pipeline` as the source of truth for delivery policy and evidence.
 - Treat merge queue as the native entry point to the real development pipeline.
+- Treat `check:commit` as the deployed-surface gate only:
+  - `api`
+  - `web`
+  - `db-tools`
+  - `contracts`
+  - `sdk`
+- Treat non-deployed code such as `apps/worker` as out of the required merge-queue path unless it is brought back into deploy scope.

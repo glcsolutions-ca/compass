@@ -8,7 +8,6 @@ function runEslint(maxComplexity) {
     "eslint",
     "apps/api/src",
     "apps/web/app",
-    "apps/worker/src",
     "--ext",
     ".ts,.tsx",
     "--max-warnings=0",

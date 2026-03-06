@@ -31,6 +31,22 @@ Commit is split into parallel jobs:
 
 The candidate is published only after both gates pass.
 
+## Scope
+
+The required merge-queue commit gate covers the deployed surface only:
+
+- `api`
+- `web`
+- `db-tools`
+- `contracts`
+- `sdk`
+
+Non-deployed code such as `apps/worker` is intentionally out of the required path.
+
 ## Operational rule
 
 Developers should treat Commit as the first hard gate and wait for it before assuming the change is releasable.
+
+## Reporting target
+
+Commit Stage should normally complete within `3m` on a no-drama merge-queue run.

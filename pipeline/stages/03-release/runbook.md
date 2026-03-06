@@ -36,6 +36,8 @@ Stage smoke must therefore stay read-only.
 
 The Entra auth-start smoke runs after migrations because OIDC request persistence depends on the migrated database schema.
 
+Stage apps intentionally remain at `minReplicas=0` for cost control. Release therefore accepts cold-start latency instead of adding stage warm-up orchestration.
+
 ## Rollback
 
 Rollback means rerunning Release with a previous accepted `candidate_id`.
@@ -72,6 +74,10 @@ Observed timings:
 
 - rollback redeploy run `22771878458`: `2026-03-06T16:18:18Z` -> `2026-03-06T16:22:36Z` (`4m18s`)
 - restore run `22772072080`: `2026-03-06T16:23:28Z` -> `2026-03-06T16:28:00Z` (`4m32s`)
+
+## Reporting target
+
+Normal no-infra-change Release should normally complete within `3m45s`.
 
 ### Operational note
 

@@ -10,13 +10,32 @@ A lightweight `Queue Admission` job runs on `pull_request` only to satisfy GitHu
 
 Runs first, on integrated merge-queue code.
 
+The required commit gate is intentionally scoped to the deployed surface:
+
+- `api`
+- `web`
+- `db-tools`
+- `contracts`
+- `sdk`
+
+Non-deployed code such as `apps/worker` stays in the repo but is out of the required merge-queue path.
+
 ### `Acceptance Stage`
 
 Runs second, against the exact candidate produced by Commit.
 
+Acceptance remains smoke-only on the required path:
+
+- one system smoke
+- one browser smoke
+
+Broader exploratory or regression journeys belong outside the required merge-queue flow.
+
 ### `Release Stage`
 
 Runs third, deploying the exact accepted candidate to Azure before `main` advances.
+
+Stage apps stay at `minReplicas=0` for cost control, so Release still accepts the cold-start tradeoff instead of adding warm-up orchestration.
 
 ## Workflow topology
 
@@ -45,3 +64,14 @@ The key rule is:
 - long-lived ACA app pairs for stage/prod
 - automatic release after Acceptance success on merge queue
 - rollback by prior-candidate redeploy
+
+## Stage budgets
+
+Current reporting targets:
+
+- Commit Stage: `<= 3m`
+- Acceptance Stage: `<= 1m30s`
+- Release Stage (no infra change): `<= 3m45s`
+- total merge-group pipeline: `<= 7m30s`
+
+These are visibility targets, not merge-blocking SLOs.

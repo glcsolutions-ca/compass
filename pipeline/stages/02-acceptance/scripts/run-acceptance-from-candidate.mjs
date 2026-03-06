@@ -78,6 +78,15 @@ async function captureLogs(outputDir, containers) {
   }
 }
 
+async function prefetchCandidateImages(manifest) {
+  const images = [
+    manifest.artifacts.apiImage,
+    manifest.artifacts.webImage,
+    manifest.artifacts.migrationsArtifact
+  ];
+  await Promise.all(images.map((image) => run("docker", ["pull", image])));
+}
+
 export async function runAcceptanceFromCandidate({ manifestPath, outputDir }) {
   const manifest = await readJsonFile(manifestPath);
   const network = `compass-acceptance-${Date.now()}`;
@@ -88,6 +97,7 @@ export async function runAcceptanceFromCandidate({ manifestPath, outputDir }) {
   const diagnosticsDir = path.resolve(outputDir);
 
   await mkdir(diagnosticsDir, { recursive: true });
+  await prefetchCandidateImages(manifest);
   await run("docker", ["network", "create", network]);
 
   try {

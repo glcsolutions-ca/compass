@@ -5,7 +5,7 @@
 A release candidate is identified as:
 
 ```text
-sha-<40-character-main-commit-sha>
+sha-<40-character-merge-group-sha>
 ```
 
 The candidate is immutable after Commit Stage publication.
@@ -22,9 +22,9 @@ Each candidate manifest contains digest-pinned references for:
 
 The required promotion path is:
 
-1. `01 Commit Stage`
-2. `02 Acceptance Stage`
-3. `03 Release Stage`
+1. `Commit Stage`
+2. `Acceptance Stage`
+3. `Release Stage`
 
 A candidate is releasable only if:
 
@@ -39,12 +39,13 @@ A candidate is releasable only if:
 - Stage auth smoke runs after migrations because Entra login startup persists OIDC request state in the database.
 - Prod deploy uses the same candidate image digests that were tested on stage.
 - Production smoke must pass before release attestation is written.
+- Release happens before the queued change merges to `main`.
 
 ## Rollback Rules
 
 Rollback is a prior-candidate redeploy:
 
 1. choose a previously accepted candidate id
-2. re-run `03 Release Stage` with that candidate id
+2. rerun `01 Development Pipeline` manually with that `candidate_id`
 
 There is no traffic-flip rollback in this architecture.

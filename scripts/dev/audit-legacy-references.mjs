@@ -6,8 +6,14 @@ const ROOT = process.cwd();
 const THIS_FILE = fileURLToPath(import.meta.url);
 
 const FORBIDDEN_PATTERNS = [
-  { pattern: "merge_group" },
   { pattern: "00-queue-admission.yml" },
+  { pattern: "00-pr-validation.yml" },
+  { pattern: "01-commit-stage.yml" },
+  { pattern: "02-acceptance-stage.yml" },
+  { pattern: "03-release-stage.yml" },
+  { pattern: "PR Validation" },
+  { pattern: "check:ci" },
+  { pattern: "workflow_run:" },
   { pattern: "AZURE_GITHUB_CLIENT_ID" },
   { pattern: "infra/identity" },
   { pattern: "bootstrap/terraform" },

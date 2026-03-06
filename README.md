@@ -1,10 +1,101 @@
 # Compass
 
-Compass uses a simple development pipeline built around one immutable release candidate:
+Compass follows a native development pipeline built around one immutable release candidate created on GitHub merge queue branches.
 
-1. `01 Commit` builds the candidate once and publishes digest-pinned images to `GHCR`.
-2. `02 Acceptance` runs the exact candidate locally in GitHub Actions against ephemeral infrastructure.
-3. `03 Release` deploys the exact candidate to long-lived stage apps in Azure Container Apps, smoke-tests them, runs migrations, and then deploys the same digests to production apps.
+## Delivery model
+
+The pipeline is:
+
+1. `Commit Stage`
+2. `Acceptance Stage`
+3. `Release Stage`
+
+The key rule is:
+
+- Commit builds the candidate once from integrated code
+- Acceptance runs against that exact candidate
+- Release promotes that exact candidate
+- later stages do not rebuild from source
+
+## GitHub workflow topology
+
+### `00 PR Metadata`
+
+Optional and non-blocking.
+
+- applies path labels only
+- runs on pull requests to `main`
+- does not install dependencies
+- does not run tests
+- does not mutate Azure
+
+### `01 Development Pipeline`
+
+The real delivery pipeline.
+
+Trigger modes:
+
+- `merge_group` for the normal automated path
+- `workflow_dispatch` with `candidate_id` for manual redeploy of a previously accepted candidate
+
+Normal flow:
+
+1. a PR is reviewed
+2. the PR is added to GitHub merge queue
+3. GitHub creates a merge-group branch
+4. the Development Pipeline runs:
+   - `Commit Stage`
+   - `Acceptance Stage`
+   - `Release Stage`
+5. if all stages pass, GitHub merges to `main`
+
+## Commit Stage
+
+Commit Stage runs on integrated merge-queue code, not on stale PR heads.
+
+It runs in parallel:
+
+- code gate
+- pipeline gate
+- image builds
+
+If the commit gates pass, it publishes:
+
+- API image digest
+- Web image digest
+- Migrations image digest
+- release candidate manifest
+- release unit OCI index
+
+## Acceptance Stage
+
+Acceptance does not deploy to Azure.
+
+It runs the exact candidate locally in GitHub Actions using:
+
+- local Postgres
+- candidate migrations image
+- candidate API image with `AUTH_MODE=mock`
+- candidate Web image pointing at the candidate API
+
+It writes and attests the acceptance verdict.
+
+## Release Stage
+
+Release runs before `main` advances.
+
+It:
+
+1. verifies the acceptance attestation
+2. applies production Bicep first when `infra/azure/**` changed in the merge-group revision
+3. deploys the candidate to long-lived stage apps in Azure Container Apps
+4. runs read-only stage smoke
+5. runs migrations against the production database
+6. deploys the same digests to prod apps
+7. runs production smoke
+8. writes and attests release evidence
+
+If Release fails, the PR does not merge.
 
 ## Architecture
 
@@ -50,7 +141,9 @@ The stage apps use their ACA default hostnames.
 
 - `pnpm install`
 - `pnpm dev`
-- `pnpm test:quick`
+- `pnpm check`
+- `pnpm check:commit`
+- `pnpm check:pipeline`
 - `pnpm test:full`
 
 Local Postgres helpers:
@@ -69,53 +162,21 @@ Typical sequence:
 3. `pnpm bootstrap:ghcr`
 4. `pnpm infra:apply`
 5. `pnpm bootstrap:keyvault:seed`
-6. merge the first candidate to `main`
-7. `pnpm bootstrap:apps -- --candidate-id sha-<commit>`
+6. add the first PR to merge queue so the first candidate is published
+7. `pnpm bootstrap:apps -- --candidate-id sha-<merge-group-sha>`
 8. rerun `pnpm bootstrap:entra -- --stage-web-fqdn <stage-fqdn>`
 9. `pnpm bootstrap:web-domain`
 
-More detail is in [/Users/justinkropp/.codex/worktrees/2bfd/compass/bootstrap/README.md](bootstrap/README.md).
-
-## Delivery model
-
-### `00 PR Validation`
-
-Fast validation on pull requests. No Azure mutation.
-
-### `01 Commit`
-
-Runs on `push` to `main`.
-
-- quick checks
-- build API/Web/Migrations once
-- publish the release candidate manifest and release unit
-
-### `02 Acceptance`
-
-Runs on the exact candidate produced by Commit.
-
-- local Postgres in GitHub Actions
-- candidate migrations image
-- candidate API image with `AUTH_MODE=mock`
-- candidate Web image pointing at the candidate API
-- system/browser acceptance tests
-
-### `03 Release`
-
-Runs on the accepted candidate.
-
-- applies production support Bicep if `infra/azure/**` changed
-- deploys to `api-stage` and `web-stage`
-- runs read-only stage smoke
-- runs migrations against production DB
-- deploys the same digests to `api-prod` and `web-prod`
-- runs production smoke
-- records release evidence and attestation
+More detail is in [/Users/justinkropp/.codex/worktrees/2bfd/compass/bootstrap/README.md](/Users/justinkropp/.codex/worktrees/2bfd/compass/bootstrap/README.md).
 
 ## Rollback
 
-Rollback is a prior-candidate redeploy:
+Rollback is a prior-candidate redeploy.
 
-- rerun `03 Release` with a previous accepted `candidate_id`
+Use the unified pipeline manually:
 
-There is no revision-traffic rollback in this model.
+```sh
+gh workflow run 01-development-pipeline.yml --ref main -f candidate_id=sha-<previous-accepted-candidate>
+```
+
+There is no traffic-flip rollback in this architecture.

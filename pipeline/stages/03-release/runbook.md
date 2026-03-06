@@ -2,12 +2,24 @@
 
 ## Purpose
 
-Release takes an accepted candidate and deploys it to production.
+Release takes an accepted candidate and deploys it to production before GitHub advances `main`.
+
+## Trigger modes
+
+Normal delivery:
+
+- `merge_group` inside `01 Development Pipeline`
+
+Manual redeploy / rollback:
+
+```sh
+gh workflow run 01-development-pipeline.yml --ref main -f candidate_id=sha-<previous-accepted-candidate>
+```
 
 ## Sequence
 
 1. verify acceptance attestation
-2. apply support Bicep when `infra/azure/**` changed
+2. apply support Bicep when `infra/azure/**` changed in the merge-group revision
 3. deploy candidate digests to `api-stage` and `web-stage`
 4. run read-only stage health smoke
 5. run migrations against production DB
@@ -30,10 +42,10 @@ Rollback means rerunning Release with a previous accepted `candidate_id`.
 
 ### Manual rollback command
 
-Use the normal release workflow with the previously accepted candidate:
+Use the unified development pipeline with the previously accepted candidate:
 
 ```sh
-gh workflow run 03-release-stage.yml --ref main -f candidate_id=sha-<previous-accepted-commit>
+gh workflow run 01-development-pipeline.yml --ref main -f candidate_id=sha-<previous-accepted-candidate>
 ```
 
 That redeploys the previous API, Web, and migrations artifacts through the same path used for a normal release:

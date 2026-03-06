@@ -1,0 +1,722 @@
+name: Development Pipeline
+run-name: ${{ github.event_name == 'workflow_dispatch' && format('Development Pipeline (redeploy {0})', inputs.candidate_id) || format('Development Pipeline ({0})', github.sha) }}
+
+on:
+  merge_group:
+    types:
+      - checks_requested
+  workflow_dispatch:
+    inputs:
+      candidate_id:
+        description: Accepted candidate to redeploy
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY_BASE: ghcr.io/glcsolutions-ca
+  API_IMAGE_NAME: compass-api
+  WEB_IMAGE_NAME: compass-web
+  MIGRATIONS_IMAGE_NAME: compass-migrations
+  MANIFESTS_REPO: ghcr.io/glcsolutions-ca/compass-release-manifests
+  RELEASE_UNITS_REPO: ghcr.io/glcsolutions-ca/compass-release-units
+  ACCEPTANCE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/acceptance/v1
+  RELEASE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/release/v2
+
+concurrency:
+  group: development-pipeline-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && inputs.candidate_id || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  commit_code_gate:
+    name: Commit Stage / Code Gate
+    if: ${{ github.event_name == 'merge_group' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Run commit gate
+        run: pnpm check:commit
+
+  commit_pipeline_gate:
+    name: Commit Stage / Pipeline Gate
+    if: ${{ github.event_name == 'merge_group' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install actionlint
+        run: |
+          install_dir="$RUNNER_TEMP/actionlint-bin"
+          mkdir -p "$install_dir"
+          (
+            cd "$install_dir"
+            curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash \
+              | bash -s -- 1.7.8
+          )
+          echo "$install_dir" >> "$GITHUB_PATH"
+
+      - name: Run pipeline gate
+        run: pnpm check:pipeline
+
+      - name: Workflow lint
+        run: actionlint -color
+
+  build_candidate_images:
+    name: Build Candidate / ${{ matrix.image.id }}
+    if: ${{ github.event_name == 'merge_group' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - id: api
+            dockerfile: apps/api/Dockerfile
+            image_name: compass-api
+          - id: web
+            dockerfile: apps/web/Dockerfile
+            image_name: compass-web
+          - id: migrations
+            dockerfile: db/Dockerfile.migrations
+            image_name: compass-migrations
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.image.id }} image
+        id: build_image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ${{ matrix.image.dockerfile }}
+          push: true
+          tags: ${{ env.REGISTRY_BASE }}/${{ matrix.image.image_name }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=build-${{ matrix.image.id }}
+          cache-to: type=gha,mode=max,scope=build-${{ matrix.image.id }}
+          provenance: true
+          sbom: true
+
+      - name: Record digest output
+        run: |
+          mkdir -p .artifacts/image-digests
+          printf '%s' '${{ steps.build_image.outputs.digest }}' > .artifacts/image-digests/${{ matrix.image.id }}.digest
+
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275cb12b1f17 # v4.3.3
+        with:
+          name: image-digest-${{ matrix.image.id }}
+          path: .artifacts/image-digests/${{ matrix.image.id }}.digest
+          if-no-files-found: error
+          retention-days: 3
+
+  publish_candidate:
+    name: Commit Stage / Publish Candidate
+    if: ${{ github.event_name == 'merge_group' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    needs:
+      - commit_code_gate
+      - commit_pipeline_gate
+      - build_candidate_images
+    outputs:
+      candidate_id: ${{ steps.candidate.outputs.candidate_id }}
+      source_revision: ${{ steps.source.outputs.source_revision }}
+      release_unit_digest: ${{ steps.release_unit.outputs.release_unit_digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
+
+      - name: Download digest artifacts
+        uses: actions/download-artifact@95815c38cf66f59e6cc85e4e5d6f2f65bd6d65fd # v4.1.8
+        with:
+          pattern: image-digest-*
+          path: .artifacts/image-digests
+          merge-multiple: true
+
+      - name: Capture canonical digest refs
+        id: refs
+        run: |
+          api_digest="$(cat .artifacts/image-digests/api.digest)"
+          web_digest="$(cat .artifacts/image-digests/web.digest)"
+          migrations_digest="$(cat .artifacts/image-digests/migrations.digest)"
+          {
+            echo "api_image_ref=${REGISTRY_BASE}/${API_IMAGE_NAME}@${api_digest}"
+            echo "web_image_ref=${REGISTRY_BASE}/${WEB_IMAGE_NAME}@${web_digest}"
+            echo "migrations_image_ref=${REGISTRY_BASE}/${MIGRATIONS_IMAGE_NAME}@${migrations_digest}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Compute candidate id
+        id: candidate
+        run: echo "candidate_id=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Record source revision
+        id: source
+        run: echo "source_revision=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release-unit index
+        id: release_unit
+        run: |
+          set -euo pipefail
+          candidate_id="${{ steps.candidate.outputs.candidate_id }}"
+          docker buildx imagetools create \
+            --tag "${RELEASE_UNITS_REPO}:${candidate_id}" \
+            "${{ steps.refs.outputs.api_image_ref }}" \
+            "${{ steps.refs.outputs.web_image_ref }}" \
+            "${{ steps.refs.outputs.migrations_image_ref }}"
+          release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${candidate_id}" | jq -r '.digest')"
+          echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release candidate manifest
+        run: |
+          manifest_path="$RUNNER_TEMP/release-candidate.json"
+          pnpm --filter @compass/pipeline-tools run manifest:generate -- \
+            --out "$manifest_path" \
+            --repository "${{ github.repository }}" \
+            --source-revision "${{ github.sha }}" \
+            --api-image "${{ steps.refs.outputs.api_image_ref }}" \
+            --web-image "${{ steps.refs.outputs.web_image_ref }}" \
+            --migrations-artifact "${{ steps.refs.outputs.migrations_image_ref }}" \
+            --registry "${{ env.REGISTRY_BASE }}" \
+            --commit-stage-run-id "${{ github.run_id }}" \
+            --release-unit-digest "${{ steps.release_unit.outputs.release_unit_digest }}"
+
+      - name: Validate release candidate manifest
+        run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Publish candidate manifest package
+        run: |
+          cp "$RUNNER_TEMP/release-candidate.json" manifest.json
+          oras push --artifact-type application/vnd.compass.release-manifest.v1+json \
+            "${MANIFESTS_REPO}:${{ steps.candidate.outputs.candidate_id }}" \
+            "manifest.json:application/vnd.compass.release-manifest.v1+json"
+
+      - name: Verify GHCR runtime packages are public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/bootstrap/ensure-ghcr-visibility.mjs
+
+      - name: Upload release candidate manifest
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275cb12b1f17 # v4.3.3
+        with:
+          name: release-candidate-manifest
+          path: ${{ runner.temp }}/release-candidate.json
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Write commit summary
+        run: |
+          {
+            echo '## Commit Stage'
+            echo "- Candidate: ${{ steps.candidate.outputs.candidate_id }}"
+            echo "- API image: ${{ steps.refs.outputs.api_image_ref }}"
+            echo "- Web image: ${{ steps.refs.outputs.web_image_ref }}"
+            echo "- Migrations image: ${{ steps.refs.outputs.migrations_image_ref }}"
+            echo "- Release unit digest: ${{ steps.release_unit.outputs.release_unit_digest }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  acceptance:
+    name: Acceptance Stage
+    if: ${{ github.event_name == 'merge_group' }}
+    needs:
+      - publish_candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Download release candidate manifest
+        uses: actions/download-artifact@95815c38cf66f59e6cc85e4e5d6f2f65bd6d65fd # v4.1.8
+        with:
+          name: release-candidate-manifest
+          path: ${{ runner.temp }}/release-candidate
+
+      - name: Run candidate acceptance locally
+        run: |
+          node pipeline/stages/02-acceptance/scripts/run-acceptance-from-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate/release-candidate.json" \
+            --diagnostics-dir "$RUNNER_TEMP/acceptance-diagnostics"
+
+      - name: Generate acceptance attestation predicate
+        run: |
+          predicate_path="${GITHUB_WORKSPACE}/.artifacts/attestations/acceptance-predicate.json"
+          mkdir -p "$(dirname "${predicate_path}")"
+          pnpm --filter @compass/pipeline-tools run acceptance:predicate:generate -- \
+            --out "${predicate_path}" \
+            --candidate-id "${{ needs.publish_candidate.outputs.candidate_id }}" \
+            --source-revision "${{ needs.publish_candidate.outputs.source_revision }}" \
+            --verdict pass \
+            --workflow-run-id "${{ github.run_id }}" \
+            --tested-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --suite-summary 'system=pass browser=pass'
+
+      - name: Attest acceptance verdict to candidate subject
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-name: ${{ env.RELEASE_UNITS_REPO }}
+          subject-digest: ${{ needs.publish_candidate.outputs.release_unit_digest }}
+          predicate-type: ${{ env.ACCEPTANCE_PREDICATE_TYPE }}
+          predicate-path: ${{ github.workspace }}/.artifacts/attestations/acceptance-predicate.json
+          push-to-registry: true
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275cb12b1f17 # v4.3.3
+        with:
+          name: acceptance-diagnostics-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/acceptance-diagnostics
+            .artifacts/attestations/acceptance-predicate.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  resolve_manual_candidate:
+    name: Resolve Manual Release Candidate
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      candidate_id: ${{ steps.resolve.outputs.candidate_id }}
+      source_revision: ${{ steps.resolve.outputs.source_revision }}
+      release_unit_digest: ${{ steps.resolve.outputs.release_unit_digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
+
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve release manifest from GHCR
+        id: resolve
+        run: |
+          set -euo pipefail
+          candidate_id='${{ inputs.candidate_id }}'
+          pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
+            --candidate-id "$candidate_id" \
+            --registry-repo "${MANIFESTS_REPO}" \
+            --out "$RUNNER_TEMP/release-candidate.json"
+          pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
+          release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${candidate_id}" | jq -r '.digest')"
+          {
+            echo "candidate_id=${candidate_id}"
+            echo "source_revision=$(jq -r '.source.revision' "$RUNNER_TEMP/release-candidate.json")"
+            echo "release_unit_digest=${release_unit_digest}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload release candidate manifest
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275cb12b1f17 # v4.3.3
+        with:
+          name: release-candidate-manifest
+          path: ${{ runner.temp }}/release-candidate.json
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Write manual redeploy summary
+        run: |
+          {
+            echo '## Manual Redeploy'
+            echo "- Candidate: ${{ steps.resolve.outputs.candidate_id }}"
+            echo "- Source revision: ${{ steps.resolve.outputs.source_revision }}"
+            echo "- Release unit digest: ${{ steps.resolve.outputs.release_unit_digest }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Release Stage
+    if: ${{ always() && ((github.event_name == 'merge_group' && needs.acceptance.result == 'success') || (github.event_name == 'workflow_dispatch' && needs.resolve_manual_candidate.result == 'success')) }}
+    needs:
+      - publish_candidate
+      - acceptance
+      - resolve_manual_candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Download release candidate manifest
+        uses: actions/download-artifact@95815c38cf66f59e6cc85e4e5d6f2f65bd6d65fd # v4.1.8
+        with:
+          name: release-candidate-manifest
+          path: ${{ runner.temp }}/release-candidate
+
+      - name: Select candidate context
+        id: context
+        run: |
+          if [ "${{ github.event_name }}" = 'workflow_dispatch' ]; then
+            {
+              echo "candidate_id=${{ needs.resolve_manual_candidate.outputs.candidate_id }}"
+              echo "source_revision=${{ needs.resolve_manual_candidate.outputs.source_revision }}"
+              echo "release_unit_digest=${{ needs.resolve_manual_candidate.outputs.release_unit_digest }}"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "candidate_id=${{ needs.publish_candidate.outputs.candidate_id }}"
+              echo "source_revision=${{ needs.publish_candidate.outputs.source_revision }}"
+              echo "release_unit_digest=${{ needs.publish_candidate.outputs.release_unit_digest }}"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify GHCR runtime packages are public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/bootstrap/ensure-ghcr-visibility.mjs
+
+      - name: Assert production environment config
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          ACA_API_PROD_APP_NAME: ${{ vars.ACA_API_PROD_APP_NAME }}
+          ACA_WEB_PROD_APP_NAME: ${{ vars.ACA_WEB_PROD_APP_NAME }}
+          ACA_API_STAGE_APP_NAME: ${{ vars.ACA_API_STAGE_APP_NAME }}
+          ACA_WEB_STAGE_APP_NAME: ${{ vars.ACA_WEB_STAGE_APP_NAME }}
+          ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          PRODUCTION_WEB_BASE_URL: ${{ vars.PRODUCTION_WEB_BASE_URL }}
+          ENTRA_WEB_CLIENT_ID: ${{ vars.ENTRA_WEB_CLIENT_ID }}
+        run: |
+          pnpm --filter @compass/pipeline-tools run env:assert -- \
+            --required AZURE_RESOURCE_GROUP \
+            --required ACA_API_PROD_APP_NAME \
+            --required ACA_WEB_PROD_APP_NAME \
+            --required ACA_API_STAGE_APP_NAME \
+            --required ACA_WEB_STAGE_APP_NAME \
+            --required ACA_MIGRATE_JOB_NAME \
+            --required AZURE_CLIENT_ID \
+            --required AZURE_TENANT_ID \
+            --required AZURE_SUBSCRIPTION_ID \
+            --required PRODUCTION_WEB_BASE_URL \
+            --required ENTRA_WEB_CLIENT_ID
+
+      - name: Azure login (OIDC)
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify acceptance attestation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pnpm --filter @compass/pipeline-tools run attest:verify-acceptance -- \
+            --candidate-id "${{ steps.context.outputs.candidate_id }}" \
+            --source-revision "${{ steps.context.outputs.source_revision }}" \
+            --predicate-type "${ACCEPTANCE_PREDICATE_TYPE}" \
+            --repo "${{ github.repository }}" \
+            --subject "${RELEASE_UNITS_REPO}@${{ steps.context.outputs.release_unit_digest }}"
+
+      - name: Detect infra changes
+        if: ${{ github.event_name == 'merge_group' }}
+        id: changed
+        run: |
+          json="$(node scripts/infra/detect-changed-scopes.mjs --revision "${{ steps.context.outputs.source_revision }}")"
+          echo "infra_changed=$(printf '%s' "$json" | jq -r '.infraChanged')" >> "$GITHUB_OUTPUT"
+
+      - name: Default infra change flag for manual redeploy
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        id: changed_manual
+        run: echo 'infra_changed=false' >> "$GITHUB_OUTPUT"
+
+      - name: Resolve current endpoints and prod images
+        id: runtime
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          API_PROD: ${{ vars.ACA_API_PROD_APP_NAME }}
+          WEB_PROD: ${{ vars.ACA_WEB_PROD_APP_NAME }}
+          API_STAGE: ${{ vars.ACA_API_STAGE_APP_NAME }}
+          WEB_STAGE: ${{ vars.ACA_WEB_STAGE_APP_NAME }}
+        run: |
+          api_prod_image="$(az containerapp show -g "$RG" -n "$API_PROD" --query 'properties.template.containers[0].image' -o tsv)"
+          web_prod_image="$(az containerapp show -g "$RG" -n "$WEB_PROD" --query 'properties.template.containers[0].image' -o tsv)"
+          api_stage_base_url="https://$(az containerapp show -g "$RG" -n "$API_STAGE" --query 'properties.configuration.ingress.fqdn' -o tsv)"
+          web_stage_base_url="https://$(az containerapp show -g "$RG" -n "$WEB_STAGE" --query 'properties.configuration.ingress.fqdn' -o tsv)"
+          prod_api_base_url="https://$(az containerapp show -g "$RG" -n "$API_PROD" --query 'properties.configuration.ingress.fqdn' -o tsv)"
+          {
+            echo "api_prod_image=${api_prod_image}"
+            echo "web_prod_image=${web_prod_image}"
+            echo "api_stage_base_url=${api_stage_base_url}"
+            echo "web_stage_base_url=${web_stage_base_url}"
+            echo "prod_api_base_url=${prod_api_base_url}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Apply production Bicep when infra changed
+        if: ${{ github.event_name == 'merge_group' && steps.changed.outputs.infra_changed == 'true' }}
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+        run: |
+          node scripts/infra/apply-platform.mjs \
+            --mode apply \
+            --resource-group "$RG"
+
+      - name: Deploy stage apps from candidate
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          API_STAGE: ${{ vars.ACA_API_STAGE_APP_NAME }}
+          WEB_STAGE: ${{ vars.ACA_WEB_STAGE_APP_NAME }}
+        run: |
+          node pipeline/stages/03-release/scripts/deploy-stage-from-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate/release-candidate.json" \
+            --resource-group "$RG" \
+            --api-app-name "$API_STAGE" \
+            --web-app-name "$WEB_STAGE" \
+            --stage-api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}"
+
+      - name: Stage health smoke
+        id: stage_health_smoke
+        run: |
+          node pipeline/stages/03-release/scripts/run-stage-smoke.mjs \
+            --api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
+            --web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}" \
+            --include-auth false
+          echo 'verdict=pass' >> "$GITHUB_OUTPUT"
+
+      - name: Run production migrations
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          JOB: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+        run: |
+          node pipeline/stages/03-release/scripts/run-production-migrations.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate/release-candidate.json" \
+            --resource-group "$RG" \
+            --job-name "$JOB"
+
+      - name: Stage auth smoke
+        id: stage_smoke
+        run: |
+          node pipeline/stages/03-release/scripts/run-stage-smoke.mjs \
+            --api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
+            --web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}" \
+            --include-auth true
+          echo 'verdict=pass' >> "$GITHUB_OUTPUT"
+
+      - name: Deploy prod apps from candidate
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          API_PROD: ${{ vars.ACA_API_PROD_APP_NAME }}
+          WEB_PROD: ${{ vars.ACA_WEB_PROD_APP_NAME }}
+        run: |
+          node pipeline/stages/03-release/scripts/deploy-prod-from-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate/release-candidate.json" \
+            --resource-group "$RG" \
+            --api-app-name "$API_PROD" \
+            --web-app-name "$WEB_PROD" \
+            --prod-api-base-url "${{ steps.runtime.outputs.prod_api_base_url }}"
+
+      - name: Production smoke
+        id: production_smoke
+        run: |
+          node pipeline/stages/03-release/scripts/run-production-smoke.mjs \
+            --web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}"
+          echo 'verdict=pass' >> "$GITHUB_OUTPUT"
+
+      - name: Record release evidence
+        run: |
+          mkdir -p .artifacts/release
+          node pipeline/stages/03-release/scripts/record-release-evidence.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate/release-candidate.json" \
+            --stage-api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
+            --stage-web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}" \
+            --stage-smoke-verdict "${{ steps.stage_smoke.outputs.verdict }}" \
+            --production-web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}" \
+            --production-smoke-verdict "${{ steps.production_smoke.outputs.verdict }}" \
+            --out .artifacts/release/release-evidence.json
+
+      - name: Generate release attestation predicate
+        run: |
+          predicate_path="${GITHUB_WORKSPACE}/.artifacts/attestations/release-predicate.json"
+          mkdir -p "$(dirname "$predicate_path")"
+          pnpm --filter @compass/pipeline-tools run release:predicate:generate -- \
+            --out "$predicate_path" \
+            --candidate-id "${{ steps.context.outputs.candidate_id }}" \
+            --source-revision "${{ steps.context.outputs.source_revision }}" \
+            --verdict pass \
+            --workflow-run-id "${{ github.run_id }}" \
+            --released-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --deployment-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --api-image "$(jq -r '.artifacts.apiImage' "$RUNNER_TEMP/release-candidate/release-candidate.json")" \
+            --web-image "$(jq -r '.artifacts.webImage' "$RUNNER_TEMP/release-candidate/release-candidate.json")" \
+            --stage-api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
+            --stage-web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}" \
+            --stage-smoke-verdict "${{ steps.stage_smoke.outputs.verdict }}" \
+            --production-web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}" \
+            --production-smoke-verdict "${{ steps.production_smoke.outputs.verdict }}"
+
+      - name: Attest release verdict to candidate subject
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-name: ${{ env.RELEASE_UNITS_REPO }}
+          subject-digest: ${{ steps.context.outputs.release_unit_digest }}
+          predicate-type: ${{ env.RELEASE_PREDICATE_TYPE }}
+          predicate-path: ${{ github.workspace }}/.artifacts/attestations/release-predicate.json
+          push-to-registry: true
+
+      - name: Upload release diagnostics
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275cb12b1f17 # v4.3.3
+        with:
+          name: release-diagnostics-${{ github.run_id }}
+          path: |
+            .artifacts/release
+            .artifacts/attestations/release-predicate.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Write release summary
+        if: always()
+        run: |
+          {
+            echo '## Release Stage'
+            echo "- Candidate: ${{ steps.context.outputs.candidate_id }}"
+            echo "- Stage API: ${{ steps.runtime.outputs.api_stage_base_url }}"
+            echo "- Stage Web: ${{ steps.runtime.outputs.web_stage_base_url }}"
+            echo "- Stage health smoke: ${{ steps.stage_health_smoke.outputs.verdict || 'skipped' }}"
+            echo "- Stage auth smoke: ${{ steps.stage_smoke.outputs.verdict || 'skipped' }}"
+            echo "- Production Web: ${{ vars.PRODUCTION_WEB_BASE_URL }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  pipeline_complete:
+    name: Pipeline Complete
+    if: ${{ github.event_name == 'merge_group' && always() }}
+    runs-on: ubuntu-latest
+    needs:
+      - commit_code_gate
+      - commit_pipeline_gate
+      - build_candidate_images
+      - publish_candidate
+      - acceptance
+      - release
+    steps:
+      - name: Assert full pipeline success
+        env:
+          COMMIT_CODE_GATE: ${{ needs.commit_code_gate.result }}
+          COMMIT_PIPELINE_GATE: ${{ needs.commit_pipeline_gate.result }}
+          BUILD_CANDIDATE_IMAGES: ${{ needs.build_candidate_images.result }}
+          PUBLISH_CANDIDATE: ${{ needs.publish_candidate.result }}
+          ACCEPTANCE: ${{ needs.acceptance.result }}
+          RELEASE: ${{ needs.release.result }}
+        run: |
+          set -euo pipefail
+          for entry in \
+            "commit_code_gate:$COMMIT_CODE_GATE" \
+            "commit_pipeline_gate:$COMMIT_PIPELINE_GATE" \
+            "build_candidate_images:$BUILD_CANDIDATE_IMAGES" \
+            "publish_candidate:$PUBLISH_CANDIDATE" \
+            "acceptance:$ACCEPTANCE" \
+            "release:$RELEASE"; do
+            name="${entry%%:*}"
+            result="${entry#*:}"
+            if [ "$result" != 'success' ]; then
+              echo "${name} finished with ${result}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Write pipeline summary
+        run: |
+          {
+            echo '## Pipeline Complete'
+            echo '- Commit Stage: pass'
+            echo '- Acceptance Stage: pass'
+            echo '- Release Stage: pass'
+          } >> "$GITHUB_STEP_SUMMARY"

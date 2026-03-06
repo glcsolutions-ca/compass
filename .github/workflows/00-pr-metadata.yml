@@ -1,0 +1,25 @@
+name: PR Metadata
+run-name: PR Metadata (#${{ github.event.pull_request.number }})
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-metadata-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    name: PR Metadata
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label changed paths
+        uses: actions/labeler@9325d0f8d3c1e0c402edd1cf54dc5201c5693a8d # v5.0.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}

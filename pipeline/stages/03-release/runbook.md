@@ -27,3 +27,44 @@ The Entra auth-start smoke runs after migrations because OIDC request persistenc
 ## Rollback
 
 Rollback means rerunning Release with a previous accepted `candidate_id`.
+
+### Manual rollback command
+
+Use the normal release workflow with the previously accepted candidate:
+
+```sh
+gh workflow run 03-release-stage.yml --ref main -f candidate_id=sha-<previous-accepted-commit>
+```
+
+That redeploys the previous API, Web, and migrations artifacts through the same path used for a normal release:
+
+1. deploy to `api-stage` and `web-stage`
+2. run read-only stage smoke
+3. run migrations
+4. deploy to `api-prod` and `web-prod`
+5. run production smoke
+
+### Observed rollback drill
+
+Rollback drill executed on 2026-03-06 UTC:
+
+1. rolled production back from `sha-145da49c74332efde081243866a507ac4db245d7`
+2. redeployed previous accepted candidate `sha-d2cdc4cfd431d5c26d432f58b2d9aff5b1368e7f`
+3. verified:
+   - `https://compass.glcsolutions.ca` returned `200`
+   - `/v1/auth/entra/start` returned `302`
+   - redirect URI remained `https://compass.glcsolutions.ca/v1/auth/entra/callback`
+4. restored production to `sha-145da49c74332efde081243866a507ac4db245d7`
+
+Observed timings:
+
+- rollback redeploy run `22771878458`: `2026-03-06T16:18:18Z` -> `2026-03-06T16:22:36Z` (`4m18s`)
+- restore run `22772072080`: `2026-03-06T16:23:28Z` -> `2026-03-06T16:28:00Z` (`4m32s`)
+
+### Operational note
+
+Because this simplified model uses long-lived stage/prod app pairs instead of revision traffic switching:
+
+- rollback is a prior-candidate redeploy, not a traffic flip
+- stage smoke must remain read-only because stage shares the production DB and Key Vault
+- database changes must stay backward-compatible across the release window

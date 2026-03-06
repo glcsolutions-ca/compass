@@ -5,11 +5,11 @@
 ```text
 compass/
 ├─ .github/{actions,workflows,labeler.yml}
-├─ apps/{api,web,worker,desktop,codex-session-runtime}
+├─ apps/{api,web,worker,desktop}
 ├─ bootstrap/{README.md,config}
 ├─ db/{migrations,postgres,scripts,seeds}
 ├─ infra/azure
-├─ packages/{contracts,sdk,testkit}
+├─ packages/{contracts,sdk,testkit,session-agent,session-agent-protocol}
 ├─ pipeline/{contracts,shared,stages}
 └─ scripts/{bootstrap,dev,infra}
 ```

@@ -3,9 +3,11 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { loadEnvFile } from "node:process";
 import { buildApiApp } from "./app.js";
+import { buildDefaultSessionControlPlane } from "./agent-sessions/session-control-plane.js";
 import { buildDefaultAuthService } from "./auth-service.js";
 import { buildDefaultAgentService } from "./agent-service.js";
 import { attachAgentWebSocketGateway } from "./agent-websocket.js";
+import { attachSessionAgentGateway } from "./agent-sessions/gateway.js";
 import { loadApiConfig } from "./config.js";
 import { requireDatabaseUrl, verifyDatabaseReadiness } from "./startup-env.js";
 
@@ -41,9 +43,15 @@ process.env.AUTH_MODE = config.authMode;
 await verifyDatabaseReadiness({ databaseUrl });
 
 const defaultAuth = buildDefaultAuthService(databaseUrl, process.env);
+const sessionControlPlane = buildDefaultSessionControlPlane({
+  env: process.env,
+  apiPort: config.port,
+  now: () => new Date()
+});
 const defaultAgent = buildDefaultAgentService({
   databaseUrl,
-  env: process.env
+  env: process.env,
+  sessionControlPlane
 });
 const app = buildApiApp({
   authService: defaultAuth.service,
@@ -57,6 +65,11 @@ attachAgentWebSocketGateway({
   agentService: defaultAgent.service,
   now: () => new Date()
 });
+attachSessionAgentGateway({
+  server,
+  controlPlane: sessionControlPlane,
+  now: () => new Date()
+});
 
 server.listen(config.port, config.host, () => {
   console.info(`API listening on ${config.host}:${config.port}`);
@@ -65,6 +78,7 @@ server.listen(config.port, config.host, () => {
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     server.close(() => {
+      sessionControlPlane.close();
       void Promise.all([defaultAuth.close(), defaultAgent.close()]).finally(() => {
         process.exit(0);
       });

@@ -7,6 +7,7 @@ import {
   switchAgentThreadMode
 } from "~/features/chat/agent-client";
 import { resolveThreadCreateWorkspaceSlug } from "~/features/chat/chat-context";
+import { readDefaultExecutionMode } from "~/features/chat/default-execution-mode";
 import {
   ChatClientRequestIdSchema,
   ChatExecutionModeSchema,
@@ -123,7 +124,7 @@ function createSuccessAction(input: {
 
 function resolveExecutionMode(formData: FormData): AgentExecutionMode {
   const requestedExecutionMode = ChatExecutionModeSchema.safeParse(formData.get("executionMode"));
-  return requestedExecutionMode.success ? requestedExecutionMode.data : "cloud";
+  return requestedExecutionMode.success ? requestedExecutionMode.data : readDefaultExecutionMode();
 }
 
 function resolveTargetThreadId(
@@ -396,14 +397,6 @@ export async function submitChatAction({
   }
 
   const executionMode = resolveExecutionMode(formData);
-  if (executionMode === "local") {
-    return createErrorAction({
-      intent,
-      executionMode,
-      error: "Local mode turns are not implemented yet."
-    });
-  }
-
   const targetThreadId = resolveTargetThreadId(formData, threadId);
   if (intent === "switchMode") {
     return handleSwitchModeIntent({

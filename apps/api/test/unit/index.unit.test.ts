@@ -3,17 +3,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => {
   const closeAuth = vi.fn(async () => {});
   const closeAgent = vi.fn(async () => {});
+  const closeSessionControlPlane = vi.fn(() => {});
   const serverClose = vi.fn((callback?: () => void) => {
     callback?.();
   });
   const serverListen = vi.fn((_port: number, _host: string, callback?: () => void) => {
     callback?.();
   });
+  const serverOn = vi.fn();
   const createServer = vi.fn(() => ({
     listen: serverListen,
-    close: serverClose
+    close: serverClose,
+    on: serverOn
   }));
   const attachGateway = vi.fn();
+  const attachSessionAgentGateway = vi.fn();
   const buildApiApp = vi.fn(() => ({ mocked: true }));
   const buildDefaultAuthService = vi.fn(() => ({
     service: { auth: "service" },
@@ -22,6 +26,9 @@ const mocks = vi.hoisted(() => {
   const buildDefaultAgentService = vi.fn(() => ({
     service: { agent: "service" },
     close: closeAgent
+  }));
+  const buildDefaultSessionControlPlane = vi.fn(() => ({
+    close: closeSessionControlPlane
   }));
   const existsSync = vi.fn(() => false);
   const loadEnvFile = vi.fn();
@@ -39,13 +46,17 @@ const mocks = vi.hoisted(() => {
   return {
     closeAuth,
     closeAgent,
+    closeSessionControlPlane,
     serverClose,
     serverListen,
+    serverOn,
     createServer,
     attachGateway,
+    attachSessionAgentGateway,
     buildApiApp,
     buildDefaultAuthService,
     buildDefaultAgentService,
+    buildDefaultSessionControlPlane,
     existsSync,
     loadEnvFile,
     requireDatabaseUrl,
@@ -90,6 +101,14 @@ vi.mock("../../src/agent-websocket.js", () => ({
   attachAgentWebSocketGateway: mocks.attachGateway
 }));
 
+vi.mock("../../src/agent-sessions/session-control-plane.js", () => ({
+  buildDefaultSessionControlPlane: mocks.buildDefaultSessionControlPlane
+}));
+
+vi.mock("../../src/agent-sessions/gateway.js", () => ({
+  attachSessionAgentGateway: mocks.attachSessionAgentGateway
+}));
+
 vi.mock("../../src/startup-env.js", () => ({
   requireDatabaseUrl: mocks.requireDatabaseUrl,
   verifyDatabaseReadiness: mocks.verifyDatabaseReadiness
@@ -119,9 +138,11 @@ describe("API entrypoint", () => {
       expect(mocks.verifyDatabaseReadiness).toHaveBeenCalledTimes(1);
       expect(mocks.buildDefaultAuthService).toHaveBeenCalledTimes(1);
       expect(mocks.buildDefaultAgentService).toHaveBeenCalledTimes(1);
+      expect(mocks.buildDefaultSessionControlPlane).toHaveBeenCalledTimes(1);
       expect(mocks.buildApiApp).toHaveBeenCalledTimes(1);
       expect(mocks.createServer).toHaveBeenCalledTimes(1);
       expect(mocks.attachGateway).toHaveBeenCalledTimes(1);
+      expect(mocks.attachSessionAgentGateway).toHaveBeenCalledTimes(1);
       expect(mocks.serverListen).toHaveBeenCalledWith(3101, "127.0.0.1", expect.any(Function));
       expect(signalHandlers.has("SIGINT")).toBe(true);
       expect(signalHandlers.has("SIGTERM")).toBe(true);

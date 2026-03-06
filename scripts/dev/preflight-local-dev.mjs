@@ -23,15 +23,6 @@ async function canConnectPostgres(databaseUrl) {
   }
 }
 
-async function canReachRuntime(endpoint) {
-  try {
-    const response = await fetch(`${endpoint.replace(/\/+$/u, "")}/health`);
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
 async function main() {
   const rootDir = process.cwd();
   const resolved = await resolveLocalDevEnv({ rootDir, env: process.env });
@@ -48,17 +39,8 @@ async function main() {
     return;
   }
 
-  const runtimeEndpoint = normalize(resolved.env.AGENT_RUNTIME_ENDPOINT);
-  if (!runtimeEndpoint || !(await canReachRuntime(runtimeEndpoint))) {
-    console.error("env:doctor: session runtime is not reachable.");
-    console.error("Fix:");
-    console.error("  pnpm dev");
-    process.exitCode = 1;
-    return;
-  }
-
   console.info(
-    `env:doctor passed (web/api/postgres/runtime: ${resolved.ports.WEB_PORT}/${resolved.ports.API_PORT}/${resolved.ports.POSTGRES_PORT}/${resolved.ports.SESSION_RUNTIME_PORT}).`
+    `env:doctor passed (web/api/postgres: ${resolved.ports.WEB_PORT}/${resolved.ports.API_PORT}/${resolved.ports.POSTGRES_PORT}).`
   );
 }
 

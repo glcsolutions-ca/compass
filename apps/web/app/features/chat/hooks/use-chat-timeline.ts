@@ -12,7 +12,8 @@ export interface TimelinePromptRecord {
   clientRequestId: string;
   turnId: string | null;
   text: string;
-  state: "pending" | "confirmed" | "failed";
+  answer: string | null;
+  state: "pending" | "confirmed" | "submitted" | "failed";
   error: string | null;
   createdAt: string;
 }
@@ -125,44 +126,83 @@ export function useChatTimeline({
       return;
     }
 
-    if (submitResult.ok) {
-      return;
-    }
-
     upsertTimelinePrompt({
       id: `prompt-${clientRequestId}`,
       clientRequestId,
       turnId: submitResult.turnId,
       text: prompt,
-      state: "failed",
-      error: submitResult.error ?? "Unable to submit this prompt.",
+      answer: submitResult.answer ?? null,
+      state: submitResult.ok ? "submitted" : "failed",
+      error: submitResult.ok ? null : (submitResult.error ?? "Unable to submit this prompt."),
       createdAt: new Date().toISOString()
     });
   }, [submitResult, upsertTimelinePrompt]);
 
   const timeline = useMemo(() => {
     const normalized = normalizeAgentEvents(events);
-    const promptFallbackItems: ChatTimelineItem[] = timelinePrompts.flatMap((record) => {
-      const baseMessage: ChatTimelineItem = {
-        id: record.id,
-        kind: "message",
-        role: "user",
-        text: record.text,
-        parts: [
-          {
-            type: "text",
-            text: record.text
-          }
-        ],
-        turnId: record.turnId,
-        cursor: null,
-        streaming: false,
-        createdAt: record.createdAt
-      };
+    const normalizedUserTurnIds = new Set<string>();
+    const normalizedAssistantTurnIds = new Set<string>();
+    for (const item of normalized) {
+      if (item.kind !== "message" || typeof item.turnId !== "string") {
+        continue;
+      }
 
-      return [
-        baseMessage,
-        {
+      if (item.role === "user") {
+        normalizedUserTurnIds.add(item.turnId);
+        continue;
+      }
+
+      if (item.role === "assistant") {
+        normalizedAssistantTurnIds.add(item.turnId);
+      }
+    }
+    const promptFallbackItems: ChatTimelineItem[] = timelinePrompts.flatMap((record) => {
+      const items: ChatTimelineItem[] = [];
+      const hasNormalizedUser = record.turnId ? normalizedUserTurnIds.has(record.turnId) : false;
+      const hasNormalizedAssistant = record.turnId
+        ? normalizedAssistantTurnIds.has(record.turnId)
+        : false;
+
+      if (!hasNormalizedUser) {
+        items.push({
+          id: record.id,
+          kind: "message",
+          role: "user",
+          text: record.text,
+          parts: [
+            {
+              type: "text",
+              text: record.text
+            }
+          ],
+          turnId: record.turnId,
+          cursor: null,
+          streaming: false,
+          createdAt: record.createdAt
+        });
+      }
+
+      if (record.state === "submitted" && record.answer && !hasNormalizedAssistant) {
+        items.push({
+          id: `${record.id}-assistant`,
+          kind: "message",
+          role: "assistant",
+          text: record.answer,
+          parts: [
+            {
+              type: "text",
+              text: record.answer
+            }
+          ],
+          turnId: record.turnId,
+          cursor: null,
+          streaming: false,
+          createdAt: record.createdAt
+        });
+      }
+
+      if (record.state === "failed") {
+        items.push({
           id: `${record.id}-error`,
           kind: "status",
           label: "Send failed",
@@ -170,8 +210,10 @@ export function useChatTimeline({
           turnId: record.turnId,
           cursor: null,
           createdAt: record.createdAt
-        } satisfies ChatTimelineItem
-      ];
+        });
+      }
+
+      return items;
     });
 
     return [...promptFallbackItems, ...normalized].sort(sortTimelineByCursorOrTime);

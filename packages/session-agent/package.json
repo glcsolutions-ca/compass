@@ -1,0 +1,23 @@
+{
+  "name": "@compass/session-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/agent.js",
+  "exports": {
+    ".": "./src/agent.js",
+    "./cli": "./src/cli.js",
+    "./echo-runtime": "./src/echo-runtime.js",
+    "./azure-bootstrap-template": "./src/azure-bootstrap-template.js"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "lint": "eslint . --ext .js --max-warnings=0",
+    "test": "vitest run --config vitest.config.mts"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}

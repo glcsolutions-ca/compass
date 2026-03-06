@@ -10,6 +10,7 @@ dist-types
 coverage
 .next
 .artifacts
+.playwright-cli
 test-results
 .notes
 .DS_Store

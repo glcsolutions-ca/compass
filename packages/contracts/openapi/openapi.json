@@ -612,7 +612,7 @@
                   "error"
                 ]
               },
-              "cloudSessionIdentifier": {
+              "sessionIdentifier": {
                 "type": [
                   "string",
                   "null"
@@ -704,7 +704,7 @@
                   "error"
                 ]
               },
-              "cloudSessionIdentifier": {
+              "sessionIdentifier": {
                 "type": [
                   "string",
                   "null"
@@ -823,7 +823,7 @@
                     "error"
                   ]
                 },
-                "cloudSessionIdentifier": {
+                "sessionIdentifier": {
                   "type": [
                     "string",
                     "null"
@@ -929,7 +929,7 @@
                   "error"
                 ]
               },
-              "cloudSessionIdentifier": {
+              "sessionIdentifier": {
                 "type": [
                   "string",
                   "null"
@@ -1057,7 +1057,7 @@
                   "error"
                 ]
               },
-              "cloudSessionIdentifier": {
+              "sessionIdentifier": {
                 "type": [
                   "string",
                   "null"
@@ -1250,6 +1250,43 @@
               "string",
               "null"
             ]
+          },
+          "runtime": {
+            "type": "object",
+            "properties": {
+              "sessionIdentifier": {
+                "type": "string",
+                "minLength": 1
+              },
+              "connectionState": {
+                "type": "string",
+                "enum": [
+                  "bootstrapped",
+                  "reused"
+                ]
+              },
+              "runtimeKind": {
+                "type": "string",
+                "minLength": 1
+              },
+              "bootId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "pid": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "sessionIdentifier",
+              "connectionState",
+              "runtimeKind",
+              "bootId"
+            ]
           }
         },
         "required": [
@@ -1342,6 +1379,51 @@
         },
         "required": [
           "turn"
+        ]
+      },
+      "AgentThreadRuntimeLaunchResponse": {
+        "type": "object",
+        "properties": {
+          "launch": {
+            "type": "object",
+            "properties": {
+              "sessionIdentifier": {
+                "type": "string",
+                "minLength": 1
+              },
+              "bootId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "controlPlaneUrl": {
+                "type": "string",
+                "format": "uri"
+              },
+              "connectToken": {
+                "type": "string",
+                "minLength": 1
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runtimeKind": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "sessionIdentifier",
+              "bootId",
+              "controlPlaneUrl",
+              "connectToken",
+              "expiresAt",
+              "runtimeKind"
+            ]
+          }
+        },
+        "required": [
+          "launch"
         ]
       },
       "AgentEventsBatchRequest": {
@@ -4415,7 +4497,7 @@
                               "error"
                             ]
                           },
-                          "cloudSessionIdentifier": {
+                          "sessionIdentifier": {
                             "type": [
                               "string",
                               "null"
@@ -4639,7 +4721,7 @@
                             "error"
                           ]
                         },
-                        "cloudSessionIdentifier": {
+                        "sessionIdentifier": {
                           "type": [
                             "string",
                             "null"
@@ -4837,7 +4919,7 @@
                             "error"
                           ]
                         },
-                        "cloudSessionIdentifier": {
+                        "sessionIdentifier": {
                           "type": [
                             "string",
                             "null"
@@ -5052,7 +5134,7 @@
                             "error"
                           ]
                         },
-                        "cloudSessionIdentifier": {
+                        "sessionIdentifier": {
                           "type": [
                             "string",
                             "null"
@@ -5420,7 +5502,7 @@
                             "error"
                           ]
                         },
-                        "cloudSessionIdentifier": {
+                        "sessionIdentifier": {
                           "type": [
                             "string",
                             "null"
@@ -5547,6 +5629,205 @@
           },
           "409": {
             "description": "Thread mode switch conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/threads/{threadId}/runtime/launch": {
+      "post": {
+        "operationId": "launchAgentThreadRuntime",
+        "summary": "Create a desktop-local runtime launch bundle",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "sessionCookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Runtime launch bundle created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "launch": {
+                      "type": "object",
+                      "properties": {
+                        "sessionIdentifier": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "bootId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "controlPlaneUrl": {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        "connectToken": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "runtimeKind": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "sessionIdentifier",
+                        "bootId",
+                        "controlPlaneUrl",
+                        "connectToken",
+                        "expiresAt",
+                        "runtimeKind"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "launch"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Thread not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Runtime launch unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -5748,6 +6029,43 @@
                       "type": [
                         "string",
                         "null"
+                      ]
+                    },
+                    "runtime": {
+                      "type": "object",
+                      "properties": {
+                        "sessionIdentifier": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "connectionState": {
+                          "type": "string",
+                          "enum": [
+                            "bootstrapped",
+                            "reused"
+                          ]
+                        },
+                        "runtimeKind": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "bootId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "pid": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "exclusiveMinimum": 0
+                        }
+                      },
+                      "required": [
+                        "sessionIdentifier",
+                        "connectionState",
+                        "runtimeKind",
+                        "bootId"
                       ]
                     }
                   },

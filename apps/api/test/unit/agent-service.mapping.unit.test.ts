@@ -13,7 +13,7 @@ describe("agent service row mapping", () => {
       execution_mode: "cloud",
       execution_host: "dynamic_sessions",
       status: "idle",
-      cloud_session_identifier: "thr-thread-1",
+      session_identifier: "thr-thread-1",
       title: "Smoke",
       archived: true,
       created_at: createdAt,

@@ -12,10 +12,6 @@ const ENV_TARGETS = [
     examplePath: "apps/web/.env.example"
   },
   {
-    envPath: "apps/codex-session-runtime/.env",
-    examplePath: "apps/codex-session-runtime/.env.example"
-  },
-  {
     envPath: "db/postgres/.env",
     examplePath: "db/postgres/.env.example"
   }

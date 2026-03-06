@@ -40,6 +40,7 @@ import {
   AgentThreadPatchRequestSchema,
   AgentThreadPatchResponseSchema,
   AgentThreadReadResponseSchema,
+  AgentThreadRuntimeLaunchResponseSchema,
   AgentTurnInterruptResponseSchema,
   AgentTurnStartRequestSchema,
   AgentTurnStartResponseSchema
@@ -84,6 +85,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
   registry.register("AgentTurnStartRequest", AgentTurnStartRequestSchema);
   registry.register("AgentTurnStartResponse", AgentTurnStartResponseSchema);
   registry.register("AgentTurnInterruptResponse", AgentTurnInterruptResponseSchema);
+  registry.register("AgentThreadRuntimeLaunchResponse", AgentThreadRuntimeLaunchResponseSchema);
   registry.register("AgentEventsBatchRequest", AgentEventsBatchRequestSchema);
   registry.register("AgentEventsBatchResponse", AgentEventsBatchResponseSchema);
   registry.register("AgentEventsListResponse", AgentEventsListResponseSchema);
@@ -1129,6 +1131,70 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       },
       409: {
         description: "Thread mode switch conflict",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      }
+    }
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/v1/agent/threads/{threadId}/runtime/launch",
+    operationId: "launchAgentThreadRuntime",
+    summary: "Create a desktop-local runtime launch bundle",
+    tags: ["Agent"],
+    security: [{ sessionCookieAuth: [] }],
+    request: {
+      params: z.object({
+        threadId: z.string().min(1)
+      })
+    },
+    responses: {
+      200: {
+        description: "Runtime launch bundle created",
+        content: {
+          "application/json": {
+            schema: AgentThreadRuntimeLaunchResponseSchema
+          }
+        }
+      },
+      400: {
+        description: "Invalid request",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      401: {
+        description: "Unauthorized",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      403: {
+        description: "Forbidden",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      404: {
+        description: "Thread not found",
+        content: {
+          "application/json": {
+            schema: ApiErrorSchema
+          }
+        }
+      },
+      503: {
+        description: "Runtime launch unavailable",
         content: {
           "application/json": {
             schema: ApiErrorSchema

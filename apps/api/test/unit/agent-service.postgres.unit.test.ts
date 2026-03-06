@@ -11,7 +11,7 @@ function createThreadRow(overrides: Record<string, unknown> = {}) {
     execution_mode: "cloud",
     execution_host: "dynamic_sessions",
     status: "idle",
-    cloud_session_identifier: "thr-thread-1",
+    session_identifier: "thr-thread-1",
     title: "Thread title",
     archived: false,
     created_at: "2026-03-03T00:00:00.000Z",
@@ -142,7 +142,7 @@ describe("PostgresAgentService", () => {
     expect(pool.query).toHaveBeenCalledTimes(2);
   });
 
-  it("creates a thread, bootstraps runtime, and publishes a started event", async () => {
+  it("creates a thread and publishes a started event", async () => {
     const runtimeDriver = createRuntimeDriver();
     const pool = {
       query: vi
@@ -183,7 +183,7 @@ describe("PostgresAgentService", () => {
 
     unsubscribe();
     expect(thread.title).toBe("New Thread");
-    expect(runtimeDriver.bootstrapSession).toHaveBeenCalledTimes(1);
+    expect(runtimeDriver.bootstrapSession).not.toHaveBeenCalled();
     expect(receivedEvents).toContain("thread.started");
   });
 
@@ -665,27 +665,5 @@ describe("PostgresAgentService", () => {
 
     expect(unsubscribe).toHaveBeenCalledTimes(1);
     expect(pool.end).toHaveBeenCalledTimes(1);
-  });
-
-  it("rejects local execution mode immediately", async () => {
-    const service = new PostgresAgentService({
-      pool: {
-        query: vi.fn(),
-        connect: vi.fn(),
-        end: vi.fn(async () => {})
-      } as never,
-      runtimeExecutionDriver: createRuntimeDriver() as never
-    });
-
-    await expect(
-      service.switchThreadMode({
-        userId: "usr-1",
-        threadId: "thread-1",
-        executionMode: "local",
-        now: new Date("2026-03-03T00:00:00.000Z")
-      })
-    ).rejects.toMatchObject({
-      code: "AGENT_LOCAL_MODE_NOT_IMPLEMENTED"
-    });
   });
 });

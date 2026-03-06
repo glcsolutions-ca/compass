@@ -1244,6 +1244,21 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
     });
   });
 
+  app.post("/v1/agent/threads/:threadId/runtime/launch", async (request, response) => {
+    await withAgentContext(request, response, async ({ userId, service }) => {
+      const params = parseOrReply(request.params, AgentThreadParamsSchema, response);
+      if (!params) {
+        return;
+      }
+
+      const result = await service.issueThreadRuntimeLaunch({
+        userId,
+        threadId: params.threadId
+      });
+      response.status(200).json(result);
+    });
+  });
+
   app.post("/v1/agent/threads/:threadId/turns", async (request, response) => {
     await withAgentContext(request, response, async ({ userId, service }) => {
       const params = parseOrReply(request.params, AgentThreadParamsSchema, response);

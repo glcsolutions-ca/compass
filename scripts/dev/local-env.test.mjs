@@ -27,15 +27,19 @@ async function writeDefaultEnvFiles(repoDir) {
       "AUTH_MODE=mock",
       "WEB_BASE_URL=http://localhost:3000",
       "ENTRA_REDIRECT_URI=http://localhost:3000/v1/auth/entra/callback",
-      "AGENT_RUNTIME_ENDPOINT=http://127.0.0.1:8080"
+      "AGENT_DEFAULT_EXECUTION_MODE=local",
+      "AGENT_RUNTIME_PROVIDER=local_process"
     ].join("\n") + "\n"
   );
   await writeEnvFile(
     repoDir,
     "apps/web/.env",
-    "WEB_PORT=3000\nVITE_API_BASE_URL=http://localhost:3001\n"
+    [
+      "WEB_PORT=3000",
+      "VITE_API_BASE_URL=http://localhost:3001",
+      "VITE_AGENT_DEFAULT_EXECUTION_MODE=local"
+    ].join("\n") + "\n"
   );
-  await writeEnvFile(repoDir, "apps/codex-session-runtime/.env", "HOST=127.0.0.1\nPORT=8080\n");
   await writeEnvFile(
     repoDir,
     "db/postgres/.env",
@@ -90,7 +94,7 @@ describe("resolveLocalDevEnv", () => {
     const repoDir = await createTempRepo();
     await writeDefaultEnvFiles(repoDir);
 
-    const occupied = new Set([3000, 3001, 5432, 8080]);
+    const occupied = new Set([3000, 3001, 5432]);
     const resolved = await resolveLocalDevEnv({
       rootDir: repoDir,
       env: {},
@@ -100,8 +104,7 @@ describe("resolveLocalDevEnv", () => {
     expect(resolved.ports).toEqual({
       WEB_PORT: 3010,
       API_PORT: 3011,
-      POSTGRES_PORT: 5442,
-      SESSION_RUNTIME_PORT: 8090
+      POSTGRES_PORT: 5442
     });
   });
 
@@ -118,7 +121,7 @@ describe("resolveLocalDevEnv", () => {
     ).rejects.toThrow("WEB_PORT is pinned to 39000");
   });
 
-  it("derives coherent auth/runtime/database URLs", async () => {
+  it("derives coherent auth and database URLs", async () => {
     const repoDir = await createTempRepo();
     await writeDefaultEnvFiles(repoDir);
 
@@ -130,7 +133,9 @@ describe("resolveLocalDevEnv", () => {
 
     expect(resolved.env.WEB_BASE_URL).toBe("http://127.0.0.1:39000");
     expect(resolved.env.ENTRA_REDIRECT_URI).toBe("http://127.0.0.1:39000/v1/auth/entra/callback");
-    expect(resolved.env.AGENT_RUNTIME_ENDPOINT).toBe("http://127.0.0.1:8080");
+    expect(resolved.env.VITE_AGENT_DEFAULT_EXECUTION_MODE).toBe("local");
+    expect(resolved.env.AGENT_DEFAULT_EXECUTION_MODE).toBe("local");
+    expect(resolved.env.AGENT_RUNTIME_PROVIDER).toBe("local_process");
     expect(resolved.env.DATABASE_URL).toBe("postgres://compass:compass@localhost:5432/compass");
   });
 
@@ -159,7 +164,7 @@ describe("resolveLocalDevEnv", () => {
       ].join("\n") + "\n"
     );
 
-    const occupied = new Set([3000, 3001, 5432, 8080]);
+    const occupied = new Set([3000, 3001, 5432]);
     const resolved = await resolveLocalDevEnv({
       rootDir: repoDir,
       env: {},
@@ -182,16 +187,16 @@ describe("resolveLocalDevEnv", () => {
 
     expect(Object.keys(resolved.env).sort()).toEqual(
       [
-        "AGENT_RUNTIME_ENDPOINT",
+        "AGENT_DEFAULT_EXECUTION_MODE",
+        "AGENT_RUNTIME_PROVIDER",
         "API_PORT",
         "AUTH_MODE",
         "COMPOSE_PROJECT_NAME",
         "DATABASE_URL",
         "ENTRA_REDIRECT_URI",
         "HOST",
-        "PORT",
         "POSTGRES_PORT",
-        "SESSION_RUNTIME_PORT",
+        "VITE_AGENT_DEFAULT_EXECUTION_MODE",
         "VITE_API_BASE_URL",
         "WEB_BASE_URL",
         "WEB_PORT"

@@ -41,7 +41,7 @@ function sampleThread() {
     executionMode: "cloud" as const,
     executionHost: "dynamic_sessions" as const,
     status: "idle" as const,
-    cloudSessionIdentifier: "thr-thread-1",
+    sessionIdentifier: "thr-thread-1",
     title: null,
     archived: false,
     createdAt: "2026-03-03T00:00:00.000Z",
@@ -66,7 +66,6 @@ const envKeys = [
   "MSI_SECRET",
   "AGENT_RUNTIME_PROVIDER",
   "AGENT_CLOUD_DRIVER_MOCK",
-  "AGENT_RUNTIME_ENDPOINT",
   "DYNAMIC_SESSIONS_POOL_MANAGEMENT_ENDPOINT",
   "DYNAMIC_SESSIONS_BEARER_TOKEN",
   "DYNAMIC_SESSIONS_TOKEN_RESOURCE",
@@ -110,9 +109,7 @@ describe("agent runtime helpers", () => {
   it("resolves runtime providers from environment precedence", () => {
     expect(resolveRuntimeProvider({ AGENT_RUNTIME_PROVIDER: "mock" })).toBe("mock");
     expect(resolveRuntimeProvider({ AGENT_CLOUD_DRIVER_MOCK: "true" })).toBe("mock");
-    expect(resolveRuntimeProvider({ AGENT_RUNTIME_ENDPOINT: "http://localhost:4000" })).toBe(
-      "local_process"
-    );
+    expect(resolveRuntimeProvider({ AGENT_DEFAULT_EXECUTION_MODE: "local" })).toBe("local_process");
     expect(resolveRuntimeProvider({})).toBe("dynamic_sessions");
   });
 });
@@ -140,6 +137,13 @@ describe("MockCloudExecutionDriver", () => {
       runtimeMetadata: {
         driver: "mock",
         turnId: "turn-1"
+      },
+      runtime: {
+        sessionIdentifier: "thr-thread-1",
+        connectionState: "reused",
+        runtimeKind: "mock",
+        bootId: "mock",
+        pid: null
       }
     });
 
@@ -522,16 +526,22 @@ describe("LocalHttpExecutionDriver", () => {
 describe("buildRuntimeExecutionDriver", () => {
   it("builds a mock provider when requested", () => {
     const driver = buildRuntimeExecutionDriver({
-      AGENT_RUNTIME_PROVIDER: "mock"
+      env: {
+        AGENT_RUNTIME_PROVIDER: "mock"
+      },
+      sessionControlPlane: null
     });
 
     expect(driver.provider).toBe("mock");
   });
 
-  it("builds a local_process provider when endpoint exists", () => {
+  it("builds a local_process provider when local mode is default", () => {
     const driver = buildRuntimeExecutionDriver({
-      AGENT_RUNTIME_PROVIDER: "local_process",
-      AGENT_RUNTIME_ENDPOINT: "http://runtime.local"
+      env: {
+        AGENT_RUNTIME_PROVIDER: "local_process",
+        AGENT_DEFAULT_EXECUTION_MODE: "local"
+      },
+      sessionControlPlane: {} as never
     });
 
     expect(driver.provider).toBe("local_process");
@@ -539,7 +549,10 @@ describe("buildRuntimeExecutionDriver", () => {
 
   it("builds unavailable driver for dynamic_sessions without endpoint", async () => {
     const driver = buildRuntimeExecutionDriver({
-      AGENT_RUNTIME_PROVIDER: "dynamic_sessions"
+      env: {
+        AGENT_RUNTIME_PROVIDER: "dynamic_sessions"
+      },
+      sessionControlPlane: null
     });
 
     await expect(driver.readAccount({ refreshToken: false })).rejects.toMatchObject({
@@ -548,11 +561,12 @@ describe("buildRuntimeExecutionDriver", () => {
     });
   });
 
-  it("builds dynamic_sessions driver with static token when configured", () => {
+  it("builds dynamic_sessions driver when a control plane is configured", () => {
     const driver = buildRuntimeExecutionDriver({
-      AGENT_RUNTIME_PROVIDER: "dynamic_sessions",
-      DYNAMIC_SESSIONS_POOL_MANAGEMENT_ENDPOINT: "https://pool.example",
-      DYNAMIC_SESSIONS_BEARER_TOKEN: "bearer-token"
+      env: {
+        AGENT_RUNTIME_PROVIDER: "dynamic_sessions"
+      },
+      sessionControlPlane: {} as never
     });
 
     expect(driver.provider).toBe("dynamic_sessions");

@@ -2,7 +2,7 @@
 
 Compass uses one native GitHub development pipeline built around merge queue and one immutable release candidate.
 
-A lightweight `Queue Admission` job runs on `pull_request` only to satisfy GitHub merge queue entry requirements. The real staged pipeline still starts at Commit Stage on `merge_group`.
+A lightweight `Queue Admission` job runs on `pull_request` only to satisfy GitHub merge queue entry requirements. It is not part of the deployment pipeline stage model. The real staged pipeline starts at Commit Stage on `merge_group`.
 
 ## Stages
 
@@ -65,13 +65,10 @@ The key rule is:
 - automatic release after Acceptance success on merge queue
 - rollback by prior-candidate redeploy
 
-## Stage budgets
+## Runtime visibility
 
-Current reporting targets:
+The workflow summaries report elapsed time for Commit, Acceptance, and Release so operators can spot regressions. Those timings are informational. The first-order design concern is still the stage model:
 
-- Commit Stage: `<= 3m`
-- Acceptance Stage: `<= 1m30s`
-- Release Stage (no infra change): `<= 3m45s`
-- total merge-group pipeline: `<= 7m30s`
-
-These are visibility targets, not merge-blocking SLOs.
+- Commit is the first real stage and builds the candidate once
+- Acceptance proves behavior on that same candidate
+- Release promotes that same candidate

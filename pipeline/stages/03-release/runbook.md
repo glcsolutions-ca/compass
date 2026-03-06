@@ -70,15 +70,6 @@ Rollback drill executed on 2026-03-06 UTC:
    - redirect URI remained `https://compass.glcsolutions.ca/v1/auth/entra/callback`
 4. restored production to `sha-145da49c74332efde081243866a507ac4db245d7`
 
-Observed timings:
-
-- rollback redeploy run `22771878458`: `2026-03-06T16:18:18Z` -> `2026-03-06T16:22:36Z` (`4m18s`)
-- restore run `22772072080`: `2026-03-06T16:23:28Z` -> `2026-03-06T16:28:00Z` (`4m32s`)
-
-## Reporting target
-
-Normal no-infra-change Release should normally complete within `3m45s`.
-
 ### Operational note
 
 Because this simplified model uses long-lived stage/prod app pairs instead of revision traffic switching:
@@ -86,3 +77,5 @@ Because this simplified model uses long-lived stage/prod app pairs instead of re
 - rollback is a prior-candidate redeploy, not a traffic flip
 - stage smoke must remain read-only because stage shares the production DB and Key Vault
 - database changes must stay backward-compatible across the release window
+
+Release summaries still include basic elapsed time for operator visibility, but detailed performance diagnostics are intentionally not treated as a first-class part of the pipeline design.

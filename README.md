@@ -2,7 +2,7 @@
 
 Compass follows a native development pipeline built around one immutable release candidate created on GitHub merge queue branches.
 
-A small PR-time queue-admission check exists only because GitHub merge queue requires required PR conditions to be satisfied before a change can enter the queue. The real development pipeline still starts with Commit Stage on integrated code.
+A small PR-time queue-admission check exists only because GitHub merge queue requires a required PR condition before a change can enter the queue. It is a GitHub prerequisite, not part of the deployment pipeline proper. The real development pipeline starts with Commit Stage on integrated code.
 
 ## Delivery model
 
@@ -157,12 +157,7 @@ The stage apps use their ACA default hostnames.
 - `pnpm check:pipeline`
 - `pnpm test:full`
 
-Current merge-queue reporting targets:
-
-- Commit Stage: `<= 3m`
-- Acceptance Stage: `<= 1m30s`
-- Release Stage (no infra change): `<= 3m45s`
-- total merge-group pipeline: `<= 7m30s`
+Commit should stay comfortably under the roughly ten-minute guidance Farley/Humble describe for fast integrated feedback. The workflow summaries still show stage elapsed time for operator visibility, but the stage model itself is the primary design concern.
 
 Local Postgres helpers:
 

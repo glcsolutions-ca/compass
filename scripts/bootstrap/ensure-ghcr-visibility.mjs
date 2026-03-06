@@ -21,18 +21,36 @@ function sleep(delayMs) {
   });
 }
 
-async function ensurePackagePublic(owner, packageName) {
+async function getPackage(owner, packageName) {
+  const output = await gh([
+    "api",
+    "-H",
+    "Accept: application/vnd.github+json",
+    `orgs/${owner}/packages/container/${packageName}`
+  ]);
+  return JSON.parse(output);
+}
+
+function buildVisibilityHelp(owner, packageName, packageHtmlUrl) {
+  const packageSettingsUrl = `${packageHtmlUrl}/settings`;
+  const orgPackagesSettingsUrl = `https://github.com/organizations/${owner}/settings/packages`;
+  return [
+    `GHCR package is not public: ${packageName}`,
+    `GitHub does not expose a supported API to change container package visibility in this workflow.`,
+    `Set the package visibility to public in GitHub UI, then rerun the workflow.`,
+    `Package settings: ${packageSettingsUrl}`,
+    `Org package defaults: ${orgPackagesSettingsUrl}`
+  ].join("\n");
+}
+
+async function verifyPackagePublic(owner, packageName) {
   for (let attempt = 1; attempt <= PACKAGE_LOOKUP_RETRIES; attempt += 1) {
     try {
-      await gh([
-        "api",
-        "--method",
-        "PATCH",
-        `orgs/${owner}/packages/container/${packageName}/visibility`,
-        "-f",
-        "visibility=public"
-      ]);
-      console.info(`GHCR package made public: ${packageName}`);
+      const pkg = await getPackage(owner, packageName);
+      if (pkg.visibility !== "public") {
+        throw new Error(buildVisibilityHelp(owner, packageName, pkg.html_url));
+      }
+      console.info(`GHCR package is public: ${packageName}`);
       return;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -54,7 +72,7 @@ export async function ensureGhcrVisibility() {
   const config = await loadProductionConfig();
   const owner = config.repository.split("/")[0];
   for (const packageName of config.ghcrPackages) {
-    await ensurePackagePublic(owner, packageName);
+    await verifyPackagePublic(owner, packageName);
   }
 }
 

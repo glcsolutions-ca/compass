@@ -211,9 +211,9 @@ jobs:
 
       - name: Generate release candidate manifest
         run: |
-          mkdir -p .artifacts/release-candidate
+          manifest_path="$RUNNER_TEMP/release-candidate.json"
           pnpm --filter @compass/pipeline-tools run manifest:generate -- \
-            --out .artifacts/release-candidate/manifest.json \
+            --out "$manifest_path" \
             --repository "${{ github.repository }}" \
             --source-revision "${{ github.sha }}" \
             --api-image "${{ steps.refs.outputs.api_image_ref }}" \
@@ -224,11 +224,11 @@ jobs:
             --release-unit-digest "${{ steps.release_unit.outputs.release_unit_digest }}"
 
       - name: Validate release candidate manifest
-        run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file .artifacts/release-candidate/manifest.json
+        run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
 
       - name: Publish candidate manifest package
         run: |
-          cp .artifacts/release-candidate/manifest.json manifest.json
+          cp "$RUNNER_TEMP/release-candidate.json" manifest.json
           oras push --artifact-type application/vnd.compass.release-manifest.v1+json \
             "${MANIFESTS_REPO}:${{ steps.candidate.outputs.candidate_id }}" \
             "manifest.json:application/vnd.compass.release-manifest.v1+json"

@@ -169,6 +169,9 @@ export async function ensureEntraApps({
 } = {}) {
   await ensureAzLogin();
   const config = await loadProductionConfig();
+  await runAz(["account", "set", "--subscription", config.subscriptionId], {
+    output: "none"
+  });
   const previousOutput = await readPreviousOutput(OUTPUT_PATH);
   const redirectUriPath = config.entra.redirectUriPath;
   const redirectUris = [

@@ -60,7 +60,6 @@ async function loadVerificationEntries(options) {
     repo,
     "--predicate-type",
     predicateType,
-    "--bundle-from-oci",
     "--format",
     "json"
   ];

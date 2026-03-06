@@ -2,6 +2,8 @@
 
 Compass follows a native development pipeline built around one immutable release candidate created on GitHub merge queue branches.
 
+A small PR-time queue-admission check exists only because GitHub merge queue requires required PR conditions to be satisfied before a change can enter the queue. The real development pipeline still starts with Commit Stage on integrated code.
+
 ## Delivery model
 
 The pipeline is:
@@ -25,19 +27,21 @@ The real delivery pipeline.
 
 Trigger modes:
 
+- `pull_request` for the lightweight queue-admission check
 - `merge_group` for the normal automated path
 - `workflow_dispatch` with `candidate_id` for manual redeploy of a previously accepted candidate
 
 Normal flow:
 
 1. a PR is reviewed
-2. the PR is added to GitHub merge queue
-3. GitHub creates a merge-group branch
-4. the Development Pipeline runs:
+2. the Development Pipeline runs a lightweight `Queue Admission` job on the PR
+3. the PR is added to GitHub merge queue
+4. GitHub creates a merge-group branch
+5. the Development Pipeline runs:
    - `Commit Stage`
    - `Acceptance Stage`
    - `Release Stage`
-5. if all stages pass, GitHub merges to `main`
+6. if all stages pass, GitHub merges to `main`
 
 ## Commit Stage
 

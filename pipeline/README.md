@@ -2,6 +2,8 @@
 
 Compass uses one native GitHub development pipeline built around merge queue and one immutable release candidate.
 
+A lightweight `Queue Admission` job runs on `pull_request` only to satisfy GitHub merge queue entry requirements. The real staged pipeline still starts at Commit Stage on `merge_group`.
+
 ## Stages
 
 ### `Commit Stage`
@@ -24,6 +26,7 @@ The real pipeline and the only required status check path.
 
 Triggers:
 
+- `pull_request` for the lightweight queue-admission check
 - `merge_group` for normal delivery
 - `workflow_dispatch` with `candidate_id` for manual redeploy
 

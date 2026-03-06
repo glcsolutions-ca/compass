@@ -6,7 +6,7 @@ import { PATTERNS, readJsonFile } from "../../../shared/scripts/pipeline-contrac
 
 const execFileAsync = promisify(execFile);
 
-export function findPassingAcceptanceAttestation(entries, options) {
+export function findPassingAttestation(entries, options) {
   const { candidateId, sourceRevision, predicateType } = options;
   if (!Array.isArray(entries) || entries.length === 0) {
     throw new Error("No attestations were returned for verification.");
@@ -31,7 +31,7 @@ export function findPassingAcceptanceAttestation(entries, options) {
   }
 
   throw new Error(
-    `No passing acceptance attestation found for ${candidateId} (${sourceRevision}) with predicate ${predicateType}.`
+    `No passing attestation found for ${candidateId} (${sourceRevision}) with predicate ${predicateType}.`
   );
 }
 
@@ -81,7 +81,7 @@ async function loadVerificationEntries(options) {
   return JSON.parse(String(result.stdout || "[]"));
 }
 
-export async function verifyAcceptanceAttestation(options) {
+export async function verifyPassingAttestation(options) {
   const candidateId = requireOption(options, "candidate-id");
   const sourceRevision = requireOption(options, "source-revision").toLowerCase();
   const predicateType = requireOption(options, "predicate-type");
@@ -93,19 +93,19 @@ export async function verifyAcceptanceAttestation(options) {
     throw new Error(`Invalid source revision: ${sourceRevision}`);
   }
 
-  const predicate = findPassingAcceptanceAttestation(await loadVerificationEntries(options), {
+  const predicate = findPassingAttestation(await loadVerificationEntries(options), {
     candidateId,
     sourceRevision,
     predicateType
   });
   console.info(
-    `Verified acceptance attestation for ${predicate.candidateId} (${predicate.sourceRevision}) verdict=${predicate.verdict}.`
+    `Verified passing attestation for ${predicate.candidateId} (${predicate.sourceRevision}) predicate=${predicateType} verdict=${predicate.verdict}.`
   );
   return predicate;
 }
 
 export async function main(argv = process.argv.slice(2)) {
-  await verifyAcceptanceAttestation(parseCliArgs(argv));
+  await verifyPassingAttestation(parseCliArgs(argv));
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {

@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  findPassingAcceptanceAttestation,
+  findPassingAttestation,
   normalizeOciSubject
-} from "../scripts/verify-acceptance-attestation.mjs";
+} from "../scripts/verify-passing-attestation.mjs";
 
-const predicateType = "https://compass.glcsolutions.ca/pipeline/attestations/acceptance/v1";
+const acceptancePredicateType =
+  "https://compass.glcsolutions.ca/pipeline/attestations/acceptance/v1";
+const releasePredicateType = "https://compass.glcsolutions.ca/pipeline/attestations/release/v2";
 
-describe("verify-acceptance-attestation", () => {
+describe("verify-passing-attestation", () => {
   it("normalizes plain OCI subjects", () => {
     expect(
       normalizeOciSubject(
@@ -22,7 +24,7 @@ describe("verify-acceptance-attestation", () => {
       {
         verificationResult: {
           statement: {
-            predicateType,
+            predicateType: acceptancePredicateType,
             predicate: {
               schemaVersion: "acceptance-attestation.v1",
               candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -34,10 +36,36 @@ describe("verify-acceptance-attestation", () => {
       }
     ];
 
-    const predicate = findPassingAcceptanceAttestation(entries, {
+    const predicate = findPassingAttestation(entries, {
       candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      predicateType
+      predicateType: acceptancePredicateType
+    });
+
+    expect(predicate.verdict).toBe("pass");
+  });
+
+  it("matches release attestations too", () => {
+    const entries = [
+      {
+        verificationResult: {
+          statement: {
+            predicateType: releasePredicateType,
+            predicate: {
+              schemaVersion: "release-attestation.v2",
+              candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              verdict: "pass"
+            }
+          }
+        }
+      }
+    ];
+
+    const predicate = findPassingAttestation(entries, {
+      candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      predicateType: releasePredicateType
     });
 
     expect(predicate.verdict).toBe("pass");
@@ -48,7 +76,7 @@ describe("verify-acceptance-attestation", () => {
       {
         verificationResult: {
           statement: {
-            predicateType,
+            predicateType: acceptancePredicateType,
             predicate: {
               schemaVersion: "acceptance-attestation.v1",
               candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -61,11 +89,11 @@ describe("verify-acceptance-attestation", () => {
     ];
 
     expect(() =>
-      findPassingAcceptanceAttestation(entries, {
+      findPassingAttestation(entries, {
         candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        predicateType
+        predicateType: acceptancePredicateType
       })
-    ).toThrow(/No passing acceptance attestation found/);
+    ).toThrow(/No passing attestation found/);
   });
 });

@@ -34,6 +34,7 @@ The current target architecture is:
 - one migrate job
 - `Commit Stage -> Acceptance Stage -> Release Stage`
 - `Queue Admission` exists only as a GitHub merge-queue prerequisite; it is not part of the deployment pipeline stage model
+- manual `workflow_dispatch` is rare recovery redeploy only for a previously released candidate
 
 ## Main commands
 
@@ -54,6 +55,11 @@ The current target architecture is:
 - Treat `scripts/bootstrap/*` as admin-only control-plane tooling.
 - Treat `pipeline` as the source of truth for delivery policy and evidence.
 - Treat merge queue as the native entry point to the real development pipeline.
+- Treat manual `workflow_dispatch` as rare recovery redeploy:
+  - previously released candidates only
+  - no infra apply
+  - no migrations
+  - preferred operational response remains fix-forward with a new candidate
 - Treat `check:commit` as the deployed-surface gate only:
   - `api`
   - `web`

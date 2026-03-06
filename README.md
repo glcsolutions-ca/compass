@@ -29,7 +29,7 @@ Trigger modes:
 
 - `pull_request` for the lightweight queue-admission check
 - `merge_group` for the normal automated path
-- `workflow_dispatch` with `candidate_id` for manual redeploy of a previously accepted candidate
+- `workflow_dispatch` with `candidate_id` for manual recovery redeploy of a previously released candidate
 
 Normal flow:
 
@@ -105,6 +105,8 @@ It:
 8. writes and attests release evidence
 
 If Release fails, the PR does not merge.
+
+For new changes, Release only runs after the same candidate has already passed Acceptance.
 
 Stage apps stay scaled to zero between releases for cost control, so the release path keeps the cold-start tradeoff instead of adding extra warm-up logic.
 
@@ -182,14 +184,24 @@ Typical sequence:
 
 More detail is in [/Users/justinkropp/.codex/worktrees/2bfd/compass/bootstrap/README.md](/Users/justinkropp/.codex/worktrees/2bfd/compass/bootstrap/README.md).
 
-## Rollback
+## Recovery redeploy
 
-Rollback is a prior-candidate redeploy.
+The preferred response to production issues is to fix forward with a new candidate through the normal pipeline.
+
+Recovery redeploy is a rare fallback, not the normal production path.
+
+Recovery redeploy is only supported for a **previously released** candidate. It:
+
+- verifies prior release attestation
+- skips production Bicep apply
+- skips migrations
+- still redeploys through stage and then prod
+- still runs stage smoke and production smoke
+
+If the previous candidate is not compatible with the current schema, recovery redeploy is unsupported and the correct response is a forward fix.
 
 Use the unified pipeline manually:
 
 ```sh
-gh workflow run 01-development-pipeline.yml --ref main -f candidate_id=sha-<previous-accepted-candidate>
+gh workflow run 01-development-pipeline.yml --ref main -f candidate_id=sha-<previous-released-candidate>
 ```
-
-There is no traffic-flip rollback in this architecture.

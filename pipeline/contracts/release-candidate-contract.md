@@ -41,11 +41,18 @@ A candidate is releasable only if:
 - Production smoke must pass before release attestation is written.
 - Release happens before the queued change merges to `main`.
 
-## Rollback Rules
+## Recovery Rules
 
-Rollback is a prior-candidate redeploy:
+Recovery redeploy is a previously released-candidate redeploy:
 
-1. choose a previously accepted candidate id
+1. choose a previously released candidate id
 2. rerun `01 Development Pipeline` manually with that `candidate_id`
 
-There is no traffic-flip rollback in this architecture.
+Recovery redeploy:
+
+- verifies prior release attestation
+- skips infra apply
+- skips migrations
+- still uses stage deploy, read-only stage smoke, prod deploy, and production smoke
+
+If a previously released candidate is not compatible with the current schema, recovery redeploy is unsupported and the preferred response is a forward fix.

@@ -47,7 +47,7 @@ Triggers:
 
 - `pull_request` for the lightweight queue-admission check
 - `merge_group` for normal delivery
-- `workflow_dispatch` with `candidate_id` for manual redeploy
+- `workflow_dispatch` with `candidate_id` for manual recovery redeploy of a previously released candidate
 
 ## Candidate flow
 
@@ -56,6 +56,7 @@ The key rule is:
 - Commit builds and publishes the candidate once
 - Acceptance and Release consume that exact candidate
 - later stages do not rebuild images
+- new candidates must pass Acceptance before Release can promote them
 
 ## Current production architecture
 
@@ -63,11 +64,25 @@ The key rule is:
 - one GitHub deployment environment: `production`
 - long-lived ACA app pairs for stage/prod
 - automatic release after Acceptance success on merge queue
-- rollback by prior-candidate redeploy
+- rare recovery redeploy of a previously released candidate
+
+## Recovery policy
+
+The preferred operational response is to fix forward with a new candidate through the normal pipeline.
+
+Manual recovery redeploy exists only as a rare fallback. It:
+
+- is only allowed for a previously released candidate
+- verifies prior release attestation
+- skips infra apply
+- skips migrations
+- still uses the same stage -> prod deployment flow
+
+If the previous candidate is not compatible with the current database schema, recovery redeploy is unsupported and the correct response is a forward fix.
 
 ## Runtime visibility
 
-The workflow summaries report elapsed time for Commit, Acceptance, and Release so operators can spot regressions. Those timings are informational. The first-order design concern is still the stage model:
+The workflow summaries report basic elapsed time for Commit, Acceptance, and Release so operators can spot regressions. Those timings are informational. The first-order design concern is still the stage model:
 
 - Commit is the first real stage and builds the candidate once
 - Acceptance proves behavior on that same candidate

@@ -4,11 +4,11 @@ import { Client } from "pg";
 import { resolveDatabaseUrl } from "./constants.mjs";
 
 const SEED_TEMPLATE_DEFAULTS = {
-  AUTH_BOOTSTRAP_ALLOWED_TENANT_ID: "acceptance-tenant",
-  AUTH_BOOTSTRAP_ALLOWED_APP_CLIENT_ID: "integration-client",
-  AUTH_BOOTSTRAP_DELEGATED_USER_OID: "smoke-user",
-  AUTH_BOOTSTRAP_DELEGATED_USER_EMAIL: "smoke-user@compass.local",
-  AUTH_BOOTSTRAP_DELEGATED_USER_DISPLAY_NAME: "Smoke User"
+  SEED_DEFAULT_TENANT_ID: "acceptance-tenant",
+  SEED_DEFAULT_APP_CLIENT_ID: "integration-client",
+  SEED_DEFAULT_USER_OID: "smoke-user",
+  SEED_DEFAULT_USER_EMAIL: "smoke-user@compass.local",
+  SEED_DEFAULT_USER_DISPLAY_NAME: "Smoke User"
 };
 
 function escapeSqlLiteral(value) {

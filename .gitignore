@@ -17,3 +17,9 @@ test-results
 *.tsbuildinfo
 
 .tools
+
+bootstrap/.artifacts
+infra/azure/apps-bootstrap.json
+infra/azure/foundation.json
+infra/azure/main.json
+infra/azure/modules/*.json

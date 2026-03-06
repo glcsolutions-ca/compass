@@ -1,0 +1,66 @@
+name: PR Validation
+run-name: PR Validation (#${{ github.event.pull_request.number }} @ ${{ github.sha }})
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr_validation:
+    name: PR Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Application validation
+        run: pnpm check:ci
+
+      - name: Pipeline tests
+        run: pnpm --filter @compass/pipeline-tools run test
+
+      - name: Install actionlint
+        run: |
+          install_dir="$RUNNER_TEMP/actionlint-bin"
+          mkdir -p "$install_dir"
+          (
+            cd "$install_dir"
+            curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash \
+              | bash -s -- 1.7.8
+          )
+          echo "$install_dir" >> "$GITHUB_PATH"
+
+      - name: Workflow lint
+        run: actionlint -color
+
+      - name: Build all Bicep templates
+        run: |
+          find infra/azure -type f -name '*.bicep' -print0 | while IFS= read -r -d '' file; do
+            az bicep build --stdout --file "$file" >/dev/null
+          done
+
+      - name: Audit legacy references
+        run: node scripts/dev/audit-legacy-references.mjs

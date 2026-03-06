@@ -18,24 +18,17 @@ const SCHEMAS = {
   acceptanceAttestationPredicate: loadSchema(
     "pipeline/contracts/schemas/acceptance-attestation-predicate.schema.json"
   ),
-  productionRehearsalEvidence: loadSchema(
-    "pipeline/contracts/schemas/production-rehearsal-evidence.schema.json"
-  ),
   releaseAttestationPredicate: loadSchema(
     "pipeline/contracts/schemas/release-attestation-predicate.schema.json"
   )
 };
 
-const ajv = new Ajv2020({
-  allErrors: true,
-  strict: false
-});
+const ajv = new Ajv2020({ allErrors: true, strict: false });
 addFormats(ajv);
 
 const VALIDATORS = {
   releaseCandidate: ajv.compile(SCHEMAS.releaseCandidate),
   acceptanceAttestationPredicate: ajv.compile(SCHEMAS.acceptanceAttestationPredicate),
-  productionRehearsalEvidence: ajv.compile(SCHEMAS.productionRehearsalEvidence),
   releaseAttestationPredicate: ajv.compile(SCHEMAS.releaseAttestationPredicate)
 };
 
@@ -44,19 +37,12 @@ function toDotPath(instancePath) {
     return "$";
   }
 
-  const decoded = instancePath
+  return `$${instancePath
     .split("/")
     .filter(Boolean)
     .map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"))
-    .map((part) => {
-      if (/^[0-9]+$/u.test(part)) {
-        return `[${part}]`;
-      }
-      return `.${part}`;
-    })
-    .join("");
-
-  return `$${decoded}`;
+    .map((part) => (/^[0-9]+$/u.test(part) ? `[${part}]` : `.${part}`))
+    .join("")}`;
 }
 
 function normalizeAjvError(error) {

@@ -15,8 +15,6 @@ function baseManifest() {
         "ghcr.io/glcsolutions-ca/compass-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       webImage:
         "ghcr.io/glcsolutions-ca/compass-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      workerImage:
-        "ghcr.io/glcsolutions-ca/compass-worker@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       migrationsArtifact:
         "ghcr.io/glcsolutions-ca/compass-migrations@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
     },
@@ -30,14 +28,12 @@ function baseManifest() {
 
 describe("validate-release-candidate-runtime", () => {
   it("passes a valid release candidate manifest", () => {
-    const errors = validateReleaseCandidateRuntimeDocument(baseManifest());
-    expect(errors).toHaveLength(0);
+    expect(validateReleaseCandidateRuntimeDocument(baseManifest())).toHaveLength(0);
   });
 
   it("fails invalid provenance.releaseUnitDigest", () => {
     const manifest = baseManifest();
     manifest.provenance.releaseUnitDigest = "sha256:bad";
-
     const errors = validateReleaseCandidateRuntimeDocument(manifest);
     expect(errors.some((entry) => entry.path === "$.provenance.releaseUnitDigest")).toBe(true);
   });
@@ -45,7 +41,6 @@ describe("validate-release-candidate-runtime", () => {
   it("fails unknown top-level keys", () => {
     const manifest = baseManifest();
     manifest.unexpected = true;
-
     const errors = validateReleaseCandidateRuntimeDocument(manifest);
     expect(errors.some((entry) => entry.path === "$.unexpected")).toBe(true);
   });

@@ -13,47 +13,36 @@ function run(command, args, { cwd } = {}) {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"]
   });
-
   if (result.status !== 0) {
     throw new Error(
       `Command failed: ${command} ${args.join(" ")}\n${result.stderr || result.stdout || ""}`
     );
   }
-
   return result;
 }
 
-export async function collectFilesRecursive(directory) {
+async function collectFilesRecursive(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = [];
-
   for (const entry of entries) {
     const fullPath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await collectFilesRecursive(fullPath)));
-      continue;
-    }
-
-    if (entry.isFile()) {
+    } else if (entry.isFile()) {
       files.push(fullPath);
     }
   }
-
   return files;
 }
 
 export async function resolvePulledManifestPath(directory) {
   const preferredPath = path.join(directory, "manifest.json");
-
   try {
     await access(preferredPath);
     return preferredPath;
-  } catch {
-    // Fall through to generic discovery.
-  }
+  } catch {}
 
   const files = await collectFilesRecursive(directory);
-
   if (files.length === 0) {
     throw new Error(`No files found in pulled artifact directory: ${directory}`);
   }
@@ -63,57 +52,50 @@ export async function resolvePulledManifestPath(directory) {
     return namedManifest;
   }
 
-  const prioritizedCandidates = [
-    ...files.filter((filePath) => filePath.endsWith(".json")),
-    ...files.filter((filePath) => !filePath.endsWith(".json"))
-  ];
-
-  for (const candidatePath of prioritizedCandidates) {
+  for (const candidatePath of files) {
     try {
       const errors = await validateReleaseCandidateFile(candidatePath);
       if (errors.length === 0) {
         return candidatePath;
       }
-    } catch {
-      // Ignore unreadable/non-JSON files and continue searching.
-    }
+    } catch {}
   }
 
   throw new Error(`No valid release candidate manifest found in pulled artifact: ${directory}`);
 }
 
-export async function main(argv = process.argv.slice(2)) {
-  const options = parseCliArgs(argv);
-
-  const candidateId = requireOption(options, "candidate-id");
-  const outPath = requireOption(options, "out");
-  const registryRepo = requireOption(options, "registry-repo");
-
+export async function fetchReleaseCandidate(candidateId, outPath, registryRepo) {
   if (!PATTERNS.candidateId.test(candidateId)) {
     throw new Error(`Invalid candidate id: ${candidateId}`);
   }
 
   run("oras", ["version"]);
-
   const workingDirectory = await mkdtemp(path.join(os.tmpdir(), "compass-rc-"));
 
   try {
     const reference = `${registryRepo}:${candidateId}`;
     run("oras", ["pull", reference, "-o", workingDirectory]);
-
     const sourceManifest = await resolvePulledManifestPath(workingDirectory);
     await copyFile(sourceManifest, outPath);
-
     const errors = await validateReleaseCandidateFile(outPath);
     if (errors.length > 0) {
-      const details = errors.map((entry) => `- ${entry.path}: ${entry.message}`).join("\n");
-      throw new Error(`Fetched manifest failed validation:\n${details}`);
+      throw new Error(
+        `Fetched manifest failed validation:\n${errors.map((entry) => `- ${entry.path}: ${entry.message}`).join("\n")}`
+      );
     }
-
-    console.info(`Fetched release candidate '${candidateId}' to ${path.resolve(outPath)}`);
+    return outPath;
   } finally {
     await rm(workingDirectory, { recursive: true, force: true });
   }
+}
+
+export async function main(argv = process.argv.slice(2)) {
+  const options = parseCliArgs(argv);
+  const candidateId = requireOption(options, "candidate-id");
+  const outPath = requireOption(options, "out");
+  const registryRepo = requireOption(options, "registry-repo");
+  await fetchReleaseCandidate(candidateId, outPath, registryRepo);
+  console.info(`Fetched release candidate '${candidateId}' to ${path.resolve(outPath)}`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {

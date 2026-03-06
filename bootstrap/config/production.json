@@ -1,0 +1,29 @@
+{
+  "repository": "glcsolutions-ca/compass",
+  "subscriptionId": "4514a0d0-2cdc-468e-be25-895aef2846ad",
+  "tenantId": "98dddcec-5421-457b-8cac-aa8d27fbafb6",
+  "resourceGroup": "rg-compass-prd-cc-001",
+  "webBaseUrl": "https://compass.glcsolutions.ca",
+  "webCustomDomain": "compass.glcsolutions.ca",
+  "location": "canadacentral",
+  "githubEnvironment": "production",
+  "reviewers": [],
+  "environmentVars": {
+    "AZURE_TENANT_ID": "98dddcec-5421-457b-8cac-aa8d27fbafb6",
+    "AZURE_SUBSCRIPTION_ID": "4514a0d0-2cdc-468e-be25-895aef2846ad",
+    "AZURE_RESOURCE_GROUP": "rg-compass-prd-cc-001",
+    "ACA_API_PROD_APP_NAME": "ca-compass-api-prd-cc-001",
+    "ACA_WEB_PROD_APP_NAME": "ca-compass-web-prd-cc-001",
+    "ACA_API_STAGE_APP_NAME": "ca-compass-api-stg-prd-cc-001",
+    "ACA_WEB_STAGE_APP_NAME": "ca-compass-web-stg-prd-cc-001",
+    "ACA_MIGRATE_JOB_NAME": "caj-compass-migrate-prd-cc-001",
+    "PRODUCTION_WEB_BASE_URL": "https://compass.glcsolutions.ca"
+  },
+  "entra": {
+    "apiAppDisplayName": "compass-api-prd",
+    "webAppDisplayName": "compass-web-prd",
+    "deployAppDisplayName": "compass-deploy-prd",
+    "redirectUriPath": "/v1/auth/entra/callback"
+  },
+  "ghcrPackages": ["compass-api", "compass-web", "compass-migrations"]
+}

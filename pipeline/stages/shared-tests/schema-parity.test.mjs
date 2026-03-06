@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   validateAcceptanceAttestationPredicateDocument,
-  validateProductionRehearsalEvidenceDocument,
   validateReleaseCandidateDocument,
   validateReleaseAttestationPredicateDocument
 } from "../../shared/scripts/pipeline-contract-lib.mjs";
@@ -22,8 +21,6 @@ describe("schema parity", () => {
           "ghcr.io/glcsolutions-ca/compass-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         webImage:
           "ghcr.io/glcsolutions-ca/compass-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        workerImage:
-          "ghcr.io/glcsolutions-ca/compass-worker@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         migrationsArtifact:
           "ghcr.io/glcsolutions-ca/compass-migrations@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
       },
@@ -33,9 +30,9 @@ describe("schema parity", () => {
       }
     };
 
-    const helperValid = validateReleaseCandidateDocument(candidate).length === 0;
-    const schemaValid = validateBySchema("releaseCandidate", candidate).length === 0;
-    expect(helperValid).toBe(schemaValid);
+    expect(validateReleaseCandidateDocument(candidate).length === 0).toBe(
+      validateBySchema("releaseCandidate", candidate).length === 0
+    );
   });
 
   it("keeps acceptance attestation helper verdict parity with schema validator", () => {
@@ -49,49 +46,34 @@ describe("schema parity", () => {
       suiteSummary: "system=pass browser=pass"
     };
 
-    const helperValid = validateAcceptanceAttestationPredicateDocument(attestation).length === 0;
-    const schemaValid =
-      validateBySchema("acceptanceAttestationPredicate", attestation).length === 0;
-    expect(helperValid).toBe(schemaValid);
-  });
-
-  it("keeps rehearsal evidence helper verdict parity with schema validator", () => {
-    const evidence = {
-      schemaVersion: "production-rehearsal-evidence.v1",
-      candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      workflowRunId: "123456",
-      rehearsedAt: "2026-03-03T18:28:12Z",
-      verdict: "pass",
-      environment: "production-rehearsal",
-      activeLabel: "green",
-      inactiveLabel: "blue",
-      apiBaseUrl: "https://ca-compass-api-prd-cc-02---blue.example.com",
-      webBaseUrl: "https://ca-compass-web-prd-cc-02---blue.example.com",
-      apiRevision: "ca-compass-api-prd-cc-02--api-aaaaaaaaaaaaaaaaaaaaaaaa",
-      webRevision: "ca-compass-web-prd-cc-02--web-aaaaaaaaaaaaaaaaaaaaaaaa",
-      summary: "deploy=0 verify=0"
-    };
-
-    const helperValid = validateProductionRehearsalEvidenceDocument(evidence).length === 0;
-    const schemaValid = validateBySchema("productionRehearsalEvidence", evidence).length === 0;
-    expect(helperValid).toBe(schemaValid);
+    expect(validateAcceptanceAttestationPredicateDocument(attestation).length === 0).toBe(
+      validateBySchema("acceptanceAttestationPredicate", attestation).length === 0
+    );
   });
 
   it("keeps release attestation helper verdict parity with schema validator", () => {
     const attestation = {
-      schemaVersion: "release-attestation.v1",
+      schemaVersion: "release-attestation.v2",
       candidateId: "sha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       workflowRunId: "123456",
       verdict: "pass",
       releasedAt: "2026-03-03T18:30:12Z",
       environment: "production",
-      deploymentRef: "https://github.com/glcsolutions-ca/compass/actions/runs/123456"
+      deploymentRef: "https://github.com/glcsolutions-ca/compass/actions/runs/123456",
+      apiImage:
+        "ghcr.io/glcsolutions-ca/compass-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      webImage:
+        "ghcr.io/glcsolutions-ca/compass-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      stageApiBaseUrl: "https://api-stage.example.com",
+      stageWebBaseUrl: "https://web-stage.example.com",
+      stageSmokeVerdict: "pass",
+      productionWebBaseUrl: "https://compass.glcsolutions.ca",
+      productionSmokeVerdict: "pass"
     };
 
-    const helperValid = validateReleaseAttestationPredicateDocument(attestation).length === 0;
-    const schemaValid = validateBySchema("releaseAttestationPredicate", attestation).length === 0;
-    expect(helperValid).toBe(schemaValid);
+    expect(validateReleaseAttestationPredicateDocument(attestation).length === 0).toBe(
+      validateBySchema("releaseAttestationPredicate", attestation).length === 0
+    );
   });
 });

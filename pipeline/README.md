@@ -18,10 +18,6 @@ Runs third, deploying the exact accepted candidate to Azure before `main` advanc
 
 ## Workflow topology
 
-### `00 PR Metadata`
-
-Optional, non-blocking PR labeling only.
-
 ### `01 Development Pipeline`
 
 The real pipeline and the only required status check path.

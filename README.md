@@ -19,16 +19,6 @@ The key rule is:
 
 ## GitHub workflow topology
 
-### `00 PR Metadata`
-
-Optional and non-blocking.
-
-- applies path labels only
-- runs on pull requests to `main`
-- does not install dependencies
-- does not run tests
-- does not mutate Azure
-
 ### `01 Development Pipeline`
 
 The real delivery pipeline.

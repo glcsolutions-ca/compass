@@ -17,10 +17,7 @@ function isObject(value) {
 }
 
 function pushError(errors, pathName, message) {
-  errors.push({
-    path: pathName,
-    message
-  });
+  errors.push({ path: pathName, message });
 }
 
 function validateKnownKeys(errors, value, pathName, allowedKeys) {
@@ -62,11 +59,9 @@ function validateSource(errors, source) {
   }
 
   validateNonEmptyString(errors, source.repository, "$.source.repository");
-
   if (typeof source.revision !== "string" || !PATTERNS.sourceRevision.test(source.revision)) {
     pushError(errors, "$.source.revision", "must be a 40-char lowercase SHA");
   }
-
   if (typeof source.createdAt !== "string" || Number.isNaN(Date.parse(source.createdAt))) {
     pushError(errors, "$.source.createdAt", "must be an RFC3339/ISO date-time string");
   }
@@ -77,7 +72,7 @@ function validateArtifacts(errors, artifacts) {
     errors,
     artifacts,
     "$.artifacts",
-    new Set(["apiImage", "webImage", "workerImage", "migrationsArtifact"])
+    new Set(["apiImage", "webImage", "migrationsArtifact"])
   );
 
   if (!isObject(artifacts)) {
@@ -87,7 +82,6 @@ function validateArtifacts(errors, artifacts) {
   const refs = {
     apiImage: artifacts.apiImage,
     webImage: artifacts.webImage,
-    workerImage: artifacts.workerImage,
     migrationsArtifact: artifacts.migrationsArtifact
   };
 
@@ -105,14 +99,12 @@ function validateCommitStageRunId(errors, value) {
     }
     return;
   }
-
   if (typeof value === "string") {
     if (!PATTERNS.numericString.test(value)) {
       pushError(errors, "$.provenance.commitStageRunId", "must be numeric");
     }
     return;
   }
-
   pushError(
     errors,
     "$.provenance.commitStageRunId",
@@ -127,7 +119,6 @@ function validateProvenance(errors, provenance) {
     "$.provenance",
     new Set(["commitStageRunId", "registry", "sbomRefs", "signatureRefs", "releaseUnitDigest"])
   );
-
   if (!isObject(provenance)) {
     return;
   }
@@ -138,11 +129,9 @@ function validateProvenance(errors, provenance) {
   if (typeof provenance.sbomRefs !== "undefined") {
     validateArrayOfNonEmptyStrings(errors, provenance.sbomRefs, "$.provenance.sbomRefs");
   }
-
   if (typeof provenance.signatureRefs !== "undefined") {
     validateArrayOfNonEmptyStrings(errors, provenance.signatureRefs, "$.provenance.signatureRefs");
   }
-
   if (
     typeof provenance.releaseUnitDigest !== "undefined" &&
     (typeof provenance.releaseUnitDigest !== "string" ||
@@ -158,46 +147,37 @@ function validateProvenance(errors, provenance) {
 
 export function validateReleaseCandidateRuntimeDocument(document) {
   const errors = [];
-
   validateKnownKeys(
     errors,
     document,
     "$",
     new Set(["schemaVersion", "candidateId", "source", "artifacts", "provenance"])
   );
-
   if (!isObject(document)) {
     return errors;
   }
-
   if (document.schemaVersion !== "rc.v1") {
     pushError(errors, "$.schemaVersion", "must equal rc.v1");
   }
-
   if (
     typeof document.candidateId !== "string" ||
     !PATTERNS.candidateId.test(document.candidateId)
   ) {
     pushError(errors, "$.candidateId", "must match sha-<40-char lowercase sha>");
   }
-
   validateSource(errors, document.source);
   validateArtifacts(errors, document.artifacts);
   validateProvenance(errors, document.provenance);
-
   return errors;
 }
 
 export async function validateReleaseCandidateRuntimeFile(filePath) {
-  const raw = await readFile(filePath, "utf8");
-  const document = JSON.parse(raw);
-  return validateReleaseCandidateRuntimeDocument(document);
+  return validateReleaseCandidateRuntimeDocument(JSON.parse(await readFile(filePath, "utf8")));
 }
 
 export async function main(argv = process.argv.slice(2)) {
   const options = parseCliArgs(argv);
   const filePath = requireOption(options, "file");
-
   const errors = await validateReleaseCandidateRuntimeFile(filePath);
   if (errors.length > 0) {
     console.error(`Release-candidate runtime validation failed for ${path.resolve(filePath)}:`);
@@ -206,7 +186,6 @@ export async function main(argv = process.argv.slice(2)) {
     }
     process.exit(1);
   }
-
   console.info(`Release-candidate runtime validation passed: ${path.resolve(filePath)}`);
 }
 

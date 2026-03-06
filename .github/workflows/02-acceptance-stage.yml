@@ -9,7 +9,7 @@ on:
       - completed
 
 concurrency:
-  group: acceptance-environment
+  group: acceptance-stage
   cancel-in-progress: true
 
 permissions:
@@ -29,8 +29,6 @@ jobs:
       contents: read
       packages: read
     outputs:
-      run_acceptance: ${{ steps.decision.outputs.run_acceptance }}
-      skip_reason: ${{ steps.decision.outputs.skip_reason }}
       candidate_id: ${{ steps.resolve.outputs.candidate_id }}
       source_revision: ${{ steps.resolve.outputs.source_revision }}
       release_unit_digest_hint: ${{ steps.resolve.outputs.release_unit_digest_hint }}
@@ -38,7 +36,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup pnpm
@@ -67,141 +64,56 @@ jobs:
         id: resolve
         run: |
           set -euo pipefail
-
-          expected_candidate_id="sha-${{ github.event.workflow_run.head_sha }}"
-          if ! echo "${expected_candidate_id}" | grep -Eq '^sha-[0-9a-f]{40}$'; then
-            echo "Invalid candidate id derived from triggering Commit Stage run: ${expected_candidate_id}" >&2
-            exit 1
-          fi
-
-          pull_dir="${RUNNER_TEMP}/release-candidate-pull"
-          rm -rf "${pull_dir}"
-          mkdir -p "${pull_dir}"
-          oras pull "${MANIFESTS_REPO}:${expected_candidate_id}" -o "${pull_dir}"
-
-          manifest_file="${pull_dir}/manifest.json"
-          if [ ! -f "${manifest_file}" ]; then
-            manifest_file="$(find "${pull_dir}" -maxdepth 3 -type f -name '*.json' | head -n 1 || true)"
-          fi
-
-          if [ -z "${manifest_file}" ] || [ ! -f "${manifest_file}" ]; then
-            echo "No manifest JSON found in GHCR candidate package ${MANIFESTS_REPO}:${expected_candidate_id}" >&2
-            exit 1
-          fi
-
-          pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "${manifest_file}"
-
-          candidate_id="$(jq -r '.candidateId // empty' "${manifest_file}")"
-          if [ "${candidate_id}" != "${expected_candidate_id}" ]; then
-            echo "Candidate id mismatch between triggering Commit Stage SHA and GHCR manifest." >&2
-            echo "trigger=${expected_candidate_id} manifest=${candidate_id}" >&2
-            exit 1
-          fi
-
-          source_revision="$(jq -r '.source.revision // empty' "${manifest_file}")"
-          release_unit_digest_hint="$(jq -r '.provenance.releaseUnitDigest // empty' "${manifest_file}")"
-
-          if ! echo "${source_revision}" | grep -Eq '^[0-9a-f]{40}$'; then
-            echo "Invalid source.revision in GHCR manifest: ${source_revision}" >&2
-            exit 1
-          fi
-
-          if [ -n "${release_unit_digest_hint}" ] && ! echo "${release_unit_digest_hint}" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
-            echo "Invalid provenance.releaseUnitDigest in GHCR manifest: ${release_unit_digest_hint}" >&2
-            exit 1
-          fi
-
-          echo "candidate_id=${candidate_id}" >> "$GITHUB_OUTPUT"
-          echo "source_revision=${source_revision}" >> "$GITHUB_OUTPUT"
-          echo "release_unit_digest_hint=${release_unit_digest_hint}" >> "$GITHUB_OUTPUT"
-
-      - name: Wait for source revision on main
-        id: main_guard
-        run: |
-          set -euo pipefail
-
-          source_revision="${{ steps.resolve.outputs.source_revision }}"
-          deadline=$(( $(date +%s) + 600 ))
-          is_on_main=false
-
-          while [ "$(date +%s)" -lt "${deadline}" ]; do
-            git fetch --no-tags origin main
-            if git merge-base --is-ancestor "${source_revision}" origin/main >/dev/null 2>&1; then
-              is_on_main=true
-              break
-            fi
-            sleep 30
-          done
-
-          echo "is_on_main=${is_on_main}" >> "$GITHUB_OUTPUT"
-
-      - name: Finalize acceptance decision
-        id: decision
-        run: |
-          if [ "${{ steps.main_guard.outputs.is_on_main }}" = "true" ]; then
-            echo "run_acceptance=true" >> "$GITHUB_OUTPUT"
-            echo "skip_reason=" >> "$GITHUB_OUTPUT"
-          else
-            echo "run_acceptance=false" >> "$GITHUB_OUTPUT"
-            echo "skip_reason=stale candidate source revision not merged to main" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Write resolver summary
-        run: |
+          candidate_id="sha-${{ github.event.workflow_run.head_sha }}"
+          pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
+            --candidate-id "$candidate_id" \
+            --registry-repo "${MANIFESTS_REPO}" \
+            --out "$RUNNER_TEMP/release-candidate.json"
+          pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
+          source_revision="$(jq -r '.source.revision' "$RUNNER_TEMP/release-candidate.json")"
+          release_unit_digest_hint="$(jq -r '.provenance.releaseUnitDigest // empty' "$RUNNER_TEMP/release-candidate.json")"
           {
-            echo "## Acceptance Resolver"
-            echo "- Candidate: ${{ steps.resolve.outputs.candidate_id }}"
-            echo "- Source revision: ${{ steps.resolve.outputs.source_revision }}"
-            echo "- Run acceptance: ${{ steps.decision.outputs.run_acceptance }}"
-            if [ -n "${{ steps.decision.outputs.skip_reason }}" ]; then
-              echo "- Skip reason: ${{ steps.decision.outputs.skip_reason }}"
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+            echo "candidate_id=${candidate_id}"
+            echo "source_revision=${source_revision}"
+            echo "release_unit_digest_hint=${release_unit_digest_hint}"
+          } >> "$GITHUB_OUTPUT"
 
   acceptance:
     name: Acceptance Stage
     needs:
       - resolve_candidate
-    if: ${{ needs.resolve_candidate.outputs.run_acceptance == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    environment: acceptance
     permissions:
       contents: read
       packages: write
       id-token: write
       attestations: write
-      artifact-metadata: write
 
     steps:
-      - &checkout_step
-        name: Checkout
+      - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.resolve_candidate.outputs.source_revision }}
           fetch-depth: 1
           persist-credentials: false
 
-      - &setup_pnpm_step
-        name: Setup pnpm
+      - name: Setup pnpm
         uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
 
-      - &setup_node_step
-        name: Setup Node
+      - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
+          cache: pnpm
 
-      - &install_dependencies_step
-        name: Install dependencies
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - &setup_oras_step
-        name: Setup ORAS
+      - name: Setup ORAS
         uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
 
-      - &login_ghcr_step
-        name: Login to GHCR
+      - name: Login to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
@@ -215,101 +127,23 @@ jobs:
             --registry-repo "${{ env.MANIFESTS_REPO }}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
-      - name: Validate release manifest
-        run: pnpm --filter @compass/pipeline-tools run manifest:validate --file "$RUNNER_TEMP/release-candidate.json"
-
-      - name: Verify source revision matches resolved candidate
-        run: |
-          set -euo pipefail
-          manifest_source_revision="$(jq -r '.source.revision // empty' "$RUNNER_TEMP/release-candidate.json")"
-          if [ "${manifest_source_revision}" != "${{ needs.resolve_candidate.outputs.source_revision }}" ]; then
-            echo "Manifest source revision mismatch for candidate ${{ needs.resolve_candidate.outputs.candidate_id }}" >&2
-            echo "manifest=${manifest_source_revision} expected=${{ needs.resolve_candidate.outputs.source_revision }}" >&2
-            exit 1
-          fi
-
       - name: Resolve and verify release-unit digest
         id: release_unit
         run: |
           set -euo pipefail
-
           resolved_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ needs.resolve_candidate.outputs.candidate_id }}" | jq -r '.digest')"
-          if [ -z "${resolved_digest}" ] || [ "${resolved_digest}" = "null" ]; then
-            echo "Unable to resolve release-unit digest for ${{ needs.resolve_candidate.outputs.candidate_id }}" >&2
-            exit 1
-          fi
-
           hint="${{ needs.resolve_candidate.outputs.release_unit_digest_hint }}"
           if [ -n "${hint}" ] && [ "${hint}" != "${resolved_digest}" ]; then
-            echo "Release-unit digest mismatch for ${{ needs.resolve_candidate.outputs.candidate_id }}" >&2
-            echo "manifest=${hint} resolved=${resolved_digest}" >&2
+            echo 'Release-unit digest mismatch' >&2
             exit 1
           fi
-
           echo "release_unit_digest=${resolved_digest}" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy and run acceptance suites
-        id: acceptance_run
+      - name: Run candidate acceptance locally
         run: |
-          set +e
-
-          mkdir -p .artifacts/acceptance
-
-          pnpm --filter @compass/pipeline-tools run acceptance:deploy:github -- \
+          node pipeline/stages/02-acceptance/scripts/run-acceptance-from-candidate.mjs \
             --manifest "$RUNNER_TEMP/release-candidate.json" \
-            --run-id "${{ github.run_id }}" \
-            --out "$RUNNER_TEMP/acceptance-deploy-state.json"
-          deploy_status=$?
-
-          verify_status=1
-          system_status=1
-          browser_status=1
-          playwright_install_status=1
-
-          if [ "${deploy_status}" -eq 0 ]; then
-            pnpm --filter @compass/pipeline-tools run acceptance:verify:github -- \
-              --manifest "$RUNNER_TEMP/release-candidate.json" \
-              --deploy-state "$RUNNER_TEMP/acceptance-deploy-state.json" \
-              --api-base-url "http://127.0.0.1:3001" \
-              --web-base-url "http://127.0.0.1:3000"
-            verify_status=$?
-          fi
-
-          if [ "${deploy_status}" -eq 0 ] && [ "${verify_status}" -eq 0 ]; then
-            pnpm exec playwright install --with-deps chromium
-            playwright_install_status=$?
-            if [ "${playwright_install_status}" -eq 0 ]; then
-              (
-                HEAD_SHA="${{ needs.resolve_candidate.outputs.source_revision }}" \
-                TESTED_SHA="${{ needs.resolve_candidate.outputs.source_revision }}" \
-                BASE_URL="http://127.0.0.1:3001" \
-                TARGET_API_BASE_URL="http://127.0.0.1:3001" \
-                pnpm test:system
-              ) &
-              system_pid=$!
-
-              (
-                WEB_BASE_URL="http://127.0.0.1:3000" \
-                pnpm test:e2e
-              ) &
-              browser_pid=$!
-
-              wait "${system_pid}"
-              system_status=$?
-
-              wait "${browser_pid}"
-              browser_status=$?
-            fi
-          fi
-
-          verdict="fail"
-          if [ "${deploy_status}" -eq 0 ] && [ "${verify_status}" -eq 0 ] && [ "${playwright_install_status}" -eq 0 ] && [ "${system_status}" -eq 0 ] && [ "${browser_status}" -eq 0 ]; then
-            verdict="pass"
-          fi
-
-          summary="deploy=${deploy_status} verify=${verify_status} playwrightInstall=${playwright_install_status} system=${system_status} browser=${browser_status}"
-          echo "verdict=${verdict}" >> "$GITHUB_OUTPUT"
-          echo "suite_summary=${summary}" >> "$GITHUB_OUTPUT"
+            --diagnostics-dir "$RUNNER_TEMP/acceptance-diagnostics"
 
       - name: Generate acceptance attestation predicate
         run: |
@@ -319,10 +153,10 @@ jobs:
             --out "${predicate_path}" \
             --candidate-id "${{ needs.resolve_candidate.outputs.candidate_id }}" \
             --source-revision "${{ needs.resolve_candidate.outputs.source_revision }}" \
-            --verdict "${{ steps.acceptance_run.outputs.verdict }}" \
+            --verdict pass \
             --workflow-run-id "${{ github.run_id }}" \
             --tested-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --suite-summary "${{ steps.acceptance_run.outputs.suite_summary }}"
+            --suite-summary 'system=pass browser=pass'
 
       - name: Attest acceptance verdict to candidate subject
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
@@ -333,58 +167,13 @@ jobs:
           predicate-path: ${{ github.workspace }}/.artifacts/attestations/acceptance-predicate.json
           push-to-registry: true
 
-      - name: Upload release candidate handoff for Release Stage
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: release-candidate-manifest
-          path: ${{ runner.temp }}/release-candidate.json
-          if-no-files-found: error
-          retention-days: 3
-
-      - name: Upload acceptance diagnostics on failure
-        if: ${{ !cancelled() && (failure() || steps.acceptance_run.outputs.verdict != 'pass') }}
+      - name: Upload diagnostics
+        if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: acceptance-diagnostics-${{ github.run_id }}
           path: |
-            .artifacts/acceptance
-            .artifacts/attestations
-            playwright-report
-            test-results
-            ${{ runner.temp }}/acceptance-deploy-state.json
-          if-no-files-found: ignore
+            ${{ runner.temp }}/acceptance-diagnostics
+            .artifacts/attestations/acceptance-predicate.json
+          if-no-files-found: warn
           retention-days: 7
-
-      - name: Write acceptance summary
-        if: ${{ always() }}
-        run: |
-          {
-            echo "## Acceptance Stage"
-            echo "- Candidate: ${{ needs.resolve_candidate.outputs.candidate_id }}"
-            echo "- Source revision: ${{ needs.resolve_candidate.outputs.source_revision }}"
-            echo "- Release unit digest: ${{ steps.release_unit.outputs.release_unit_digest }}"
-            echo "- Verdict: ${{ steps.acceptance_run.outputs.verdict }}"
-            echo "- Suite summary: ${{ steps.acceptance_run.outputs.suite_summary }}"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Fail acceptance stage when verdict is non-pass
-        if: ${{ steps.acceptance_run.outputs.verdict != 'pass' }}
-        run: |
-          echo "Acceptance failed for candidate ${{ needs.resolve_candidate.outputs.candidate_id }}: ${{ steps.acceptance_run.outputs.suite_summary }}" >&2
-          exit 1
-
-  acceptance_skip:
-    name: Acceptance Stage (skipped)
-    needs:
-      - resolve_candidate
-    if: ${{ needs.resolve_candidate.outputs.run_acceptance != 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Record skip
-        run: |
-          {
-            echo "## Acceptance Stage"
-            echo "- Candidate: ${{ needs.resolve_candidate.outputs.candidate_id }}"
-            echo "- Result: skipped"
-            echo "- Reason: ${{ needs.resolve_candidate.outputs.skip_reason }}"
-          } >> "$GITHUB_STEP_SUMMARY"

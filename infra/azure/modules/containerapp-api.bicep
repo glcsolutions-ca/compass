@@ -2,223 +2,136 @@ param location string
 param containerAppName string
 param managedEnvironmentId string
 param image string
-@allowed([
-  'single'
-  'multiple'
-])
-param activeRevisionsMode string = 'multiple'
-param registryServer string
-param registryIdentityResourceId string
-param sessionExecutorIdentityResourceId string = ''
+param keyVaultId string
 param keyVaultUri string
+@secure()
+param databaseUrl string
 param webBaseUrl string
-@allowed([
-  'mock'
-  'entra'
-])
 param authMode string = 'entra'
 param entraClientId string = ''
 param entraAllowedTenantIds string = ''
-@secure()
-param databaseUrl string
-param authIssuer string
-param authJwksUri string
-param authAudience string
-param authAllowedClientIds string
-param authActiveTenantIds string
-param oauthTokenIssuer string
-param oauthTokenAudience string
+param minReplicas int = 1
+param maxReplicas int = 1
+param customDomainNames array = []
 param logLevel string = 'warn'
-param customDomainName string = ''
-param dynamicSessionsPoolManagementEndpoint string = ''
-param dynamicSessionsExecutorClientId string = ''
-param agentGatewayEnabled bool = false
-param agentCloudModeEnabled bool = false
-param agentLocalModeEnabledDesktop bool = false
-param agentModeSwitchEnabled bool = false
 
 var normalizedKeyVaultUri = endsWith(keyVaultUri, '/') ? keyVaultUri : '${keyVaultUri}/'
 var keyVaultSecretBaseUrl = '${normalizedKeyVaultUri}secrets'
-var userAssignedIdentities = empty(sessionExecutorIdentityResourceId)
-  ? {
-      '${registryIdentityResourceId}': {}
-    }
-  : union(
-      {
-        '${registryIdentityResourceId}': {}
-      },
-      {
-        '${sessionExecutorIdentityResourceId}': {}
-      }
-    )
-var ingressConfig = {
-  external: true
-  targetPort: 3001
-  allowInsecure: false
-  transport: 'auto'
-  customDomains: empty(customDomainName)
-    ? []
-    : [
-        {
-          name: customDomainName
-          bindingType: 'Auto'
-        }
-      ]
-}
-var configuration = {
-  activeRevisionsMode: activeRevisionsMode
-  maxInactiveRevisions: 10
-  ingress: ingressConfig
-  registries: [
-    {
-      server: registryServer
-      identity: registryIdentityResourceId
-    }
-  ]
-  secrets: concat([
-    {
-      name: 'database-url'
-      value: databaseUrl
-    }
-    {
-      name: 'oauth-token-signing-secret'
-      keyVaultUrl: '${keyVaultSecretBaseUrl}/oauth-token-signing-secret'
-      identity: registryIdentityResourceId
-    }
-    {
-      name: 'entra-client-secret'
-      keyVaultUrl: '${keyVaultSecretBaseUrl}/entra-client-secret'
-      identity: registryIdentityResourceId
-    }
-    {
-      name: 'auth-oidc-state-encryption-key'
-      keyVaultUrl: '${keyVaultSecretBaseUrl}/auth-oidc-state-encryption-key'
-      identity: registryIdentityResourceId
-    }
-  ])
+var includeEntraSecrets = toLower(authMode) == 'entra'
+var customDomains = [for domainName in customDomainNames: {
+  name: domainName
+  bindingType: 'Disabled'
+}]
+
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: last(split(keyVaultId, '/'))
 }
 
 resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
   name: containerAppName
   location: location
   identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: userAssignedIdentities
+    type: 'SystemAssigned'
   }
   properties: {
     managedEnvironmentId: managedEnvironmentId
-    configuration: configuration
+    configuration: {
+      activeRevisionsMode: 'single'
+      ingress: {
+        external: true
+        targetPort: 3001
+        allowInsecure: false
+        transport: 'auto'
+        customDomains: customDomains
+      }
+      secrets: concat(
+        [
+          {
+            name: 'database-url'
+            value: databaseUrl
+          }
+        ],
+        includeEntraSecrets
+          ? [
+              {
+                name: 'entra-client-secret'
+                keyVaultUrl: '${keyVaultSecretBaseUrl}/entra-client-secret'
+                identity: 'system'
+              }
+              {
+                name: 'auth-oidc-state-encryption-key'
+                keyVaultUrl: '${keyVaultSecretBaseUrl}/auth-oidc-state-encryption-key'
+                identity: 'system'
+              }
+            ]
+          : []
+      )
+    }
     template: {
       containers: [
         {
-          name: 'compass-api'
+          name: 'api'
           image: image
-          env: [
-            {
-              name: 'API_HOST'
-              value: '0.0.0.0'
-            }
-            {
-              name: 'API_PORT'
-              value: '3001'
-            }
-            {
-              name: 'DATABASE_URL'
-              secretRef: 'database-url'
-            }
-            {
-              name: 'DB_SSL_MODE'
-              value: 'require'
-            }
-            {
-              name: 'DB_SSL_REJECT_UNAUTHORIZED'
-              value: 'true'
-            }
-            {
-              name: 'LOG_LEVEL'
-              value: logLevel
-            }
-            {
-              name: 'WEB_BASE_URL'
-              value: webBaseUrl
-            }
-            {
-              name: 'DYNAMIC_SESSIONS_POOL_MANAGEMENT_ENDPOINT'
-              value: dynamicSessionsPoolManagementEndpoint
-            }
-            {
-              name: 'DYNAMIC_SESSIONS_EXECUTOR_CLIENT_ID'
-              value: dynamicSessionsExecutorClientId
-            }
-            {
-              name: 'AGENT_GATEWAY_ENABLED'
-              value: string(agentGatewayEnabled)
-            }
-            {
-              name: 'AGENT_CLOUD_MODE_ENABLED'
-              value: string(agentCloudModeEnabled)
-            }
-            {
-              name: 'AGENT_LOCAL_MODE_ENABLED_DESKTOP'
-              value: string(agentLocalModeEnabledDesktop)
-            }
-            {
-              name: 'AGENT_MODE_SWITCH_ENABLED'
-              value: string(agentModeSwitchEnabled)
-            }
-            {
-              name: 'AUTH_MODE'
-              value: authMode
-            }
-            {
-              name: 'ENTRA_CLIENT_ID'
-              value: entraClientId
-            }
-            {
-              name: 'ENTRA_ALLOWED_TENANT_IDS'
-              value: entraAllowedTenantIds
-            }
-            {
-              name: 'ENTRA_CLIENT_SECRET'
-              secretRef: 'entra-client-secret'
-            }
-            {
-              name: 'AUTH_OIDC_STATE_ENCRYPTION_KEY'
-              secretRef: 'auth-oidc-state-encryption-key'
-            }
-            {
-              name: 'AUTH_ISSUER'
-              value: authIssuer
-            }
-            {
-              name: 'AUTH_JWKS_URI'
-              value: authJwksUri
-            }
-            {
-              name: 'AUTH_AUDIENCE'
-              value: authAudience
-            }
-            {
-              name: 'AUTH_ALLOWED_CLIENT_IDS'
-              value: authAllowedClientIds
-            }
-            {
-              name: 'AUTH_ACTIVE_TENANT_IDS'
-              value: authActiveTenantIds
-            }
-            {
-              name: 'OAUTH_TOKEN_ISSUER'
-              value: oauthTokenIssuer
-            }
-            {
-              name: 'OAUTH_TOKEN_AUDIENCE'
-              value: oauthTokenAudience
-            }
-            {
-              name: 'OAUTH_TOKEN_SIGNING_SECRET'
-              secretRef: 'oauth-token-signing-secret'
-            }
-          ]
+          env: concat(
+            [
+              {
+                name: 'API_HOST'
+                value: '0.0.0.0'
+              }
+              {
+                name: 'API_PORT'
+                value: '3001'
+              }
+              {
+                name: 'DATABASE_URL'
+                secretRef: 'database-url'
+              }
+              {
+                name: 'DB_SSL_MODE'
+                value: 'require'
+              }
+              {
+                name: 'DB_SSL_REJECT_UNAUTHORIZED'
+                value: 'true'
+              }
+              {
+                name: 'LOG_LEVEL'
+                value: logLevel
+              }
+              {
+                name: 'AUTH_MODE'
+                value: authMode
+              }
+              {
+                name: 'WEB_BASE_URL'
+                value: webBaseUrl
+              }
+              {
+                name: 'ENTRA_CLIENT_ID'
+                value: entraClientId
+              }
+              {
+                name: 'ENTRA_ALLOWED_TENANT_IDS'
+                value: entraAllowedTenantIds
+              }
+              {
+                name: 'AGENT_GATEWAY_ENABLED'
+                value: 'false'
+              }
+            ],
+            includeEntraSecrets
+              ? [
+                  {
+                    name: 'ENTRA_CLIENT_SECRET'
+                    secretRef: 'entra-client-secret'
+                  }
+                  {
+                    name: 'AUTH_OIDC_STATE_ENCRYPTION_KEY'
+                    secretRef: 'auth-oidc-state-encryption-key'
+                  }
+                ]
+              : []
+          )
           resources: {
             cpu: json('0.25')
             memory: '0.5Gi'
@@ -252,14 +165,23 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
         }
       ]
       scale: {
-        // Keep a warm instance in production to avoid cold starts.
-        minReplicas: 1
-        maxReplicas: 1
+        minReplicas: minReplicas
+        maxReplicas: maxReplicas
       }
     }
   }
 }
 
+resource keyVaultSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (includeEntraSecrets) {
+  name: guid(keyVault.id, containerApp.name, 'key-vault-secrets-user')
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+    principalId: containerApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 output appName string = containerApp.name
+output ingressFqdn string = containerApp.properties.configuration.ingress.fqdn
 output latestRevisionName string = containerApp.properties.latestRevisionName
-output latestRevisionFqdn string = containerApp.properties.latestRevisionFqdn

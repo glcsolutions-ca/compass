@@ -2,117 +2,42 @@ param location string
 param containerAppName string
 param managedEnvironmentId string
 param image string
-@allowed([
-  'single'
-  'multiple'
-])
-param activeRevisionsMode string = 'multiple'
-param registryServer string
-param registryIdentityResourceId string
-param keyVaultUri string
 param apiBaseUrl string
-@allowed([
-  'mock'
-  'entra'
-])
-param authMode string = 'entra'
-param entraClientId string = ''
-param entraAllowedTenantIds string = ''
-param customDomainName string = ''
+param minReplicas int = 1
+param maxReplicas int = 1
+param customDomainNames array = []
 
-var normalizedKeyVaultUri = endsWith(keyVaultUri, '/') ? keyVaultUri : '${keyVaultUri}/'
-var keyVaultSecretBaseUrl = '${normalizedKeyVaultUri}secrets'
-var includeEntraClientSecret = toLower(authMode) == 'entra'
-var entraClientSecretRef = includeEntraClientSecret
-  ? [
-      {
-        name: 'ENTRA_CLIENT_SECRET'
-        secretRef: 'entra-client-secret'
-      }
-    ]
-  : []
-var ingressConfig = {
-  external: true
-  targetPort: 3000
-  allowInsecure: false
-  transport: 'auto'
-  customDomains: empty(customDomainName)
-    ? []
-    : [
-        {
-          name: customDomainName
-          bindingType: 'Auto'
-        }
-      ]
-}
-var configuration = {
-  activeRevisionsMode: activeRevisionsMode
-  maxInactiveRevisions: 10
-  ingress: ingressConfig
-  registries: [
-    {
-      server: registryServer
-      identity: registryIdentityResourceId
-    }
-  ]
-  secrets: concat(
-    [
-      {
-        name: 'web-session-secret'
-        keyVaultUrl: '${keyVaultSecretBaseUrl}/web-session-secret'
-        identity: registryIdentityResourceId
-      }
-    ],
-    includeEntraClientSecret
-      ? [
-          {
-            name: 'entra-client-secret'
-            keyVaultUrl: '${keyVaultSecretBaseUrl}/entra-client-secret'
-            identity: registryIdentityResourceId
-          }
-        ]
-      : []
-  )
-}
+var customDomains = [for domainName in customDomainNames: {
+  name: domainName
+  bindingType: 'Disabled'
+}]
 
 resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
   name: containerAppName
   location: location
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${registryIdentityResourceId}': {}
-    }
-  }
   properties: {
     managedEnvironmentId: managedEnvironmentId
-    configuration: configuration
+    configuration: {
+      activeRevisionsMode: 'single'
+      ingress: {
+        external: true
+        targetPort: 3000
+        allowInsecure: false
+        transport: 'auto'
+        customDomains: customDomains
+      }
+    }
     template: {
       containers: [
         {
-          name: 'compass-web'
+          name: 'web'
           image: image
-          env: concat(
-            [
-              {
-                name: 'API_BASE_URL'
-                value: apiBaseUrl
-              }
-              {
-                name: 'WEB_SESSION_SECRET'
-                secretRef: 'web-session-secret'
-              }
-              {
-                name: 'ENTRA_CLIENT_ID'
-                value: entraClientId
-              }
-              {
-                name: 'ENTRA_ALLOWED_TENANT_IDS'
-                value: entraAllowedTenantIds
-              }
-            ],
-            entraClientSecretRef
-          )
+          env: [
+            {
+              name: 'API_BASE_URL'
+              value: apiBaseUrl
+            }
+          ]
           resources: {
             cpu: json('0.25')
             memory: '0.5Gi'
@@ -146,14 +71,13 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
         }
       ]
       scale: {
-        // Keep a warm instance in production to avoid cold starts.
-        minReplicas: 1
-        maxReplicas: 1
+        minReplicas: minReplicas
+        maxReplicas: maxReplicas
       }
     }
   }
 }
 
 output appName string = containerApp.name
+output ingressFqdn string = containerApp.properties.configuration.ingress.fqdn
 output latestRevisionName string = containerApp.properties.latestRevisionName
-output latestRevisionFqdn string = containerApp.properties.latestRevisionFqdn

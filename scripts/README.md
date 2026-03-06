@@ -1,8 +1,13 @@
 # Scripts
 
-Purpose: operational scripts for development and infrastructure.
+## `scripts/bootstrap`
 
-## Start Here
+Admin-only scripts for the one-time and infrequent control-plane/bootstrap tasks.
 
-- `dev/*`
-- `infra/*`
+## `scripts/infra`
+
+Production support-infrastructure helpers used by the release workflow and admin bootstrap.
+
+## `scripts/dev`
+
+Local development and validation helpers.

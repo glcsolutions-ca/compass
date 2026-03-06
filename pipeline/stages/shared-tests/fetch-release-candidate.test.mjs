@@ -18,8 +18,6 @@ function buildManifest() {
         "ghcr.io/glcsolutions-ca/compass-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       webImage:
         "ghcr.io/glcsolutions-ca/compass-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      workerImage:
-        "ghcr.io/glcsolutions-ca/compass-worker@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       migrationsArtifact:
         "ghcr.io/glcsolutions-ca/compass-migrations@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
     },
@@ -40,17 +38,13 @@ describe("fetch-release-candidate resolvePulledManifestPath", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "fetch-rc-nested-"));
     const nestedManifest = path.join(root, ".artifacts", "release-candidate", "manifest.json");
     await writeJson(nestedManifest, buildManifest());
-
-    const resolved = await resolvePulledManifestPath(root);
-    expect(resolved).toBe(nestedManifest);
+    expect(await resolvePulledManifestPath(root)).toBe(nestedManifest);
   });
 
   it("finds a valid release-candidate document without a .json extension", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "fetch-rc-generic-"));
     const genericName = path.join(root, "blob");
     await writeJson(genericName, buildManifest());
-
-    const resolved = await resolvePulledManifestPath(root);
-    expect(resolved).toBe(genericName);
+    expect(await resolvePulledManifestPath(root)).toBe(genericName);
   });
 });

@@ -1,67 +1,121 @@
 # Compass
 
-Purpose: one place to manage work, time, and delivery across the company.
+Compass uses a simple development pipeline built around one immutable release candidate:
 
-## Quick Start
+1. `01 Commit` builds the candidate once and publishes digest-pinned images to `GHCR`.
+2. `02 Acceptance` runs the exact candidate locally in GitHub Actions against ephemeral infrastructure.
+3. `03 Release` deploys the exact candidate to long-lived stage apps in Azure Container Apps, smoke-tests them, runs migrations, and then deploys the same digests to production apps.
 
-Requirements:
+## Architecture
 
-- Node.js `22.x`
-- `pnpm 10.30.1`
-- Docker (local Postgres)
+### Azure
 
-```bash
-pnpm install
-pnpm env:setup
-pnpm dev
-```
+There is one production Azure resource group:
 
-`pnpm dev` runs the full stack in the foreground and auto-stops dependencies (Postgres + runtime) when it exits.
+- `rg-compass-prd-cc-001`
 
-Detached startup:
+It contains:
 
-```bash
-pnpm dev:up
-```
+- ACA environment
+- `api-prod`
+- `web-prod`
+- `api-stage`
+- `web-stage`
+- migrate job
+- Key Vault
+- PostgreSQL
+- VNet/subnets
+- Log Analytics
+- Azure DNS zone for `compass.glcsolutions.ca`
 
-`pnpm dev:up` starts the full stack in the background, waits for health checks, and writes app logs to `.artifacts/dev/dev-apps.log`.
+There is no permanent acceptance Azure environment.
 
-Manual recovery cleanup:
+### Registry
 
-```bash
-pnpm dev:down
-```
+Deployable images are published to `GHCR`:
 
-## Environment Model
+- `ghcr.io/glcsolutions-ca/compass-api`
+- `ghcr.io/glcsolutions-ca/compass-web`
+- `ghcr.io/glcsolutions-ca/compass-migrations`
 
-Local config is service-owned and layered:
+### Domains
 
-- `apps/api/.env(.local)`
-- `apps/web/.env(.local)`
-- `apps/codex-session-runtime/.env(.local)`
-- `db/postgres/.env(.local)`
+Only the production web app has a public custom domain:
 
-Precedence is:
+- `https://compass.glcsolutions.ca`
 
-1. `process.env`
-2. `.env.local`
-3. `.env`
+The stage apps use their ACA default hostnames.
 
-Rules:
+## Local development
 
-- `pnpm env:setup` only creates missing `.env` files from `.env.example` and does not overwrite existing files.
-- `pnpm dev` resolves a coherent runtime env map and does not rewrite tracked env files.
-- Local Postgres is ephemeral by default.
-- `DATABASE_URL` is required at API startup.
-- In local dev orchestration, `DATABASE_URL` is derived from the resolved `POSTGRES_PORT` unless explicitly set in `process.env`.
-- Local auth defaults to `AUTH_MODE=mock`.
-- `WEB_BASE_URL` is the canonical web origin; `ENTRA_REDIRECT_URI` must match that origin and use `/v1/auth/entra/callback`.
+- `pnpm install`
+- `pnpm dev`
+- `pnpm test:quick`
+- `pnpm test:full`
 
-## Run And Test
+Local Postgres helpers:
 
-```bash
-pnpm env:doctor
-pnpm check
-pnpm test:full
-pnpm build
-```
+- `pnpm db:postgres:up`
+- `pnpm db:postgres:down`
+
+## Admin bootstrap
+
+Bootstrap is a manual admin concern. It is not part of the normal delivery pipeline.
+
+Typical sequence:
+
+1. `pnpm bootstrap:entra -- --reset-web-client-secret`
+2. `pnpm bootstrap:github:apply`
+3. `pnpm bootstrap:ghcr`
+4. `pnpm infra:apply`
+5. `pnpm bootstrap:keyvault:seed`
+6. merge the first candidate to `main`
+7. `pnpm bootstrap:apps -- --candidate-id sha-<commit>`
+8. rerun `pnpm bootstrap:entra -- --stage-web-fqdn <stage-fqdn>`
+9. `pnpm bootstrap:web-domain`
+
+More detail is in [/Users/justinkropp/.codex/worktrees/2bfd/compass/bootstrap/README.md](bootstrap/README.md).
+
+## Delivery model
+
+### `00 PR Validation`
+
+Fast validation on pull requests. No Azure mutation.
+
+### `01 Commit`
+
+Runs on `push` to `main`.
+
+- quick checks
+- build API/Web/Migrations once
+- publish the release candidate manifest and release unit
+
+### `02 Acceptance`
+
+Runs on the exact candidate produced by Commit.
+
+- local Postgres in GitHub Actions
+- candidate migrations image
+- candidate API image with `AUTH_MODE=mock`
+- candidate Web image pointing at the candidate API
+- system/browser acceptance tests
+
+### `03 Release`
+
+Runs on the accepted candidate.
+
+- applies production support Bicep if `infra/azure/**` changed
+- deploys to `api-stage` and `web-stage`
+- runs read-only stage smoke
+- runs migrations against production DB
+- deploys the same digests to `api-prod` and `web-prod`
+- runs production smoke
+- records release evidence and attestation
+
+## Rollback
+
+Rollback is a prior-candidate redeploy:
+
+- rerun `03 Release` with a previous accepted `candidate_id`
+
+There is no revision-traffic rollback in this model.

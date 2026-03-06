@@ -1,0 +1,11 @@
+{
+  "repository": "glcsolutions-ca/compass",
+  "environments": [
+    {
+      "name": "production",
+      "canAdminsBypass": false,
+      "requireReviewers": false,
+      "branchPolicies": ["main"]
+    }
+  ]
+}

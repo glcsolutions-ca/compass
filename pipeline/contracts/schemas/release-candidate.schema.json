@@ -6,50 +6,26 @@
   "additionalProperties": false,
   "required": ["schemaVersion", "candidateId", "source", "artifacts", "provenance"],
   "properties": {
-    "schemaVersion": {
-      "type": "string",
-      "const": "rc.v1"
-    },
-    "candidateId": {
-      "type": "string",
-      "pattern": "^sha-[a-f0-9]{40}$"
-    },
+    "schemaVersion": { "type": "string", "const": "rc.v1" },
+    "candidateId": { "type": "string", "pattern": "^sha-[a-f0-9]{40}$" },
     "source": {
       "type": "object",
       "additionalProperties": false,
       "required": ["repository", "revision", "createdAt"],
       "properties": {
-        "repository": {
-          "type": "string",
-          "minLength": 1
-        },
-        "revision": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{40}$"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "repository": { "type": "string", "minLength": 1 },
+        "revision": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "createdAt": { "type": "string", "format": "date-time" }
       }
     },
     "artifacts": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["apiImage", "webImage", "workerImage", "migrationsArtifact"],
+      "required": ["apiImage", "webImage", "migrationsArtifact"],
       "properties": {
-        "apiImage": {
-          "$ref": "#/$defs/digestPinnedOciRef"
-        },
-        "webImage": {
-          "$ref": "#/$defs/digestPinnedOciRef"
-        },
-        "workerImage": {
-          "$ref": "#/$defs/digestPinnedOciRef"
-        },
-        "migrationsArtifact": {
-          "$ref": "#/$defs/digestPinnedOciRef"
-        }
+        "apiImage": { "$ref": "#/$defs/digestPinnedOciRef" },
+        "webImage": { "$ref": "#/$defs/digestPinnedOciRef" },
+        "migrationsArtifact": { "$ref": "#/$defs/digestPinnedOciRef" }
       }
     },
     "provenance": {
@@ -59,33 +35,18 @@
       "properties": {
         "commitStageRunId": {
           "oneOf": [
-            {
-              "type": "integer",
-              "minimum": 1
-            },
-            {
-              "type": "string",
-              "pattern": "^[0-9]+$"
-            }
+            { "type": "integer", "minimum": 1 },
+            { "type": "string", "pattern": "^[0-9]+$" }
           ]
         },
-        "registry": {
-          "type": "string",
-          "minLength": 1
-        },
+        "registry": { "type": "string", "minLength": 1 },
         "sbomRefs": {
           "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
+          "items": { "type": "string", "minLength": 1 }
         },
         "signatureRefs": {
           "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
+          "items": { "type": "string", "minLength": 1 }
         },
         "releaseUnitDigest": {
           "type": "string",

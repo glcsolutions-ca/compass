@@ -1,10 +1,26 @@
 name: Commit Stage
-run-name: Commit Stage (merge_group @ ${{ github.sha }})
+run-name: Commit Stage (${{ github.sha }})
 
 on:
-  merge_group:
-    types:
-      - checks_requested
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/api/**"
+      - "apps/web/**"
+      - "db/**"
+      - "infra/azure/**"
+      - "pipeline/**"
+      - "scripts/**"
+      - "tests/**"
+      - "bootstrap/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "turbo.json"
+      - ".github/workflows/00-pr-validation.yml"
+      - ".github/workflows/01-commit-stage.yml"
+      - ".github/workflows/02-acceptance-stage.yml"
+      - ".github/workflows/03-release-stage.yml"
 
 permissions:
   contents: read
@@ -13,7 +29,6 @@ env:
   REGISTRY_BASE: ghcr.io/glcsolutions-ca
   API_IMAGE_NAME: compass-api
   WEB_IMAGE_NAME: compass-web
-  WORKER_IMAGE_NAME: compass-worker
   MIGRATIONS_IMAGE_NAME: compass-migrations
   MANIFESTS_REPO: ghcr.io/glcsolutions-ca/compass-release-manifests
   RELEASE_UNITS_REPO: ghcr.io/glcsolutions-ca/compass-release-units
@@ -24,25 +39,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - &checkout_step
-        name: Checkout
+      - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
-      - &setup_pnpm_step
-        name: Setup pnpm
+      - name: Setup pnpm
         uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
 
-      - &setup_node_step
-        name: Setup Node
+      - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: pnpm
 
-      - &install_dependencies_step
-        name: Install dependencies
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Commit quick gate
@@ -72,22 +83,20 @@ jobs:
           - id: web
             dockerfile: apps/web/Dockerfile
             image_name: compass-web
-          - id: worker
-            dockerfile: apps/worker/Dockerfile
-            image_name: compass-worker
           - id: migrations
             dockerfile: db/Dockerfile.migrations
             image_name: compass-migrations
 
     steps:
-      - *checkout_step
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
-      - &setup_buildx_step
-        name: Setup Docker Buildx
+      - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
-      - &login_ghcr_step
-        name: Login to GHCR
+      - name: Login to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
@@ -129,23 +138,37 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-      artifact-metadata: write
     needs:
       - commit_tests
       - build_and_publish_images
 
     steps:
-      - *checkout_step
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
-      - *setup_pnpm_step
+      - name: Setup pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
 
-      - *setup_node_step
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
 
-      - *install_dependencies_step
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - *setup_buildx_step
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
-      - *login_ghcr_step
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup ORAS
         uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
@@ -162,13 +185,12 @@ jobs:
         run: |
           api_digest="$(cat .artifacts/image-digests/api.digest)"
           web_digest="$(cat .artifacts/image-digests/web.digest)"
-          worker_digest="$(cat .artifacts/image-digests/worker.digest)"
           migrations_digest="$(cat .artifacts/image-digests/migrations.digest)"
-
-          echo "api_image_ref=${REGISTRY_BASE}/${API_IMAGE_NAME}@${api_digest}" >> "$GITHUB_OUTPUT"
-          echo "web_image_ref=${REGISTRY_BASE}/${WEB_IMAGE_NAME}@${web_digest}" >> "$GITHUB_OUTPUT"
-          echo "worker_image_ref=${REGISTRY_BASE}/${WORKER_IMAGE_NAME}@${worker_digest}" >> "$GITHUB_OUTPUT"
-          echo "migrations_image_ref=${REGISTRY_BASE}/${MIGRATIONS_IMAGE_NAME}@${migrations_digest}" >> "$GITHUB_OUTPUT"
+          {
+            echo "api_image_ref=${REGISTRY_BASE}/${API_IMAGE_NAME}@${api_digest}"
+            echo "web_image_ref=${REGISTRY_BASE}/${WEB_IMAGE_NAME}@${web_digest}"
+            echo "migrations_image_ref=${REGISTRY_BASE}/${MIGRATIONS_IMAGE_NAME}@${migrations_digest}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Compute candidate id
         id: candidate
@@ -178,65 +200,31 @@ jobs:
         id: release_unit
         run: |
           set -euo pipefail
-
           candidate_id="${{ steps.candidate.outputs.candidate_id }}"
           docker buildx imagetools create \
             --tag "${RELEASE_UNITS_REPO}:${candidate_id}" \
             "${{ steps.refs.outputs.api_image_ref }}" \
             "${{ steps.refs.outputs.web_image_ref }}" \
-            "${{ steps.refs.outputs.worker_image_ref }}" \
             "${{ steps.refs.outputs.migrations_image_ref }}"
-
           release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${candidate_id}" | jq -r '.digest')"
-          if [ -z "${release_unit_digest}" ] || [ "${release_unit_digest}" = "null" ]; then
-            echo "Unable to resolve release-unit digest for ${candidate_id}" >&2
-            exit 1
-          fi
-
           echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
 
       - name: Generate release candidate manifest
         run: |
-          set -euo pipefail
-
           mkdir -p .artifacts/release-candidate
-          created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-          jq -n \
-            --arg candidateId "${{ steps.candidate.outputs.candidate_id }}" \
-            --arg repository "${{ github.repository }}" \
-            --arg sourceRevision "${{ github.sha }}" \
-            --arg createdAt "${created_at}" \
-            --arg apiImage "${{ steps.refs.outputs.api_image_ref }}" \
-            --arg webImage "${{ steps.refs.outputs.web_image_ref }}" \
-            --arg workerImage "${{ steps.refs.outputs.worker_image_ref }}" \
-            --arg migrationsArtifact "${{ steps.refs.outputs.migrations_image_ref }}" \
-            --arg commitStageRunId "${{ github.run_id }}" \
-            --arg registry "${{ env.REGISTRY_BASE }}" \
-            --arg releaseUnitDigest "${{ steps.release_unit.outputs.release_unit_digest }}" \
-            '{
-              schemaVersion: "rc.v1",
-              candidateId: $candidateId,
-              source: {
-                repository: $repository,
-                revision: $sourceRevision,
-                createdAt: $createdAt
-              },
-              artifacts: {
-                apiImage: $apiImage,
-                webImage: $webImage,
-                workerImage: $workerImage,
-                migrationsArtifact: $migrationsArtifact
-              },
-              provenance: {
-                commitStageRunId: $commitStageRunId,
-                registry: $registry,
-                releaseUnitDigest: $releaseUnitDigest
-              }
-            }' > .artifacts/release-candidate/manifest.json
+          pnpm --filter @compass/pipeline-tools run manifest:generate -- \
+            --out .artifacts/release-candidate/manifest.json \
+            --repository "${{ github.repository }}" \
+            --source-revision "${{ github.sha }}" \
+            --api-image "${{ steps.refs.outputs.api_image_ref }}" \
+            --web-image "${{ steps.refs.outputs.web_image_ref }}" \
+            --migrations-artifact "${{ steps.refs.outputs.migrations_image_ref }}" \
+            --registry "${{ env.REGISTRY_BASE }}" \
+            --commit-stage-run-id "${{ github.run_id }}" \
+            --release-unit-digest "${{ steps.release_unit.outputs.release_unit_digest }}"
 
       - name: Validate release candidate manifest
-        run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file ../.artifacts/release-candidate/manifest.json
+        run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file .artifacts/release-candidate/manifest.json
 
       - name: Publish candidate manifest package
         run: |
@@ -245,60 +233,18 @@ jobs:
             "${MANIFESTS_REPO}:${{ steps.candidate.outputs.candidate_id }}" \
             "manifest.json:application/vnd.compass.release-manifest.v1+json"
 
+      - name: Ensure GHCR runtime packages are public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/bootstrap/ensure-ghcr-visibility.mjs
+
       - name: Write commit summary
         run: |
           {
-            echo "## Commit Stage"
+            echo '## Commit Stage'
             echo "- Candidate: ${{ steps.candidate.outputs.candidate_id }}"
-            echo "- Source revision: ${{ github.sha }}"
+            echo "- API image: ${{ steps.refs.outputs.api_image_ref }}"
+            echo "- Web image: ${{ steps.refs.outputs.web_image_ref }}"
+            echo "- Migrations image: ${{ steps.refs.outputs.migrations_image_ref }}"
             echo "- Release unit digest: ${{ steps.release_unit.outputs.release_unit_digest }}"
-            echo "- Manifest package: ${MANIFESTS_REPO}:${{ steps.candidate.outputs.candidate_id }}"
-            echo "- Release-unit package: ${RELEASE_UNITS_REPO}:${{ steps.candidate.outputs.candidate_id }}"
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Attest release-unit build provenance
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
-        with:
-          subject-name: ${{ env.RELEASE_UNITS_REPO }}
-          subject-digest: ${{ steps.release_unit.outputs.release_unit_digest }}
-          push-to-registry: true
-
-  commit_stage_gate:
-    name: Commit Stage
-    runs-on: ubuntu-latest
-    if: ${{ always() }}
-    needs:
-      - commit_tests
-      - build_and_publish_images
-      - publish_candidate
-    steps:
-      - name: Fail closed when upstream commit-stage jobs fail
-        env:
-          COMMIT_TESTS_RESULT: ${{ needs.commit_tests.result }}
-          BUILD_AND_PUBLISH_IMAGES_RESULT: ${{ needs.build_and_publish_images.result }}
-          PUBLISH_CANDIDATE_RESULT: ${{ needs.publish_candidate.result }}
-        run: |
-          set -euo pipefail
-
-          results=(
-            "commit_tests:${COMMIT_TESTS_RESULT}"
-            "build_and_publish_images:${BUILD_AND_PUBLISH_IMAGES_RESULT}"
-            "publish_candidate:${PUBLISH_CANDIDATE_RESULT}"
-          )
-
-          failed=0
-          for entry in "${results[@]}"; do
-            job="${entry%%:*}"
-            result="${entry##*:}"
-            echo "${job} => ${result}"
-            if [ "${result}" != "success" ]; then
-              failed=1
-            fi
-          done
-
-          if [ "${failed}" -ne 0 ]; then
-            echo "Commit Stage failed because one or more upstream jobs were not successful." >&2
-            exit 1
-          fi
-
-          echo "Commit Stage passed."

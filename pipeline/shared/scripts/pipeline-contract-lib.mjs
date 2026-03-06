@@ -9,25 +9,14 @@ export const PATTERNS = {
     /^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*@sha256:[a-f0-9]{64}$/u
 };
 
-const FORBIDDEN_RELEASE_FIELDS = new Set([
-  "riskClass",
-  "deploymentRequired",
-  "promotionHalted",
-  "acceptancePassed"
-]);
+const FORBIDDEN_RELEASE_FIELDS = new Set(["riskClass", "deploymentRequired", "promotionHalted"]);
 
 function normalizeErrors(errors) {
-  return errors.map((entry) => ({
-    path: entry.path,
-    message: entry.message
-  }));
+  return errors.map((entry) => ({ path: entry.path, message: entry.message }));
 }
 
 function pushError(errors, pathName, message) {
-  errors.push({
-    path: pathName,
-    message
-  });
+  errors.push({ path: pathName, message });
 }
 
 function isObject(value) {
@@ -52,22 +41,16 @@ export function validateAcceptanceAttestationPredicateDocument(document) {
   return normalizeErrors(validateBySchema("acceptanceAttestationPredicate", document));
 }
 
-export function validateProductionRehearsalEvidenceDocument(document) {
-  return normalizeErrors(validateBySchema("productionRehearsalEvidence", document));
-}
-
 export function validateReleaseAttestationPredicateDocument(document) {
   return normalizeErrors(validateBySchema("releaseAttestationPredicate", document));
 }
 
 export async function readJsonFile(filePath) {
-  const raw = await readFile(filePath, "utf8");
-  return JSON.parse(raw);
+  return JSON.parse(await readFile(filePath, "utf8"));
 }
 
 export async function writeJsonFile(filePath, document) {
-  const absoluteParent = path.dirname(filePath);
-  await mkdir(absoluteParent, { recursive: true });
+  await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, "utf8");
 }
 
@@ -75,10 +58,8 @@ export function buildCandidateId(sourceRevision) {
   const normalizedRevision = String(sourceRevision || "")
     .trim()
     .toLowerCase();
-
   if (!PATTERNS.sourceRevision.test(normalizedRevision)) {
     throw new Error("sourceRevision must be a 40-char lowercase SHA");
   }
-
   return `sha-${normalizedRevision}`;
 }

@@ -41,3 +41,4 @@ resource managedEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
 output environmentId string = managedEnvironment.id
 output environmentNameOutput string = managedEnvironment.name
 output defaultDomain string = managedEnvironment.properties.defaultDomain
+output staticIp string = managedEnvironment.properties.staticIp

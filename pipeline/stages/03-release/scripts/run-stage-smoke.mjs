@@ -2,7 +2,25 @@ import { pathToFileURL } from "node:url";
 import { parseCliArgs, requireOption } from "../../../shared/scripts/cli-utils.mjs";
 import { fetchStatus } from "./release-azure-lib.mjs";
 
-export async function runStageSmoke({ apiBaseUrl, webBaseUrl }) {
+function parseBooleanOption(value, defaultValue) {
+  if (value === undefined) {
+    return defaultValue;
+  }
+  switch (String(value).trim().toLowerCase()) {
+    case "true":
+    case "1":
+    case "yes":
+      return true;
+    case "false":
+    case "0":
+    case "no":
+      return false;
+    default:
+      throw new Error(`Invalid boolean value: ${value}`);
+  }
+}
+
+export async function runStageSmoke({ apiBaseUrl, webBaseUrl, includeAuth = true }) {
   const health = await fetchStatus(`${apiBaseUrl}/health`);
   if (health.status !== 200) {
     throw new Error(`Stage API health failed with status ${health.status}`);
@@ -13,17 +31,23 @@ export async function runStageSmoke({ apiBaseUrl, webBaseUrl }) {
     throw new Error(`Stage Web failed with status ${web.status}`);
   }
 
-  const auth = await fetchStatus(`${webBaseUrl}/v1/auth/entra/start?returnTo=%2Fchat`, {
-    redirect: "manual"
-  });
-  if (![302, 303, 307, 308].includes(auth.status)) {
-    throw new Error(`Stage auth start did not redirect; status=${auth.status}`);
-  }
-  const expectedRedirect = `${webBaseUrl}/v1/auth/entra/callback`;
-  if (!auth.location.includes(encodeURIComponent(expectedRedirect))) {
-    throw new Error(
-      `Stage auth redirect_uri mismatch. Expected ${expectedRedirect}; location=${auth.location}`
-    );
+  let authStatus = null;
+  let authLocation = "";
+  if (includeAuth) {
+    const auth = await fetchStatus(`${webBaseUrl}/v1/auth/entra/start?returnTo=%2Fchat`, {
+      redirect: "manual"
+    });
+    if (![302, 303, 307, 308].includes(auth.status)) {
+      throw new Error(`Stage auth start did not redirect; status=${auth.status}`);
+    }
+    const expectedRedirect = `${webBaseUrl}/v1/auth/entra/callback`;
+    if (!auth.location.includes(encodeURIComponent(expectedRedirect))) {
+      throw new Error(
+        `Stage auth redirect_uri mismatch. Expected ${expectedRedirect}; location=${auth.location}`
+      );
+    }
+    authStatus = auth.status;
+    authLocation = auth.location;
   }
 
   return {
@@ -31,8 +55,9 @@ export async function runStageSmoke({ apiBaseUrl, webBaseUrl }) {
     webBaseUrl,
     healthStatus: health.status,
     webStatus: web.status,
-    authStatus: auth.status,
-    authLocation: auth.location,
+    authStatus,
+    authLocation,
+    includeAuth,
     verdict: "pass"
   };
 }
@@ -41,7 +66,8 @@ export async function main(argv = process.argv.slice(2)) {
   const options = parseCliArgs(argv);
   const result = await runStageSmoke({
     apiBaseUrl: requireOption(options, "api-base-url"),
-    webBaseUrl: requireOption(options, "web-base-url")
+    webBaseUrl: requireOption(options, "web-base-url"),
+    includeAuth: parseBooleanOption(options["include-auth"], true)
   });
   console.info(JSON.stringify(result, null, 2));
 }

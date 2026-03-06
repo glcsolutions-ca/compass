@@ -236,7 +236,7 @@ jobs:
             "${MANIFESTS_REPO}:${{ steps.candidate.outputs.candidate_id }}" \
             "manifest.json:application/vnd.compass.release-manifest.v1+json"
 
-      - name: Ensure GHCR runtime packages are public
+      - name: Verify GHCR runtime packages are public
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/bootstrap/ensure-ghcr-visibility.mjs

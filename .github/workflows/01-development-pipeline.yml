@@ -1,5 +1,5 @@
 name: Development Pipeline
-run-name: ${{ github.event_name == 'workflow_dispatch' && format('Development Pipeline (redeploy {0})', inputs.candidate_id) || format('Development Pipeline ({0})', github.sha) }}
+run-name: ${{ github.event_name == 'workflow_dispatch' && format('Development Pipeline (recovery {0})', inputs.candidate_id) || format('Development Pipeline ({0})', github.sha) }}
 
 on:
   pull_request:
@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       candidate_id:
-        description: Accepted candidate to redeploy
+        description: Previously released candidate to redeploy for recovery
         required: true
         type: string
 
@@ -435,8 +435,8 @@ jobs:
             echo "- Elapsed: ${{ steps.stage_timing.outputs.duration_seconds }}s"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  resolve_manual_candidate:
-    name: Resolve Manual Release Candidate
+  resolve_recovery_candidate:
+    name: Resolve Released Candidate for Recovery
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
@@ -490,10 +490,10 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-      - name: Write manual redeploy summary
+      - name: Write recovery redeploy summary
         run: |
           {
-            echo '## Manual Redeploy'
+            echo '## Recovery Redeploy'
             echo "- Candidate: ${{ steps.resolve.outputs.candidate_id }}"
             echo "- Source revision: ${{ steps.resolve.outputs.source_revision }}"
             echo "- Release unit digest: ${{ steps.resolve.outputs.release_unit_digest }}"
@@ -501,11 +501,11 @@ jobs:
 
   release:
     name: Release Stage
-    if: ${{ always() && ((github.event_name == 'merge_group' && needs.acceptance.result == 'success') || (github.event_name == 'workflow_dispatch' && needs.resolve_manual_candidate.result == 'success')) }}
+    if: ${{ always() && ((github.event_name == 'merge_group' && needs.acceptance.result == 'success') || (github.event_name == 'workflow_dispatch' && needs.resolve_recovery_candidate.result == 'success')) }}
     needs:
       - publish_candidate
       - acceptance
-      - resolve_manual_candidate
+      - resolve_recovery_candidate
     runs-on: ubuntu-latest
     timeout-minutes: 90
     outputs:
@@ -544,9 +544,9 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = 'workflow_dispatch' ]; then
             {
-              echo "candidate_id=${{ needs.resolve_manual_candidate.outputs.candidate_id }}"
-              echo "source_revision=${{ needs.resolve_manual_candidate.outputs.source_revision }}"
-              echo "release_unit_digest=${{ needs.resolve_manual_candidate.outputs.release_unit_digest }}"
+              echo "candidate_id=${{ needs.resolve_recovery_candidate.outputs.candidate_id }}"
+              echo "source_revision=${{ needs.resolve_recovery_candidate.outputs.source_revision }}"
+              echo "release_unit_digest=${{ needs.resolve_recovery_candidate.outputs.release_unit_digest }}"
             } >> "$GITHUB_OUTPUT"
           else
             {
@@ -598,13 +598,26 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify acceptance attestation
+        if: ${{ github.event_name == 'merge_group' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          pnpm --filter @compass/pipeline-tools run attest:verify-acceptance -- \
+          pnpm --filter @compass/pipeline-tools run attest:verify -- \
             --candidate-id "${{ steps.context.outputs.candidate_id }}" \
             --source-revision "${{ steps.context.outputs.source_revision }}" \
             --predicate-type "${ACCEPTANCE_PREDICATE_TYPE}" \
+            --repo "${{ github.repository }}" \
+            --subject "${RELEASE_UNITS_REPO}@${{ steps.context.outputs.release_unit_digest }}"
+
+      - name: Verify prior release attestation
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pnpm --filter @compass/pipeline-tools run attest:verify -- \
+            --candidate-id "${{ steps.context.outputs.candidate_id }}" \
+            --source-revision "${{ steps.context.outputs.source_revision }}" \
+            --predicate-type "${RELEASE_PREDICATE_TYPE}" \
             --repo "${{ github.repository }}" \
             --subject "${RELEASE_UNITS_REPO}@${{ steps.context.outputs.release_unit_digest }}"
 
@@ -615,7 +628,7 @@ jobs:
           json="$(node scripts/infra/detect-changed-scopes.mjs --revision "${{ steps.context.outputs.source_revision }}")"
           echo "infra_changed=$(printf '%s' "$json" | jq -r '.infraChanged')" >> "$GITHUB_OUTPUT"
 
-      - name: Default infra change flag for manual redeploy
+      - name: Default infra change flag for recovery redeploy
         if: ${{ github.event_name == 'workflow_dispatch' }}
         id: changed_manual
         run: echo 'infra_changed=false' >> "$GITHUB_OUTPUT"
@@ -671,6 +684,7 @@ jobs:
           echo 'verdict=pass' >> "$GITHUB_OUTPUT"
 
       - name: Run production migrations
+        if: ${{ github.event_name == 'merge_group' }}
         env:
           RG: ${{ vars.AZURE_RESOURCE_GROUP }}
           JOB: ${{ vars.ACA_MIGRATE_JOB_NAME }}
@@ -793,7 +807,7 @@ jobs:
       - build_candidate_images
       - publish_candidate
       - acceptance
-      - resolve_manual_candidate
+      - resolve_recovery_candidate
       - release
     steps:
       - name: Assert expected path succeeded
@@ -805,7 +819,7 @@ jobs:
           BUILD_CANDIDATE_IMAGES: ${{ needs.build_candidate_images.result }}
           PUBLISH_CANDIDATE: ${{ needs.publish_candidate.result }}
           ACCEPTANCE: ${{ needs.acceptance.result }}
-          RESOLVE_MANUAL_CANDIDATE: ${{ needs.resolve_manual_candidate.result }}
+          RESOLVE_RECOVERY_CANDIDATE: ${{ needs.resolve_recovery_candidate.result }}
           RELEASE: ${{ needs.release.result }}
         run: |
           set -euo pipefail
@@ -832,7 +846,7 @@ jobs:
               assert_success "release" "$RELEASE"
               ;;
             workflow_dispatch)
-              assert_success "resolve_manual_candidate" "$RESOLVE_MANUAL_CANDIDATE"
+              assert_success "resolve_recovery_candidate" "$RESOLVE_RECOVERY_CANDIDATE"
               assert_success "release" "$RELEASE"
               ;;
             *)
@@ -848,7 +862,7 @@ jobs:
             if [ "${{ github.event_name }}" = 'pull_request' ]; then
               echo '- Queue Admission: pass'
             elif [ "${{ github.event_name }}" = 'workflow_dispatch' ]; then
-              echo '- Manual Candidate Resolution: pass'
+              echo '- Recovery Candidate Resolution: pass'
               echo '- Release Stage: pass'
               echo "- Release elapsed: ${{ needs.release.outputs.duration_seconds }}s"
             else

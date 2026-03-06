@@ -8,6 +8,9 @@
   "references": [
     {
       "path": "../../packages/contracts"
+    },
+    {
+      "path": "../../packages/session-agent-protocol"
     }
   ],
   "include": ["src/**/*.ts", "test/**/*.ts"]

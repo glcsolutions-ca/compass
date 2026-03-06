@@ -17,7 +17,7 @@ export const AgentThreadSchema = z.object({
   executionMode: AgentExecutionModeSchema,
   executionHost: AgentExecutionHostSchema,
   status: AgentThreadStatusSchema,
-  cloudSessionIdentifier: z.string().min(1).nullish(),
+  sessionIdentifier: z.string().min(1).nullish(),
   title: z.string().min(1).nullish(),
   archived: z.boolean(),
   createdAt: z.string().datetime(),
@@ -110,11 +110,31 @@ export const AgentTurnStartRequestSchema = z.object({
 
 export const AgentTurnStartResponseSchema = z.object({
   turn: AgentTurnSchema,
-  outputText: z.string().nullish()
+  outputText: z.string().nullish(),
+  runtime: z
+    .object({
+      sessionIdentifier: z.string().min(1),
+      connectionState: z.enum(["bootstrapped", "reused"]),
+      runtimeKind: z.string().min(1),
+      bootId: z.string().min(1),
+      pid: z.number().int().positive().nullable().optional()
+    })
+    .optional()
 });
 
 export const AgentTurnInterruptResponseSchema = z.object({
   turn: AgentTurnSchema
+});
+
+export const AgentThreadRuntimeLaunchResponseSchema = z.object({
+  launch: z.object({
+    sessionIdentifier: z.string().min(1),
+    bootId: z.string().min(1),
+    controlPlaneUrl: z.string().url(),
+    connectToken: z.string().min(1),
+    expiresAt: z.string().datetime(),
+    runtimeKind: z.string().min(1)
+  })
 });
 
 export const AgentEventSchema = z.object({

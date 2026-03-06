@@ -10,6 +10,7 @@
     "1772163000000_organization_workspace_reset.mjs": "13bad175ea129d9f2d76e7e7a1a26d8c0bfea9258bf2af90ccb2b8c3f8806baf",
     "1772164000000_auth_audit_events_org_fk.mjs": "182a52218753920099d8afc2639d1609683b0b69027df3b8d43c4a7adf22166c",
     "1772184000000_auth_desktop_handoffs.mjs": "21d8dfa68de59e254fed2f5ced3c041e9269d8ba673f77c31de5efc90efd7316",
-    "1772185000000_agent_turn_lineage_and_idempotency.mjs": "0b6fe16eb04ea3f8c22adb676cc3b61dd1e19fd0d643e672432ff2923f14ab0e"
+    "1772185000000_agent_turn_lineage_and_idempotency.mjs": "0b6fe16eb04ea3f8c22adb676cc3b61dd1e19fd0d643e672432ff2923f14ab0e",
+    "1772186000000_agent_session_identifier.mjs": "04af42075477a6e29cbb6771153a16ae04ebb5eaeab69573757095186709d32d"
   }
 }

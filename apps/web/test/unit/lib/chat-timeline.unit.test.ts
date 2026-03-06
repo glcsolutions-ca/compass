@@ -1,12 +1,13 @@
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentEvent } from "~/features/chat/agent-types";
+import type { AgentEvent, ChatTimelineItem } from "~/features/chat/agent-types";
 import {
   __private__,
   useChatTimeline,
   type TimelinePromptRecord
 } from "~/features/chat/hooks/use-chat-timeline";
 import type { ChatActionData } from "~/features/chat/chat-action";
+import type { AssistantStoreMessage } from "~/features/chat/presentation/chat-runtime-store";
 
 const normalizeAgentEventsMock = vi.hoisted(() => vi.fn());
 const buildAssistantStoreMessagesMock = vi.hoisted(() => vi.fn());
@@ -45,6 +46,7 @@ describe("chat timeline prompt upsert", () => {
       clientRequestId: "req-1",
       turnId: null,
       text: "First prompt",
+      answer: null,
       state: "pending",
       error: null,
       createdAt
@@ -61,6 +63,7 @@ describe("chat timeline prompt upsert", () => {
       clientRequestId: "req-1",
       turnId: null,
       text: "First prompt",
+      answer: null,
       state: "pending",
       error: null,
       createdAt: "2026-03-01T00:00:00.000Z"
@@ -70,6 +73,7 @@ describe("chat timeline prompt upsert", () => {
       clientRequestId: "req-1",
       turnId: "turn-1",
       text: "First prompt",
+      answer: null,
       state: "failed",
       error: "Unable to submit this prompt.",
       createdAt: "2026-03-01T00:01:00.000Z"
@@ -139,6 +143,55 @@ describe("useChatTimeline", () => {
     expect(result.current.assistantMessages).toEqual([{ id: "assistant-message-1" }]);
   });
 
+  it("adds a successful submit fallback assistant message when no assistant event exists", () => {
+    normalizeAgentEventsMock.mockReturnValue([]);
+    buildAssistantStoreMessagesMock.mockImplementation(
+      ({ timeline }: { timeline: ChatTimelineItem[] }): AssistantStoreMessage[] =>
+        timeline as AssistantStoreMessage[]
+    );
+
+    const { result } = renderHook(
+      (props: {
+        resetKey: string;
+        events: AgentEvent[];
+        submitResult: ChatActionData | undefined;
+      }) => useChatTimeline(props),
+      {
+        initialProps: {
+          resetKey: "workspace-1:thread-1",
+          events: [],
+          submitResult: {
+            intent: "sendMessage",
+            ok: true,
+            clientRequestId: "req-success",
+            prompt: "hello",
+            answer: "echo:hello",
+            threadId: "thread-1",
+            turnId: "turn-1",
+            executionMode: "local"
+          } as ChatActionData
+        }
+      }
+    );
+
+    expect(result.current.timeline).toEqual([
+      expect.objectContaining({
+        id: "prompt-req-success",
+        kind: "message",
+        role: "user",
+        text: "hello",
+        turnId: "turn-1"
+      }),
+      expect.objectContaining({
+        id: "prompt-req-success-assistant",
+        kind: "message",
+        role: "assistant",
+        text: "echo:hello",
+        turnId: "turn-1"
+      })
+    ]);
+  });
+
   it("clears fallback prompts on reset key change and clears active turn after interruption", () => {
     const { result, rerender } = renderHook(
       (props: {
@@ -159,6 +212,7 @@ describe("useChatTimeline", () => {
             ok: false,
             clientRequestId: "req-reset",
             prompt: "Retry this",
+            answer: null,
             turnId: "turn-1",
             error: "Nope"
           } as ChatActionData

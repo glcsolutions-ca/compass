@@ -9,7 +9,6 @@ import { resolveLocalDevEnv } from "./local-env.mjs";
 const ARTIFACTS_DIR = ".artifacts/dev";
 const LOCK_PATH = path.join(ARTIFACTS_DIR, "dev-stack.lock.json");
 const DEV_APPS_LOG_PATH = path.join(ARTIFACTS_DIR, "dev-apps.log");
-const RUNTIME_PID_PATH = path.join(ARTIFACTS_DIR, "runtime-session.pid");
 const TURBO_DEV_ARGS = [
   "run",
   "dev",
@@ -245,15 +244,6 @@ async function startDependencies(rootDir, env) {
       env
     }
   );
-
-  await runCommand(
-    process.execPath,
-    [path.resolve(rootDir, "scripts/dev/runtime-session.mjs"), "up"],
-    rootDir,
-    {
-      env
-    }
-  );
 }
 
 async function waitForHttpHealth(url, timeoutMs = 30_000) {
@@ -283,11 +273,9 @@ async function waitForHttpHealth(url, timeoutMs = 30_000) {
 async function waitForStackHealth(env) {
   const apiPort = env.API_PORT;
   const webPort = env.WEB_PORT;
-  const runtimeEndpoint = String(env.AGENT_RUNTIME_ENDPOINT || "").replace(/\/+$/u, "");
 
   await waitForHttpHealth(`http://127.0.0.1:${apiPort}/health`);
   await waitForHttpHealth(`http://127.0.0.1:${webPort}/health`);
-  await waitForHttpHealth(`${runtimeEndpoint}/health`);
 }
 
 async function down(rootDir, env) {
@@ -304,13 +292,6 @@ async function down(rootDir, env) {
 
   await runCommand(
     process.execPath,
-    [path.resolve(rootDir, "scripts/dev/runtime-session.mjs"), "down"],
-    rootDir,
-    { allowFailure: true, env }
-  );
-
-  await runCommand(
-    process.execPath,
     [path.resolve(rootDir, "db/scripts/postgres-compose.mjs"), "down"],
     rootDir,
     {
@@ -319,7 +300,6 @@ async function down(rootDir, env) {
     }
   );
 
-  await unlink(path.resolve(rootDir, RUNTIME_PID_PATH)).catch(() => {});
   await removeLock(rootDir);
   console.info("dev-stack: dependencies are down.");
 }

@@ -3,6 +3,7 @@ import type { AuthShellLoaderData } from "~/features/auth/types";
 import type { ChatContextMode } from "~/features/auth/types";
 import { loadAuthShellData } from "~/features/auth/shell-loader";
 import { readPersonalContextLabel } from "~/features/chat/chat-context";
+import { readDefaultExecutionMode } from "~/features/chat/default-execution-mode";
 import { getAgentThread, listAgentThreadEvents } from "~/features/chat/agent-client";
 import type { AgentEvent, AgentExecutionMode, AgentThread } from "~/features/chat/agent-types";
 import { buildReturnTo } from "~/lib/auth/auth-session";
@@ -78,7 +79,7 @@ async function loadThreadContext(input: {
       thread: null,
       initialEvents: [],
       initialCursor: 0,
-      executionMode: "cloud"
+      executionMode: readDefaultExecutionMode()
     };
   }
 

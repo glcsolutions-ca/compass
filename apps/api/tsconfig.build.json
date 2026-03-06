@@ -8,6 +8,9 @@
   "references": [
     {
       "path": "../../packages/contracts/tsconfig.build.json"
+    },
+    {
+      "path": "../../packages/session-agent-protocol/tsconfig.build.json"
     }
   ],
   "include": ["src/**/*.ts"],

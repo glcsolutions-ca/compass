@@ -11,10 +11,12 @@
     "start": "node dist/index.js",
     "test": "vitest run --config vitest.config.mts",
     "test:integration": "vitest run --config vitest.integration.config.mts",
-    "typecheck": "tsc -p tsconfig.ref.json --noEmit"
+    "typecheck": "pnpm exec tsc -p ../../packages/session-agent-protocol/tsconfig.ref.json && tsc -p tsconfig.ref.json --noEmit"
   },
   "dependencies": {
     "@compass/contracts": "workspace:*",
+    "@compass/session-agent": "workspace:*",
+    "@compass/session-agent-protocol": "workspace:*",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "jose": "^6.1.2",

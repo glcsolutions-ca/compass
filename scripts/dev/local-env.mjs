@@ -7,16 +7,14 @@ import { normalizeEnvValue, readEnvLayer } from "../shared/env-files.mjs";
 const SERVICE_ENV_PATHS = {
   api: "apps/api/.env",
   web: "apps/web/.env",
-  runtime: "apps/codex-session-runtime/.env",
   db: "db/postgres/.env"
 };
 
-const PORT_KEYS = ["WEB_PORT", "API_PORT", "POSTGRES_PORT", "SESSION_RUNTIME_PORT"];
+const PORT_KEYS = ["WEB_PORT", "API_PORT", "POSTGRES_PORT"];
 const DEFAULT_PORTS = {
   WEB_PORT: 3000,
   API_PORT: 3001,
-  POSTGRES_PORT: 5432,
-  SESSION_RUNTIME_PORT: 8080
+  POSTGRES_PORT: 5432
 };
 
 function parsePort(value, sourceLabel) {
@@ -114,37 +112,6 @@ function resolvePortAssignment({
   };
 }
 
-function resolveRuntimePortAssignment({ processEnv, layer }) {
-  const runtimePort = normalizeEnvValue(processEnv.SESSION_RUNTIME_PORT);
-  if (runtimePort) {
-    return {
-      port: parsePort(runtimePort, "process.env.SESSION_RUNTIME_PORT"),
-      source: "process.env.SESSION_RUNTIME_PORT",
-      pinned: true,
-      basePort: undefined
-    };
-  }
-
-  const processPort = normalizeEnvValue(processEnv.PORT);
-  if (processPort) {
-    return {
-      port: parsePort(processPort, "process.env.PORT"),
-      source: "process.env.PORT",
-      pinned: true,
-      basePort: undefined
-    };
-  }
-
-  return resolvePortAssignment({
-    key: "SESSION_RUNTIME_PORT",
-    processEnv,
-    envLocalValues: layer.envLocalValues,
-    envValues: layer.envValues,
-    envFileKey: "PORT",
-    defaultPort: DEFAULT_PORTS.SESSION_RUNTIME_PORT
-  });
-}
-
 function ensurePinnedPortUniqueness(assignments) {
   const seen = new Map();
 
@@ -232,7 +199,7 @@ async function assignHybridPorts({ assignments, isPortAvailableFn }) {
   }
 
   throw new Error(
-    "Unable to allocate ports. Set explicit WEB_PORT/API_PORT/POSTGRES_PORT/SESSION_RUNTIME_PORT overrides."
+    "Unable to allocate ports. Set explicit WEB_PORT/API_PORT/POSTGRES_PORT overrides."
   );
 }
 
@@ -259,21 +226,28 @@ function resolveDerivedEnv({ processEnv, layers, ports }) {
     normalizeEnvValue(layers.web.envLocalValues.VITE_API_BASE_URL) ??
     `http://localhost:${ports.API_PORT}`;
 
-  const runtimeEndpoint =
-    normalizeEnvValue(processEnv.AGENT_RUNTIME_ENDPOINT) ??
-    normalizeEnvValue(layers.api.envLocalValues.AGENT_RUNTIME_ENDPOINT) ??
-    `http://127.0.0.1:${ports.SESSION_RUNTIME_PORT}`;
-
   const authMode =
     normalizeEnvValue(processEnv.AUTH_MODE) ??
     normalizeEnvValue(layers.api.envLocalValues.AUTH_MODE) ??
     normalizeEnvValue(layers.api.envValues.AUTH_MODE) ??
     "mock";
 
+  const defaultExecutionMode =
+    normalizeEnvValue(processEnv.AGENT_DEFAULT_EXECUTION_MODE) ??
+    normalizeEnvValue(layers.api.envLocalValues.AGENT_DEFAULT_EXECUTION_MODE) ??
+    normalizeEnvValue(layers.api.envValues.AGENT_DEFAULT_EXECUTION_MODE) ??
+    "local";
+
+  const runtimeProvider =
+    normalizeEnvValue(processEnv.AGENT_RUNTIME_PROVIDER) ??
+    normalizeEnvValue(layers.api.envLocalValues.AGENT_RUNTIME_PROVIDER) ??
+    normalizeEnvValue(layers.api.envValues.AGENT_RUNTIME_PROVIDER) ??
+    (defaultExecutionMode === "local" ? "local_process" : "dynamic_sessions");
+
   const host =
     normalizeEnvValue(processEnv.HOST) ??
-    normalizeEnvValue(layers.runtime.envLocalValues.HOST) ??
-    normalizeEnvValue(layers.runtime.envValues.HOST) ??
+    normalizeEnvValue(layers.api.envLocalValues.HOST) ??
+    normalizeEnvValue(layers.api.envValues.HOST) ??
     "127.0.0.1";
 
   const composeProjectName =
@@ -286,7 +260,9 @@ function resolveDerivedEnv({ processEnv, layers, ports }) {
     WEB_BASE_URL: webBaseUrl,
     ENTRA_REDIRECT_URI: entraRedirectUri,
     VITE_API_BASE_URL: apiBaseUrl,
-    AGENT_RUNTIME_ENDPOINT: runtimeEndpoint,
+    VITE_AGENT_DEFAULT_EXECUTION_MODE: defaultExecutionMode,
+    AGENT_DEFAULT_EXECUTION_MODE: defaultExecutionMode,
+    AGENT_RUNTIME_PROVIDER: runtimeProvider,
     DATABASE_URL: databaseUrl,
     AUTH_MODE: authMode,
     HOST: host,
@@ -325,10 +301,6 @@ export async function resolveLocalDevEnv({
       envValues: layers.db.envValues,
       envFileKey: "POSTGRES_PORT",
       defaultPort: DEFAULT_PORTS.POSTGRES_PORT
-    }),
-    SESSION_RUNTIME_PORT: resolveRuntimePortAssignment({
-      processEnv: env,
-      layer: layers.runtime
     })
   };
 
@@ -338,8 +310,7 @@ export async function resolveLocalDevEnv({
   const ports = {
     WEB_PORT: assignments.WEB_PORT.port,
     API_PORT: assignments.API_PORT.port,
-    POSTGRES_PORT: assignments.POSTGRES_PORT.port,
-    SESSION_RUNTIME_PORT: assignments.SESSION_RUNTIME_PORT.port
+    POSTGRES_PORT: assignments.POSTGRES_PORT.port
   };
 
   const derived = resolveDerivedEnv({ processEnv: env, layers, ports });
@@ -351,12 +322,12 @@ export async function resolveLocalDevEnv({
       WEB_PORT: String(ports.WEB_PORT),
       API_PORT: String(ports.API_PORT),
       POSTGRES_PORT: String(ports.POSTGRES_PORT),
-      SESSION_RUNTIME_PORT: String(ports.SESSION_RUNTIME_PORT),
-      PORT: String(ports.SESSION_RUNTIME_PORT),
       VITE_API_BASE_URL: derived.VITE_API_BASE_URL,
+      VITE_AGENT_DEFAULT_EXECUTION_MODE: derived.VITE_AGENT_DEFAULT_EXECUTION_MODE,
       WEB_BASE_URL: derived.WEB_BASE_URL,
       ENTRA_REDIRECT_URI: derived.ENTRA_REDIRECT_URI,
-      AGENT_RUNTIME_ENDPOINT: derived.AGENT_RUNTIME_ENDPOINT,
+      AGENT_DEFAULT_EXECUTION_MODE: derived.AGENT_DEFAULT_EXECUTION_MODE,
+      AGENT_RUNTIME_PROVIDER: derived.AGENT_RUNTIME_PROVIDER,
       DATABASE_URL: derived.DATABASE_URL,
       AUTH_MODE: derived.AUTH_MODE,
       HOST: derived.HOST,

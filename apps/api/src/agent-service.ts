@@ -18,6 +18,7 @@ import {
 } from "@compass/contracts";
 import { Pool, type PoolClient } from "pg";
 import { ApiError } from "./auth-service.js";
+import type { SessionControlPlane } from "./agent-sessions/session-control-plane.js";
 
 export interface AgentThreadRecord {
   threadId: string;
@@ -26,7 +27,7 @@ export interface AgentThreadRecord {
   executionMode: AgentExecutionMode;
   executionHost: AgentExecutionHost;
   status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
-  cloudSessionIdentifier: string | null;
+  sessionIdentifier: string | null;
   title: string | null;
   archived: boolean;
   createdAt: string;
@@ -80,6 +81,13 @@ interface CloudBootstrapResult {
 interface CloudTurnResult {
   outputText: string;
   runtimeMetadata: Record<string, unknown>;
+  runtime: {
+    sessionIdentifier: string;
+    connectionState: "bootstrapped" | "reused";
+    runtimeKind: string;
+    bootId: string;
+    pid: number | null;
+  } | null;
 }
 
 interface StartTurnResolvedInput {
@@ -128,6 +136,14 @@ interface RuntimeExecutionDriver {
   loginCancel(input: { loginId: string }): Promise<RuntimeAccountLoginCancelResponse>;
   logout(): Promise<RuntimeAccountLogoutResponse>;
   readRateLimits(): Promise<RuntimeAccountRateLimitsReadResponse>;
+  issueThreadRuntimeLaunch(input: { thread: AgentThreadRecord }): Promise<{
+    sessionIdentifier: string;
+    bootId: string;
+    controlPlaneUrl: string;
+    connectToken: string;
+    expiresAt: string;
+    runtimeKind: string;
+  }>;
   subscribeNotifications(handler: (notification: RuntimeNotificationRecord) => void): () => void;
 }
 
@@ -162,6 +178,13 @@ class MockCloudExecutionDriver implements RuntimeExecutionDriver {
       runtimeMetadata: {
         driver: "mock",
         turnId: input.turnId
+      },
+      runtime: {
+        sessionIdentifier: input.thread.sessionIdentifier || `thr-${input.thread.threadId}`,
+        connectionState: "reused",
+        runtimeKind: "mock",
+        bootId: "mock",
+        pid: null
       }
     };
   }
@@ -222,6 +245,24 @@ class MockCloudExecutionDriver implements RuntimeExecutionDriver {
     return {
       rateLimits: null,
       rateLimitsByLimitId: null
+    };
+  }
+
+  async issueThreadRuntimeLaunch(input: { thread: AgentThreadRecord }): Promise<{
+    sessionIdentifier: string;
+    bootId: string;
+    controlPlaneUrl: string;
+    connectToken: string;
+    expiresAt: string;
+    runtimeKind: string;
+  }> {
+    return {
+      sessionIdentifier: input.thread.sessionIdentifier || `thr-${input.thread.threadId}`,
+      bootId: "mock",
+      controlPlaneUrl: "ws://localhost/mock",
+      connectToken: "mock",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      runtimeKind: "mock"
     };
   }
 
@@ -287,8 +328,156 @@ class UnavailableCloudExecutionDriver implements RuntimeExecutionDriver {
     throw this.runtimeUnavailableError();
   }
 
+  async issueThreadRuntimeLaunch(): Promise<{
+    sessionIdentifier: string;
+    bootId: string;
+    controlPlaneUrl: string;
+    connectToken: string;
+    expiresAt: string;
+    runtimeKind: string;
+  }> {
+    throw this.runtimeUnavailableError();
+  }
+
   subscribeNotifications(): () => void {
     throw this.runtimeUnavailableError();
+  }
+}
+
+class SessionBackedExecutionDriver implements RuntimeExecutionDriver {
+  readonly provider: RuntimeProvider;
+  readonly capabilities: RuntimeCapabilities = {
+    interactiveAuth: false,
+    supportsChatgptManaged: false,
+    supportsApiKey: false,
+    supportsChatgptAuthTokens: false,
+    supportsRateLimits: false,
+    supportsRuntimeStream: false
+  };
+  readonly #controlPlane: SessionControlPlane;
+
+  constructor(input: { provider: RuntimeProvider; controlPlane: SessionControlPlane }) {
+    this.provider = input.provider;
+    this.#controlPlane = input.controlPlane;
+  }
+
+  async bootstrapSession(input: { thread: AgentThreadRecord }): Promise<CloudBootstrapResult> {
+    return {
+      runtimeMetadata: {
+        provider: this.provider,
+        sessionIdentifier: input.thread.sessionIdentifier || `thr-${input.thread.threadId}`
+      }
+    };
+  }
+
+  async runTurn(input: {
+    thread: AgentThreadRecord;
+    turnId: string;
+    text: string;
+  }): Promise<CloudTurnResult> {
+    const result = await this.#controlPlane.runTurn({
+      thread: {
+        threadId: input.thread.threadId,
+        sessionIdentifier: input.thread.sessionIdentifier || `thr-${input.thread.threadId}`,
+        executionHost: input.thread.executionHost
+      },
+      turnId: input.turnId,
+      text: input.text
+    });
+
+    return {
+      outputText: result.outputText,
+      runtimeMetadata: result.runtimeMetadata,
+      runtime: result.runtime
+    };
+  }
+
+  async interruptTurn(input: {
+    thread: AgentThreadRecord;
+    turnId: string;
+  }): Promise<CloudInterruptResult> {
+    this.#controlPlane.interruptTurn({
+      thread: {
+        threadId: input.thread.threadId,
+        sessionIdentifier: input.thread.sessionIdentifier || `thr-${input.thread.threadId}`,
+        executionHost: input.thread.executionHost
+      },
+      turnId: input.turnId
+    });
+
+    return {
+      interrupted: true,
+      runtimeMetadata: {
+        provider: this.provider,
+        sessionIdentifier: input.thread.sessionIdentifier || `thr-${input.thread.threadId}`,
+        turnId: input.turnId
+      }
+    };
+  }
+
+  async readAccount(): Promise<RuntimeAccountReadResponse> {
+    return {
+      provider: this.provider,
+      capabilities: this.capabilities,
+      authMode: null,
+      requiresOpenaiAuth: false,
+      account: {
+        type: "service",
+        label: "Provider-managed runtime"
+      }
+    };
+  }
+
+  async loginStart(): Promise<RuntimeAccountLoginStartResponse> {
+    throw new ApiError(
+      400,
+      "AGENT_RUNTIME_PROVIDER_UNSUPPORTED",
+      "Interactive runtime authentication is unavailable for this runtime provider"
+    );
+  }
+
+  async loginCancel(): Promise<RuntimeAccountLoginCancelResponse> {
+    throw new ApiError(
+      400,
+      "AGENT_RUNTIME_PROVIDER_UNSUPPORTED",
+      "Interactive runtime authentication is unavailable for this runtime provider"
+    );
+  }
+
+  async logout(): Promise<RuntimeAccountLogoutResponse> {
+    throw new ApiError(
+      400,
+      "AGENT_RUNTIME_PROVIDER_UNSUPPORTED",
+      "Interactive runtime authentication is unavailable for this runtime provider"
+    );
+  }
+
+  async readRateLimits(): Promise<RuntimeAccountRateLimitsReadResponse> {
+    return {
+      rateLimits: null,
+      rateLimitsByLimitId: null
+    };
+  }
+
+  async issueThreadRuntimeLaunch(input: { thread: AgentThreadRecord }): Promise<{
+    sessionIdentifier: string;
+    bootId: string;
+    controlPlaneUrl: string;
+    connectToken: string;
+    expiresAt: string;
+    runtimeKind: string;
+  }> {
+    return this.#controlPlane.issueDesktopLaunchBundle({
+      thread: {
+        threadId: input.thread.threadId,
+        sessionIdentifier: input.thread.sessionIdentifier || `thr-${input.thread.threadId}`,
+        executionHost: input.thread.executionHost
+      }
+    });
+  }
+
+  subscribeNotifications(): () => void {
+    return () => {};
   }
 }
 
@@ -448,7 +637,7 @@ class DynamicSessionsCloudExecutionDriver implements RuntimeExecutionDriver {
   }
 
   async bootstrapSession(input: { thread: AgentThreadRecord }): Promise<CloudBootstrapResult> {
-    const identifier = input.thread.cloudSessionIdentifier || `thr-${input.thread.threadId}`;
+    const identifier = input.thread.sessionIdentifier || `thr-${input.thread.threadId}`;
     const payload = await this.callRuntime({
       path: "/agent/session/bootstrap",
       identifier,
@@ -470,7 +659,7 @@ class DynamicSessionsCloudExecutionDriver implements RuntimeExecutionDriver {
     turnId: string;
     text: string;
   }): Promise<CloudTurnResult> {
-    const identifier = input.thread.cloudSessionIdentifier || `thr-${input.thread.threadId}`;
+    const identifier = input.thread.sessionIdentifier || `thr-${input.thread.threadId}`;
     const payload = await this.callRuntime({
       path: "/agent/turns/start",
       identifier,
@@ -487,7 +676,8 @@ class DynamicSessionsCloudExecutionDriver implements RuntimeExecutionDriver {
       runtimeMetadata:
         payload.runtimeMetadata && typeof payload.runtimeMetadata === "object"
           ? (payload.runtimeMetadata as Record<string, unknown>)
-          : { driver: "dynamic_sessions" }
+          : { driver: "dynamic_sessions" },
+      runtime: null
     };
   }
 
@@ -495,7 +685,7 @@ class DynamicSessionsCloudExecutionDriver implements RuntimeExecutionDriver {
     thread: AgentThreadRecord;
     turnId: string;
   }): Promise<CloudInterruptResult> {
-    const identifier = input.thread.cloudSessionIdentifier || `thr-${input.thread.threadId}`;
+    const identifier = input.thread.sessionIdentifier || `thr-${input.thread.threadId}`;
     const payload = await this.callRuntime({
       path: `/agent/turns/${encodeURIComponent(input.turnId)}/interrupt`,
       identifier,
@@ -557,6 +747,21 @@ class DynamicSessionsCloudExecutionDriver implements RuntimeExecutionDriver {
       rateLimits: null,
       rateLimitsByLimitId: null
     };
+  }
+
+  async issueThreadRuntimeLaunch(): Promise<{
+    sessionIdentifier: string;
+    bootId: string;
+    controlPlaneUrl: string;
+    connectToken: string;
+    expiresAt: string;
+    runtimeKind: string;
+  }> {
+    throw new ApiError(
+      400,
+      "AGENT_RUNTIME_PROVIDER_UNSUPPORTED",
+      "Runtime launch bundles are unavailable for this runtime provider"
+    );
   }
 
   subscribeNotifications(): () => void {
@@ -644,7 +849,7 @@ class LocalHttpExecutionDriver implements RuntimeExecutionDriver {
   }
 
   async bootstrapSession(input: { thread: AgentThreadRecord }): Promise<CloudBootstrapResult> {
-    const identifier = input.thread.cloudSessionIdentifier || `thr-${input.thread.threadId}`;
+    const identifier = input.thread.sessionIdentifier || `thr-${input.thread.threadId}`;
     const payload = await this.callRuntimePost({
       path: "/agent/session/bootstrap",
       identifier,
@@ -666,7 +871,7 @@ class LocalHttpExecutionDriver implements RuntimeExecutionDriver {
     turnId: string;
     text: string;
   }): Promise<CloudTurnResult> {
-    const identifier = input.thread.cloudSessionIdentifier || `thr-${input.thread.threadId}`;
+    const identifier = input.thread.sessionIdentifier || `thr-${input.thread.threadId}`;
     const payload = await this.callRuntimePost({
       path: "/agent/turns/start",
       identifier,
@@ -683,7 +888,8 @@ class LocalHttpExecutionDriver implements RuntimeExecutionDriver {
       runtimeMetadata:
         payload.runtimeMetadata && typeof payload.runtimeMetadata === "object"
           ? (payload.runtimeMetadata as Record<string, unknown>)
-          : { driver: this.provider }
+          : { driver: this.provider },
+      runtime: null
     };
   }
 
@@ -691,7 +897,7 @@ class LocalHttpExecutionDriver implements RuntimeExecutionDriver {
     thread: AgentThreadRecord;
     turnId: string;
   }): Promise<CloudInterruptResult> {
-    const identifier = input.thread.cloudSessionIdentifier || `thr-${input.thread.threadId}`;
+    const identifier = input.thread.sessionIdentifier || `thr-${input.thread.threadId}`;
     const payload = await this.callRuntimePost({
       path: `/agent/turns/${encodeURIComponent(input.turnId)}/interrupt`,
       identifier,
@@ -810,6 +1016,21 @@ class LocalHttpExecutionDriver implements RuntimeExecutionDriver {
           ? (normalizedByLimitId as RuntimeAccountRateLimitsReadResponse["rateLimitsByLimitId"])
           : null
     };
+  }
+
+  async issueThreadRuntimeLaunch(): Promise<{
+    sessionIdentifier: string;
+    bootId: string;
+    controlPlaneUrl: string;
+    connectToken: string;
+    expiresAt: string;
+    runtimeKind: string;
+  }> {
+    throw new ApiError(
+      400,
+      "AGENT_RUNTIME_PROVIDER_UNSUPPORTED",
+      "Runtime launch bundles are unavailable for this runtime provider"
+    );
   }
 
   subscribeNotifications(handler: (notification: RuntimeNotificationRecord) => void): () => void {
@@ -1143,7 +1364,7 @@ function mapThreadRow(row: Record<string, unknown>): AgentThreadRecord {
     executionMode: parseExecutionMode(executionModeValue),
     executionHost: parseExecutionHost(executionHostValue),
     status: statusValue as AgentThreadRecord["status"],
-    cloudSessionIdentifier: readRecordNullableString(row, "cloud_session_identifier"),
+    sessionIdentifier: readRecordNullableString(row, "session_identifier"),
     title: readRecordNullableString(row, "title"),
     archived: readRecordBoolean(row, "archived", false),
     createdAt: readRecordIsoDate(row, "created_at"),
@@ -1289,7 +1510,11 @@ export interface AgentService {
     executionMode?: AgentExecutionMode;
     executionHost?: AgentExecutionHost;
     now: Date;
-  }): Promise<{ turn: AgentTurnRecord; outputText: string | null }>;
+  }): Promise<{
+    turn: AgentTurnRecord;
+    outputText: string | null;
+    runtime?: CloudTurnResult["runtime"];
+  }>;
   interruptTurn(input: {
     userId: string;
     threadId: string;
@@ -1322,6 +1547,16 @@ export interface AgentService {
   }): Promise<RuntimeAccountLoginCancelResponse>;
   logoutRuntimeAccount(input: { userId: string }): Promise<RuntimeAccountLogoutResponse>;
   readRuntimeRateLimits(input: { userId: string }): Promise<RuntimeAccountRateLimitsReadResponse>;
+  issueThreadRuntimeLaunch(input: { userId: string; threadId: string }): Promise<{
+    launch: {
+      sessionIdentifier: string;
+      bootId: string;
+      controlPlaneUrl: string;
+      connectToken: string;
+      expiresAt: string;
+      runtimeKind: string;
+    };
+  }>;
   listRuntimeNotifications(input: {
     userId: string;
     cursor?: number;
@@ -1413,7 +1648,7 @@ class PostgresAgentService implements AgentService {
           at.workspace_id,
           at.execution_mode,
           at.execution_host,
-          at.cloud_session_identifier,
+          at.session_identifier,
           at.title,
           at.archived,
           at.status,
@@ -1449,26 +1684,7 @@ class PostgresAgentService implements AgentService {
     const threadId = randomUUID();
     const executionMode = input.executionMode;
     const executionHost = input.executionHost ?? resolveDefaultExecutionHost(executionMode);
-    const cloudSessionIdentifier = executionMode === "cloud" ? `thr-${threadId}` : null;
-
-    if (executionMode === "cloud") {
-      await this.runtimeExecutionDriver.bootstrapSession({
-        thread: {
-          threadId,
-          workspaceId: workspace.workspaceId,
-          workspaceSlug: workspace.workspaceSlug,
-          executionMode,
-          executionHost,
-          status: "idle",
-          cloudSessionIdentifier,
-          title: input.title?.trim() || null,
-          archived: false,
-          createdAt: input.now.toISOString(),
-          updatedAt: input.now.toISOString(),
-          modeSwitchedAt: null
-        }
-      });
-    }
+    const sessionIdentifier = `thr-${threadId}`;
 
     const result = await this.pool.query(
       `
@@ -1482,7 +1698,7 @@ class PostgresAgentService implements AgentService {
           workspace_id,
           execution_mode,
           execution_host,
-          cloud_session_identifier
+          session_identifier
         )
         values ($1, $2, 'idle', '{}'::jsonb, $3, $3, $4, $5, $6, $7)
         returning
@@ -1490,7 +1706,7 @@ class PostgresAgentService implements AgentService {
           workspace_id,
           execution_mode,
           execution_host,
-          cloud_session_identifier,
+          session_identifier,
           title,
           archived,
           status,
@@ -1506,7 +1722,7 @@ class PostgresAgentService implements AgentService {
         workspace.workspaceId,
         executionMode,
         executionHost,
-        cloudSessionIdentifier,
+        sessionIdentifier,
         workspace.workspaceSlug
       ]
     );
@@ -1590,7 +1806,7 @@ class PostgresAgentService implements AgentService {
             workspace_id,
             execution_mode,
             execution_host,
-            cloud_session_identifier,
+            session_identifier,
             title,
             archived,
             status,
@@ -1650,13 +1866,6 @@ class PostgresAgentService implements AgentService {
   }): Promise<AgentThreadRecord> {
     const executionMode = input.executionMode;
     const executionHost = input.executionHost ?? resolveDefaultExecutionHost(executionMode);
-    if (executionMode === "local") {
-      throw new ApiError(
-        503,
-        "AGENT_LOCAL_MODE_NOT_IMPLEMENTED",
-        "Local mode turns are not implemented yet."
-      );
-    }
 
     const client = await this.pool.connect();
     try {
@@ -1697,17 +1906,14 @@ class PostgresAgentService implements AgentService {
             execution_host = $3,
             mode_switched_at = $4,
             updated_at = $4,
-            cloud_session_identifier = case
-              when $2 = 'cloud' then coalesce(cloud_session_identifier, $5)
-              else cloud_session_identifier
-            end
+            session_identifier = coalesce(session_identifier, $5)
           where thread_id = $1
           returning
             thread_id,
             workspace_id,
             execution_mode,
             execution_host,
-            cloud_session_identifier,
+            session_identifier,
             title,
             archived,
             status,
@@ -1770,13 +1976,6 @@ class PostgresAgentService implements AgentService {
   }): StartTurnResolvedInput {
     const executionMode = input.executionMode ?? input.threadDefaults.executionMode;
     const executionHost = input.executionHost ?? input.threadDefaults.executionHost;
-    if (executionMode === "local") {
-      throw new ApiError(
-        503,
-        "AGENT_LOCAL_MODE_NOT_IMPLEMENTED",
-        "Local mode turns are not implemented yet."
-      );
-    }
 
     return {
       threadId: input.threadId,
@@ -2066,9 +2265,7 @@ class PostgresAgentService implements AgentService {
       ...input.accessThread,
       executionMode: input.turnContext.executionMode,
       executionHost: input.turnContext.executionHost,
-      cloudSessionIdentifier:
-        input.accessThread.cloudSessionIdentifier ||
-        (input.turnContext.executionMode === "cloud" ? `thr-${input.turnContext.threadId}` : null)
+      sessionIdentifier: input.accessThread.sessionIdentifier || `thr-${input.turnContext.threadId}`
     };
 
     let cloudResult: CloudTurnResult | null = null;
@@ -2095,7 +2292,11 @@ class PostgresAgentService implements AgentService {
     turnContext: StartTurnResolvedInput;
     cloudResult: CloudTurnResult | null;
     turnError: unknown;
-  }): Promise<{ turn: AgentTurnRecord; outputText: string | null }> {
+  }): Promise<{
+    turn: AgentTurnRecord;
+    outputText: string | null;
+    runtime?: CloudTurnResult["runtime"];
+  }> {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
@@ -2243,7 +2444,8 @@ class PostgresAgentService implements AgentService {
       }
       return {
         turn: updatedTurn,
-        outputText: input.cloudResult?.outputText ?? null
+        outputText: input.cloudResult?.outputText ?? null,
+        runtime: input.cloudResult?.runtime ?? undefined
       };
     } catch (error) {
       await client.query("rollback");
@@ -2263,7 +2465,11 @@ class PostgresAgentService implements AgentService {
     executionMode?: AgentExecutionMode;
     executionHost?: AgentExecutionHost;
     now: Date;
-  }): Promise<{ turn: AgentTurnRecord; outputText: string | null }> {
+  }): Promise<{
+    turn: AgentTurnRecord;
+    outputText: string | null;
+    runtime?: CloudTurnResult["runtime"];
+  }> {
     const access = await this.requireThreadAccess({
       userId: input.userId,
       threadId: input.threadId
@@ -2276,7 +2482,8 @@ class PostgresAgentService implements AgentService {
     if (startTransaction.reusedTurn) {
       return {
         turn: startTransaction.reusedTurn,
-        outputText: readTurnOutputText(startTransaction.reusedTurn)
+        outputText: readTurnOutputText(startTransaction.reusedTurn),
+        runtime: undefined
       };
     }
     if (startTransaction.startedEvent) {
@@ -2368,22 +2575,19 @@ class PostgresAgentService implements AgentService {
       await client.query("commit");
       this.publishEvent(event);
 
-      if (turn.executionMode === "cloud") {
-        void this.runtimeExecutionDriver
-          .interruptTurn({
-            thread: {
-              ...access.thread,
-              executionMode: turn.executionMode,
-              executionHost: turn.executionHost,
-              cloudSessionIdentifier:
-                access.thread.cloudSessionIdentifier || `thr-${input.threadId}`
-            },
-            turnId: input.turnId
-          })
-          .catch(() => {
-            // Cloud interrupt is best-effort; database state remains the source of truth.
-          });
-      }
+      void this.runtimeExecutionDriver
+        .interruptTurn({
+          thread: {
+            ...access.thread,
+            executionMode: turn.executionMode,
+            executionHost: turn.executionHost,
+            sessionIdentifier: access.thread.sessionIdentifier || `thr-${input.threadId}`
+          },
+          turnId: input.turnId
+        })
+        .catch(() => {
+          // Interrupt is best-effort; database state remains the source of truth.
+        });
 
       return turn;
     } catch (error) {
@@ -2535,6 +2739,36 @@ class PostgresAgentService implements AgentService {
     }
   }
 
+  async issueThreadRuntimeLaunch(input: { userId: string; threadId: string }): Promise<{
+    launch: {
+      sessionIdentifier: string;
+      bootId: string;
+      controlPlaneUrl: string;
+      connectToken: string;
+      expiresAt: string;
+      runtimeKind: string;
+    };
+  }> {
+    const access = await this.requireThreadAccess({
+      userId: input.userId,
+      threadId: input.threadId
+    });
+
+    if (access.thread.executionHost !== "desktop_local") {
+      throw new ApiError(
+        400,
+        "AGENT_RUNTIME_LAUNCH_UNSUPPORTED",
+        "Runtime launch bundles are only available for desktop_local threads"
+      );
+    }
+
+    return {
+      launch: await this.runtimeExecutionDriver.issueThreadRuntimeLaunch({
+        thread: access.thread
+      })
+    };
+  }
+
   async listRuntimeNotifications(input: {
     userId: string;
     cursor?: number;
@@ -2654,7 +2888,7 @@ class PostgresAgentService implements AgentService {
           w.slug as workspace_slug,
           at.execution_mode,
           at.execution_host,
-          at.cloud_session_identifier,
+          at.session_identifier,
           at.title,
           at.archived,
           at.status,
@@ -2718,65 +2952,38 @@ function resolveRuntimeProvider(env: NodeJS.ProcessEnv): RuntimeProvider {
     return "mock";
   }
 
-  if (String(env.AGENT_RUNTIME_ENDPOINT || "").trim()) {
+  if (
+    String(env.AGENT_DEFAULT_EXECUTION_MODE || "")
+      .trim()
+      .toLowerCase() === "local"
+  ) {
     return "local_process";
   }
 
   return "dynamic_sessions";
 }
 
-function buildRuntimeExecutionDriver(env: NodeJS.ProcessEnv): RuntimeExecutionDriver {
+function buildRuntimeExecutionDriver(input: {
+  env: NodeJS.ProcessEnv;
+  sessionControlPlane: SessionControlPlane | null;
+}): RuntimeExecutionDriver {
+  const env = input.env;
   const provider = resolveRuntimeProvider(env);
-  const requestTimeoutMs = parsePositiveInteger(
-    env.AGENT_RUNTIME_REQUEST_TIMEOUT_MS || env.DYNAMIC_SESSIONS_REQUEST_TIMEOUT_MS,
-    30_000
-  );
 
   if (provider === "mock") {
     return new MockCloudExecutionDriver();
   }
 
-  if (provider === "local_process" || provider === "local_docker") {
-    const endpoint = String(env.AGENT_RUNTIME_ENDPOINT || "").trim();
-    if (!endpoint) {
-      return new UnavailableCloudExecutionDriver({
-        provider,
-        reason: "AGENT_RUNTIME_ENDPOINT is missing"
-      });
-    }
-
-    return new LocalHttpExecutionDriver({
-      provider,
-      endpoint,
-      requestTimeoutMs
-    });
-  }
-
-  const endpoint = String(env.DYNAMIC_SESSIONS_POOL_MANAGEMENT_ENDPOINT || "").trim();
-  const staticBearerToken = String(env.DYNAMIC_SESSIONS_BEARER_TOKEN || "").trim();
-  const tokenResource = String(
-    env.DYNAMIC_SESSIONS_TOKEN_RESOURCE || "https://dynamicsessions.io"
-  ).trim();
-  const sessionExecutorClientId = String(env.DYNAMIC_SESSIONS_EXECUTOR_CLIENT_ID || "").trim();
-
-  if (!endpoint) {
+  if (!input.sessionControlPlane) {
     return new UnavailableCloudExecutionDriver({
       provider,
-      reason: "DYNAMIC_SESSIONS_POOL_MANAGEMENT_ENDPOINT is missing"
+      reason: "Session control plane is unavailable"
     });
   }
 
-  const tokenProvider = staticBearerToken
-    ? new StaticAccessTokenProvider(staticBearerToken)
-    : new ManagedIdentityTokenProvider({
-        resource: tokenResource,
-        clientId: sessionExecutorClientId
-      });
-
-  return new DynamicSessionsCloudExecutionDriver({
-    endpoint,
-    tokenProvider,
-    requestTimeoutMs
+  return new SessionBackedExecutionDriver({
+    provider,
+    controlPlane: input.sessionControlPlane
   });
 }
 
@@ -2784,6 +2991,7 @@ export const __internalAgentServiceRuntime = {
   PostgresAgentService,
   MockCloudExecutionDriver,
   UnavailableCloudExecutionDriver,
+  SessionBackedExecutionDriver,
   ManagedIdentityTokenProvider,
   StaticAccessTokenProvider,
   DynamicSessionsCloudExecutionDriver,
@@ -2804,6 +3012,7 @@ export const __internalAgentServiceRuntime = {
 export function buildDefaultAgentService(input: {
   databaseUrl: string | undefined;
   env?: NodeJS.ProcessEnv;
+  sessionControlPlane?: SessionControlPlane | null;
 }): { service: AgentService | null; close: () => Promise<void> } {
   const databaseUrl = input.databaseUrl?.trim();
   const env = input.env ?? process.env;
@@ -2821,7 +3030,10 @@ export function buildDefaultAgentService(input: {
 
   const service = new PostgresAgentService({
     pool,
-    runtimeExecutionDriver: buildRuntimeExecutionDriver(env)
+    runtimeExecutionDriver: buildRuntimeExecutionDriver({
+      env,
+      sessionControlPlane: input.sessionControlPlane ?? null
+    })
   });
 
   return {

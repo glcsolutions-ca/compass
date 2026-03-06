@@ -381,6 +381,23 @@ export interface paths {
         patch: operations["patchAgentThreadMode"];
         trace?: never;
     };
+    "/v1/agent/threads/{threadId}/runtime/launch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a desktop-local runtime launch bundle */
+        post: operations["launchAgentThreadRuntime"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agent/threads/{threadId}/turns": {
         parameters: {
             query?: never;
@@ -608,7 +625,7 @@ export interface components {
                 executionHost: "dynamic_sessions" | "desktop_local";
                 /** @enum {string} */
                 status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
-                cloudSessionIdentifier?: string | null;
+                sessionIdentifier?: string | null;
                 title?: string | null;
                 archived: boolean;
                 /** Format: date-time */
@@ -630,7 +647,7 @@ export interface components {
                 executionHost: "dynamic_sessions" | "desktop_local";
                 /** @enum {string} */
                 status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
-                cloudSessionIdentifier?: string | null;
+                sessionIdentifier?: string | null;
                 title?: string | null;
                 archived: boolean;
                 /** Format: date-time */
@@ -658,7 +675,7 @@ export interface components {
                 executionHost: "dynamic_sessions" | "desktop_local";
                 /** @enum {string} */
                 status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
-                cloudSessionIdentifier?: string | null;
+                sessionIdentifier?: string | null;
                 title?: string | null;
                 archived: boolean;
                 /** Format: date-time */
@@ -684,7 +701,7 @@ export interface components {
                 executionHost: "dynamic_sessions" | "desktop_local";
                 /** @enum {string} */
                 status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
-                cloudSessionIdentifier?: string | null;
+                sessionIdentifier?: string | null;
                 title?: string | null;
                 archived: boolean;
                 /** Format: date-time */
@@ -716,7 +733,7 @@ export interface components {
                 executionHost: "dynamic_sessions" | "desktop_local";
                 /** @enum {string} */
                 status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
-                cloudSessionIdentifier?: string | null;
+                sessionIdentifier?: string | null;
                 title?: string | null;
                 archived: boolean;
                 /** Format: date-time */
@@ -764,6 +781,14 @@ export interface components {
                 completedAt?: string | null;
             };
             outputText?: string | null;
+            runtime?: {
+                sessionIdentifier: string;
+                /** @enum {string} */
+                connectionState: "bootstrapped" | "reused";
+                runtimeKind: string;
+                bootId: string;
+                pid?: number | null;
+            };
         };
         AgentTurnInterruptResponse: {
             turn: {
@@ -785,6 +810,18 @@ export interface components {
                 startedAt: string;
                 /** Format: date-time */
                 completedAt?: string | null;
+            };
+        };
+        AgentThreadRuntimeLaunchResponse: {
+            launch: {
+                sessionIdentifier: string;
+                bootId: string;
+                /** Format: uri */
+                controlPlaneUrl: string;
+                connectToken: string;
+                /** Format: date-time */
+                expiresAt: string;
+                runtimeKind: string;
             };
         };
         AgentEventsBatchRequest: {
@@ -1978,7 +2015,7 @@ export interface operations {
                             executionHost: "dynamic_sessions" | "desktop_local";
                             /** @enum {string} */
                             status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
-                            cloudSessionIdentifier?: string | null;
+                            sessionIdentifier?: string | null;
                             title?: string | null;
                             archived: boolean;
                             /** Format: date-time */
@@ -2069,7 +2106,7 @@ export interface operations {
                             executionHost: "dynamic_sessions" | "desktop_local";
                             /** @enum {string} */
                             status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
-                            cloudSessionIdentifier?: string | null;
+                            sessionIdentifier?: string | null;
                             title?: string | null;
                             archived: boolean;
                             /** Format: date-time */
@@ -2148,7 +2185,7 @@ export interface operations {
                             executionHost: "dynamic_sessions" | "desktop_local";
                             /** @enum {string} */
                             status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
-                            cloudSessionIdentifier?: string | null;
+                            sessionIdentifier?: string | null;
                             title?: string | null;
                             archived: boolean;
                             /** Format: date-time */
@@ -2295,7 +2332,7 @@ export interface operations {
                             executionHost: "dynamic_sessions" | "desktop_local";
                             /** @enum {string} */
                             status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
-                            cloudSessionIdentifier?: string | null;
+                            sessionIdentifier?: string | null;
                             title?: string | null;
                             archived: boolean;
                             /** Format: date-time */
@@ -2395,7 +2432,7 @@ export interface operations {
                             executionHost: "dynamic_sessions" | "desktop_local";
                             /** @enum {string} */
                             status: "idle" | "inProgress" | "completed" | "interrupted" | "error";
-                            cloudSessionIdentifier?: string | null;
+                            sessionIdentifier?: string | null;
                             title?: string | null;
                             archived: boolean;
                             /** Format: date-time */
@@ -2446,6 +2483,99 @@ export interface operations {
             };
             /** @description Thread mode switch conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    launchAgentThreadRuntime: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runtime launch bundle created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        launch: {
+                            sessionIdentifier: string;
+                            bootId: string;
+                            /** Format: uri */
+                            controlPlaneUrl: string;
+                            connectToken: string;
+                            /** Format: date-time */
+                            expiresAt: string;
+                            runtimeKind: string;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Runtime launch unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2515,6 +2645,14 @@ export interface operations {
                             completedAt?: string | null;
                         };
                         outputText?: string | null;
+                        runtime?: {
+                            sessionIdentifier: string;
+                            /** @enum {string} */
+                            connectionState: "bootstrapped" | "reused";
+                            runtimeKind: string;
+                            bootId: string;
+                            pid?: number | null;
+                        };
                     };
                 };
             };

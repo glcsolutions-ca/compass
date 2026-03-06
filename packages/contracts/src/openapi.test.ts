@@ -35,6 +35,7 @@ describe("buildOpenApiDocument", () => {
     expect(document.paths?.["/v1/agent/threads"]).toBeTruthy();
     expect(document.paths?.["/v1/agent/threads/{threadId}"]).toBeTruthy();
     expect(document.paths?.["/v1/agent/threads/{threadId}/mode"]).toBeTruthy();
+    expect(document.paths?.["/v1/agent/threads/{threadId}/runtime/launch"]).toBeTruthy();
     expect(document.paths?.["/v1/agent/threads/{threadId}/turns"]).toBeTruthy();
     expect(document.paths?.["/v1/agent/threads/{threadId}/turns/{turnId}/interrupt"]).toBeTruthy();
     expect(document.paths?.["/v1/agent/threads/{threadId}/events:batch"]).toBeTruthy();
@@ -74,6 +75,9 @@ describe("buildOpenApiDocument", () => {
     );
     expect(document.paths?.["/v1/agent/threads/{threadId}"]?.delete?.operationId).toBe(
       "deleteAgentThread"
+    );
+    expect(document.paths?.["/v1/agent/threads/{threadId}/runtime/launch"]?.post?.operationId).toBe(
+      "launchAgentThreadRuntime"
     );
     expect(document.components?.securitySchemes?.sessionCookieAuth).toBeTruthy();
 

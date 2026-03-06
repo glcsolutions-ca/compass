@@ -37,7 +37,7 @@ function resolveConnectedLabel(state: RuntimeAccountModel["state"]): string {
 function readCapabilities(runtimeAccount: RuntimeAccountModel): RuntimeCapabilities {
   const state = runtimeAccount.state;
   return {
-    providerManaged: state?.provider === "dynamic_sessions",
+    providerManaged: Boolean(state) && state?.requiresOpenaiAuth === false,
     interactiveAuthEnabled: state?.capabilities.interactiveAuth === true,
     canUseApiKey: state?.capabilities.supportsApiKey === true,
     canUseChatgpt: state?.capabilities.supportsChatgptManaged === true,

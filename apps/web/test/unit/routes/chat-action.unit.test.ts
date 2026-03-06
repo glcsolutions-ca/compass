@@ -92,7 +92,7 @@ describe("chat action", () => {
         executionMode: "cloud",
         executionHost: "dynamic_sessions",
         status: "idle",
-        cloudSessionIdentifier: null,
+        sessionIdentifier: null,
         title: "hello",
         archived: false,
         createdAt: null,
@@ -202,7 +202,7 @@ describe("chat action", () => {
         executionMode: "cloud",
         executionHost: "dynamic_sessions",
         status: "idle",
-        cloudSessionIdentifier: null,
+        sessionIdentifier: null,
         title: "hello from chat",
         archived: false,
         createdAt: null,
@@ -427,7 +427,7 @@ describe("chat action", () => {
         executionMode: "cloud",
         executionHost: "dynamic_sessions",
         status: "idle",
-        cloudSessionIdentifier: null,
+        sessionIdentifier: null,
         title: "thread",
         archived: false,
         createdAt: null,
@@ -466,7 +466,26 @@ describe("chat action", () => {
     });
   });
 
-  it("rejects local mode send attempts until local turns are implemented", async () => {
+  it("submits local mode send attempts through the agent API", async () => {
+    vi.mocked(startAgentTurn).mockResolvedValue({
+      status: 200,
+      data: {
+        turnId: "turn_local_1",
+        threadId: "thread_1",
+        status: "completed",
+        executionMode: "local",
+        executionHost: "desktop_local",
+        input: null,
+        output: null,
+        error: null,
+        startedAt: null,
+        completedAt: null,
+        outputText: "echo:hello"
+      },
+      error: null,
+      message: null
+    });
+
     const formData = new FormData();
     formData.set("intent", "sendMessage");
     formData.set("executionMode", "local");
@@ -484,16 +503,20 @@ describe("chat action", () => {
     });
 
     expect(createAgentThread).not.toHaveBeenCalled();
-    expect(startAgentTurn).not.toHaveBeenCalled();
+    expect(startAgentTurn).toHaveBeenCalledWith(expect.any(Request), {
+      threadId: "thread_1",
+      text: "hello",
+      executionMode: "local"
+    });
     expect(result).toEqual({
       intent: "sendMessage",
-      ok: false,
-      error: "Local mode turns are not implemented yet.",
-      threadId: null,
-      turnId: null,
+      ok: true,
+      error: null,
+      threadId: "thread_1",
+      turnId: "turn_local_1",
       executionMode: "local",
-      prompt: null,
-      answer: null
+      prompt: "hello",
+      answer: "echo:hello"
     });
   });
 });

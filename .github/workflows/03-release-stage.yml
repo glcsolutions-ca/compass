@@ -100,8 +100,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.resolve_candidate.outputs.source_revision }}
-          fetch-depth: 2
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup pnpm

@@ -20,7 +20,7 @@ The current target architecture is:
 
 - one Azure production resource group: `rg-compass-prd-cc-001`
 - one GitHub deployment environment: `production`
-- one native development pipeline workflow triggered by `merge_group`
+- one native development pipeline workflow with `pull_request` queue admission and `merge_group` staged delivery
 - one required merge-queue status check: `Pipeline Complete`
 - GHCR only
 - no Terraform

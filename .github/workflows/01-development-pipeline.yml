@@ -2,6 +2,14 @@ name: Development Pipeline
 run-name: ${{ github.event_name == 'workflow_dispatch' && format('Development Pipeline (redeploy {0})', inputs.candidate_id) || format('Development Pipeline ({0})', github.sha) }}
 
 on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
   merge_group:
     types:
       - checks_requested
@@ -30,6 +38,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  queue_admission:
+    name: Queue Admission
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@d5a5d7ec85758dd5f5f0fc24f28e99083084d9a6 # v6.0.0
+        with:
+          node-version: 22
+
+      - name: Workflow lint
+        run: ./.tools/bin/actionlint
+
+      - name: Validate Bicep templates
+        run: node scripts/dev/validate-bicep-templates.mjs
+
+      - name: Audit retired references
+        run: node scripts/dev/audit-legacy-references.mjs
+
   commit_code_gate:
     name: Commit Stage / Code Gate
     if: ${{ github.event_name == 'merge_group' }}
@@ -677,46 +710,75 @@ jobs:
 
   pipeline_complete:
     name: Pipeline Complete
-    if: ${{ github.event_name == 'merge_group' && always() }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     needs:
+      - queue_admission
       - commit_code_gate
       - commit_pipeline_gate
       - build_candidate_images
       - publish_candidate
       - acceptance
+      - resolve_manual_candidate
       - release
     steps:
-      - name: Assert full pipeline success
+      - name: Assert expected path succeeded
         env:
+          EVENT_NAME: ${{ github.event_name }}
+          QUEUE_ADMISSION: ${{ needs.queue_admission.result }}
           COMMIT_CODE_GATE: ${{ needs.commit_code_gate.result }}
           COMMIT_PIPELINE_GATE: ${{ needs.commit_pipeline_gate.result }}
           BUILD_CANDIDATE_IMAGES: ${{ needs.build_candidate_images.result }}
           PUBLISH_CANDIDATE: ${{ needs.publish_candidate.result }}
           ACCEPTANCE: ${{ needs.acceptance.result }}
+          RESOLVE_MANUAL_CANDIDATE: ${{ needs.resolve_manual_candidate.result }}
           RELEASE: ${{ needs.release.result }}
         run: |
           set -euo pipefail
-          for entry in \
-            "commit_code_gate:$COMMIT_CODE_GATE" \
-            "commit_pipeline_gate:$COMMIT_PIPELINE_GATE" \
-            "build_candidate_images:$BUILD_CANDIDATE_IMAGES" \
-            "publish_candidate:$PUBLISH_CANDIDATE" \
-            "acceptance:$ACCEPTANCE" \
-            "release:$RELEASE"; do
-            name="${entry%%:*}"
-            result="${entry#*:}"
+
+          assert_success() {
+            local name="$1"
+            local result="$2"
             if [ "$result" != 'success' ]; then
               echo "${name} finished with ${result}" >&2
               exit 1
             fi
-          done
+          }
+
+          case "$EVENT_NAME" in
+            pull_request)
+              assert_success "queue_admission" "$QUEUE_ADMISSION"
+              ;;
+            merge_group)
+              assert_success "commit_code_gate" "$COMMIT_CODE_GATE"
+              assert_success "commit_pipeline_gate" "$COMMIT_PIPELINE_GATE"
+              assert_success "build_candidate_images" "$BUILD_CANDIDATE_IMAGES"
+              assert_success "publish_candidate" "$PUBLISH_CANDIDATE"
+              assert_success "acceptance" "$ACCEPTANCE"
+              assert_success "release" "$RELEASE"
+              ;;
+            workflow_dispatch)
+              assert_success "resolve_manual_candidate" "$RESOLVE_MANUAL_CANDIDATE"
+              assert_success "release" "$RELEASE"
+              ;;
+            *)
+              echo "Unsupported event: $EVENT_NAME" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Write pipeline summary
         run: |
           {
             echo '## Pipeline Complete'
-            echo '- Commit Stage: pass'
-            echo '- Acceptance Stage: pass'
-            echo '- Release Stage: pass'
+            if [ "${{ github.event_name }}" = 'pull_request' ]; then
+              echo '- Queue Admission: pass'
+            elif [ "${{ github.event_name }}" = 'workflow_dispatch' ]; then
+              echo '- Manual Candidate Resolution: pass'
+              echo '- Release Stage: pass'
+            else
+              echo '- Commit Stage: pass'
+              echo '- Acceptance Stage: pass'
+              echo '- Release Stage: pass'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

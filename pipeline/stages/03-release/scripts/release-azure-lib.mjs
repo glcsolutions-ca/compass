@@ -39,12 +39,46 @@ export async function updateContainerApp({ resourceGroup, appName, image, env = 
   await runAz(args, { output: "none" });
 }
 
-export async function fetchStatus(url, { redirect = "follow" } = {}) {
-  const response = await fetch(url, { redirect });
-  const location = response.headers.get("location") || "";
-  return {
-    status: response.status,
-    location,
-    body: await response.text()
-  };
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function fetchStatus(
+  url,
+  {
+    redirect = "follow",
+    timeoutMs = 30_000,
+    retries = 3,
+    retryDelayMs = 3_000,
+    retryOnStatuses = [502, 503, 504]
+  } = {}
+) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        redirect,
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+      const location = response.headers.get("location") || "";
+      const result = {
+        status: response.status,
+        location,
+        body: await response.text()
+      };
+      if (retryOnStatuses.includes(result.status) && attempt < retries) {
+        await wait(retryDelayMs);
+        continue;
+      }
+      return result;
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) {
+        await wait(retryDelayMs);
+      }
+    }
+  }
+
+  const message = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(`Request failed for ${url} after ${retries} attempts: ${message}`);
 }

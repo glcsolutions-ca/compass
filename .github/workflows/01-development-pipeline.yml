@@ -79,7 +79,13 @@ jobs:
     if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      started_at_epoch: ${{ steps.stage_start.outputs.epoch }}
     steps:
+      - name: Record stage start
+        id: stage_start
+        run: echo "epoch=$(date -u +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -96,7 +102,13 @@ jobs:
     if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      started_at_epoch: ${{ steps.stage_start.outputs.epoch }}
     steps:
+      - name: Record stage start
+        id: stage_start
+        run: echo "epoch=$(date -u +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -208,6 +220,7 @@ jobs:
       candidate_id: ${{ steps.candidate.outputs.candidate_id }}
       source_revision: ${{ steps.source.outputs.source_revision }}
       release_unit_digest: ${{ steps.release_unit.outputs.release_unit_digest }}
+      commit_stage_duration_seconds: ${{ steps.commit_timing.outputs.duration_seconds }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -219,13 +232,6 @@ jobs:
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
-      - name: Login to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup ORAS
         uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
@@ -294,11 +300,6 @@ jobs:
             "${MANIFESTS_REPO}:${{ steps.candidate.outputs.candidate_id }}" \
             "manifest.json:application/vnd.compass.release-manifest.v1+json"
 
-      - name: Verify GHCR runtime packages are public
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node scripts/bootstrap/ensure-ghcr-visibility.mjs
-
       - name: Upload release candidate manifest
         uses: actions/upload-artifact@v4
         with:
@@ -306,6 +307,18 @@ jobs:
           path: ${{ runner.temp }}/release-candidate.json
           if-no-files-found: error
           retention-days: 3
+
+      - name: Record commit-stage timing
+        id: commit_timing
+        run: |
+          start_a='${{ needs.commit_code_gate.outputs.started_at_epoch }}'
+          start_b='${{ needs.commit_pipeline_gate.outputs.started_at_epoch }}'
+          start_epoch="$start_a"
+          if [ "$start_b" -lt "$start_epoch" ]; then
+            start_epoch="$start_b"
+          fi
+          end_epoch="$(date -u +%s)"
+          echo "duration_seconds=$((end_epoch - start_epoch))" >> "$GITHUB_OUTPUT"
 
       - name: Write commit summary
         run: |
@@ -316,6 +329,7 @@ jobs:
             echo "- Web image: ${{ steps.refs.outputs.web_image_ref }}"
             echo "- Migrations image: ${{ steps.refs.outputs.migrations_image_ref }}"
             echo "- Release unit digest: ${{ steps.release_unit.outputs.release_unit_digest }}"
+            echo "- Elapsed: ${{ steps.commit_timing.outputs.duration_seconds }}s"
           } >> "$GITHUB_STEP_SUMMARY"
 
   acceptance:
@@ -325,11 +339,17 @@ jobs:
       - publish_candidate
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    outputs:
+      duration_seconds: ${{ steps.stage_timing.outputs.duration_seconds }}
     permissions:
       contents: read
       id-token: write
       attestations: write
     steps:
+      - name: Record stage start
+        id: stage_start
+        run: echo "epoch=$(date -u +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -391,6 +411,22 @@ jobs:
             .artifacts/attestations/acceptance-predicate.json
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Record acceptance timing
+        if: always()
+        id: stage_timing
+        run: |
+          start_epoch='${{ steps.stage_start.outputs.epoch }}'
+          end_epoch="$(date -u +%s)"
+          echo "duration_seconds=$((end_epoch - start_epoch))" >> "$GITHUB_OUTPUT"
+
+      - name: Write acceptance summary
+        if: always()
+        run: |
+          {
+            echo '## Acceptance Stage'
+            echo "- Elapsed: ${{ steps.stage_timing.outputs.duration_seconds }}s"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   resolve_manual_candidate:
     name: Resolve Manual Release Candidate
@@ -465,6 +501,9 @@ jobs:
       - resolve_manual_candidate
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    outputs:
+      duration_seconds: ${{ steps.stage_timing.outputs.duration_seconds }}
+      started_at_epoch: ${{ steps.stage_start.outputs.epoch }}
     permissions:
       contents: read
       packages: write
@@ -474,10 +513,14 @@ jobs:
       name: production
       url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
     steps:
+      - name: Record stage start
+        id: stage_start
+        run: echo "epoch=$(date -u +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Setup Node and pnpm
@@ -505,11 +548,6 @@ jobs:
               echo "release_unit_digest=${{ needs.publish_candidate.outputs.release_unit_digest }}"
             } >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Verify GHCR runtime packages are public
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node scripts/bootstrap/ensure-ghcr-visibility.mjs
 
       - name: Assert production environment config
         env:
@@ -575,26 +613,23 @@ jobs:
         id: changed_manual
         run: echo 'infra_changed=false' >> "$GITHUB_OUTPUT"
 
-      - name: Resolve current endpoints and prod images
+      - name: Resolve runtime context
         id: runtime
         env:
           RG: ${{ vars.AZURE_RESOURCE_GROUP }}
           API_PROD: ${{ vars.ACA_API_PROD_APP_NAME }}
-          WEB_PROD: ${{ vars.ACA_WEB_PROD_APP_NAME }}
           API_STAGE: ${{ vars.ACA_API_STAGE_APP_NAME }}
           WEB_STAGE: ${{ vars.ACA_WEB_STAGE_APP_NAME }}
         run: |
-          api_prod_image="$(az containerapp show -g "$RG" -n "$API_PROD" --query 'properties.template.containers[0].image' -o tsv)"
-          web_prod_image="$(az containerapp show -g "$RG" -n "$WEB_PROD" --query 'properties.template.containers[0].image' -o tsv)"
-          api_stage_base_url="https://$(az containerapp show -g "$RG" -n "$API_STAGE" --query 'properties.configuration.ingress.fqdn' -o tsv)"
-          web_stage_base_url="https://$(az containerapp show -g "$RG" -n "$WEB_STAGE" --query 'properties.configuration.ingress.fqdn' -o tsv)"
-          prod_api_base_url="https://$(az containerapp show -g "$RG" -n "$API_PROD" --query 'properties.configuration.ingress.fqdn' -o tsv)"
+          json="$(node pipeline/stages/03-release/scripts/resolve-runtime-context.mjs \
+            --resource-group "$RG" \
+            --api-stage-app-name "$API_STAGE" \
+            --web-stage-app-name "$WEB_STAGE" \
+            --api-prod-app-name "$API_PROD")"
           {
-            echo "api_prod_image=${api_prod_image}"
-            echo "web_prod_image=${web_prod_image}"
-            echo "api_stage_base_url=${api_stage_base_url}"
-            echo "web_stage_base_url=${web_stage_base_url}"
-            echo "prod_api_base_url=${prod_api_base_url}"
+            echo "api_stage_base_url=$(printf '%s' "$json" | jq -r '.apiStageBaseUrl')"
+            echo "web_stage_base_url=$(printf '%s' "$json" | jq -r '.webStageBaseUrl')"
+            echo "prod_api_base_url=$(printf '%s' "$json" | jq -r '.prodApiBaseUrl')"
           } >> "$GITHUB_OUTPUT"
 
       - name: Apply production Bicep when infra changed
@@ -718,6 +753,14 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Record release timing
+        if: always()
+        id: stage_timing
+        run: |
+          start_epoch='${{ steps.stage_start.outputs.epoch }}'
+          end_epoch="$(date -u +%s)"
+          echo "duration_seconds=$((end_epoch - start_epoch))" >> "$GITHUB_OUTPUT"
+
       - name: Write release summary
         if: always()
         run: |
@@ -729,6 +772,7 @@ jobs:
             echo "- Stage health smoke: ${{ steps.stage_health_smoke.outputs.verdict || 'skipped' }}"
             echo "- Stage auth smoke: ${{ steps.stage_smoke.outputs.verdict || 'skipped' }}"
             echo "- Production Web: ${{ vars.PRODUCTION_WEB_BASE_URL }}"
+            echo "- Elapsed: ${{ steps.stage_timing.outputs.duration_seconds }}s"
           } >> "$GITHUB_STEP_SUMMARY"
 
   pipeline_complete:
@@ -799,9 +843,15 @@ jobs:
             elif [ "${{ github.event_name }}" = 'workflow_dispatch' ]; then
               echo '- Manual Candidate Resolution: pass'
               echo '- Release Stage: pass'
+              echo "- Release elapsed: ${{ needs.release.outputs.duration_seconds }}s"
             else
               echo '- Commit Stage: pass'
               echo '- Acceptance Stage: pass'
               echo '- Release Stage: pass'
+              echo "- Commit elapsed: ${{ needs.publish_candidate.outputs.commit_stage_duration_seconds }}s"
+              echo "- Acceptance elapsed: ${{ needs.acceptance.outputs.duration_seconds }}s"
+              echo "- Release elapsed: ${{ needs.release.outputs.duration_seconds }}s"
+              total_seconds=$(( ${{ needs.publish_candidate.outputs.commit_stage_duration_seconds }} + ${{ needs.acceptance.outputs.duration_seconds }} + ${{ needs.release.outputs.duration_seconds }} ))
+              echo "- Pipeline elapsed (summed stage budgets): ${total_seconds}s"
             fi
           } >> "$GITHUB_STEP_SUMMARY"

@@ -19,8 +19,23 @@ It runs the exact candidate locally in GitHub Actions:
 - candidate API image with `AUTH_MODE=mock`
 - candidate Web image pointing at the candidate API
 
+The acceptance runner explicitly prefetches the candidate images before startup to reduce local container pull variance without changing the coverage model.
+
 ## Evidence
 
 Acceptance produces an attestation tied to the release unit subject.
 
 Release must verify that attestation before mutating production.
+
+## Required scope
+
+Acceptance on the required path remains smoke-only:
+
+- one system smoke
+- one browser smoke
+
+Broader acceptance or regression journeys should stay outside the merge-queue critical path.
+
+## Reporting target
+
+Acceptance should normally complete within `1m30s`.

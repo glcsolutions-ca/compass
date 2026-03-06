@@ -53,6 +53,16 @@ It runs in parallel:
 - pipeline gate
 - image builds
 
+The required merge-queue code gate is intentionally scoped to the deployed surface:
+
+- API
+- Web
+- DB tooling
+- contracts
+- SDK
+
+Non-deployed code such as `apps/worker` is kept out of the critical path.
+
 If the commit gates pass, it publishes:
 
 - API image digest
@@ -74,6 +84,11 @@ It runs the exact candidate locally in GitHub Actions using:
 
 It writes and attests the acceptance verdict.
 
+Acceptance stays intentionally lean on the required path:
+
+- one system smoke
+- one browser smoke
+
 ## Release Stage
 
 Release runs before `main` advances.
@@ -90,6 +105,8 @@ It:
 8. writes and attests release evidence
 
 If Release fails, the PR does not merge.
+
+Stage apps stay scaled to zero between releases for cost control, so the release path keeps the cold-start tradeoff instead of adding extra warm-up logic.
 
 ## Architecture
 
@@ -139,6 +156,13 @@ The stage apps use their ACA default hostnames.
 - `pnpm check:commit`
 - `pnpm check:pipeline`
 - `pnpm test:full`
+
+Current merge-queue reporting targets:
+
+- Commit Stage: `<= 3m`
+- Acceptance Stage: `<= 1m30s`
+- Release Stage (no infra change): `<= 3m45s`
+- total merge-group pipeline: `<= 7m30s`
 
 Local Postgres helpers:
 

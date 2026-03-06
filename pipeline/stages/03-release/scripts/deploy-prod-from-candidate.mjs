@@ -11,19 +11,21 @@ export async function deployProdFromCandidate({
   prodApiBaseUrl
 }) {
   const manifest = await readJsonFile(manifestPath);
-  await updateContainerApp({
-    resourceGroup,
-    appName: apiAppName,
-    image: manifest.artifacts.apiImage,
-    minReplicas: 1
-  });
-  await updateContainerApp({
-    resourceGroup,
-    appName: webAppName,
-    image: manifest.artifacts.webImage,
-    env: { API_BASE_URL: prodApiBaseUrl },
-    minReplicas: 1
-  });
+  await Promise.all([
+    updateContainerApp({
+      resourceGroup,
+      appName: apiAppName,
+      image: manifest.artifacts.apiImage,
+      minReplicas: 1
+    }),
+    updateContainerApp({
+      resourceGroup,
+      appName: webAppName,
+      image: manifest.artifacts.webImage,
+      env: { API_BASE_URL: prodApiBaseUrl },
+      minReplicas: 1
+    })
+  ]);
   return manifest;
 }
 

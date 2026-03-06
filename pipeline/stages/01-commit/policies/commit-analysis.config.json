@@ -9,7 +9,6 @@
   "coverageSummaryPaths": [
     "apps/api/coverage/coverage-summary.json",
     "apps/web/coverage/coverage-summary.json",
-    "apps/worker/coverage/coverage-summary.json",
     "packages/contracts/coverage/coverage-summary.json",
     "packages/sdk/coverage/coverage-summary.json"
   ],

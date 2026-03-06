@@ -14,12 +14,6 @@ const GRAPH_TARGETS = [
     root: "apps/web/app",
     tsConfig: "apps/web/tsconfig.json",
     extensions: ["ts", "tsx"]
-  },
-  {
-    name: "worker",
-    root: "apps/worker/src",
-    tsConfig: "apps/worker/tsconfig.json",
-    extensions: ["ts"]
   }
 ];
 

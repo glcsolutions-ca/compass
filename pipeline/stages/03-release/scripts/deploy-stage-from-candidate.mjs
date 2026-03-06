@@ -11,19 +11,21 @@ export async function deployStageFromCandidate({
   stageApiBaseUrl
 }) {
   const manifest = await readJsonFile(manifestPath);
-  await updateContainerApp({
-    resourceGroup,
-    appName: apiAppName,
-    image: manifest.artifacts.apiImage,
-    minReplicas: 0
-  });
-  await updateContainerApp({
-    resourceGroup,
-    appName: webAppName,
-    image: manifest.artifacts.webImage,
-    env: { API_BASE_URL: stageApiBaseUrl },
-    minReplicas: 0
-  });
+  await Promise.all([
+    updateContainerApp({
+      resourceGroup,
+      appName: apiAppName,
+      image: manifest.artifacts.apiImage,
+      minReplicas: 0
+    }),
+    updateContainerApp({
+      resourceGroup,
+      appName: webAppName,
+      image: manifest.artifacts.webImage,
+      env: { API_BASE_URL: stageApiBaseUrl },
+      minReplicas: 0
+    })
+  ]);
   return manifest;
 }
 

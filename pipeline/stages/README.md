@@ -10,4 +10,4 @@ All three stages run inside one workflow:
 
 - [01-development-pipeline.yml](/Users/justinkropp/.codex/worktrees/2bfd/compass/.github/workflows/01-development-pipeline.yml)
 
-That workflow runs on GitHub merge queue (`merge_group`) for normal delivery and on `workflow_dispatch` for manual redeploy by `candidate_id`.
+That workflow runs on GitHub merge queue (`merge_group`) for normal forward delivery and on `workflow_dispatch` for rare recovery redeploy of a previously released candidate by `candidate_id`.

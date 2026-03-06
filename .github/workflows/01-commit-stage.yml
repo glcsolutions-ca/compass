@@ -111,6 +111,9 @@ jobs:
           file: ${{ matrix.image.dockerfile }}
           push: true
           tags: ${{ env.REGISTRY_BASE }}/${{ matrix.image.image_name }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=build-${{ matrix.image.id }}
           cache-to: type=gha,mode=max,scope=build-${{ matrix.image.id }}
           provenance: true

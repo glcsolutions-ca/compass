@@ -4,7 +4,7 @@
 
 ```text
 compass/
-├─ .github/{actions,workflows}
+├─ .github/{actions,workflows,labeler.yml}
 ├─ apps/{api,web,worker,desktop,codex-session-runtime}
 ├─ bootstrap/{README.md,config}
 ├─ db/{migrations,postgres,scripts,seeds}
@@ -20,7 +20,8 @@ The current target architecture is:
 
 - one Azure production resource group: `rg-compass-prd-cc-001`
 - one GitHub deployment environment: `production`
-- one native development pipeline workflow with `pull_request` queue admission and `merge_group` staged delivery
+- one PR-only workflow for metadata and queue admission: `00-pr-metadata-and-admission.yml`
+- one cloud delivery workflow for the real stage model: `01-cloud-development-pipeline.yml`
 - one required merge-queue status check: `Pipeline Complete`
 - GHCR only
 - no Terraform
@@ -34,6 +35,7 @@ The current target architecture is:
 - one migrate job
 - `Commit Stage -> Acceptance Stage -> Release Stage`
 - `Queue Admission` exists only as a GitHub merge-queue prerequisite; it is not part of the deployment pipeline stage model
+- pull request labels are metadata only; they do not control delivery routing
 - manual `workflow_dispatch` is rare recovery redeploy only for a previously released candidate
 
 ## Main commands
@@ -55,6 +57,14 @@ The current target architecture is:
 - Treat `scripts/bootstrap/*` as admin-only control-plane tooling.
 - Treat `pipeline` as the source of truth for delivery policy and evidence.
 - Treat merge queue as the native entry point to the real development pipeline.
+- Treat `00-pr-metadata-and-admission.yml` as PR metadata and GitHub prerequisite only:
+  - labels
+  - queue admission sanity
+  - no delivery stages
+- Treat `01-cloud-development-pipeline.yml` as the real delivery path:
+  - Commit
+  - Acceptance
+  - Release
 - Treat manual `workflow_dispatch` as rare recovery redeploy:
   - previously released candidates only
   - no infra apply

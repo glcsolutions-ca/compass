@@ -6,7 +6,7 @@ Acceptance proves that the candidate produced by Commit behaves as users expect.
 
 ## Trigger
 
-Acceptance runs inside `01 Development Pipeline` after Commit publishes the release candidate.
+Acceptance runs inside `01 Cloud Development Pipeline` after Commit publishes the release candidate.
 
 ## Runtime model
 

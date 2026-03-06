@@ -2,7 +2,12 @@
 
 Compass follows a native development pipeline built around one immutable release candidate created on GitHub merge queue branches.
 
-A small PR-time queue-admission check exists only because GitHub merge queue requires a required PR condition before a change can enter the queue. It is a GitHub prerequisite, not part of the deployment pipeline proper. The real development pipeline starts with Commit Stage on integrated code.
+PR-time concerns are split from delivery-time concerns:
+
+- `00-pr-metadata-and-admission.yml` applies informational labels and satisfies GitHub merge queue prerequisites
+- `01-cloud-development-pipeline.yml` is the real cloud delivery pipeline
+
+Queue Admission exists only because GitHub merge queue requires a required PR condition before a change can enter the queue. It is a GitHub prerequisite, not part of the deployment pipeline proper. The real development pipeline starts with Commit Stage on integrated code.
 
 ## Delivery model
 
@@ -21,23 +26,34 @@ The key rule is:
 
 ## GitHub workflow topology
 
-### `01 Development Pipeline`
+### `00 PR Metadata and Queue Admission`
+
+PR-time only.
+
+It:
+
+- applies informational labels based on changed paths
+- runs the minimal Queue Admission sanity checks
+- emits `Pipeline Complete` so the PR can enter merge queue
+
+It does not build candidates, run acceptance, or deploy anything.
+
+### `01 Cloud Development Pipeline`
 
 The real delivery pipeline.
 
 Trigger modes:
 
-- `pull_request` for the lightweight queue-admission check
 - `merge_group` for the normal automated path
 - `workflow_dispatch` with `candidate_id` for manual recovery redeploy of a previously released candidate
 
 Normal flow:
 
 1. a PR is reviewed
-2. the Development Pipeline runs a lightweight `Queue Admission` job on the PR
+2. `00-pr-metadata-and-admission.yml` applies labels and runs Queue Admission on the PR
 3. the PR is added to GitHub merge queue
 4. GitHub creates a merge-group branch
-5. the Development Pipeline runs:
+5. `01-cloud-development-pipeline.yml` runs:
    - `Commit Stage`
    - `Acceptance Stage`
    - `Release Stage`
@@ -203,5 +219,5 @@ If the previous candidate is not compatible with the current schema, recovery re
 Use the unified pipeline manually:
 
 ```sh
-gh workflow run 01-development-pipeline.yml --ref main -f candidate_id=sha-<previous-released-candidate>
+gh workflow run 01-cloud-development-pipeline.yml --ref main -f candidate_id=sha-<previous-released-candidate>
 ```

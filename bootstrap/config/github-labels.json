@@ -1,0 +1,39 @@
+{
+  "labels": [
+    {
+      "name": "scope:infra",
+      "description": "Infrastructure and platform configuration changes",
+      "color": "ededed"
+    },
+    {
+      "name": "scope:runtime-api-web",
+      "description": "Deployed API or web runtime changes",
+      "color": "ededed"
+    },
+    {
+      "name": "scope:packages",
+      "description": "Shared package changes",
+      "color": "ededed"
+    },
+    {
+      "name": "scope:docs",
+      "description": "Documentation changes",
+      "color": "ededed"
+    },
+    {
+      "name": "ci",
+      "description": "Continuous integration and pipeline changes",
+      "color": "5319e7"
+    },
+    {
+      "name": "risk:pipeline",
+      "description": "Changes to delivery or bootstrap control plane",
+      "color": "ededed"
+    },
+    {
+      "name": "risk:high",
+      "description": "Elevated production or state-change risk",
+      "color": "ededed"
+    }
+  ]
+}

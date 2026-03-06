@@ -5,7 +5,7 @@
       "name": "production",
       "canAdminsBypass": false,
       "requireReviewers": false,
-      "branchPolicies": ["main"]
+      "branchPolicies": ["main", "gh-readonly-queue/main/*"]
     }
   ]
 }

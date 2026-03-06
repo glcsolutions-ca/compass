@@ -85,9 +85,13 @@ async function configureLabels(repository, labels, apply) {
 
   for (const label of labels) {
     const current = existingByName.get(label.name);
-    const desiredColor = String(label.color || "").replace(/^#/, "").trim();
+    const desiredColor = String(label.color || "")
+      .replace(/^#/, "")
+      .trim();
     const desiredDescription = String(label.description || "").trim();
-    const currentColor = String(current?.color || "").replace(/^#/, "").trim();
+    const currentColor = String(current?.color || "")
+      .replace(/^#/, "")
+      .trim();
     const currentDescription = String(current?.description || "").trim();
     const needsUpdate =
       !current ||

@@ -36,6 +36,6 @@ Acceptance on the required path remains smoke-only:
 
 Broader acceptance or regression journeys should stay outside the merge-queue critical path.
 
-## Reporting target
+## Stage boundary
 
-Acceptance should normally complete within `1m30s`.
+Acceptance is intentionally slower and broader than Commit, but it stays focused on the smallest behavioral proof needed on the required path. Its job is to validate user and system behavior on the already-built candidate, not to absorb every possible regression suite.

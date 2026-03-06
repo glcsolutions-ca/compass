@@ -31,6 +31,8 @@ Commit is split into parallel jobs:
 
 The candidate is published only after both gates pass.
 
+`check:commit` and `check:pipeline` are both part of Commit Stage. They divide the work for clarity and parallelism; they are not separate conceptual stages.
+
 ## Scope
 
 The required merge-queue commit gate covers the deployed surface only:
@@ -47,6 +49,6 @@ Non-deployed code such as `apps/worker` is intentionally out of the required pat
 
 Developers should treat Commit as the first hard gate and wait for it before assuming the change is releasable.
 
-## Reporting target
+## Runtime target
 
-Commit Stage should normally complete within `3m` on a no-drama merge-queue run.
+Commit should stay comfortably under the roughly ten-minute guidance Farley/Humble describe for fast integrated feedback. In this repo we expect materially less, but the important rule is that Commit remains fast enough for engineers to watch it finish before moving on.

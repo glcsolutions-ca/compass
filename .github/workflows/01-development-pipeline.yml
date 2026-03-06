@@ -315,7 +315,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-      - name: Record commit-stage timing
+      - name: Record commit stage elapsed time
         id: commit_timing
         run: |
           start_a='${{ needs.commit_code_gate.outputs.started_at_epoch }}'
@@ -408,18 +408,18 @@ jobs:
           predicate-type: ${{ env.ACCEPTANCE_PREDICATE_TYPE }}
           predicate-path: ${{ github.workspace }}/.artifacts/attestations/acceptance-predicate.json
 
-      - name: Upload diagnostics
+      - name: Upload acceptance artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: acceptance-diagnostics-${{ github.run_id }}
+          name: acceptance-artifacts-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/acceptance-diagnostics
             .artifacts/attestations/acceptance-predicate.json
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Record acceptance timing
+      - name: Record acceptance stage elapsed time
         if: always()
         id: stage_timing
         run: |
@@ -749,18 +749,18 @@ jobs:
           predicate-type: ${{ env.RELEASE_PREDICATE_TYPE }}
           predicate-path: ${{ github.workspace }}/.artifacts/attestations/release-predicate.json
 
-      - name: Upload release diagnostics
+      - name: Upload release artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: release-diagnostics-${{ github.run_id }}
+          name: release-artifacts-${{ github.run_id }}
           path: |
             .artifacts/release
             .artifacts/attestations/release-predicate.json
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Record release timing
+      - name: Record release stage elapsed time
         if: always()
         id: stage_timing
         run: |
@@ -859,6 +859,6 @@ jobs:
               echo "- Acceptance elapsed: ${{ needs.acceptance.outputs.duration_seconds }}s"
               echo "- Release elapsed: ${{ needs.release.outputs.duration_seconds }}s"
               total_seconds=$(( ${{ needs.publish_candidate.outputs.commit_stage_duration_seconds }} + ${{ needs.acceptance.outputs.duration_seconds }} + ${{ needs.release.outputs.duration_seconds }} ))
-              echo "- Pipeline elapsed (summed stage budgets): ${total_seconds}s"
+              echo "- Pipeline elapsed (summed stage durations): ${total_seconds}s"
             fi
           } >> "$GITHUB_STEP_SUMMARY"

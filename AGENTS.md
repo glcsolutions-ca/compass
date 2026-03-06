@@ -33,6 +33,7 @@ The current target architecture is:
   - `web-stage`
 - one migrate job
 - `Commit Stage -> Acceptance Stage -> Release Stage`
+- `Queue Admission` exists only as a GitHub merge-queue prerequisite; it is not part of the deployment pipeline stage model
 
 ## Main commands
 

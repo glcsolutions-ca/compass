@@ -380,7 +380,6 @@ jobs:
           subject-digest: ${{ needs.publish_candidate.outputs.release_unit_digest }}
           predicate-type: ${{ env.ACCEPTANCE_PREDICATE_TYPE }}
           predicate-path: ${{ github.workspace }}/.artifacts/attestations/acceptance-predicate.json
-          push-to-registry: true
 
       - name: Upload diagnostics
         if: always()
@@ -707,7 +706,6 @@ jobs:
           subject-digest: ${{ steps.context.outputs.release_unit_digest }}
           predicate-type: ${{ env.RELEASE_PREDICATE_TYPE }}
           predicate-path: ${{ github.workspace }}/.artifacts/attestations/release-predicate.json
-          push-to-registry: true
 
       - name: Upload release diagnostics
         if: always()

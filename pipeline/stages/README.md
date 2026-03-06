@@ -2,10 +2,12 @@
 
 The active stage model is:
 
-1. `01 Commit`
-2. `02 Acceptance`
-3. `03 Release`
+1. `Commit Stage`
+2. `Acceptance Stage`
+3. `Release Stage`
 
-There are no extra pre-release orchestration stages in the current architecture.
+All three stages run inside one workflow:
 
-Release uses long-lived stage/prod app pairs instead of revision traffic shifting.
+- [01-development-pipeline.yml](/Users/justinkropp/.codex/worktrees/2bfd/compass/.github/workflows/01-development-pipeline.yml)
+
+That workflow runs on GitHub merge queue (`merge_group`) for normal delivery and on `workflow_dispatch` for manual redeploy by `candidate_id`.

@@ -4,12 +4,12 @@ Bootstrap is a manual admin workflow. It creates the control plane and the initi
 
 ## Scripts
 
-- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/ensure-entra-apps.mjs](../scripts/bootstrap/ensure-entra-apps.mjs)
-- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/configure-github-repo.mjs](../scripts/bootstrap/configure-github-repo.mjs)
-- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/ensure-ghcr-visibility.mjs](../scripts/bootstrap/ensure-ghcr-visibility.mjs)
-- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/seed-keyvault-secrets.mjs](../scripts/bootstrap/seed-keyvault-secrets.mjs)
-- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/bootstrap-production-apps.mjs](../scripts/bootstrap/bootstrap-production-apps.mjs)
-- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/configure-web-domain.mjs](../scripts/bootstrap/configure-web-domain.mjs)
+- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/ensure-entra-apps.mjs](/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/ensure-entra-apps.mjs)
+- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/configure-github-repo.mjs](/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/configure-github-repo.mjs)
+- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/ensure-ghcr-visibility.mjs](/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/ensure-ghcr-visibility.mjs)
+- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/seed-keyvault-secrets.mjs](/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/seed-keyvault-secrets.mjs)
+- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/bootstrap-production-apps.mjs](/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/bootstrap-production-apps.mjs)
+- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/configure-web-domain.mjs](/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/configure-web-domain.mjs)
 
 ## Sequence
 
@@ -24,8 +24,8 @@ Bootstrap is a manual admin workflow. It creates the control plane and the initi
 6. run `pnpm bootstrap:ghcr` to verify package visibility
 7. run `pnpm infra:apply`
 8. run `pnpm bootstrap:keyvault:seed`
-9. merge the first release-producing revision to `main`
-10. run `pnpm bootstrap:apps -- --candidate-id sha-<commit>`
+9. add the first PR to merge queue so the first candidate is published
+10. run `pnpm bootstrap:apps -- --candidate-id sha-<merge-group-sha>`
 11. discover the stage web ACA FQDN
 12. rerun `pnpm bootstrap:entra -- --stage-web-fqdn <fqdn>`
 13. run `pnpm bootstrap:web-domain`
@@ -35,3 +35,4 @@ Bootstrap is a manual admin workflow. It creates the control plane and the initi
 - `ensure-entra-apps.mjs --reset-web-client-secret` writes the generated web client secret to `bootstrap/.artifacts/entra-apps.json` so it can be seeded into Key Vault.
 - `bootstrap/.artifacts` is local-only and ignored by git.
 - GitHub currently exposes container package visibility changes through the UI. The bootstrap path treats public GHCR package visibility as a one-time admin action and verifies it in CI/CD.
+- The real delivery pipeline runs only after a change is added to the GitHub merge queue.

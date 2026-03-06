@@ -4,8 +4,8 @@
 
 ```text
 compass/
-├─ .github/workflows
-├─ apps/{api,web,worker}
+├─ .github/{actions,workflows}
+├─ apps/{api,web,worker,desktop,codex-session-runtime}
 ├─ bootstrap/{README.md,config}
 ├─ db/{migrations,postgres,scripts,seeds}
 ├─ infra/azure
@@ -20,6 +20,7 @@ The current target architecture is:
 
 - one Azure production resource group: `rg-compass-prd-cc-001`
 - one GitHub deployment environment: `production`
+- one native development pipeline workflow triggered by `merge_group`
 - GHCR only
 - no Terraform
 - no ACR
@@ -30,14 +31,16 @@ The current target architecture is:
   - `api-stage`
   - `web-stage`
 - one migrate job
-- Commit -> Acceptance -> Release only
+- `Commit Stage -> Acceptance Stage -> Release Stage`
 
 ## Main commands
 
 - `pnpm install`
 - `pnpm dev`
 - `pnpm build`
-- `pnpm check:ci`
+- `pnpm check`
+- `pnpm check:commit`
+- `pnpm check:pipeline`
 - `pnpm --filter @compass/pipeline-tools run test`
 - `pnpm infra:whatif`
 - `pnpm infra:apply`
@@ -48,3 +51,4 @@ The current target architecture is:
 - Prefer the simplified production-only model over adding new parallel environments.
 - Treat `scripts/bootstrap/*` as admin-only control-plane tooling.
 - Treat `pipeline` as the source of truth for delivery policy and evidence.
+- Treat merge queue as the native entry point to the real development pipeline.

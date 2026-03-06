@@ -1,37 +1,44 @@
 # Pipeline
 
-Compass follows a simplified development pipeline built around one immutable release candidate.
+Compass uses one native GitHub development pipeline built around merge queue and one immutable release candidate.
 
 ## Stages
 
-### `00 PR Validation`
+### `Commit Stage`
 
-Pull-request validation only.
+Runs first, on integrated merge-queue code.
 
-### `01 Commit`
+### `Acceptance Stage`
 
-Build once and publish the release candidate.
+Runs second, against the exact candidate produced by Commit.
 
-### `02 Acceptance`
+### `Release Stage`
 
-Prove that exact candidate behaves correctly using an ephemeral local stack in GitHub Actions.
+Runs third, deploying the exact accepted candidate to Azure before `main` advances.
 
-### `03 Release`
+## Workflow topology
 
-Deploy the exact accepted candidate to stage apps, smoke-test them, run migrations, deploy the same digests to prod apps, and smoke production.
+### `01 Development Pipeline`
+
+The real pipeline and the only required status check path.
+
+Triggers:
+
+- `merge_group` for normal delivery
+- `workflow_dispatch` with `candidate_id` for manual redeploy
 
 ## Candidate flow
 
 The key rule is:
 
-- the candidate is built once in Commit
-- Acceptance and Release reuse the exact same digest-pinned artifacts
-- later stages do not rebuild from source
+- Commit builds and publishes the candidate once
+- Acceptance and Release consume that exact candidate
+- later stages do not rebuild images
 
-## Current release architecture
+## Current production architecture
 
 - one Azure production resource group
 - one GitHub deployment environment: `production`
-- long-lived stage/prod app pairs in ACA
-- automatic release after Acceptance success
+- long-lived ACA app pairs for stage/prod
+- automatic release after Acceptance success on merge queue
 - rollback by prior-candidate redeploy

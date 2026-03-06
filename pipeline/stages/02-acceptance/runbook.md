@@ -4,6 +4,10 @@
 
 Acceptance proves that the candidate produced by Commit behaves as users expect.
 
+## Trigger
+
+Acceptance runs inside `01 Development Pipeline` after Commit publishes the release candidate.
+
 ## Runtime model
 
 Acceptance does not deploy to Azure.

@@ -545,6 +545,13 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Verify acceptance attestation
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -691,13 +698,6 @@ jobs:
             --stage-smoke-verdict "${{ steps.stage_smoke.outputs.verdict }}" \
             --production-web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}" \
             --production-smoke-verdict "${{ steps.production_smoke.outputs.verdict }}"
-
-      - name: Login to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Attest release verdict to candidate subject
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0

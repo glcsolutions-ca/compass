@@ -4,6 +4,8 @@ import { pathToFileURL } from "node:url";
 import { loadProductionConfig } from "../infra/platform-config.mjs";
 
 const execFileAsync = promisify(execFile);
+const PACKAGE_LOOKUP_RETRIES = 12;
+const PACKAGE_LOOKUP_DELAY_MS = 5000;
 
 async function gh(args) {
   const { stdout } = await execFileAsync("gh", args, {
@@ -13,10 +15,14 @@ async function gh(args) {
   return String(stdout || "").trim();
 }
 
-export async function ensureGhcrVisibility() {
-  const config = await loadProductionConfig();
-  const owner = config.repository.split("/")[0];
-  for (const packageName of config.ghcrPackages) {
+function sleep(delayMs) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, delayMs);
+  });
+}
+
+async function ensurePackagePublic(owner, packageName) {
+  for (let attempt = 1; attempt <= PACKAGE_LOOKUP_RETRIES; attempt += 1) {
     try {
       await gh([
         "api",
@@ -27,14 +33,28 @@ export async function ensureGhcrVisibility() {
         "visibility=public"
       ]);
       console.info(`GHCR package made public: ${packageName}`);
+      return;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("HTTP 404")) {
-        console.info(`GHCR package not found yet, skipping: ${packageName}`);
-        continue;
+      if (!message.includes("HTTP 404")) {
+        throw error;
       }
-      throw error;
+      if (attempt === PACKAGE_LOOKUP_RETRIES) {
+        throw new Error(`GHCR package not found after retries: ${packageName}`);
+      }
+      console.info(
+        `GHCR package not found yet, retrying (${attempt}/${PACKAGE_LOOKUP_RETRIES}): ${packageName}`
+      );
+      await sleep(PACKAGE_LOOKUP_DELAY_MS);
     }
+  }
+}
+
+export async function ensureGhcrVisibility() {
+  const config = await loadProductionConfig();
+  const owner = config.repository.split("/")[0];
+  for (const packageName of config.ghcrPackages) {
+    await ensurePackagePublic(owner, packageName);
   }
 }
 

@@ -144,6 +144,11 @@ jobs:
           fi
           echo "release_unit_digest=${resolved_digest}" >> "$GITHUB_OUTPUT"
 
+      - name: Ensure GHCR runtime packages are public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/bootstrap/ensure-ghcr-visibility.mjs
+
       - name: Assert production environment config
         env:
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}

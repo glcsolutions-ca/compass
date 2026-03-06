@@ -54,8 +54,19 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install actionlint
+        run: |
+          install_dir="$RUNNER_TEMP/actionlint-bin"
+          mkdir -p "$install_dir"
+          (
+            cd "$install_dir"
+            curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash \
+              | bash -s -- 1.7.8
+          )
+          echo "$install_dir" >> "$GITHUB_PATH"
+
       - name: Workflow lint
-        run: ./.tools/bin/actionlint
+        run: actionlint
 
       - name: Validate Bicep templates
         run: node scripts/dev/validate-bicep-templates.mjs

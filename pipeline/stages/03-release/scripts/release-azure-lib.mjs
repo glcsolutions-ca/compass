@@ -45,7 +45,13 @@ function wait(ms) {
 
 export async function fetchStatus(
   url,
-  { redirect = "follow", timeoutMs = 30_000, retries = 3, retryDelayMs = 3_000 } = {}
+  {
+    redirect = "follow",
+    timeoutMs = 30_000,
+    retries = 3,
+    retryDelayMs = 3_000,
+    retryOnStatuses = [502, 503, 504]
+  } = {}
 ) {
   let lastError = null;
   for (let attempt = 1; attempt <= retries; attempt += 1) {
@@ -55,11 +61,16 @@ export async function fetchStatus(
         signal: AbortSignal.timeout(timeoutMs)
       });
       const location = response.headers.get("location") || "";
-      return {
+      const result = {
         status: response.status,
         location,
         body: await response.text()
       };
+      if (retryOnStatuses.includes(result.status) && attempt < retries) {
+        await wait(retryDelayMs);
+        continue;
+      }
+      return result;
     } catch (error) {
       lastError = error;
       if (attempt < retries) {

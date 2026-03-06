@@ -34,8 +34,9 @@ A candidate is releasable only if:
 ## Release Rules
 
 - Release deploys API and Web to long-lived stage apps first.
-- Stage smoke is read-only and limited to safe checks.
-- Migrations run after stage smoke and before prod deploy.
+- Stage health smoke runs before migrations and is limited to safe, read-only checks.
+- Migrations run after stage health smoke and before stage auth smoke / prod deploy.
+- Stage auth smoke runs after migrations because Entra login startup persists OIDC request state in the database.
 - Prod deploy uses the same candidate image digests that were tested on stage.
 - Production smoke must pass before release attestation is written.
 

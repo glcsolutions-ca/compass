@@ -244,12 +244,13 @@ jobs:
             --web-app-name "$WEB_STAGE" \
             --stage-api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}"
 
-      - name: Stage smoke
-        id: stage_smoke
+      - name: Stage health smoke
+        id: stage_health_smoke
         run: |
           node pipeline/stages/03-release/scripts/run-stage-smoke.mjs \
             --api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
-            --web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}"
+            --web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}" \
+            --include-auth false
           echo 'verdict=pass' >> "$GITHUB_OUTPUT"
 
       - name: Run production migrations
@@ -261,6 +262,15 @@ jobs:
             --manifest "$RUNNER_TEMP/release-candidate.json" \
             --resource-group "$RG" \
             --job-name "$JOB"
+
+      - name: Stage auth smoke
+        id: stage_smoke
+        run: |
+          node pipeline/stages/03-release/scripts/run-stage-smoke.mjs \
+            --api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
+            --web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}" \
+            --include-auth true
+          echo 'verdict=pass' >> "$GITHUB_OUTPUT"
 
       - name: Deploy prod apps from candidate
         env:
@@ -341,5 +351,7 @@ jobs:
             echo "- Candidate: ${{ needs.resolve_candidate.outputs.candidate_id }}"
             echo "- Stage API: ${{ steps.runtime.outputs.api_stage_base_url }}"
             echo "- Stage Web: ${{ steps.runtime.outputs.web_stage_base_url }}"
+            echo "- Stage health smoke: ${{ steps.stage_health_smoke.outputs.verdict || 'skipped' }}"
+            echo "- Stage auth smoke: ${{ steps.stage_smoke.outputs.verdict || 'skipped' }}"
             echo "- Production Web: ${{ vars.PRODUCTION_WEB_BASE_URL }}"
           } >> "$GITHUB_STEP_SUMMARY"

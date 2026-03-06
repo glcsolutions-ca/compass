@@ -38,8 +38,17 @@ export async function rollbackProduction({
       webAppName: webStageAppName,
       stageApiBaseUrl
     });
-    await runStageSmoke({ apiBaseUrl: stageApiBaseUrl, webBaseUrl: stageWebBaseUrl });
+    await runStageSmoke({
+      apiBaseUrl: stageApiBaseUrl,
+      webBaseUrl: stageWebBaseUrl,
+      includeAuth: false
+    });
     await runProductionMigrations({ manifestPath, resourceGroup, jobName: migrateJobName });
+    await runStageSmoke({
+      apiBaseUrl: stageApiBaseUrl,
+      webBaseUrl: stageWebBaseUrl,
+      includeAuth: true
+    });
     await deployProdFromCandidate({
       manifestPath,
       resourceGroup,

@@ -6,17 +6,17 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch src/bootstrap/index.ts",
     "lint": "eslint . --ext .ts --max-warnings=0",
-    "start": "node dist/index.js",
+    "start": "node dist/bootstrap/index.js",
     "test": "vitest run --config vitest.config.mts",
     "test:integration": "vitest run --config vitest.integration.config.mts",
-    "typecheck": "pnpm exec tsc -p ../../packages/session-agent-protocol/tsconfig.ref.json && tsc -p tsconfig.ref.json --noEmit"
+    "typecheck": "pnpm exec tsc -b ../../packages/contracts/tsconfig.ref.json ../../packages/runtime-protocol/tsconfig.ref.json tsconfig.ref.json"
   },
   "dependencies": {
     "@compass/contracts": "workspace:*",
-    "@compass/session-agent": "workspace:*",
-    "@compass/session-agent-protocol": "workspace:*",
+    "@compass/runtime-agent": "workspace:*",
+    "@compass/runtime-protocol": "workspace:*",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "jose": "^6.1.2",
@@ -26,7 +26,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@compass/testkit": "workspace:*",
+    "@compass/testing": "workspace:*",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.5",
     "@types/pg": "^8.15.6",

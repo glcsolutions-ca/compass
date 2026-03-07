@@ -62,10 +62,10 @@ jobs:
         run: actionlint
 
       - name: Validate Bicep templates
-        run: node scripts/dev/validate-bicep-templates.mjs
+        run: node platform/scripts/dev/validate-bicep-templates.mjs
 
       - name: Audit retired references
-        run: node scripts/dev/audit-legacy-references.mjs
+        run: node platform/scripts/dev/audit-legacy-references.mjs
 
   commit_stage_complete:
     name: Commit Stage Complete

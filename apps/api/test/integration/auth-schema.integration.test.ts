@@ -10,7 +10,7 @@ function resolveIntegrationDatabaseUrl(repoRootPath: string): string {
     return explicit;
   }
 
-  const envPath = path.join(repoRootPath, "db/postgres/.env");
+  const envPath = path.join(repoRootPath, "packages/database/postgres/.env");
   const content = readFileSync(envPath, "utf8");
   const lines = content.split(/\r?\n/u);
   const values = new Map<string, string>();

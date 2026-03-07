@@ -12,7 +12,7 @@
       "path": "../../packages/contracts/tsconfig.ref.json"
     },
     {
-      "path": "../../packages/session-agent-protocol/tsconfig.ref.json"
+      "path": "../../packages/runtime-protocol/tsconfig.ref.json"
     }
   ],
   "include": ["src/**/*.ts"],

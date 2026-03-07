@@ -1,6 +1,6 @@
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentEvent, ChatTimelineItem } from "~/features/chat/agent-types";
+import type { ChatEvent, ChatTimelineItem } from "~/features/chat/thread-types";
 import {
   __private__,
   useChatTimeline,
@@ -9,18 +9,18 @@ import {
 import type { ChatActionData } from "~/features/chat/chat-action";
 import type { AssistantStoreMessage } from "~/features/chat/presentation/chat-runtime-store";
 
-const normalizeAgentEventsMock = vi.hoisted(() => vi.fn());
+const normalizeChatEventsMock = vi.hoisted(() => vi.fn());
 const buildAssistantStoreMessagesMock = vi.hoisted(() => vi.fn());
 
-vi.mock("~/features/chat/agent-event-normalizer", () => ({
-  normalizeAgentEvents: normalizeAgentEventsMock
+vi.mock("~/features/chat/thread-event-normalizer", () => ({
+  normalizeChatEvents: normalizeChatEventsMock
 }));
 
 vi.mock("~/features/chat/presentation/chat-runtime-store", () => ({
   buildAssistantStoreMessages: buildAssistantStoreMessagesMock
 }));
 
-function createEvent(input: Partial<AgentEvent>): AgentEvent {
+function createEvent(input: Partial<ChatEvent>): ChatEvent {
   return {
     cursor: 1,
     threadId: "thread-1",
@@ -34,7 +34,7 @@ function createEvent(input: Partial<AgentEvent>): AgentEvent {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  normalizeAgentEventsMock.mockReturnValue([]);
+  normalizeChatEventsMock.mockReturnValue([]);
   buildAssistantStoreMessagesMock.mockReturnValue([]);
 });
 
@@ -92,7 +92,7 @@ describe("chat timeline prompt upsert", () => {
 
 describe("useChatTimeline", () => {
   it("adds failed submit fallback items and computes active turn id", () => {
-    normalizeAgentEventsMock.mockReturnValue([
+    normalizeChatEventsMock.mockReturnValue([
       {
         id: "normalized-1",
         kind: "status",
@@ -108,7 +108,7 @@ describe("useChatTimeline", () => {
     const { result, rerender } = renderHook(
       (props: {
         resetKey: string;
-        events: AgentEvent[];
+        events: ChatEvent[];
         submitResult: ChatActionData | undefined;
       }) => useChatTimeline(props),
       {
@@ -146,7 +146,7 @@ describe("useChatTimeline", () => {
   });
 
   it("adds a successful submit fallback assistant message when no assistant event exists", () => {
-    normalizeAgentEventsMock.mockReturnValue([]);
+    normalizeChatEventsMock.mockReturnValue([]);
     buildAssistantStoreMessagesMock.mockImplementation(
       ({ timeline }: { timeline: ChatTimelineItem[] }): AssistantStoreMessage[] =>
         timeline as AssistantStoreMessage[]
@@ -155,7 +155,7 @@ describe("useChatTimeline", () => {
     const { result } = renderHook(
       (props: {
         resetKey: string;
-        events: AgentEvent[];
+        events: ChatEvent[];
         submitResult: ChatActionData | undefined;
       }) => useChatTimeline(props),
       {
@@ -199,7 +199,7 @@ describe("useChatTimeline", () => {
     const { result, rerender } = renderHook(
       (props: {
         resetKey: string;
-        events: AgentEvent[];
+        events: ChatEvent[];
         submitResult: ChatActionData | undefined;
       }) => useChatTimeline(props),
       {
@@ -246,7 +246,7 @@ describe("useChatTimeline", () => {
   });
 
   it("shows an optimistic user message and running assistant placeholder while a submit is pending", () => {
-    normalizeAgentEventsMock.mockReturnValue([]);
+    normalizeChatEventsMock.mockReturnValue([]);
     buildAssistantStoreMessagesMock.mockImplementation(
       ({ timeline }: { timeline: ChatTimelineItem[] }): AssistantStoreMessage[] =>
         timeline as AssistantStoreMessage[]
@@ -255,7 +255,7 @@ describe("useChatTimeline", () => {
     const { result } = renderHook(
       (props: {
         resetKey: string;
-        events: AgentEvent[];
+        events: ChatEvent[];
         submitResult: ChatActionData | undefined;
         pendingSubmission: {
           intent: "sendMessage";

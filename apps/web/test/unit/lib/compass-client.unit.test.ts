@@ -48,7 +48,7 @@ describe("compass client", () => {
 
       const forwardedFetch = __private__.createForwardingFetch(request);
       await forwardedFetch(
-        new Request("http://127.0.0.1:3001/v1/agent/threads", {
+        new Request("http://127.0.0.1:3001/v1/threads", {
           method: "POST",
           headers: {
             "content-type": "application/json"

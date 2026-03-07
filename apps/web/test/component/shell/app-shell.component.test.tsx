@@ -1,44 +1,25 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AppShell } from "~/components/shell/app-shell";
+import { AppShell } from "~/layout/app-shell";
+import type { AppSidebarProps } from "~/layout/app-sidebar";
 
 const useLocationMock = vi.hoisted(() => vi.fn());
 const useMatchesMock = vi.hoisted(() => vi.fn());
-const useNavigateMock = vi.hoisted(() => vi.fn());
+const appSidebarMock = vi.hoisted(() =>
+  vi.fn(() => <aside data-testid="app-sidebar">Sidebar</aside>)
+);
 
 vi.mock("react-router", async () => {
   const actual = await vi.importActual("react-router");
   return {
     ...actual,
     useLocation: useLocationMock,
-    useMatches: useMatchesMock,
-    useNavigate: useNavigateMock
+    useMatches: useMatchesMock
   };
 });
 
-vi.mock("~/components/shell/app-sidebar", () => ({
-  AppSidebar: () => <aside data-testid="app-sidebar">Sidebar</aside>
-}));
-
-vi.mock("~/components/shell/settings-modal", () => ({
-  SettingsModal: (props: {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    onSectionChange: (section: "general" | "personalization") => void;
-  }) => (
-    <div data-testid="settings-modal">
-      <span>{props.open ? "open" : "closed"}</span>
-      <button onClick={() => props.onOpenChange(true)} type="button">
-        Open settings
-      </button>
-      <button onClick={() => props.onOpenChange(false)} type="button">
-        Close settings
-      </button>
-      <button onClick={() => props.onSectionChange("personalization")} type="button">
-        Personalization
-      </button>
-    </div>
-  )
+vi.mock("~/layout/app-sidebar", () => ({
+  AppSidebar: appSidebarMock
 }));
 
 const AUTH_FIXTURE = {
@@ -76,7 +57,6 @@ beforeEach(() => {
     hash: ""
   });
   useMatchesMock.mockReturnValue([{ handle: { shellLayout: "default" } }]);
-  useNavigateMock.mockReturnValue(vi.fn());
 });
 
 afterEach(() => {
@@ -85,10 +65,7 @@ afterEach(() => {
 });
 
 describe("app shell component", () => {
-  it("renders default shell layout and wires settings modal navigation", () => {
-    const navigate = vi.fn();
-    useNavigateMock.mockReturnValue(navigate);
-
+  it("renders default shell layout and passes workspace settings links to the sidebar", () => {
     render(
       <AppShell auth={AUTH_FIXTURE}>
         <div>Child content</div>
@@ -98,12 +75,19 @@ describe("app shell component", () => {
     expect(screen.getByTestId("app-sidebar")).toBeTruthy();
     expect(screen.getByText("Child content")).toBeTruthy();
     expect(screen.getByTestId("app-main").className).toContain("px-4");
+    expect(screen.getByRole("button", { name: "Open navigation" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open settings" }));
-    fireEvent.click(screen.getByRole("button", { name: "Close settings" }));
-    fireEvent.click(screen.getByRole("button", { name: "Personalization" }));
-
-    expect(navigate).toHaveBeenCalled();
+    const sidebarProps = appSidebarMock.mock.calls[0]?.[0] as AppSidebarProps | undefined;
+    expect(sidebarProps).toBeTruthy();
+    if (!sidebarProps) {
+      throw new Error("Expected AppShell to render AppSidebar with props.");
+    }
+    expect(sidebarProps.buildSettingsHref("general")).toBe(
+      "/w/personal-user-1/settings?section=general"
+    );
+    expect(sidebarProps.buildSettingsHref("personalization")).toBe(
+      "/w/personal-user-1/settings?section=personalization"
+    );
   });
 
   it("uses immersive shell layout when deepest route handle requests it", () => {

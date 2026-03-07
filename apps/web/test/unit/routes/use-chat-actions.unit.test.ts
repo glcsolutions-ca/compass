@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppendMessage } from "@assistant-ui/react";
-import type { AgentExecutionMode } from "~/features/chat/agent-types";
+import type { ChatExecutionMode } from "~/features/chat/thread-types";
 import type { ChatActionData } from "~/features/chat/chat-action";
 import { __private__, useChatActions } from "~/features/chat/hooks/use-chat-actions";
 
@@ -71,7 +71,7 @@ function createAppendMessage(overrides: Record<string, unknown> = {}): AppendMes
 
 function renderChatActions(options?: {
   loaderThreadId?: string | null;
-  executionMode?: AgentExecutionMode;
+  executionMode?: ChatExecutionMode;
   submitState?: MockFetcher["state"];
   submitData?: Partial<ChatActionData>;
   modeState?: MockFetcher["state"];

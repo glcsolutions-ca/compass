@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadApiConfig } from "../../src/config.js";
+import { loadApiConfig } from "../../src/bootstrap/config.js";
 
 describe("loadApiConfig", () => {
   it("uses baseline defaults (queue canary)", () => {

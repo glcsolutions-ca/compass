@@ -9,15 +9,21 @@ WORKDIR /workspace
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig*.json ./
 COPY apps/web/package.json apps/web/package.json
+COPY packages/app-shell/package.json packages/app-shell/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/sdk/package.json packages/sdk/package.json
+COPY packages/shared/package.json packages/shared/package.json
+COPY packages/ui/package.json packages/ui/package.json
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm install --frozen-lockfile --filter . --filter @compass/web...
 
 FROM deps AS build
+COPY packages/app-shell ./packages/app-shell
 COPY packages/contracts ./packages/contracts
 COPY packages/sdk ./packages/sdk
+COPY packages/shared ./packages/shared
+COPY packages/ui ./packages/ui
 COPY apps/web ./apps/web
 
 ARG VITE_API_BASE_URL=http://localhost:3001

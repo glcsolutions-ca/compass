@@ -12,8 +12,13 @@
     "app/**/*.tsx",
     "react-router.config.ts",
     "vite.config.ts",
+    "../../packages/app-shell/src/**/*.ts",
+    "../../packages/app-shell/src/**/*.tsx",
     "../../packages/contracts/src/**/*.ts",
-    "../../packages/sdk/src/**/*.ts"
+    "../../packages/sdk/src/**/*.ts",
+    "../../packages/shared/src/**/*.ts",
+    "../../packages/ui/src/**/*.ts",
+    "../../packages/ui/src/**/*.tsx"
   ],
   "exclude": ["app/**/*.test.ts", "app/**/*.test.tsx"]
 }

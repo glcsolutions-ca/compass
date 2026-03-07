@@ -1,0 +1,32 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "jsx": "react-jsx",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "rootDir": "src",
+    "outDir": "dist-types",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "types": ["node", "vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["./src/*"]
+    }
+  },
+  "references": [
+    {
+      "path": "../contracts"
+    },
+    {
+      "path": "../sdk"
+    },
+    {
+      "path": "../shared"
+    },
+    {
+      "path": "../ui"
+    }
+  ],
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

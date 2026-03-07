@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthShellLoaderData } from "~/features/auth/types";
+import { readDefaultExecutionMode } from "~/features/chat/default-execution-mode";
 import { loadChatData } from "~/features/chat/chat-loader";
 
 const loadAuthShellDataMock = vi.hoisted(() => vi.fn());
-const getAgentThreadMock = vi.hoisted(() => vi.fn());
-const listAgentThreadEventsMock = vi.hoisted(() => vi.fn());
+const getChatThreadMock = vi.hoisted(() => vi.fn());
+const listChatThreadEventsMock = vi.hoisted(() => vi.fn());
 const readPersonalContextLabelMock = vi.hoisted(() => vi.fn());
 const buildReturnToMock = vi.hoisted(() => vi.fn());
 
@@ -12,9 +13,9 @@ vi.mock("~/features/auth/shell-loader", () => ({
   loadAuthShellData: loadAuthShellDataMock
 }));
 
-vi.mock("~/features/chat/agent-client", () => ({
-  getAgentThread: getAgentThreadMock,
-  listAgentThreadEvents: listAgentThreadEventsMock
+vi.mock("~/features/chat/thread-client", () => ({
+  getChatThread: getChatThreadMock,
+  listChatThreadEvents: listChatThreadEventsMock
 }));
 
 vi.mock("~/features/chat/chat-context", () => ({
@@ -142,7 +143,7 @@ describe("loadChatData", () => {
   it("returns login redirect when thread fetch returns 401", async () => {
     loadAuthShellDataMock.mockResolvedValue(createAuth());
     buildReturnToMock.mockReturnValue("/return");
-    getAgentThreadMock.mockResolvedValue({
+    getChatThreadMock.mockResolvedValue({
       status: 401,
       data: null,
       message: null
@@ -160,7 +161,7 @@ describe("loadChatData", () => {
 
   it("redirects to workspace chat when thread is inaccessible", async () => {
     loadAuthShellDataMock.mockResolvedValue(createAuth());
-    getAgentThreadMock.mockResolvedValue({
+    getChatThreadMock.mockResolvedValue({
       status: 404,
       data: null,
       message: null
@@ -178,7 +179,7 @@ describe("loadChatData", () => {
 
   it("throws when thread fetch returns no data with non-error status", async () => {
     loadAuthShellDataMock.mockResolvedValue(createAuth());
-    getAgentThreadMock.mockResolvedValue({
+    getChatThreadMock.mockResolvedValue({
       status: 200,
       data: null,
       message: "failed to load"
@@ -195,7 +196,7 @@ describe("loadChatData", () => {
 
   it("redirects to thread's workspace when it differs from route workspace", async () => {
     loadAuthShellDataMock.mockResolvedValue(createAuth());
-    getAgentThreadMock.mockResolvedValue({
+    getChatThreadMock.mockResolvedValue({
       status: 200,
       data: {
         threadId: "thread-1",
@@ -218,7 +219,7 @@ describe("loadChatData", () => {
   it("returns login redirect when events fetch returns 401", async () => {
     loadAuthShellDataMock.mockResolvedValue(createAuth());
     buildReturnToMock.mockReturnValue("/return");
-    getAgentThreadMock.mockResolvedValue({
+    getChatThreadMock.mockResolvedValue({
       status: 200,
       data: {
         threadId: "thread-1",
@@ -227,7 +228,7 @@ describe("loadChatData", () => {
       },
       message: null
     });
-    listAgentThreadEventsMock.mockResolvedValue({
+    listChatThreadEventsMock.mockResolvedValue({
       status: 401,
       data: null
     });
@@ -245,7 +246,7 @@ describe("loadChatData", () => {
   it("returns composed loader data with events when thread exists", async () => {
     loadAuthShellDataMock.mockResolvedValue(createAuth());
     readPersonalContextLabelMock.mockReturnValue("Personal");
-    getAgentThreadMock.mockResolvedValue({
+    getChatThreadMock.mockResolvedValue({
       status: 200,
       data: {
         threadId: "thread-1",
@@ -254,7 +255,7 @@ describe("loadChatData", () => {
       },
       message: null
     });
-    listAgentThreadEventsMock.mockResolvedValue({
+    listChatThreadEventsMock.mockResolvedValue({
       status: 200,
       data: {
         events: [{ cursor: 1, method: "turn.started" }],
@@ -304,9 +305,9 @@ describe("loadChatData", () => {
       thread: null,
       initialEvents: [],
       initialCursor: 0,
-      executionMode: "cloud"
+      executionMode: readDefaultExecutionMode()
     });
-    expect(getAgentThreadMock).not.toHaveBeenCalled();
-    expect(listAgentThreadEventsMock).not.toHaveBeenCalled();
+    expect(getChatThreadMock).not.toHaveBeenCalled();
+    expect(listChatThreadEventsMock).not.toHaveBeenCalled();
   });
 });

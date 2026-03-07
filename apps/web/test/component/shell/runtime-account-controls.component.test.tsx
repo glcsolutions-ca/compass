@@ -1,10 +1,10 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { RuntimeAccountControls } from "~/components/shell/runtime-account-controls";
+import { RuntimeAccountControls } from "~/layout/runtime-account-controls";
 
 const useRuntimeAccountMock = vi.hoisted(() => vi.fn());
 
-vi.mock("~/components/shell/use-runtime-account", () => ({
+vi.mock("~/layout/use-runtime-account", () => ({
   useRuntimeAccount: useRuntimeAccountMock
 }));
 

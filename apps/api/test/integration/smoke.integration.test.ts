@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import request from "supertest";
-import { buildApiApp } from "../../src/app.js";
+import { buildApiApp } from "../../src/http/build-app.js";
 
 describe("API integration smoke", () => {
   it("exposes core endpoints", async () => {

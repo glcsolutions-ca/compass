@@ -10,9 +10,9 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig*.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
-COPY packages/session-agent/package.json packages/session-agent/package.json
-COPY packages/session-agent-protocol/package.json packages/session-agent-protocol/package.json
-COPY packages/testkit/package.json packages/testkit/package.json
+COPY packages/runtime-agent/package.json packages/runtime-agent/package.json
+COPY packages/runtime-protocol/package.json packages/runtime-protocol/package.json
+COPY packages/testing/package.json packages/testing/package.json
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm install --frozen-lockfile --filter . --filter @compass/contracts... --filter @compass/api...
@@ -20,13 +20,13 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 FROM deps AS build
 COPY apps/api ./apps/api
 COPY packages/contracts ./packages/contracts
-COPY packages/session-agent ./packages/session-agent
-COPY packages/session-agent-protocol ./packages/session-agent-protocol
-COPY db ./db
+COPY packages/runtime-agent ./packages/runtime-agent
+COPY packages/runtime-protocol ./packages/runtime-protocol
+COPY packages/database ./packages/database
 
 RUN pnpm --filter @compass/contracts build
-RUN pnpm --filter @compass/session-agent-protocol build
-RUN pnpm --filter @compass/session-agent build
+RUN pnpm --filter @compass/runtime-protocol build
+RUN pnpm --filter @compass/runtime-agent build
 RUN pnpm --filter @compass/api build
 RUN pnpm --filter @compass/api deploy --legacy --prod /opt/app
 
@@ -37,9 +37,9 @@ ENV API_HOST=0.0.0.0
 ENV API_PORT=3001
 
 COPY --from=build /opt/app/ ./
-COPY --from=build /workspace/db/migrations ./db/migrations
-COPY --from=build /workspace/db/scripts ./db/scripts
-COPY --from=build /workspace/db/seeds ./db/seeds
+COPY --from=build /workspace/packages/database/migrations ./packages/database/migrations
+COPY --from=build /workspace/packages/database/scripts ./packages/database/scripts
+COPY --from=build /workspace/packages/database/seeds ./packages/database/seeds
 
 EXPOSE 3001
 CMD ["node", "dist/index.js"]

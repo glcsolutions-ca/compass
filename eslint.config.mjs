@@ -83,7 +83,7 @@ export default tseslint.config(
       "**/coverage/**",
       "**/vitest*.config.*",
       "**/postcss.config.mjs",
-      "packages/testkit/guardrails/**"
+      "packages/testing/guardrails/**"
     ]
   },
   js.configs.recommended,
@@ -93,7 +93,7 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ["tests/acceptance/e2e/*.ts"]
+          allowDefaultProject: ["tests/acceptance/web/e2e/*.ts"]
         },
         tsconfigRootDir: import.meta.dirname
       }
@@ -164,7 +164,7 @@ export default tseslint.config(
     }
   },
   {
-    files: ["apps/web/app/routes/**/*.ts", "apps/web/app/routes/**/*.tsx"],
+    files: ["packages/app-shell/src/routes/**/*.ts", "packages/app-shell/src/routes/**/*.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -177,14 +177,17 @@ export default tseslint.config(
             "../../*",
             "../../../*",
             "~/routes/*",
-            "apps/web/app/routes/*"
+            "packages/app-shell/src/routes/*"
           ]
         }
       ]
     }
   },
   {
-    files: ["apps/web/app/features/auth/**/*.ts", "apps/web/app/features/auth/**/*.tsx"],
+    files: [
+      "packages/app-shell/src/features/auth/**/*.ts",
+      "packages/app-shell/src/features/auth/**/*.tsx"
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -195,7 +198,10 @@ export default tseslint.config(
     }
   },
   {
-    files: ["apps/web/app/features/workspace/**/*.ts", "apps/web/app/features/workspace/**/*.tsx"],
+    files: [
+      "packages/app-shell/src/features/workspace/**/*.ts",
+      "packages/app-shell/src/features/workspace/**/*.tsx"
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -206,7 +212,10 @@ export default tseslint.config(
     }
   },
   {
-    files: ["apps/web/app/features/chat/**/*.ts", "apps/web/app/features/chat/**/*.tsx"],
+    files: [
+      "packages/app-shell/src/features/chat/**/*.ts",
+      "packages/app-shell/src/features/chat/**/*.tsx"
+    ],
     rules: {
       "no-restricted-imports": [
         "error",

@@ -1,23 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { clientAction as chatAction } from "~/routes/app/chat/route";
 import {
-  createAgentThread,
-  interruptAgentTurn,
-  startAgentTurn,
-  switchAgentThreadMode
-} from "~/features/chat/agent-client";
+  createChatThread,
+  interruptChatTurn,
+  startChatTurn,
+  switchChatThreadMode
+} from "~/features/chat/thread-client";
 import { loadAuthShellData } from "~/features/auth/shell-loader";
+import { readDefaultExecutionMode } from "~/features/chat/default-execution-mode";
 
-vi.mock("~/features/chat/agent-client", () => ({
-  createAgentThread: vi.fn(),
-  startAgentTurn: vi.fn(),
-  switchAgentThreadMode: vi.fn(),
-  interruptAgentTurn: vi.fn()
+vi.mock("~/features/chat/thread-client", () => ({
+  createChatThread: vi.fn(),
+  startChatTurn: vi.fn(),
+  switchChatThreadMode: vi.fn(),
+  interruptChatTurn: vi.fn()
 }));
 
 vi.mock("~/features/auth/shell-loader", () => ({
   loadAuthShellData: vi.fn()
 }));
+
+const defaultExecutionMode = readDefaultExecutionMode();
 
 describe("chat action", () => {
   beforeEach(() => {
@@ -43,7 +46,7 @@ describe("chat action", () => {
       error: "Prompt is required.",
       threadId: null,
       turnId: null,
-      executionMode: "cloud",
+      executionMode: defaultExecutionMode,
       prompt: null,
       answer: null
     });
@@ -83,7 +86,7 @@ describe("chat action", () => {
       personalWorkspaceSlug: "personal-user-1"
     });
 
-    vi.mocked(createAgentThread).mockResolvedValue({
+    vi.mocked(createChatThread).mockResolvedValue({
       status: 201,
       data: {
         threadId: "thread_1",
@@ -103,7 +106,7 @@ describe("chat action", () => {
       message: null
     });
 
-    vi.mocked(startAgentTurn).mockResolvedValue({
+    vi.mocked(startChatTurn).mockResolvedValue({
       status: 200,
       data: {
         turnId: "turn_1",
@@ -135,21 +138,23 @@ describe("chat action", () => {
       params: { workspaceSlug: "personal-user-1" }
     });
 
-    expect(createAgentThread).toHaveBeenCalledTimes(1);
-    expect(createAgentThread).toHaveBeenCalledWith(expect.any(Request), {
+    expect(createChatThread).toHaveBeenCalledTimes(1);
+    const [createThreadRequest, createThreadPayload] =
+      vi.mocked(createChatThread).mock.calls[0] ?? [];
+    expect(createThreadRequest).toBeInstanceOf(Request);
+    expect(createThreadPayload).toEqual({
       workspaceSlug: "personal-user-1",
-      executionMode: "cloud",
+      executionMode: defaultExecutionMode,
       title: "hello"
     });
-    expect(startAgentTurn).toHaveBeenCalledWith(
-      expect.any(Request),
-      expect.objectContaining({
-        threadId: "thread_1",
-        text: "hello",
-        executionMode: "cloud",
-        clientRequestId: "req_hello_1"
-      })
-    );
+    const [startTurnRequest, startTurnPayload] = vi.mocked(startChatTurn).mock.calls[0] ?? [];
+    expect(startTurnRequest).toBeInstanceOf(Request);
+    expect(startTurnPayload).toEqual({
+      threadId: "thread_1",
+      text: "hello",
+      executionMode: defaultExecutionMode,
+      clientRequestId: "req_hello_1"
+    });
     expect(result).toEqual({
       intent: "sendMessage",
       ok: true,
@@ -197,7 +202,7 @@ describe("chat action", () => {
       personalWorkspaceSlug: "personal-user-1"
     });
 
-    vi.mocked(createAgentThread).mockResolvedValue({
+    vi.mocked(createChatThread).mockResolvedValue({
       status: 201,
       data: {
         threadId: "thread_2",
@@ -217,7 +222,7 @@ describe("chat action", () => {
       message: null
     });
 
-    vi.mocked(startAgentTurn).mockResolvedValue({
+    vi.mocked(startChatTurn).mockResolvedValue({
       status: 200,
       data: {
         turnId: "turn_2",
@@ -248,9 +253,12 @@ describe("chat action", () => {
       params: {}
     });
 
-    expect(createAgentThread).toHaveBeenCalledWith(expect.any(Request), {
+    const [createThreadRequest, createThreadPayload] =
+      vi.mocked(createChatThread).mock.calls[0] ?? [];
+    expect(createThreadRequest).toBeInstanceOf(Request);
+    expect(createThreadPayload).toEqual({
       workspaceSlug: "personal-user-1",
-      executionMode: "cloud",
+      executionMode: defaultExecutionMode,
       title: "hello from chat"
     });
     expect(result).toEqual({
@@ -299,7 +307,7 @@ describe("chat action", () => {
       personalWorkspaceSlug: "personal-user-1"
     });
 
-    vi.mocked(createAgentThread).mockResolvedValue({
+    vi.mocked(createChatThread).mockResolvedValue({
       status: 403,
       data: null,
       error: "FORBIDDEN",
@@ -319,14 +327,14 @@ describe("chat action", () => {
       params: { workspaceSlug: "personal-user-1" }
     });
 
-    expect(startAgentTurn).not.toHaveBeenCalled();
+    expect(startChatTurn).not.toHaveBeenCalled();
     expect(result).toEqual({
       intent: "sendMessage",
       ok: false,
       error: "Forbidden.",
       threadId: null,
       turnId: null,
-      executionMode: "cloud",
+      executionMode: defaultExecutionMode,
       prompt: "blocked prompt",
       answer: null,
       clientRequestId: "req-blocked-1"
@@ -359,21 +367,21 @@ describe("chat action", () => {
       params: {}
     });
 
-    expect(createAgentThread).not.toHaveBeenCalled();
+    expect(createChatThread).not.toHaveBeenCalled();
     expect(result).toEqual({
       intent: "sendMessage",
       ok: false,
       error: "Workspace membership is required but was not found in /v1/auth/me.",
       threadId: null,
       turnId: null,
-      executionMode: "cloud",
+      executionMode: defaultExecutionMode,
       prompt: "hello",
       answer: null
     });
   });
 
   it("interrupts active turns", async () => {
-    vi.mocked(interruptAgentTurn).mockResolvedValue({
+    vi.mocked(interruptChatTurn).mockResolvedValue({
       status: 200,
       data: {
         turnId: "turn_1",
@@ -408,7 +416,7 @@ describe("chat action", () => {
       }
     });
 
-    expect(interruptAgentTurn).toHaveBeenCalledWith(expect.any(Request), {
+    expect(interruptChatTurn).toHaveBeenCalledWith(expect.any(Request), {
       threadId: "thread_1",
       turnId: "turn_1"
     });
@@ -422,7 +430,7 @@ describe("chat action", () => {
   });
 
   it("switches execution mode for active threads", async () => {
-    vi.mocked(switchAgentThreadMode).mockResolvedValue({
+    vi.mocked(switchChatThreadMode).mockResolvedValue({
       status: 200,
       data: {
         threadId: "thread_1",
@@ -458,7 +466,7 @@ describe("chat action", () => {
       }
     });
 
-    expect(switchAgentThreadMode).toHaveBeenCalledWith(expect.any(Request), {
+    expect(switchChatThreadMode).toHaveBeenCalledWith(expect.any(Request), {
       threadId: "thread_1",
       executionMode: "cloud"
     });
@@ -471,7 +479,7 @@ describe("chat action", () => {
   });
 
   it("submits local mode send attempts through the agent API", async () => {
-    vi.mocked(startAgentTurn).mockResolvedValue({
+    vi.mocked(startChatTurn).mockResolvedValue({
       status: 200,
       data: {
         turnId: "turn_local_1",
@@ -506,15 +514,12 @@ describe("chat action", () => {
       }
     });
 
-    expect(createAgentThread).not.toHaveBeenCalled();
-    expect(startAgentTurn).toHaveBeenCalledWith(
-      expect.any(Request),
-      expect.objectContaining({
-        threadId: "thread_1",
-        text: "hello",
-        executionMode: "local"
-      })
-    );
+    expect(createChatThread).not.toHaveBeenCalled();
+    expect(startChatTurn).toHaveBeenCalledWith(expect.any(Request), {
+      threadId: "thread_1",
+      text: "hello",
+      executionMode: "local"
+    });
     expect(result).toEqual({
       intent: "sendMessage",
       ok: true,

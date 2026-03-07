@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ApiError } from "../../src/auth-service.js";
-import { __internalAzureDynamicSessionsHost } from "../../src/agent-sessions/hosts/azure-dynamic-sessions.js";
+import type { ApiError } from "../../src/modules/auth/auth-service.js";
+import { __internalAzureDynamicSessionsHost } from "../../src/infrastructure/runtime-hosts/azure-dynamic-sessions.js";
 
 describe("uploadFileWithFetch", () => {
   afterEach(() => {
@@ -9,7 +9,7 @@ describe("uploadFileWithFetch", () => {
   });
 
   it("uploads the file with native multipart fetch", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response("uploaded", {
         status: 201
       })
@@ -19,7 +19,7 @@ describe("uploadFileWithFetch", () => {
     const result = await __internalAzureDynamicSessionsHost.uploadFileWithFetch({
       url: new URL("https://example.com/files"),
       token: "test-token",
-      filename: "compass-session-agent.js",
+      filename: "compass-runtime-agent.cjs",
       content: "console.log('hello');"
     });
 
@@ -39,18 +39,18 @@ describe("uploadFileWithFetch", () => {
 
     const file = (init.body as FormData).get("file");
     expect(file).toBeInstanceOf(File);
-    expect((file as File).name).toBe("compass-session-agent.js");
+    expect((file as File).name).toBe("compass-runtime-agent.cjs");
     expect(await (file as File).text()).toBe("console.log('hello');");
   });
 
   it("maps fetch failures to a bootstrap api error", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("socket hang up")));
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockRejectedValue(new Error("socket hang up")));
 
     await expect(
       __internalAzureDynamicSessionsHost.uploadFileWithFetch({
         url: new URL("https://example.com/files"),
         token: "test-token",
-        filename: "compass-session-agent.js",
+        filename: "compass-runtime-agent.cjs",
         content: "console.log('hello');"
       })
     ).rejects.toMatchObject<ApiError>({

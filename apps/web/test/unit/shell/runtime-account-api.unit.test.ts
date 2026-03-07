@@ -8,7 +8,7 @@ import {
   postRuntimeRateLimitsRead,
   RuntimeAccountRequestError,
   subscribeRuntimeStream
-} from "~/components/shell/runtime-account-api";
+} from "~/layout/runtime-account-api";
 
 class MockWebSocket {
   static instances: MockWebSocket[] = [];
@@ -93,7 +93,7 @@ describe("subscribeRuntimeStream", () => {
     const payload = await fetchRuntimeAccountRead(true);
     expect(payload.provider).toBe("local_process");
     expect(fetchMock).toHaveBeenCalledWith(
-      "/v1/agent/runtime/account/read",
+      "/v1/runtime/account/read",
       expect.objectContaining({
         method: "POST",
         credentials: "include",

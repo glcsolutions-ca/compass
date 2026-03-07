@@ -10,7 +10,7 @@
       "path": "../../packages/contracts"
     },
     {
-      "path": "../../packages/session-agent-protocol"
+      "path": "../../packages/runtime-protocol"
     }
   ],
   "include": ["src/**/*.ts", "test/**/*.ts"]

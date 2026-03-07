@@ -1,30 +1,30 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ChatThreadRail } from "~/components/shell/chat-thread-rail";
-import type { AgentThread } from "~/features/chat/agent-types";
+import { ChatThreadRail } from "~/layout/chat-thread-rail";
+import type { ChatThread } from "~/features/chat/thread-types";
 
-const { listAgentThreadsClientMock } = vi.hoisted(() => ({
-  listAgentThreadsClientMock:
+const { listChatThreadsClientMock } = vi.hoisted(() => ({
+  listChatThreadsClientMock:
     vi.fn<
       (payload: {
         workspaceSlug: string;
         state?: "regular" | "archived" | "all";
         limit?: number;
         baseUrl?: string;
-      }) => Promise<AgentThread[]>
+      }) => Promise<ChatThread[]>
     >()
 }));
 
-vi.mock("~/features/chat/agent-client", () => ({
-  listAgentThreadsClient: listAgentThreadsClientMock,
-  patchAgentThreadClient: vi.fn(async () => ({})),
-  deleteAgentThreadClient: vi.fn(async () => ({ deleted: true }))
+vi.mock("~/features/chat/thread-client", () => ({
+  listChatThreadsClient: listChatThreadsClientMock,
+  patchChatThreadClient: vi.fn(async () => ({})),
+  deleteChatThreadClient: vi.fn(async () => ({ deleted: true }))
 }));
 
 describe("chat thread rail", () => {
   beforeEach(() => {
-    listAgentThreadsClientMock.mockReset();
+    listChatThreadsClientMock.mockReset();
   });
 
   afterEach(() => {
@@ -32,7 +32,7 @@ describe("chat thread rail", () => {
   });
 
   it("renders an empty state when no threads are returned", async () => {
-    listAgentThreadsClientMock.mockResolvedValue([]);
+    listChatThreadsClientMock.mockResolvedValue([]);
 
     render(
       <MemoryRouter initialEntries={["/w/personal-user-1/chat"]}>
@@ -41,7 +41,7 @@ describe("chat thread rail", () => {
     );
 
     expect(await screen.findByText("No threads yet.")).toBeTruthy();
-    expect(listAgentThreadsClientMock).toHaveBeenCalledWith({
+    expect(listChatThreadsClientMock).toHaveBeenCalledWith({
       workspaceSlug: "personal-user-1",
       state: "all",
       limit: 60
@@ -49,7 +49,7 @@ describe("chat thread rail", () => {
   });
 
   it("renders regular and archived thread sections from API data", async () => {
-    listAgentThreadsClientMock.mockResolvedValue([
+    listChatThreadsClientMock.mockResolvedValue([
       {
         threadId: "thread-live-1",
         workspaceId: "workspace-1",

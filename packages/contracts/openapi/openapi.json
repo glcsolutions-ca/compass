@@ -24,8 +24,12 @@
       "description": "Workspace membership and invite endpoints"
     },
     {
-      "name": "Agent",
-      "description": "Agent thread and turn orchestration endpoints"
+      "name": "Threads",
+      "description": "Thread and turn orchestration endpoints"
+    },
+    {
+      "name": "Runtime",
+      "description": "Runtime account and stream endpoints"
     }
   ],
   "components": {
@@ -538,7 +542,7 @@
           "status"
         ]
       },
-      "AgentThreadCreateRequest": {
+      "ThreadCreateRequest": {
         "type": "object",
         "properties": {
           "workspaceSlug": {
@@ -570,7 +574,7 @@
           "workspaceSlug"
         ]
       },
-      "AgentThreadCreateResponse": {
+      "ThreadCreateResponse": {
         "type": "object",
         "properties": {
           "thread": {
@@ -662,7 +666,7 @@
           "thread"
         ]
       },
-      "AgentThreadReadResponse": {
+      "ThreadReadResponse": {
         "type": "object",
         "properties": {
           "thread": {
@@ -754,7 +758,7 @@
           "thread"
         ]
       },
-      "AgentThreadListQuery": {
+      "ThreadListQuery": {
         "type": "object",
         "properties": {
           "workspaceSlug": {
@@ -779,7 +783,7 @@
           "workspaceSlug"
         ]
       },
-      "AgentThreadListResponse": {
+      "ThreadListResponse": {
         "type": "object",
         "properties": {
           "threads": {
@@ -874,7 +878,7 @@
           "threads"
         ]
       },
-      "AgentThreadPatchRequest": {
+      "ThreadPatchRequest": {
         "type": "object",
         "properties": {
           "title": {
@@ -887,7 +891,7 @@
           }
         }
       },
-      "AgentThreadPatchResponse": {
+      "ThreadPatchResponse": {
         "type": "object",
         "properties": {
           "thread": {
@@ -979,7 +983,7 @@
           "thread"
         ]
       },
-      "AgentThreadDeleteResponse": {
+      "ThreadDeleteResponse": {
         "type": "object",
         "properties": {
           "deleted": {
@@ -993,7 +997,7 @@
           "deleted"
         ]
       },
-      "AgentThreadModePatchRequest": {
+      "ThreadModePatchRequest": {
         "type": "object",
         "properties": {
           "executionMode": {
@@ -1015,7 +1019,7 @@
           "executionMode"
         ]
       },
-      "AgentThreadModePatchResponse": {
+      "ThreadModePatchResponse": {
         "type": "object",
         "properties": {
           "thread": {
@@ -1107,7 +1111,7 @@
           "thread"
         ]
       },
-      "AgentTurnStartRequest": {
+      "TurnStartRequest": {
         "type": "object",
         "properties": {
           "text": {
@@ -1162,7 +1166,7 @@
           "text"
         ]
       },
-      "AgentTurnStartResponse": {
+      "TurnStartResponse": {
         "type": "object",
         "properties": {
           "turn": {
@@ -1293,7 +1297,7 @@
           "turn"
         ]
       },
-      "AgentTurnInterruptResponse": {
+      "TurnInterruptResponse": {
         "type": "object",
         "properties": {
           "turn": {
@@ -1381,7 +1385,7 @@
           "turn"
         ]
       },
-      "AgentThreadRuntimeLaunchResponse": {
+      "ThreadRuntimeLaunchResponse": {
         "type": "object",
         "properties": {
           "launch": {
@@ -1426,7 +1430,7 @@
           "launch"
         ]
       },
-      "AgentEventsBatchRequest": {
+      "ThreadEventsBatchRequest": {
         "type": "object",
         "properties": {
           "events": {
@@ -1454,7 +1458,7 @@
           "events"
         ]
       },
-      "AgentEventsBatchResponse": {
+      "ThreadEventsBatchResponse": {
         "type": "object",
         "properties": {
           "accepted": {
@@ -1466,7 +1470,7 @@
           "accepted"
         ]
       },
-      "AgentEventsListResponse": {
+      "ThreadEventsListResponse": {
         "type": "object",
         "properties": {
           "events": {
@@ -3513,12 +3517,12 @@
         }
       }
     },
-    "/v1/agent/runtime/account/read": {
+    "/v1/runtime/account/read": {
       "post": {
-        "operationId": "postAgentRuntimeAccountRead",
+        "operationId": "postRuntimeAccountRead",
         "summary": "Read Codex runtime account state",
         "tags": [
-          "Agent"
+          "Runtime"
         ],
         "security": [
           {
@@ -3704,12 +3708,12 @@
         }
       }
     },
-    "/v1/agent/runtime/account/login/start": {
+    "/v1/runtime/account/login/start": {
       "post": {
-        "operationId": "postAgentRuntimeAccountLoginStart",
+        "operationId": "postRuntimeAccountLoginStart",
         "summary": "Start Codex runtime account login",
         "tags": [
-          "Agent"
+          "Runtime"
         ],
         "security": [
           {
@@ -3903,12 +3907,12 @@
         }
       }
     },
-    "/v1/agent/runtime/account/login/cancel": {
+    "/v1/runtime/account/login/cancel": {
       "post": {
-        "operationId": "postAgentRuntimeAccountLoginCancel",
+        "operationId": "postRuntimeAccountLoginCancel",
         "summary": "Cancel pending runtime login",
         "tags": [
-          "Agent"
+          "Runtime"
         ],
         "security": [
           {
@@ -4001,12 +4005,12 @@
         }
       }
     },
-    "/v1/agent/runtime/account/logout": {
+    "/v1/runtime/account/logout": {
       "post": {
-        "operationId": "postAgentRuntimeAccountLogout",
+        "operationId": "postRuntimeAccountLogout",
         "summary": "Logout runtime account",
         "tags": [
-          "Agent"
+          "Runtime"
         ],
         "security": [
           {
@@ -4076,12 +4080,12 @@
         }
       }
     },
-    "/v1/agent/runtime/account/rate-limits/read": {
+    "/v1/runtime/account/rate-limits/read": {
       "post": {
-        "operationId": "postAgentRuntimeAccountRateLimitsRead",
+        "operationId": "postRuntimeAccountRateLimitsRead",
         "summary": "Read runtime account rate limits",
         "tags": [
-          "Agent"
+          "Runtime"
         ],
         "security": [
           {
@@ -4362,12 +4366,12 @@
         }
       }
     },
-    "/v1/agent/runtime/stream": {
+    "/v1/runtime/stream": {
       "get": {
-        "operationId": "getAgentRuntimeStream",
+        "operationId": "getRuntimeStream",
         "summary": "Runtime notification websocket stream",
         "tags": [
-          "Agent"
+          "Runtime"
         ],
         "security": [
           {
@@ -4402,12 +4406,12 @@
         }
       }
     },
-    "/v1/agent/threads": {
+    "/v1/threads": {
       "get": {
-        "operationId": "listAgentThreads",
-        "summary": "List agent threads for a workspace",
+        "operationId": "listThreads",
+        "summary": "List threads for a workspace",
         "tags": [
-          "Agent"
+          "Threads"
         ],
         "security": [
           {
@@ -4450,7 +4454,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Agent threads",
+            "description": "Threads",
             "content": {
               "application/json": {
                 "schema": {
@@ -4626,10 +4630,10 @@
         }
       },
       "post": {
-        "operationId": "createAgentThread",
-        "summary": "Create an agent thread",
+        "operationId": "createThread",
+        "summary": "Create a thread",
         "tags": [
-          "Agent"
+          "Threads"
         ],
         "security": [
           {
@@ -4676,7 +4680,7 @@
         },
         "responses": {
           "201": {
-            "description": "Agent thread created",
+            "description": "Thread created",
             "content": {
               "application/json": {
                 "schema": {
@@ -4849,12 +4853,12 @@
         }
       }
     },
-    "/v1/agent/threads/{threadId}": {
+    "/v1/threads/{threadId}": {
       "get": {
-        "operationId": "getAgentThread",
-        "summary": "Read an agent thread",
+        "operationId": "getThread",
+        "summary": "Read a thread",
         "tags": [
-          "Agent"
+          "Threads"
         ],
         "security": [
           {
@@ -4874,7 +4878,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Agent thread state",
+            "description": "Thread state",
             "content": {
               "application/json": {
                 "schema": {
@@ -5047,10 +5051,10 @@
         }
       },
       "patch": {
-        "operationId": "patchAgentThread",
+        "operationId": "patchThread",
         "summary": "Update thread metadata",
         "tags": [
-          "Agent"
+          "Threads"
         ],
         "security": [
           {
@@ -5286,10 +5290,10 @@
         }
       },
       "delete": {
-        "operationId": "deleteAgentThread",
+        "operationId": "deleteThread",
         "summary": "Delete a thread",
         "tags": [
-          "Agent"
+          "Threads"
         ],
         "security": [
           {
@@ -5404,12 +5408,12 @@
         }
       }
     },
-    "/v1/agent/threads/{threadId}/mode": {
+    "/v1/threads/{threadId}/mode": {
       "patch": {
-        "operationId": "patchAgentThreadMode",
-        "summary": "Switch execution mode for an agent thread",
+        "operationId": "patchThreadMode",
+        "summary": "Switch execution mode for a thread",
         "tags": [
-          "Agent"
+          "Threads"
         ],
         "security": [
           {
@@ -5654,12 +5658,12 @@
         }
       }
     },
-    "/v1/agent/threads/{threadId}/runtime/launch": {
+    "/v1/threads/{threadId}/runtime/launch": {
       "post": {
-        "operationId": "launchAgentThreadRuntime",
+        "operationId": "launchThreadRuntime",
         "summary": "Create a desktop-local runtime launch bundle",
         "tags": [
-          "Agent"
+          "Threads"
         ],
         "security": [
           {
@@ -5853,12 +5857,12 @@
         }
       }
     },
-    "/v1/agent/threads/{threadId}/turns": {
+    "/v1/threads/{threadId}/turns": {
       "post": {
-        "operationId": "createAgentTurn",
-        "summary": "Start a turn for an agent thread",
+        "operationId": "createTurn",
+        "summary": "Start a turn for a thread",
         "tags": [
-          "Agent"
+          "Threads"
         ],
         "security": [
           {
@@ -6199,12 +6203,12 @@
         }
       }
     },
-    "/v1/agent/threads/{threadId}/turns/{turnId}/interrupt": {
+    "/v1/threads/{threadId}/turns/{turnId}/interrupt": {
       "post": {
-        "operationId": "interruptAgentTurn",
+        "operationId": "interruptTurn",
         "summary": "Interrupt an in-progress turn",
         "tags": [
-          "Agent"
+          "Threads"
         ],
         "security": [
           {
@@ -6426,12 +6430,12 @@
         }
       }
     },
-    "/v1/agent/threads/{threadId}/events:batch": {
+    "/v1/threads/{threadId}/events:batch": {
       "post": {
-        "operationId": "appendAgentThreadEventsBatch",
+        "operationId": "appendThreadEventsBatch",
         "summary": "Append externally sourced events to a thread",
         "tags": [
-          "Agent"
+          "Threads"
         ],
         "security": [
           {
@@ -6578,12 +6582,12 @@
         }
       }
     },
-    "/v1/agent/threads/{threadId}/events": {
+    "/v1/threads/{threadId}/events": {
       "get": {
-        "operationId": "listAgentThreadEvents",
+        "operationId": "listThreadEvents",
         "summary": "List persisted thread events",
         "tags": [
-          "Agent"
+          "Threads"
         ],
         "security": [
           {
@@ -6752,12 +6756,12 @@
         }
       }
     },
-    "/v1/agent/threads/{threadId}/stream": {
+    "/v1/threads/{threadId}/stream": {
       "get": {
-        "operationId": "streamAgentThreadEvents",
+        "operationId": "streamThreadEvents",
         "summary": "Upgrade to websocket stream for thread events",
         "tags": [
-          "Agent"
+          "Threads"
         ],
         "security": [
           {

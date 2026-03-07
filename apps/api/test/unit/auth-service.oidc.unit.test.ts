@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SignJWT, exportJWK, generateKeyPair, type JWK } from "jose";
-import { EntraOidcClient } from "../../src/auth-service.js";
+import { EntraOidcClient } from "../../src/modules/auth/auth-service.js";
 
 type JwtSignKey = Parameters<SignJWT["sign"]>[0];
 

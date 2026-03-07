@@ -6,7 +6,7 @@ import {
   ChatInspectDrawer,
   parseChatInspectState
 } from "~/features/chat/presentation/chat-inspect-drawer";
-import type { AgentEvent } from "~/features/chat/agent-types";
+import type { ChatEvent } from "~/features/chat/thread-types";
 
 const eventRendersInlineMock = vi.hoisted(() => vi.fn());
 
@@ -59,7 +59,7 @@ describe("chat inspect drawer", () => {
   it("renders scoped terminal/files/diff/raw views and updates inspect state", () => {
     eventRendersInlineMock.mockReturnValue(false);
     const onInspectStateChange = vi.fn();
-    const events: AgentEvent[] = [
+    const events: ChatEvent[] = [
       {
         cursor: 1,
         threadId: "thread-1",

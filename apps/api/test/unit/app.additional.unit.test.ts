@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import request from "supertest";
-import { buildApiApp } from "../../src/app.js";
-import { ApiError } from "../../src/auth-service.js";
-import type { AuthService } from "../../src/auth-service.js";
-import type { AgentService } from "../../src/agent-service.js";
+import { buildApiApp } from "../../src/http/build-app.js";
+import { ApiError } from "../../src/modules/auth/auth-service.js";
+import type { AuthService } from "../../src/modules/auth/auth-service.js";
+import type { ThreadService } from "../../src/modules/threads/thread-service.js";
 
 function activeSessionRecord() {
   return {
@@ -258,14 +258,14 @@ describe("API app additional route coverage", () => {
           authenticated: false
         }))
       } as unknown as AuthService,
-      agentService: {
+      threadService: {
         listThreads: vi.fn()
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: true,
       agentCloudModeEnabled: true
     });
 
-    const response = await request(app).get("/v1/agent/threads").query({ workspaceSlug: "acme" });
+    const response = await request(app).get("/v1/threads").query({ workspaceSlug: "acme" });
     expect(response.status).toBe(401);
     expect(response.body.code).toBe("UNAUTHORIZED");
   });
@@ -276,7 +276,7 @@ describe("API app additional route coverage", () => {
     });
 
     const response = await request(app)
-      .post("/v1/agent/threads")
+      .post("/v1/threads")
       .send({ workspaceSlug: "acme", executionMode: "cloud" });
     expect(response.status).toBe(503);
     expect(response.body.code).toBe("AGENT_GATEWAY_NOT_CONFIGURED");
@@ -287,7 +287,7 @@ describe("API app additional route coverage", () => {
       authService: {
         readAuthMe: vi.fn(async () => activeSessionRecord())
       } as unknown as AuthService,
-      agentService: {
+      threadService: {
         readThread: vi.fn(async () => ({
           threadId: "thread-1",
           workspaceId: "workspace-1",
@@ -330,26 +330,26 @@ describe("API app additional route coverage", () => {
             createdAt: "2026-03-03T00:00:00.000Z"
           }
         ])
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: true,
       agentCloudModeEnabled: true
     });
 
-    const readResponse = await request(app).get("/v1/agent/threads/thread-1");
+    const readResponse = await request(app).get("/v1/threads/thread-1");
     expect(readResponse.status).toBe(200);
 
     const interruptResponse = await request(app).post(
-      "/v1/agent/threads/thread-1/turns/turn-1/interrupt"
+      "/v1/threads/thread-1/turns/turn-1/interrupt"
     );
     expect(interruptResponse.status).toBe(200);
 
     const batchResponse = await request(app)
-      .post("/v1/agent/threads/thread-1/events:batch")
+      .post("/v1/threads/thread-1/events:batch")
       .send({ events: [{ method: "thread.started", payload: {} }] });
     expect(batchResponse.status).toBe(200);
 
     const eventsResponse = await request(app)
-      .get("/v1/agent/threads/thread-1/events")
+      .get("/v1/threads/thread-1/events")
       .query({ cursor: 0, limit: 50 });
     expect(eventsResponse.status).toBe(200);
     expect(eventsResponse.body.events).toHaveLength(1);
@@ -357,7 +357,7 @@ describe("API app additional route coverage", () => {
 
   it("returns upgrade required for runtime stream endpoint", async () => {
     const app = buildApiApp();
-    const response = await request(app).get("/v1/agent/runtime/stream");
+    const response = await request(app).get("/v1/runtime/stream");
     expect(response.status).toBe(426);
     expect(response.body.code).toBe("UPGRADE_REQUIRED");
   });
@@ -367,14 +367,14 @@ describe("API app additional route coverage", () => {
       authService: {
         readAuthMe: vi.fn(async () => activeSessionRecord())
       } as unknown as AuthService,
-      agentService: {
+      threadService: {
         startTurn: vi.fn()
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: true,
       agentCloudModeEnabled: true
     });
 
-    const response = await request(app).post("/v1/agent/threads/thread-1/turns").send({
+    const response = await request(app).post("/v1/threads/thread-1/turns").send({
       clientRequestId: "missing-text"
     });
     expect(response.status).toBe(400);
@@ -388,13 +388,13 @@ describe("API app additional route coverage", () => {
           throw new ApiError(403, "WORKSPACE_FORBIDDEN", "No access");
         })
       } as unknown as AuthService,
-      agentService: {
+      threadService: {
         listThreads: vi.fn()
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: true
     });
 
-    const response = await request(app).get("/v1/agent/threads").query({ workspaceSlug: "acme" });
+    const response = await request(app).get("/v1/threads").query({ workspaceSlug: "acme" });
     expect(response.status).toBe(403);
     expect(response.body.code).toBe("WORKSPACE_FORBIDDEN");
   });
@@ -404,7 +404,7 @@ describe("API app additional route coverage", () => {
       authService: {
         readAuthMe: vi.fn(async () => activeSessionRecord())
       } as unknown as AuthService,
-      agentService: {
+      threadService: {
         readRuntimeAccountState: vi.fn(async () => ({
           provider: "dynamic_sessions",
           capabilities: {
@@ -427,34 +427,34 @@ describe("API app additional route coverage", () => {
         cancelRuntimeAccountLogin: vi.fn(async () => ({ status: "cancelled" })),
         logoutRuntimeAccount: vi.fn(async () => ({})),
         readRuntimeRateLimits: vi.fn(async () => ({ rateLimits: null, rateLimitsByLimitId: null }))
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: true,
       agentCloudModeEnabled: true
     });
 
     const readResponse = await request(app)
-      .post("/v1/agent/runtime/account/read")
+      .post("/v1/runtime/account/read")
       .send({ refreshToken: true });
     expect(readResponse.status).toBe(200);
     expect(readResponse.body.provider).toBe("dynamic_sessions");
 
     const loginStartResponse = await request(app)
-      .post("/v1/agent/runtime/account/login/start")
+      .post("/v1/runtime/account/login/start")
       .send({ type: "chatgpt" });
     expect(loginStartResponse.status).toBe(200);
     expect(loginStartResponse.body.loginId).toBe("login-1");
 
     const loginCancelResponse = await request(app)
-      .post("/v1/agent/runtime/account/login/cancel")
+      .post("/v1/runtime/account/login/cancel")
       .send({ loginId: "login-1" });
     expect(loginCancelResponse.status).toBe(200);
     expect(loginCancelResponse.body.status).toBe("cancelled");
 
-    const logoutResponse = await request(app).post("/v1/agent/runtime/account/logout").send({});
+    const logoutResponse = await request(app).post("/v1/runtime/account/logout").send({});
     expect(logoutResponse.status).toBe(200);
 
     const rateLimitsResponse = await request(app)
-      .post("/v1/agent/runtime/account/rate-limits/read")
+      .post("/v1/runtime/account/rate-limits/read")
       .send({});
     expect(rateLimitsResponse.status).toBe(200);
     expect(rateLimitsResponse.body.rateLimits).toBeNull();
@@ -468,29 +468,29 @@ describe("API app additional route coverage", () => {
       authService: {
         readAuthMe: vi.fn(async () => activeSessionRecord())
       } as unknown as AuthService,
-      agentService: {
+      threadService: {
         readRuntimeAccountState,
         startRuntimeAccountLogin,
         cancelRuntimeAccountLogin
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: true,
       agentCloudModeEnabled: true
     });
 
     const readResponse = await request(app)
-      .post("/v1/agent/runtime/account/read")
+      .post("/v1/runtime/account/read")
       .send({ refreshToken: "yes" });
     expect(readResponse.status).toBe(400);
     expect(readResponse.body.code).toBe("INVALID_REQUEST");
 
     const loginStartResponse = await request(app)
-      .post("/v1/agent/runtime/account/login/start")
+      .post("/v1/runtime/account/login/start")
       .send({ type: "apiKey" });
     expect(loginStartResponse.status).toBe(400);
     expect(loginStartResponse.body.code).toBe("INVALID_REQUEST");
 
     const loginCancelResponse = await request(app)
-      .post("/v1/agent/runtime/account/login/cancel")
+      .post("/v1/runtime/account/login/cancel")
       .send({});
     expect(loginCancelResponse.status).toBe(400);
     expect(loginCancelResponse.body.code).toBe("INVALID_REQUEST");
@@ -508,39 +508,39 @@ describe("API app additional route coverage", () => {
       authService: {
         readAuthMe: vi.fn(async () => activeSessionRecord())
       } as unknown as AuthService,
-      agentService: {
+      threadService: {
         createThread,
         startTurn,
         switchThreadMode
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: true,
       agentCloudModeEnabled: false,
       agentLocalModeEnabledDesktop: false,
       agentModeSwitchEnabled: true
     });
 
-    const createCloud = await request(app).post("/v1/agent/threads").send({
+    const createCloud = await request(app).post("/v1/threads").send({
       workspaceSlug: "acme",
       executionMode: "cloud"
     });
     expect(createCloud.status).toBe(503);
     expect(createCloud.body.code).toBe("AGENT_CLOUD_MODE_DISABLED");
 
-    const createLocal = await request(app).post("/v1/agent/threads").send({
+    const createLocal = await request(app).post("/v1/threads").send({
       workspaceSlug: "acme",
       executionMode: "local"
     });
     expect(createLocal.status).toBe(503);
     expect(createLocal.body.code).toBe("AGENT_LOCAL_MODE_DISABLED");
 
-    const turnCloud = await request(app).post("/v1/agent/threads/thread-1/turns").send({
+    const turnCloud = await request(app).post("/v1/threads/thread-1/turns").send({
       text: "hello",
       executionMode: "cloud"
     });
     expect(turnCloud.status).toBe(503);
     expect(turnCloud.body.code).toBe("AGENT_CLOUD_MODE_DISABLED");
 
-    const switchLocal = await request(app).patch("/v1/agent/threads/thread-1/mode").send({
+    const switchLocal = await request(app).patch("/v1/threads/thread-1/mode").send({
       executionMode: "local"
     });
     expect(switchLocal.status).toBe(503);
@@ -559,25 +559,25 @@ describe("API app additional route coverage", () => {
       authService: {
         readAuthMe: vi.fn(async () => activeSessionRecord())
       } as unknown as AuthService,
-      agentService: {
+      threadService: {
         listThreads,
         updateThread,
         listThreadEvents
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: true,
       agentCloudModeEnabled: true
     });
 
-    const invalidList = await request(app).get("/v1/agent/threads");
+    const invalidList = await request(app).get("/v1/threads");
     expect(invalidList.status).toBe(400);
     expect(invalidList.body.code).toBe("INVALID_REQUEST");
 
-    const invalidPatch = await request(app).patch("/v1/agent/threads/thread-1").send({});
+    const invalidPatch = await request(app).patch("/v1/threads/thread-1").send({});
     expect(invalidPatch.status).toBe(400);
     expect(invalidPatch.body.code).toBe("INVALID_REQUEST");
 
     const invalidEvents = await request(app)
-      .get("/v1/agent/threads/thread-1/events")
+      .get("/v1/threads/thread-1/events")
       .query({ limit: 9999 });
     expect(invalidEvents.status).toBe(400);
     expect(invalidEvents.body.code).toBe("INVALID_REQUEST");

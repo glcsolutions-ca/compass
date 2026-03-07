@@ -4,12 +4,12 @@ Bootstrap is a manual admin workflow. It creates the control plane and the initi
 
 ## Scripts
 
-- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/ensure-entra-apps.mjs](/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/ensure-entra-apps.mjs)
-- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/configure-github-repo.mjs](/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/configure-github-repo.mjs)
-- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/ensure-ghcr-visibility.mjs](/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/ensure-ghcr-visibility.mjs)
-- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/seed-keyvault-secrets.mjs](/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/seed-keyvault-secrets.mjs)
-- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/bootstrap-production-apps.mjs](/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/bootstrap-production-apps.mjs)
-- [/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/configure-web-domain.mjs](/Users/justinkropp/.codex/worktrees/2bfd/compass/scripts/bootstrap/configure-web-domain.mjs)
+- `platform/scripts/bootstrap/ensure-entra-apps.mjs`
+- `platform/scripts/bootstrap/configure-github-repo.mjs`
+- `platform/scripts/bootstrap/ensure-ghcr-visibility.mjs`
+- `platform/scripts/bootstrap/seed-keyvault-secrets.mjs`
+- `platform/scripts/bootstrap/bootstrap-production-apps.mjs`
+- `platform/scripts/bootstrap/configure-web-domain.mjs`
 
 ## Sequence
 

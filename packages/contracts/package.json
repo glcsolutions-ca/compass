@@ -4,16 +4,17 @@
   "private": true,
   "type": "module",
   "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "types": "dist-types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist-types/index.d.ts",
       "default": "./dist/index.js"
     },
     "./openapi/openapi.json": "./openapi/openapi.json"
   },
   "files": [
     "dist",
+    "dist-types",
     "openapi/openapi.json"
   ],
   "scripts": {

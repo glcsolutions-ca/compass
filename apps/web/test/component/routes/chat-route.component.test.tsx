@@ -13,7 +13,7 @@ const useExternalStoreRuntimeMock = vi.hoisted(() => vi.fn());
 const useChatActionsMock = vi.hoisted(() => vi.fn());
 const useChatTransportMock = vi.hoisted(() => vi.fn());
 const useChatTimelineMock = vi.hoisted(() => vi.fn());
-const appendAgentThreadEventsBatchClientMock = vi.hoisted(() => vi.fn());
+const appendChatThreadEventsBatchClientMock = vi.hoisted(() => vi.fn());
 
 let lastAssistantStore: Record<string, unknown> | null = null;
 
@@ -64,8 +64,8 @@ vi.mock("~/features/chat/hooks/use-chat-timeline", () => ({
   useChatTimeline: useChatTimelineMock
 }));
 
-vi.mock("~/features/chat/agent-client", () => ({
-  appendAgentThreadEventsBatchClient: appendAgentThreadEventsBatchClientMock
+vi.mock("~/features/chat/thread-client", () => ({
+  appendChatThreadEventsBatchClient: appendChatThreadEventsBatchClientMock
 }));
 
 vi.mock("~/features/chat/presentation/chat-canvas", () => ({
@@ -225,7 +225,7 @@ describe("chat route component", () => {
       type: "positive"
     });
 
-    expect(appendAgentThreadEventsBatchClientMock).toHaveBeenCalledWith({
+    expect(appendChatThreadEventsBatchClientMock).toHaveBeenCalledWith({
       threadId: "thread-1",
       events: [
         {

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ThemeControls } from "~/components/shell/theme-controls";
+import { ThemeControls } from "~/layout/theme-controls";
 import { UI_MODE_STORAGE_KEY, UI_THEME_STORAGE_KEY } from "~/lib/theme/theme";
 
 let mediaMatches = false;

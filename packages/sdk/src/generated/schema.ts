@@ -225,7 +225,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/runtime/account/read": {
+    "/v1/runtime/account/read": {
         parameters: {
             query?: never;
             header?: never;
@@ -235,14 +235,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Read Codex runtime account state */
-        post: operations["postAgentRuntimeAccountRead"];
+        post: operations["postRuntimeAccountRead"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/runtime/account/login/start": {
+    "/v1/runtime/account/login/start": {
         parameters: {
             query?: never;
             header?: never;
@@ -252,14 +252,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Start Codex runtime account login */
-        post: operations["postAgentRuntimeAccountLoginStart"];
+        post: operations["postRuntimeAccountLoginStart"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/runtime/account/login/cancel": {
+    "/v1/runtime/account/login/cancel": {
         parameters: {
             query?: never;
             header?: never;
@@ -269,14 +269,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Cancel pending runtime login */
-        post: operations["postAgentRuntimeAccountLoginCancel"];
+        post: operations["postRuntimeAccountLoginCancel"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/runtime/account/logout": {
+    "/v1/runtime/account/logout": {
         parameters: {
             query?: never;
             header?: never;
@@ -286,14 +286,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Logout runtime account */
-        post: operations["postAgentRuntimeAccountLogout"];
+        post: operations["postRuntimeAccountLogout"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/runtime/account/rate-limits/read": {
+    "/v1/runtime/account/rate-limits/read": {
         parameters: {
             query?: never;
             header?: never;
@@ -303,14 +303,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Read runtime account rate limits */
-        post: operations["postAgentRuntimeAccountRateLimitsRead"];
+        post: operations["postRuntimeAccountRateLimitsRead"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/runtime/stream": {
+    "/v1/runtime/stream": {
         parameters: {
             query?: never;
             header?: never;
@@ -318,7 +318,7 @@ export interface paths {
             cookie?: never;
         };
         /** Runtime notification websocket stream */
-        get: operations["getAgentRuntimeStream"];
+        get: operations["getRuntimeStream"];
         put?: never;
         post?: never;
         delete?: never;
@@ -327,44 +327,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/threads": {
+    "/v1/threads": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List agent threads for a workspace */
-        get: operations["listAgentThreads"];
+        /** List threads for a workspace */
+        get: operations["listThreads"];
         put?: never;
-        /** Create an agent thread */
-        post: operations["createAgentThread"];
+        /** Create a thread */
+        post: operations["createThread"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/threads/{threadId}": {
+    "/v1/threads/{threadId}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Read an agent thread */
-        get: operations["getAgentThread"];
+        /** Read a thread */
+        get: operations["getThread"];
         put?: never;
         post?: never;
         /** Delete a thread */
-        delete: operations["deleteAgentThread"];
+        delete: operations["deleteThread"];
         options?: never;
         head?: never;
         /** Update thread metadata */
-        patch: operations["patchAgentThread"];
+        patch: operations["patchThread"];
         trace?: never;
     };
-    "/v1/agent/threads/{threadId}/mode": {
+    "/v1/threads/{threadId}/mode": {
         parameters: {
             query?: never;
             header?: never;
@@ -377,11 +377,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Switch execution mode for an agent thread */
-        patch: operations["patchAgentThreadMode"];
+        /** Switch execution mode for a thread */
+        patch: operations["patchThreadMode"];
         trace?: never;
     };
-    "/v1/agent/threads/{threadId}/runtime/launch": {
+    "/v1/threads/{threadId}/runtime/launch": {
         parameters: {
             query?: never;
             header?: never;
@@ -391,14 +391,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Create a desktop-local runtime launch bundle */
-        post: operations["launchAgentThreadRuntime"];
+        post: operations["launchThreadRuntime"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/threads/{threadId}/turns": {
+    "/v1/threads/{threadId}/turns": {
         parameters: {
             query?: never;
             header?: never;
@@ -407,15 +407,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start a turn for an agent thread */
-        post: operations["createAgentTurn"];
+        /** Start a turn for a thread */
+        post: operations["createTurn"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/threads/{threadId}/turns/{turnId}/interrupt": {
+    "/v1/threads/{threadId}/turns/{turnId}/interrupt": {
         parameters: {
             query?: never;
             header?: never;
@@ -425,14 +425,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Interrupt an in-progress turn */
-        post: operations["interruptAgentTurn"];
+        post: operations["interruptTurn"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/threads/{threadId}/events:batch": {
+    "/v1/threads/{threadId}/events:batch": {
         parameters: {
             query?: never;
             header?: never;
@@ -442,14 +442,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Append externally sourced events to a thread */
-        post: operations["appendAgentThreadEventsBatch"];
+        post: operations["appendThreadEventsBatch"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/threads/{threadId}/events": {
+    "/v1/threads/{threadId}/events": {
         parameters: {
             query?: never;
             header?: never;
@@ -457,7 +457,7 @@ export interface paths {
             cookie?: never;
         };
         /** List persisted thread events */
-        get: operations["listAgentThreadEvents"];
+        get: operations["listThreadEvents"];
         put?: never;
         post?: never;
         delete?: never;
@@ -466,7 +466,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/threads/{threadId}/stream": {
+    "/v1/threads/{threadId}/stream": {
         parameters: {
             query?: never;
             header?: never;
@@ -474,7 +474,7 @@ export interface paths {
             cookie?: never;
         };
         /** Upgrade to websocket stream for thread events */
-        get: operations["streamAgentThreadEvents"];
+        get: operations["streamThreadEvents"];
         put?: never;
         post?: never;
         delete?: never;
@@ -603,7 +603,7 @@ export interface components {
             /** @enum {string} */
             status: "active" | "invited" | "disabled";
         };
-        AgentThreadCreateRequest: {
+        ThreadCreateRequest: {
             workspaceSlug: string;
             /**
              * @default cloud
@@ -614,7 +614,7 @@ export interface components {
             executionHost?: "dynamic_sessions" | "desktop_local";
             title?: string;
         };
-        AgentThreadCreateResponse: {
+        ThreadCreateResponse: {
             thread: {
                 threadId: string;
                 workspaceId: string;
@@ -636,7 +636,7 @@ export interface components {
                 modeSwitchedAt?: string | null;
             };
         };
-        AgentThreadReadResponse: {
+        ThreadReadResponse: {
             thread: {
                 threadId: string;
                 workspaceId: string;
@@ -658,13 +658,13 @@ export interface components {
                 modeSwitchedAt?: string | null;
             };
         };
-        AgentThreadListQuery: {
+        ThreadListQuery: {
             workspaceSlug: string;
             /** @enum {string} */
             state?: "regular" | "archived" | "all";
             limit?: number;
         };
-        AgentThreadListResponse: {
+        ThreadListResponse: {
             threads: {
                 threadId: string;
                 workspaceId: string;
@@ -686,11 +686,11 @@ export interface components {
                 modeSwitchedAt?: string | null;
             }[];
         };
-        AgentThreadPatchRequest: {
+        ThreadPatchRequest: {
             title?: string;
             archived?: boolean;
         };
-        AgentThreadPatchResponse: {
+        ThreadPatchResponse: {
             thread: {
                 threadId: string;
                 workspaceId: string;
@@ -712,17 +712,17 @@ export interface components {
                 modeSwitchedAt?: string | null;
             };
         };
-        AgentThreadDeleteResponse: {
+        ThreadDeleteResponse: {
             /** @enum {boolean} */
             deleted: true;
         };
-        AgentThreadModePatchRequest: {
+        ThreadModePatchRequest: {
             /** @enum {string} */
             executionMode: "cloud" | "local";
             /** @enum {string} */
             executionHost?: "dynamic_sessions" | "desktop_local";
         };
-        AgentThreadModePatchResponse: {
+        ThreadModePatchResponse: {
             thread: {
                 threadId: string;
                 workspaceId: string;
@@ -744,7 +744,7 @@ export interface components {
                 modeSwitchedAt?: string | null;
             };
         };
-        AgentTurnStartRequest: {
+        TurnStartRequest: {
             text: string;
             clientRequestId?: string;
             parentTurnId?: string;
@@ -759,7 +759,7 @@ export interface components {
             effort?: string;
             personality?: string;
         };
-        AgentTurnStartResponse: {
+        TurnStartResponse: {
             turn: {
                 turnId: string;
                 threadId: string;
@@ -790,7 +790,7 @@ export interface components {
                 pid?: number | null;
             };
         };
-        AgentTurnInterruptResponse: {
+        TurnInterruptResponse: {
             turn: {
                 turnId: string;
                 threadId: string;
@@ -812,7 +812,7 @@ export interface components {
                 completedAt?: string | null;
             };
         };
-        AgentThreadRuntimeLaunchResponse: {
+        ThreadRuntimeLaunchResponse: {
             launch: {
                 sessionIdentifier: string;
                 bootId: string;
@@ -824,17 +824,17 @@ export interface components {
                 runtimeKind: string;
             };
         };
-        AgentEventsBatchRequest: {
+        ThreadEventsBatchRequest: {
             events: {
                 turnId?: string;
                 method: string;
                 payload?: unknown;
             }[];
         };
-        AgentEventsBatchResponse: {
+        ThreadEventsBatchResponse: {
             accepted: number;
         };
-        AgentEventsListResponse: {
+        ThreadEventsListResponse: {
             events: {
                 cursor: number;
                 threadId: string;
@@ -1637,7 +1637,7 @@ export interface operations {
             };
         };
     };
-    postAgentRuntimeAccountRead: {
+    postRuntimeAccountRead: {
         parameters: {
             query?: never;
             header?: never;
@@ -1708,7 +1708,7 @@ export interface operations {
             };
         };
     };
-    postAgentRuntimeAccountLoginStart: {
+    postRuntimeAccountLoginStart: {
         parameters: {
             query?: never;
             header?: never;
@@ -1787,7 +1787,7 @@ export interface operations {
             };
         };
     };
-    postAgentRuntimeAccountLoginCancel: {
+    postRuntimeAccountLoginCancel: {
         parameters: {
             query?: never;
             header?: never;
@@ -1839,7 +1839,7 @@ export interface operations {
             };
         };
     };
-    postAgentRuntimeAccountLogout: {
+    postRuntimeAccountLogout: {
         parameters: {
             query?: never;
             header?: never;
@@ -1883,7 +1883,7 @@ export interface operations {
             };
         };
     };
-    postAgentRuntimeAccountRateLimitsRead: {
+    postRuntimeAccountRateLimitsRead: {
         parameters: {
             query?: never;
             header?: never;
@@ -1962,7 +1962,7 @@ export interface operations {
             };
         };
     };
-    getAgentRuntimeStream: {
+    getRuntimeStream: {
         parameters: {
             query?: never;
             header?: never;
@@ -1985,7 +1985,7 @@ export interface operations {
             };
         };
     };
-    listAgentThreads: {
+    listThreads: {
         parameters: {
             query: {
                 workspaceSlug: string;
@@ -1998,7 +1998,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Agent threads */
+            /** @description Threads */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2066,7 +2066,7 @@ export interface operations {
             };
         };
     };
-    createAgentThread: {
+    createThread: {
         parameters: {
             query?: never;
             header?: never;
@@ -2089,7 +2089,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Agent thread created */
+            /** @description Thread created */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2157,7 +2157,7 @@ export interface operations {
             };
         };
     };
-    getAgentThread: {
+    getThread: {
         parameters: {
             query?: never;
             header?: never;
@@ -2168,7 +2168,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Agent thread state */
+            /** @description Thread state */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2236,7 +2236,7 @@ export interface operations {
             };
         };
     };
-    deleteAgentThread: {
+    deleteThread: {
         parameters: {
             query?: never;
             header?: never;
@@ -2297,7 +2297,7 @@ export interface operations {
             };
         };
     };
-    patchAgentThread: {
+    patchThread: {
         parameters: {
             query?: never;
             header?: never;
@@ -2395,7 +2395,7 @@ export interface operations {
             };
         };
     };
-    patchAgentThreadMode: {
+    patchThreadMode: {
         parameters: {
             query?: never;
             header?: never;
@@ -2495,7 +2495,7 @@ export interface operations {
             };
         };
     };
-    launchAgentThreadRuntime: {
+    launchThreadRuntime: {
         parameters: {
             query?: never;
             header?: never;
@@ -2588,7 +2588,7 @@ export interface operations {
             };
         };
     };
-    createAgentTurn: {
+    createTurn: {
         parameters: {
             query?: never;
             header?: never;
@@ -2718,7 +2718,7 @@ export interface operations {
             };
         };
     };
-    interruptAgentTurn: {
+    interruptTurn: {
         parameters: {
             query?: never;
             header?: never;
@@ -2810,7 +2810,7 @@ export interface operations {
             };
         };
     };
-    appendAgentThreadEventsBatch: {
+    appendThreadEventsBatch: {
         parameters: {
             query?: never;
             header?: never;
@@ -2880,7 +2880,7 @@ export interface operations {
             };
         };
     };
-    listAgentThreadEvents: {
+    listThreadEvents: {
         parameters: {
             query?: {
                 cursor?: number | null;
@@ -2951,7 +2951,7 @@ export interface operations {
             };
         };
     };
-    streamAgentThreadEvents: {
+    streamThreadEvents: {
         parameters: {
             query?: {
                 cursor?: number | null;

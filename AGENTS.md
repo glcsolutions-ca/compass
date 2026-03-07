@@ -5,13 +5,12 @@
 ```text
 compass/
 ├─ .github/{actions,workflows,labeler.yml}
-├─ apps/{api,web,worker,desktop}
+├─ apps/{api,web,desktop}
 ├─ bootstrap/{README.md,config}
-├─ db/{migrations,postgres,scripts,seeds}
-├─ infra/azure
-├─ packages/{contracts,sdk,testkit,session-agent,session-agent-protocol}
-├─ pipeline/{contracts,shared,stages}
-└─ scripts/{bootstrap,dev,infra}
+├─ docs/{architecture,adr,spikes}
+├─ packages/{app-shell,contracts,database,runtime-agent,runtime-protocol,sdk,shared,testing,ui}
+├─ platform/{infra,pipeline,scripts}
+└─ tests/acceptance/{api,desktop,web}
 ```
 
 ## Canonical architecture
@@ -44,6 +43,7 @@ The current target architecture is:
 - `pnpm dev`
 - `pnpm build`
 - `pnpm check`
+- `pnpm check:product`
 - `pnpm check:commit`
 - `pnpm check:pipeline`
 - `pnpm --filter @compass/pipeline-tools run test`
@@ -54,8 +54,8 @@ The current target architecture is:
 
 - Keep changes small and reversible.
 - Prefer the simplified production-only model over adding new parallel environments.
-- Treat `scripts/bootstrap/*` as admin-only control-plane tooling.
-- Treat `pipeline` as the source of truth for delivery policy and evidence.
+- Treat `platform/scripts/bootstrap/*` as admin-only control-plane tooling.
+- Treat `platform/pipeline` as the source of truth for delivery policy and evidence.
 - Treat merge queue as the native entry point to the real development pipeline.
 - Treat `00-pr-metadata-and-admission.yml` as PR metadata and GitHub prerequisite only:
   - labels
@@ -76,4 +76,4 @@ The current target architecture is:
   - `db-tools`
   - `contracts`
   - `sdk`
-- Treat non-deployed code such as `apps/worker` as out of the required merge-queue path unless it is brought back into deploy scope.
+- Treat non-deployed platform tooling as out of the required merge-queue path unless it is brought back into deploy scope.

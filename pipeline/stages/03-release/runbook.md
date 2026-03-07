@@ -21,7 +21,7 @@ gh workflow run 01-cloud-development-pipeline.yml --ref main -f candidate_id=sha
 Forward release (`push` to `main`):
 
 1. verify acceptance attestation
-2. verify the previous `main` commit already completed `Mainline Promotion Complete` (or legacy `Pipeline Complete` during cutover)
+2. verify the previous `main` commit already completed `Mainline Promotion Complete`
 3. apply support Bicep when `infra/azure/**` changed in the merged revision
 4. deploy candidate digests to `api-stage` and `web-stage`
 5. run read-only stage health smoke

@@ -102,29 +102,3 @@ jobs:
             echo '- Queue Admission: pass'
             echo '- Mode: PR queue-admission prerequisite'
           } >> "$GITHUB_STEP_SUMMARY"
-
-  pipeline_complete:
-    name: Pipeline Complete
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    needs:
-      - commit_stage_complete
-    steps:
-      - name: Assert compatibility check succeeded
-        env:
-          COMMIT_STAGE_COMPLETE: ${{ needs.commit_stage_complete.result }}
-        run: |
-          set -euo pipefail
-
-          if [ "$COMMIT_STAGE_COMPLETE" != 'success' ]; then
-            echo "commit_stage_complete finished with ${COMMIT_STAGE_COMPLETE}" >&2
-            exit 1
-          fi
-
-      - name: Write compatibility summary
-        run: |
-          {
-            echo '## Pipeline Complete'
-            echo '- Compatibility status: pass'
-            echo '- Superseded by: Commit Stage Complete'
-          } >> "$GITHUB_STEP_SUMMARY"

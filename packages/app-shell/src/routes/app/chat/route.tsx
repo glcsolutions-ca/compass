@@ -11,7 +11,7 @@ import { useLoaderData, useLocation, useNavigate } from "react-router";
 import type { MetaFunction } from "react-router";
 import type { ShellRouteHandle } from "~/features/auth/types";
 import { appendChatThreadEventsBatchClient } from "~/features/chat/thread-client";
-import type { ChatExecutionMode } from "~/features/chat/thread-types";
+import type { ChatExecutionMode, ChatTransportState } from "~/features/chat/thread-types";
 import type { ChatActionData } from "~/features/chat/chat-action";
 import { submitChatAction } from "~/features/chat/chat-action";
 import { resolveReloadPrompt } from "~/features/chat/hooks/chat-compose-utils";
@@ -70,6 +70,35 @@ export async function clientAction({
   });
 }
 
+function readTransportLabel(transportState: ChatTransportState, hasThread: boolean): string {
+  if (!hasThread) {
+    return "Ready";
+  }
+
+  if (transportState.lastError) {
+    return transportState.lastError;
+  }
+
+  switch (transportState.lifecycle) {
+    case "idle":
+      return "Ready";
+    case "connecting":
+      return "Syncing this thread…";
+    case "open":
+      return "Live updates connected";
+    case "polling":
+      return transportState.reconnectCount > 0
+        ? "Reconnecting live updates…"
+        : "Watching for updates";
+    case "closed":
+      return "Live updates paused";
+    case "error":
+      return "Live updates unavailable";
+    default:
+      return "Ready";
+  }
+}
+
 export default function ChatRoute() {
   const loaderData = useLoaderData<ChatLoaderData>();
   const location = useLocation();
@@ -87,7 +116,7 @@ export default function ChatRoute() {
     onExecutionModeChange: setExecutionMode
   });
 
-  const { eventState } = useChatTransport({
+  const { eventState, transportState } = useChatTransport({
     activeThreadId: chatActions.activeThreadId,
     initialCursor: loaderData.initialCursor,
     initialEvents: loaderData.initialEvents
@@ -96,7 +125,8 @@ export default function ChatRoute() {
   const { activeTurnId, assistantMessages } = useChatTimeline({
     resetKey: `${loaderData.workspaceSlug}:${loaderData.threadId ?? "new"}`,
     events: eventState.events,
-    submitResult: chatActions.submitFetcher.data
+    submitResult: chatActions.submitFetcher.data,
+    pendingSubmission: chatActions.pendingSubmission
   });
 
   const handleAssistantCancel = useCallback(async (): Promise<void> => {
@@ -166,9 +196,35 @@ export default function ChatRoute() {
     [chatActions.activeThreadId]
   );
 
+  const surfaceState = useMemo(
+    () => ({
+      executionLabel: executionMode === "cloud" ? "Cloud runtime" : "Local runtime",
+      transportLifecycle: transportState.lifecycle,
+      transportLabel: readTransportLabel(transportState, Boolean(chatActions.activeThreadId)),
+      actionError: chatActions.actionError,
+      transportError: transportState.lifecycle === "error" ? transportState.lastError : null,
+      activityLabel: chatActions.isSubmitting
+        ? executionMode === "cloud"
+          ? "Sending to the cloud runtime…"
+          : "Sending to the local runtime…"
+        : activeTurnId
+          ? "Compass is responding…"
+          : null,
+      isPending: chatActions.isSubmitting || activeTurnId !== null
+    }),
+    [
+      activeTurnId,
+      chatActions.actionError,
+      chatActions.activeThreadId,
+      chatActions.isSubmitting,
+      executionMode,
+      transportState
+    ]
+  );
+
   const assistantStore = useMemo(
     () => ({
-      isRunning: activeTurnId !== null,
+      isRunning: activeTurnId !== null || chatActions.isSubmitting,
       messages: assistantMessages,
       convertMessage: convertAssistantStoreMessage,
       onNew: chatActions.handleAssistantSend,
@@ -191,6 +247,7 @@ export default function ChatRoute() {
       attachmentsAdapter,
       chatActions.handleAssistantEdit,
       chatActions.handleAssistantSend,
+      chatActions.isSubmitting,
       dictationAdapter,
       feedbackAdapter,
       handleAssistantCancel,
@@ -230,7 +287,12 @@ export default function ChatRoute() {
   return (
     <section className="flex h-full min-h-0 w-full flex-col">
       <div className="flex min-h-0 flex-1">
-        <ChatCanvas runtime={assistantRuntime} />
+        <ChatCanvas
+          canCancel={activeTurnId !== null}
+          isBusy={chatActions.isSubmitting || activeTurnId !== null}
+          runtime={assistantRuntime}
+          surfaceState={surfaceState}
+        />
       </div>
 
       <ChatInspectDrawer

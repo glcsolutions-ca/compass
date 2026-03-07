@@ -52,8 +52,57 @@ export async function getRuntimeContext({
   };
 }
 
+export function mergeContainerAppEnv(currentEnv = [], overrides = {}) {
+  const merged = new Map();
+
+  for (const entry of currentEnv) {
+    const name = typeof entry?.name === "string" ? entry.name.trim() : "";
+    if (!name) {
+      continue;
+    }
+
+    if (typeof entry.value === "string") {
+      merged.set(name, `${name}=${entry.value}`);
+      continue;
+    }
+
+    if (typeof entry.secretRef === "string" && entry.secretRef.trim()) {
+      merged.set(name, `${name}=secretref:${entry.secretRef}`);
+    }
+  }
+
+  for (const [name, value] of Object.entries(overrides)) {
+    merged.set(name, `${name}=${value}`);
+  }
+
+  return [...merged.values()];
+}
+
+export function buildManagedApiEnv({ apiPublicBaseUrl, webBaseUrl, authMode = "entra" }) {
+  return {
+    AGENT_GATEWAY_ENABLED: "true",
+    AGENT_CLOUD_MODE_ENABLED: "true",
+    API_PUBLIC_BASE_URL: apiPublicBaseUrl,
+    AUTH_MODE: authMode,
+    WEB_BASE_URL: webBaseUrl
+  };
+}
+
+export function buildManagedWebEnv({ apiBaseUrl }) {
+  return {
+    API_BASE_URL: apiBaseUrl
+  };
+}
+
 export async function updateContainerApp({ resourceGroup, appName, image, env = {}, minReplicas }) {
-  const envPairs = Object.entries(env).map(([key, value]) => `${key}=${value}`);
+  const hasEnvOverrides = Object.keys(env).length > 0;
+  const envPairs = hasEnvOverrides
+    ? mergeContainerAppEnv(
+        (await getContainerApp(resourceGroup, appName))?.properties?.template?.containers?.[0]
+          ?.env ?? [],
+        env
+      )
+    : [];
   const args = [
     "containerapp",
     "update",

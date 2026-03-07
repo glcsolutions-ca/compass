@@ -1,14 +1,19 @@
 import { pathToFileURL } from "node:url";
 import { parseCliArgs, requireOption } from "../../../shared/scripts/cli-utils.mjs";
 import { readJsonFile } from "../../../shared/scripts/pipeline-contract-lib.mjs";
-import { updateContainerApp } from "./release-azure-lib.mjs";
+import {
+  buildManagedApiEnv,
+  buildManagedWebEnv,
+  updateContainerApp
+} from "./release-azure-lib.mjs";
 
 export async function deployProdFromCandidate({
   manifestPath,
   resourceGroup,
   apiAppName,
   webAppName,
-  prodApiBaseUrl
+  prodApiBaseUrl,
+  prodWebBaseUrl
 }) {
   const manifest = await readJsonFile(manifestPath);
   await Promise.all([
@@ -16,18 +21,17 @@ export async function deployProdFromCandidate({
       resourceGroup,
       appName: apiAppName,
       image: manifest.artifacts.apiImage,
-      env: {
-        AGENT_GATEWAY_ENABLED: "true",
-        AGENT_CLOUD_MODE_ENABLED: "true",
-        API_PUBLIC_BASE_URL: prodApiBaseUrl
-      },
+      env: buildManagedApiEnv({
+        apiPublicBaseUrl: prodApiBaseUrl,
+        webBaseUrl: prodWebBaseUrl
+      }),
       minReplicas: 1
     }),
     updateContainerApp({
       resourceGroup,
       appName: webAppName,
       image: manifest.artifacts.webImage,
-      env: { API_BASE_URL: prodApiBaseUrl },
+      env: buildManagedWebEnv({ apiBaseUrl: prodApiBaseUrl }),
       minReplicas: 1
     })
   ]);
@@ -41,7 +45,8 @@ export async function main(argv = process.argv.slice(2)) {
     resourceGroup: requireOption(options, "resource-group"),
     apiAppName: requireOption(options, "api-app-name"),
     webAppName: requireOption(options, "web-app-name"),
-    prodApiBaseUrl: requireOption(options, "prod-api-base-url")
+    prodApiBaseUrl: requireOption(options, "prod-api-base-url"),
+    prodWebBaseUrl: requireOption(options, "prod-web-base-url")
   });
 }
 

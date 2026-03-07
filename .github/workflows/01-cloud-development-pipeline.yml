@@ -628,7 +628,8 @@ jobs:
             --resource-group "$RG" \
             --api-app-name "$API_STAGE" \
             --web-app-name "$WEB_STAGE" \
-            --stage-api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}"
+            --stage-api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
+            --stage-web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}"
 
       - name: Stage health smoke
         id: stage_health_smoke
@@ -670,7 +671,8 @@ jobs:
             --resource-group "$RG" \
             --api-app-name "$API_PROD" \
             --web-app-name "$WEB_PROD" \
-            --prod-api-base-url "${{ steps.runtime.outputs.prod_api_base_url }}"
+            --prod-api-base-url "${{ steps.runtime.outputs.prod_api_base_url }}" \
+            --prod-web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}"
 
       - name: Production smoke
         id: production_smoke

@@ -1,13 +1,13 @@
 # Compass
 
-Compass follows a native development pipeline built around one immutable release candidate created on GitHub merge queue branches.
+Compass follows a native development pipeline built around one immutable release candidate published during Commit Stage on GitHub merge queue branches and promoted after merge on `main`.
 
 PR-time concerns are split from delivery-time concerns:
 
 - `00-pr-metadata-and-admission.yml` applies informational labels and satisfies GitHub merge queue prerequisites
 - `01-cloud-development-pipeline.yml` is the real cloud delivery pipeline
 
-Queue Admission exists only because GitHub merge queue requires a required PR condition before a change can enter the queue. It is a GitHub prerequisite, not part of the deployment pipeline proper. The real development pipeline starts with Commit Stage on integrated code.
+Queue Admission exists only because GitHub merge queue requires a required PR condition before a change can enter the queue. It is a GitHub prerequisite, not part of the deployment pipeline proper. The real development pipeline starts with Commit Stage on integrated code and continues after merge on `main`.
 
 ## Delivery model
 
@@ -34,7 +34,8 @@ It:
 
 - applies informational labels based on changed paths
 - runs the minimal Queue Admission sanity checks
-- emits `Pipeline Complete` so the PR can enter merge queue
+- emits `Commit Stage Complete` so the PR can enter merge queue
+- still emits legacy `Pipeline Complete` during the cutover window
 
 It does not build candidates, run acceptance, or deploy anything.
 
@@ -44,7 +45,8 @@ The real delivery pipeline.
 
 Trigger modes:
 
-- `merge_group` for the normal automated path
+- `merge_group` for Commit Stage publication
+- `push` to `main` for post-merge Acceptance and Release
 - `workflow_dispatch` with `candidate_id` for manual recovery redeploy of a previously released candidate
 
 Normal flow:
@@ -53,11 +55,10 @@ Normal flow:
 2. `00-pr-metadata-and-admission.yml` applies labels and runs Queue Admission on the PR
 3. the PR is added to GitHub merge queue
 4. GitHub creates a merge-group branch
-5. `01-cloud-development-pipeline.yml` runs:
-   - `Commit Stage`
-   - `Acceptance Stage`
-   - `Release Stage`
-6. if all stages pass, GitHub merges to `main`
+5. `01-cloud-development-pipeline.yml` runs `Commit Stage` on the merge-group branch and publishes the immutable candidate
+6. if Commit succeeds, GitHub merges that exact integrated revision to `main`
+7. the `push` run on `main` resolves the published candidate, runs `Acceptance Stage`, then runs `Release Stage`
+8. if post-merge promotion fails, the response is an explicit revert or fix-forward
 
 ## Commit Stage
 
@@ -87,6 +88,8 @@ If the commit gates pass, it publishes:
 - release candidate manifest
 - release unit OCI index
 
+Successful Commit is the boundary that allows the queued change to merge to `main`.
+
 ## Acceptance Stage
 
 Acceptance does not deploy to Azure.
@@ -100,6 +103,8 @@ It runs the exact candidate locally in GitHub Actions using:
 
 It writes and attests the acceptance verdict.
 
+Acceptance runs after merge on `push` to `main`, not on the merge-queue branch.
+
 Acceptance stays intentionally lean on the required path:
 
 - one system smoke
@@ -107,20 +112,21 @@ Acceptance stays intentionally lean on the required path:
 
 ## Release Stage
 
-Release runs before `main` advances.
+Release runs after `main` advances.
 
 It:
 
 1. verifies the acceptance attestation
-2. applies production Bicep first when `infra/azure/**` changed in the merge-group revision
-3. deploys the candidate to long-lived stage apps in Azure Container Apps
-4. runs read-only stage smoke
-5. runs migrations against the production database
-6. deploys the same digests to prod apps
-7. runs production smoke
-8. writes and attests release evidence
+2. verifies that the previous `main` commit already completed `Mainline Promotion Complete` (or legacy `Pipeline Complete` during cutover)
+3. applies production Bicep first when `infra/azure/**` changed in the merged revision
+4. deploys the candidate to long-lived stage apps in Azure Container Apps
+5. runs read-only stage smoke
+6. runs migrations against the production database
+7. deploys the same digests to prod apps
+8. runs production smoke
+9. writes and attests release evidence
 
-If Release fails, the PR does not merge.
+If Release fails, `main` is unhealthy and the response is to stop the line, then revert or fix forward.
 
 For new changes, Release only runs after the same candidate has already passed Acceptance.
 
@@ -194,7 +200,7 @@ Typical sequence:
 4. `pnpm infra:apply`
 5. `pnpm bootstrap:keyvault:seed`
 6. add the first PR to merge queue so the first candidate is published
-7. `pnpm bootstrap:apps -- --candidate-id sha-<merge-group-sha>`
+7. `pnpm bootstrap:apps -- --candidate-id sha-<merged-main-sha>`
 8. rerun `pnpm bootstrap:entra -- --stage-web-fqdn <stage-fqdn>`
 9. `pnpm bootstrap:web-domain`
 

@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Provide a fast signal on integrated code and produce the immutable release candidate.
+Provide fast feedback on integrated code and produce the immutable release candidate.
 
 ## Trigger
 
 Commit Stage runs inside `01 Cloud Development Pipeline` on `merge_group`.
 
-It is the first hard gate on code that GitHub has already integrated for the merge queue check.
+It is the first hard gate on code that GitHub has already integrated for the merge queue check. If Commit passes, the queued change is allowed to merge to `main`.
 
 ## Outputs
 

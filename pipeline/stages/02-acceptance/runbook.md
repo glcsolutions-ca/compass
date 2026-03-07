@@ -6,7 +6,7 @@ Acceptance proves that the candidate produced by Commit behaves as users expect.
 
 ## Trigger
 
-Acceptance runs inside `01 Cloud Development Pipeline` after Commit publishes the release candidate.
+Acceptance runs inside `01 Cloud Development Pipeline` on `push` to `main`, after the workflow resolves the candidate that Commit already published for the merged revision.
 
 ## Runtime model
 
@@ -34,7 +34,7 @@ Acceptance on the required path remains smoke-only:
 - one system smoke
 - one browser smoke
 
-Broader acceptance or regression journeys should stay outside the merge-queue critical path.
+Broader acceptance or regression journeys should stay outside the mainline critical path.
 
 ## Stage boundary
 

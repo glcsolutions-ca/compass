@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Release takes an accepted candidate and deploys it to production before GitHub advances `main`.
+Release takes an accepted candidate and deploys it to production after `main` advances.
 
 ## Trigger modes
 
 Normal delivery:
 
-- `merge_group` inside `01 Cloud Development Pipeline`
+- `push` to `main` inside `01 Cloud Development Pipeline`
 
 Manual recovery redeploy:
 
@@ -18,17 +18,18 @@ gh workflow run 01-cloud-development-pipeline.yml --ref main -f candidate_id=sha
 
 ## Sequence
 
-Forward release (`merge_group`):
+Forward release (`push` to `main`):
 
 1. verify acceptance attestation
-2. apply support Bicep when `infra/azure/**` changed in the merge-group revision
-3. deploy candidate digests to `api-stage` and `web-stage`
-4. run read-only stage health smoke
-5. run migrations against production DB
-6. run stage auth smoke
-7. deploy the same digests to `api-prod` and `web-prod`
-8. run production smoke
-9. record release evidence and attestation
+2. verify the previous `main` commit already completed `Mainline Promotion Complete` (or legacy `Pipeline Complete` during cutover)
+3. apply support Bicep when `infra/azure/**` changed in the merged revision
+4. deploy candidate digests to `api-stage` and `web-stage`
+5. run read-only stage health smoke
+6. run migrations against production DB
+7. run stage auth smoke
+8. deploy the same digests to `api-prod` and `web-prod`
+9. run production smoke
+10. record release evidence and attestation
 
 Manual recovery redeploy (`workflow_dispatch`):
 
@@ -36,9 +37,13 @@ Manual recovery redeploy (`workflow_dispatch`):
 2. deploy candidate digests to `api-stage` and `web-stage`
 3. run read-only stage health smoke
 4. run stage auth smoke
-5. deploy the same digests to `api-prod` and `web-prod`
+5. deploy candidate digests to `api-prod` and `web-prod`
 6. run production smoke
 7. record release evidence and attestation
+
+## Mainline rule
+
+If post-merge promotion fails, `main` is unhealthy. The expected response is to stop the line, then either revert or fix forward before allowing later releases to continue.
 
 ## Stage safety rule
 
@@ -77,18 +82,6 @@ It does not:
 - apply production Bicep
 - run migrations
 - attempt database rollback
-
-### Observed recovery drill
-
-Recovery drill executed on 2026-03-06 UTC:
-
-1. rolled production back from `sha-145da49c74332efde081243866a507ac4db245d7`
-2. redeployed previously released candidate `sha-d2cdc4cfd431d5c26d432f58b2d9aff5b1368e7f`
-3. verified:
-   - `https://compass.glcsolutions.ca` returned `200`
-   - `/v1/auth/entra/start` returned `302`
-   - redirect URI remained `https://compass.glcsolutions.ca/v1/auth/entra/callback`
-4. restored production to `sha-145da49c74332efde081243866a507ac4db245d7`
 
 ### Operational note
 

@@ -5,8 +5,10 @@
 A release candidate is identified as:
 
 ```text
-sha-<40-character-merge-group-sha>
+sha-<40-character-integrated-revision-sha>
 ```
+
+In normal forward delivery, that integrated revision is the merge-queue candidate that later becomes the merged `main` SHA.
 
 The candidate is immutable after Commit Stage publication.
 
@@ -23,8 +25,9 @@ Each candidate manifest contains digest-pinned references for:
 The required promotion path is:
 
 1. `Commit Stage`
-2. `Acceptance Stage`
-3. `Release Stage`
+2. merge to `main`
+3. `Acceptance Stage`
+4. `Release Stage`
 
 A candidate is releasable only if:
 
@@ -39,7 +42,7 @@ A candidate is releasable only if:
 - Stage auth smoke runs after migrations because Entra login startup persists OIDC request state in the database.
 - Prod deploy uses the same candidate image digests that were tested on stage.
 - Production smoke must pass before release attestation is written.
-- Release happens before the queued change merges to `main`.
+- Release happens after the queued change merges to `main`.
 
 ## Recovery Rules
 

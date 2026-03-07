@@ -3,7 +3,7 @@
 ```mermaid
 flowchart LR
     PR["Pull Request"] --> META["PR Metadata and Queue Admission"]
-    META --> QPC["Pipeline Complete"]
+    META --> PRC["Commit Stage Complete\n(PR prerequisite)"]
 
     MQ["Merge Queue"] --> CG["Commit Stage / Code Gate"]
     MQ --> PG["Commit Stage / Pipeline Gate"]
@@ -11,15 +11,19 @@ flowchart LR
     CG --> PUB["Commit Stage / Publish Candidate"]
     PG --> PUB
     BI --> PUB
-    PUB --> ACC["Acceptance Stage"]
+    PUB --> MGC["Commit Stage Complete\n(merge_group)"]
+    MGC --> MAIN["Merge to main"]
+    MAIN --> RES["Resolve Candidate"]
+    RES --> ACC["Acceptance Stage"]
     ACC --> REL["Release Stage"]
-    REL --> PC["Pipeline Complete"]
+    REL --> MPC["Mainline Promotion Complete"]
 
-    MR["Manual Recovery\n(workflow_dispatch)"] --> RES["Resolve Released Candidate\nfor Recovery"]
-    RES --> REL
+    MR["Manual Recovery\n(workflow_dispatch)"] --> RRES["Resolve Candidate"]
+    RRES --> RREL["Release Stage"]
+    RREL --> RC["Recovery Redeploy Complete"]
 ```
 
-The diagram above mirrors the actual GitHub Actions job dependency graph at a high level: one PR-only workflow for metadata and queue admission, one cloud delivery workflow for Commit, Acceptance, and Release, and a separate manual recovery entry into Release.
+The diagram above mirrors the actual GitHub Actions job dependency graph at a high level: one PR-only workflow for metadata and queue admission, one cloud delivery workflow split across `merge_group` and `push`, and a separate manual recovery entry into Release.
 
 Compass uses a single development pipeline built around one principle: **build the release candidate once, then promote that same candidate through the rest of the pipeline**.
 
@@ -39,11 +43,11 @@ A normal change reaches production like this:
 2. `00-pr-metadata-and-admission.yml` applies labels and confirms the repository is sane enough to enter merge queue.
 3. GitHub creates a `merge_group` branch that represents the integrated code.
 4. `Commit Stage` runs first on that integrated code and creates the immutable release candidate.
-5. `Acceptance Stage` tests that same candidate from the user or system perspective.
-6. `Release Stage` deploys that same candidate to production.
-7. If the full pipeline passes, the queued change merges to `main`.
+5. If Commit passes, GitHub merges that exact integrated revision to `main`.
+6. The `push` run on `main` resolves the already-published candidate, runs `Acceptance Stage`, then runs `Release Stage`.
+7. `Mainline Promotion Complete` marks the end of the post-merge promotion path.
 
-This is why the real delivery pipeline runs on `merge_group` rather than on the pull request branch: the first real stage should validate integrated code, not a stale branch head.
+This keeps the first real stage on integrated code instead of a stale pull-request head, while moving Acceptance and Release to the far side of the merge boundary.
 
 ## Stage Model
 
@@ -64,6 +68,8 @@ It applies informational labels using standard GitHub labeling behavior and runs
 - legacy-reference audit
 
 It does **not** run the delivery pipeline. It does not build images, publish candidates, run acceptance tests, or deploy anything.
+
+It emits `Commit Stage Complete` on the pull request only so GitHub will admit the change to merge queue. During cutover it also emits legacy `Pipeline Complete`.
 
 Labels are metadata only. They communicate scope and risk hints; they do not control which delivery pipeline runs.
 
@@ -100,6 +106,8 @@ The important rule is that Commit is the **only** stage that creates:
 - the release unit
 - the canonical image digests
 
+If Commit passes, the queued change merges to `main`.
+
 ### Acceptance Stage
 
 Purpose:
@@ -114,7 +122,7 @@ The required Acceptance path is intentionally smoke-only:
 - one system smoke
 - one browser smoke
 
-Acceptance uses the exact candidate from Commit:
+Acceptance uses the exact candidate from Commit and runs on `push` to `main`:
 
 - local Postgres
 - migrations container from the candidate
@@ -131,18 +139,19 @@ Purpose:
 
 Release consumes the same candidate that Commit built and Acceptance validated.
 
-For normal forward delivery, Release:
+For normal forward delivery on `push` to `main`, Release:
 
 1. verifies the acceptance attestation
-2. applies infrastructure changes when required
-3. deploys the candidate to stage apps
-4. runs read-only stage smoke
-5. runs migrations
-6. deploys the same candidate to prod apps
-7. runs production smoke
-8. records release evidence and release attestation
+2. verifies that the previous `main` commit already completed `Mainline Promotion Complete` (or legacy `Pipeline Complete` during cutover)
+3. applies infrastructure changes when required
+4. deploys the candidate to stage apps
+5. runs read-only stage smoke
+6. runs migrations
+7. deploys the same candidate to prod apps
+8. runs production smoke
+9. records release evidence and release attestation
 
-Release is automatic after Acceptance succeeds on the merge-queue path.
+Release is automatic after Acceptance succeeds on the mainline promotion path.
 
 ## Release Candidate Model
 
@@ -171,10 +180,11 @@ The PR workflow handles:
 
 The cloud delivery workflow handles:
 
-- `merge_group` for normal delivery
+- `merge_group` for Commit Stage publication
+- `push` to `main` for Acceptance plus Release
 - `workflow_dispatch` for rare recovery redeploy of a previously released candidate
 
-`Pipeline Complete` is the single required branch-protection check.
+`Commit Stage Complete` is the required merge-queue check. `Mainline Promotion Complete` records post-merge promotion success.
 
 ## Production Model
 

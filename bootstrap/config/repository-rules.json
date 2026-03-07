@@ -46,7 +46,7 @@
         "parameters": {
           "strict_required_status_checks_policy": true,
           "do_not_enforce_on_create": false,
-          "required_status_checks": [{ "context": "Pipeline Complete" }]
+          "required_status_checks": [{ "context": "Commit Stage Complete" }]
         }
       }
     ],

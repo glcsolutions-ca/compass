@@ -1,21 +1,28 @@
 # Packages
 
-Purpose: shared contracts, SDK, protocol artifacts, and test helpers.
+Purpose: shared foundations for product code, contracts, runtime integrations, and testing.
 
 ## Start Here
 
-- `contracts/README.md`
-- `sdk/README.md`
-- `codex-protocol/README.md`
+- `packages/contracts`
+- `packages/sdk`
+- `packages/database`
+- `packages/ui`
+- `packages/app-shell`
+- `packages/runtime-agent`
+- `packages/runtime-protocol`
+- `packages/shared`
+- `packages/testing`
 
 ## Run
 
 ```bash
-pnpm --filter @compass/contracts generate
-pnpm --filter @compass/sdk generate
-pnpm contract:check
+pnpm --filter @compass/contracts run generate
+pnpm --filter @compass/sdk run generate
+pnpm --filter @compass/database run migrate:check
 ```
 
 ## Source Of Truth
 
-- `docs/contracts/agent-runtime-and-chat-contract.md`
+- `docs/architecture/repository-boundaries.md`
+- `docs/adr/0001-canonical-product-first-monorepo.md`

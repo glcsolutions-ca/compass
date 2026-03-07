@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { normalizeAgentEvents } from "~/features/chat/agent-event-normalizer";
-import type { AgentEvent } from "~/features/chat/agent-types";
+import { normalizeChatEvents } from "~/features/chat/thread-event-normalizer";
+import type { ChatEvent } from "~/features/chat/thread-types";
 
 describe("chat event normalizer", () => {
   it("maps turn and delta events into stable user and assistant timeline messages", () => {
-    const events: AgentEvent[] = [
+    const events: ChatEvent[] = [
       {
         cursor: 1,
         threadId: "thread_1",
@@ -39,7 +39,7 @@ describe("chat event normalizer", () => {
       }
     ];
 
-    const timeline = normalizeAgentEvents(events);
+    const timeline = normalizeChatEvents(events);
 
     expect(timeline).toEqual(
       expect.arrayContaining([
@@ -61,7 +61,7 @@ describe("chat event normalizer", () => {
   });
 
   it("converts runtime methods into assistant data parts", () => {
-    const timeline = normalizeAgentEvents([
+    const timeline = normalizeChatEvents([
       {
         cursor: 9,
         threadId: "thread_1",
@@ -88,7 +88,7 @@ describe("chat event normalizer", () => {
   });
 
   it("parses tool-call and reasoning shaped item deltas into structured parts", () => {
-    const timeline = normalizeAgentEvents([
+    const timeline = normalizeChatEvents([
       {
         cursor: 11,
         threadId: "thread_1",
@@ -141,7 +141,7 @@ describe("chat event normalizer", () => {
   });
 
   it("keeps item lifecycle events in runtime timeline entries", () => {
-    const timeline = normalizeAgentEvents([
+    const timeline = normalizeChatEvents([
       {
         cursor: 13,
         threadId: "thread_1",
@@ -175,7 +175,7 @@ describe("chat event normalizer", () => {
   });
 
   it("maps unsupported item deltas into runtime fallback entries", () => {
-    const timeline = normalizeAgentEvents([
+    const timeline = normalizeChatEvents([
       {
         cursor: 15,
         threadId: "thread_1",
@@ -196,7 +196,7 @@ describe("chat event normalizer", () => {
   });
 
   it("keeps unknown methods as generic timeline events", () => {
-    const timeline = normalizeAgentEvents([
+    const timeline = normalizeChatEvents([
       {
         cursor: 16,
         threadId: "thread_1",
@@ -216,7 +216,7 @@ describe("chat event normalizer", () => {
   });
 
   it("maps explicit error events into status timeline items", () => {
-    const timeline = normalizeAgentEvents([
+    const timeline = normalizeChatEvents([
       {
         cursor: 20,
         threadId: "thread_1",
@@ -237,7 +237,7 @@ describe("chat event normalizer", () => {
   });
 
   it("suppresses thread lifecycle events that should not appear in timeline", () => {
-    const timeline = normalizeAgentEvents([
+    const timeline = normalizeChatEvents([
       {
         cursor: 21,
         threadId: "thread_1",
@@ -260,7 +260,7 @@ describe("chat event normalizer", () => {
   });
 
   it("adds approval events to timeline", () => {
-    const timeline = normalizeAgentEvents([
+    const timeline = normalizeChatEvents([
       {
         cursor: 23,
         threadId: "thread_1",

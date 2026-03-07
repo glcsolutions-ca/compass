@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
-import { SessionRegistry } from "../../src/agent-sessions/session-registry.js";
+import { SessionRegistry } from "../../src/modules/runtime/session-registry.js";
 
 function createFakeSocket() {
   const handlers = new Map<string, Array<(...args: unknown[]) => void>>();

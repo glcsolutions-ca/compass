@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { __private__, useRuntimeAccount } from "~/components/shell/use-runtime-account";
+import { __private__, useRuntimeAccount } from "~/layout/use-runtime-account";
 
 const fetchRuntimeAccountReadMock = vi.hoisted(() => vi.fn());
 const postRuntimeLoginStartMock = vi.hoisted(() => vi.fn());
@@ -11,7 +11,7 @@ const subscribeRuntimeStreamMock = vi.hoisted(() => vi.fn());
 const normalizeRequestErrorMock = vi.hoisted(() => vi.fn());
 const readDesktopRuntimeApiMock = vi.hoisted(() => vi.fn());
 
-vi.mock("~/components/shell/runtime-account-api", () => ({
+vi.mock("~/layout/runtime-account-api", () => ({
   fetchRuntimeAccountRead: fetchRuntimeAccountReadMock,
   postRuntimeLoginStart: postRuntimeLoginStartMock,
   postRuntimeLoginCancel: postRuntimeLoginCancelMock,
@@ -21,7 +21,7 @@ vi.mock("~/components/shell/runtime-account-api", () => ({
   normalizeRequestError: normalizeRequestErrorMock
 }));
 
-vi.mock("~/components/shell/runtime-account-desktop-adapter", () => ({
+vi.mock("~/layout/runtime-account-desktop-adapter", () => ({
   LOCAL_DEFAULT_STATE: {
     provider: "local_process",
     capabilities: {

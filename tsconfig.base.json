@@ -5,10 +5,17 @@
     "moduleResolution": "NodeNext",
     "baseUrl": ".",
     "paths": {
+      "@compass/app-shell": ["packages/app-shell/src/index.ts"],
+      "@compass/app-shell/*": ["packages/app-shell/src/*"],
       "@compass/contracts": ["packages/contracts/src/index.ts"],
-      "@compass/session-agent-protocol": ["packages/session-agent-protocol/src/index.ts"],
+      "@compass/database": ["packages/database/index.d.ts"],
+      "@compass/runtime-protocol": ["packages/runtime-protocol/src/index.ts"],
       "@compass/sdk": ["packages/sdk/src/index.ts"],
-      "@compass/testkit": ["packages/testkit/src/index.ts"]
+      "@compass/shared": ["packages/shared/src/index.ts"],
+      "@compass/shared/*": ["packages/shared/src/*"],
+      "@compass/testing": ["packages/testing/src/index.ts"],
+      "@compass/ui": ["packages/ui/src/index.ts"],
+      "@compass/ui/*": ["packages/ui/src/*"]
     },
     "strict": true,
     "noUncheckedIndexedAccess": true,

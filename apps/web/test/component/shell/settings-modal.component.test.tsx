@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SettingsModal } from "~/components/shell/settings-modal";
+import { SettingsModal } from "~/layout/settings-modal";
 import type { AuthShellLoaderData } from "~/features/auth/types";
 
 const AUTH_FIXTURE: AuthShellLoaderData = {

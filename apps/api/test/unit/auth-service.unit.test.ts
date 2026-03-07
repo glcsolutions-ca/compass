@@ -4,7 +4,7 @@ import {
   buildEntraAuthConfig,
   parseAuthError,
   readSessionTokenFromCookie
-} from "../../src/auth-service.js";
+} from "../../src/modules/auth/auth-service.js";
 
 describe("buildEntraAuthConfig", () => {
   it("uses organizations defaults and empty allow-list", () => {

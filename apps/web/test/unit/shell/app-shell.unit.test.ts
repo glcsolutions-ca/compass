@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { __private__ } from "~/components/shell/app-shell";
+import { __private__ } from "~/layout/app-shell";
 
 describe("app shell sidebar state", () => {
   afterEach(() => {

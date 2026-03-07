@@ -1,8 +1,7 @@
 packages:
   - "apps/*"
   - "packages/*"
-  - "db"
-  - "pipeline"
+  - "platform/pipeline"
 
 onlyBuiltDependencies:
   - "esbuild"

@@ -1,0 +1,29 @@
+{
+  "name": "@compass/runtime-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/agent.js",
+  "files": [
+    "src",
+    "dist"
+  ],
+  "scripts": {
+    "build": "node ./scripts/build-azure-bundle.mjs",
+    "lint": "eslint . --ext .js --max-warnings=0",
+    "test": "vitest run --config vitest.config.mts"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "esbuild": "0.27.3"
+  },
+  "exports": {
+    ".": "./src/agent.js",
+    "./cli": "./src/cli.js",
+    "./echo-runtime": "./src/echo-runtime.js",
+    "./azure-bootstrap-template": "./src/azure-bootstrap-template.js",
+    "./azure-agent-bundle": "./dist/azure-agent-bundle.cjs"
+  }
+}

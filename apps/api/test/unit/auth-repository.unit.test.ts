@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { AuthRepository } from "../../src/auth-service.js";
+import { AuthRepository } from "../../src/modules/auth/auth-service.js";
 
 function buildRepository(pool: {
   query: ReturnType<typeof vi.fn>;

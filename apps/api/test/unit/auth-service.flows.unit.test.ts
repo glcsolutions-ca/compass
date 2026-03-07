@@ -4,7 +4,7 @@ import {
   AuthService,
   type EntraAuthConfig,
   __internalAuthService
-} from "../../src/auth-service.js";
+} from "../../src/modules/auth/auth-service.js";
 
 type RepositoryStub = Record<string, ReturnType<typeof vi.fn>>;
 

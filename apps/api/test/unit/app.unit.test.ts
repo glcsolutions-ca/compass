@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import request from "supertest";
-import { buildApiApp } from "../../src/app.js";
-import { ApiError } from "../../src/auth-service.js";
-import type { AuthService } from "../../src/auth-service.js";
-import type { AgentService } from "../../src/agent-service.js";
+import { buildApiApp } from "../../src/http/build-app.js";
+import { ApiError } from "../../src/modules/auth/auth-service.js";
+import type { AuthService } from "../../src/modules/auth/auth-service.js";
+import type { ThreadService } from "../../src/modules/threads/thread-service.js";
 
 describe("API app", () => {
   it("returns health status", async () => {
@@ -361,20 +361,20 @@ describe("API app", () => {
       authService: {
         readAuthMe: vi.fn()
       } as unknown as AuthService,
-      agentService: {
+      threadService: {
         createThread: vi.fn()
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: false
     });
 
     const response = await request(app)
-      .post("/v1/agent/threads")
+      .post("/v1/threads")
       .send({ workspaceSlug: "acme", executionMode: "cloud" });
 
     expect(response.status).toBe(503);
     expect(response.body).toEqual({
       code: "AGENT_GATEWAY_DISABLED",
-      message: "Agent gateway is disabled"
+      message: "Thread gateway is disabled"
     });
   });
 
@@ -403,14 +403,14 @@ describe("API app", () => {
 
     const app = buildApiApp({
       authService,
-      agentService: {
+      threadService: {
         readRuntimeAccountState
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: true
     });
 
     const response = await request(app)
-      .post("/v1/agent/runtime/account/read")
+      .post("/v1/runtime/account/read")
       .send({ refreshToken: false });
 
     expect(response.status).toBe(200);
@@ -428,14 +428,14 @@ describe("API app", () => {
 
     const app = buildApiApp({
       authService,
-      agentService: {
+      threadService: {
         startRuntimeAccountLogin: vi.fn()
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: true
     });
 
     const response = await request(app)
-      .post("/v1/agent/runtime/account/login/start")
+      .post("/v1/runtime/account/login/start")
       .send({ type: "apiKey" });
 
     expect(response.status).toBe(400);
@@ -465,18 +465,18 @@ describe("API app", () => {
         modeSwitchedAt: null
       };
     });
-    const agentService = {
+    const threadService = {
       createThread
-    } as unknown as AgentService;
+    } as unknown as ThreadService;
 
     const app = buildApiApp({
       authService,
-      agentService,
+      threadService,
       agentGatewayEnabled: true,
       agentCloudModeEnabled: true
     });
 
-    const response = await request(app).post("/v1/agent/threads").send({
+    const response = await request(app).post("/v1/threads").send({
       workspaceSlug: "acme",
       executionMode: "cloud"
     });
@@ -513,15 +513,15 @@ describe("API app", () => {
 
     const app = buildApiApp({
       authService,
-      agentService: {
+      threadService: {
         listThreads
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: true,
       agentCloudModeEnabled: true
     });
 
     const response = await request(app)
-      .get("/v1/agent/threads")
+      .get("/v1/threads")
       .query({ workspaceSlug: "acme", state: "regular", limit: 25 });
 
     expect(response.status).toBe(200);
@@ -561,15 +561,15 @@ describe("API app", () => {
 
     const app = buildApiApp({
       authService,
-      agentService: {
+      threadService: {
         updateThread
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: true,
       agentCloudModeEnabled: true
     });
 
     const response = await request(app)
-      .patch("/v1/agent/threads/thread-1")
+      .patch("/v1/threads/thread-1")
       .send({ title: "Renamed thread", archived: true });
 
     expect(response.status).toBe(200);
@@ -596,14 +596,14 @@ describe("API app", () => {
 
     const app = buildApiApp({
       authService,
-      agentService: {
+      threadService: {
         deleteThread
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: true,
       agentCloudModeEnabled: true
     });
 
-    const response = await request(app).delete("/v1/agent/threads/thread-1");
+    const response = await request(app).delete("/v1/threads/thread-1");
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ deleted: true });
@@ -624,7 +624,7 @@ describe("API app", () => {
 
     const app = buildApiApp({
       authService,
-      agentService: {
+      threadService: {
         startTurn: vi.fn(async () => {
           throw new ApiError(
             503,
@@ -632,13 +632,13 @@ describe("API app", () => {
             "Local mode turns are not implemented yet."
           );
         })
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: true,
       agentCloudModeEnabled: true,
       agentLocalModeEnabledDesktop: true
     });
 
-    const response = await request(app).post("/v1/agent/threads/thread-1/turns").send({
+    const response = await request(app).post("/v1/threads/thread-1/turns").send({
       text: "hello",
       executionMode: "local"
     });
@@ -653,7 +653,7 @@ describe("API app", () => {
   it("returns upgrade required on HTTP access to agent stream route", async () => {
     const app = buildApiApp();
 
-    const response = await request(app).get("/v1/agent/threads/thread-1/stream");
+    const response = await request(app).get("/v1/threads/thread-1/stream");
 
     expect(response.status).toBe(426);
     expect(response.body).toEqual({
@@ -672,15 +672,15 @@ describe("API app", () => {
 
     const app = buildApiApp({
       authService,
-      agentService: {
+      threadService: {
         switchThreadMode: vi.fn()
-      } as unknown as AgentService,
+      } as unknown as ThreadService,
       agentGatewayEnabled: true,
       agentModeSwitchEnabled: false
     });
 
     const response = await request(app)
-      .patch("/v1/agent/threads/thread-1/mode")
+      .patch("/v1/threads/thread-1/mode")
       .send({ executionMode: "local" });
 
     expect(response.status).toBe(503);

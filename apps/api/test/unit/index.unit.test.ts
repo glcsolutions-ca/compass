@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => {
     service: { auth: "service" },
     close: closeAuth
   }));
-  const buildDefaultAgentService = vi.fn(() => ({
+  const buildDefaultThreadService = vi.fn(() => ({
     service: { agent: "service" },
     close: closeAgent
   }));
@@ -55,7 +55,7 @@ const mocks = vi.hoisted(() => {
     attachSessionAgentGateway,
     buildApiApp,
     buildDefaultAuthService,
-    buildDefaultAgentService,
+    buildDefaultThreadService,
     buildDefaultSessionControlPlane,
     existsSync,
     loadEnvFile,
@@ -81,35 +81,35 @@ vi.mock("node:http", () => ({
   createServer: mocks.createServer
 }));
 
-vi.mock("../../src/config.js", () => ({
+vi.mock("../../src/bootstrap/config.js", () => ({
   loadApiConfig: mocks.loadApiConfig
 }));
 
-vi.mock("../../src/app.js", () => ({
+vi.mock("../../src/http/build-app.js", () => ({
   buildApiApp: mocks.buildApiApp
 }));
 
-vi.mock("../../src/auth-service.js", () => ({
+vi.mock("../../src/modules/auth/auth-service.js", () => ({
   buildDefaultAuthService: mocks.buildDefaultAuthService
 }));
 
-vi.mock("../../src/agent-service.js", () => ({
-  buildDefaultAgentService: mocks.buildDefaultAgentService
+vi.mock("../../src/modules/threads/thread-service.js", () => ({
+  buildDefaultThreadService: mocks.buildDefaultThreadService
 }));
 
-vi.mock("../../src/agent-websocket.js", () => ({
-  attachAgentWebSocketGateway: mocks.attachGateway
+vi.mock("../../src/http/thread-websocket.js", () => ({
+  attachThreadWebSocketGateway: mocks.attachGateway
 }));
 
-vi.mock("../../src/agent-sessions/session-control-plane.js", () => ({
+vi.mock("../../src/modules/runtime/session-control-plane.js", () => ({
   buildDefaultSessionControlPlane: mocks.buildDefaultSessionControlPlane
 }));
 
-vi.mock("../../src/agent-sessions/gateway.js", () => ({
+vi.mock("../../src/modules/runtime/gateway.js", () => ({
   attachSessionAgentGateway: mocks.attachSessionAgentGateway
 }));
 
-vi.mock("../../src/startup-env.js", () => ({
+vi.mock("../../src/bootstrap/startup-env.js", () => ({
   requireDatabaseUrl: mocks.requireDatabaseUrl,
   verifyDatabaseReadiness: mocks.verifyDatabaseReadiness
 }));
@@ -131,13 +131,13 @@ describe("API entrypoint", () => {
     }) as typeof process.on);
 
     try {
-      await import("../../src/index.js");
+      await import("../../src/bootstrap/index.js");
 
       expect(mocks.loadApiConfig).toHaveBeenCalledTimes(1);
       expect(mocks.requireDatabaseUrl).toHaveBeenCalledTimes(1);
       expect(mocks.verifyDatabaseReadiness).toHaveBeenCalledTimes(1);
       expect(mocks.buildDefaultAuthService).toHaveBeenCalledTimes(1);
-      expect(mocks.buildDefaultAgentService).toHaveBeenCalledTimes(1);
+      expect(mocks.buildDefaultThreadService).toHaveBeenCalledTimes(1);
       expect(mocks.buildDefaultSessionControlPlane).toHaveBeenCalledTimes(1);
       expect(mocks.buildApiApp).toHaveBeenCalledTimes(1);
       expect(mocks.createServer).toHaveBeenCalledTimes(1);

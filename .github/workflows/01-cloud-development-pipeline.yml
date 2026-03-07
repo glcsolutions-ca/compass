@@ -53,7 +53,10 @@ jobs:
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
 
-      - name: Run commit gate
+      - name: Run product gate
+        run: pnpm check:product
+
+      - name: Run deploy-surface commit gate
         run: pnpm check:commit
 
   commit_pipeline_gate:
@@ -114,7 +117,7 @@ jobs:
             dockerfile: apps/web/Dockerfile
             image_name: compass-web
           - id: migrations
-            dockerfile: db/Dockerfile.migrations
+            dockerfile: packages/database/Dockerfile.migrations
             image_name: compass-migrations
     steps:
       - name: Checkout
@@ -418,7 +421,7 @@ jobs:
 
       - name: Run candidate acceptance locally
         run: |
-          node pipeline/stages/02-acceptance/scripts/run-acceptance-from-candidate.mjs \
+          node platform/pipeline/stages/02-acceptance/scripts/run-acceptance-from-candidate.mjs \
             --manifest "$RUNNER_TEMP/release-candidate/release-candidate.json" \
             --diagnostics-dir "$RUNNER_TEMP/acceptance-diagnostics"
 
@@ -601,7 +604,7 @@ jobs:
         if: ${{ github.event_name == 'push' }}
         id: changed
         run: |
-          json="$(node scripts/infra/detect-changed-scopes.mjs --revision "${{ needs.resolve_candidate.outputs.source_revision }}")"
+          json="$(node platform/scripts/infra/detect-changed-scopes.mjs --revision "${{ needs.resolve_candidate.outputs.source_revision }}")"
           echo "infra_changed=$(printf '%s' "$json" | jq -r '.infraChanged')" >> "$GITHUB_OUTPUT"
 
       - name: Default infra change flag for recovery redeploy
@@ -617,7 +620,7 @@ jobs:
           API_STAGE: ${{ vars.ACA_API_STAGE_APP_NAME }}
           WEB_STAGE: ${{ vars.ACA_WEB_STAGE_APP_NAME }}
         run: |
-          json="$(node pipeline/stages/03-release/scripts/resolve-runtime-context.mjs \
+          json="$(node platform/pipeline/stages/03-release/scripts/resolve-runtime-context.mjs \
             --resource-group "$RG" \
             --api-stage-app-name "$API_STAGE" \
             --web-stage-app-name "$WEB_STAGE" \
@@ -633,7 +636,7 @@ jobs:
         env:
           RG: ${{ vars.AZURE_RESOURCE_GROUP }}
         run: |
-          node scripts/infra/apply-platform.mjs \
+          node platform/scripts/infra/apply-platform.mjs \
             --mode apply \
             --resource-group "$RG"
 
@@ -643,7 +646,7 @@ jobs:
           API_STAGE: ${{ vars.ACA_API_STAGE_APP_NAME }}
           WEB_STAGE: ${{ vars.ACA_WEB_STAGE_APP_NAME }}
         run: |
-          node pipeline/stages/03-release/scripts/deploy-stage-from-candidate.mjs \
+          node platform/pipeline/stages/03-release/scripts/deploy-stage-from-candidate.mjs \
             --manifest "$RUNNER_TEMP/release-candidate/release-candidate.json" \
             --resource-group "$RG" \
             --api-app-name "$API_STAGE" \
@@ -654,7 +657,7 @@ jobs:
       - name: Stage health smoke
         id: stage_health_smoke
         run: |
-          node pipeline/stages/03-release/scripts/run-stage-smoke.mjs \
+          node platform/pipeline/stages/03-release/scripts/run-stage-smoke.mjs \
             --api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
             --web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}" \
             --include-auth false
@@ -666,7 +669,7 @@ jobs:
           RG: ${{ vars.AZURE_RESOURCE_GROUP }}
           JOB: ${{ vars.ACA_MIGRATE_JOB_NAME }}
         run: |
-          node pipeline/stages/03-release/scripts/run-production-migrations.mjs \
+          node platform/pipeline/stages/03-release/scripts/run-production-migrations.mjs \
             --manifest "$RUNNER_TEMP/release-candidate/release-candidate.json" \
             --resource-group "$RG" \
             --job-name "$JOB"
@@ -674,7 +677,7 @@ jobs:
       - name: Stage auth smoke
         id: stage_smoke
         run: |
-          node pipeline/stages/03-release/scripts/run-stage-smoke.mjs \
+          node platform/pipeline/stages/03-release/scripts/run-stage-smoke.mjs \
             --api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
             --web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}" \
             --include-auth true
@@ -686,7 +689,7 @@ jobs:
           API_PROD: ${{ vars.ACA_API_PROD_APP_NAME }}
           WEB_PROD: ${{ vars.ACA_WEB_PROD_APP_NAME }}
         run: |
-          node pipeline/stages/03-release/scripts/deploy-prod-from-candidate.mjs \
+          node platform/pipeline/stages/03-release/scripts/deploy-prod-from-candidate.mjs \
             --manifest "$RUNNER_TEMP/release-candidate/release-candidate.json" \
             --resource-group "$RG" \
             --api-app-name "$API_PROD" \
@@ -697,14 +700,14 @@ jobs:
       - name: Production smoke
         id: production_smoke
         run: |
-          node pipeline/stages/03-release/scripts/run-production-smoke.mjs \
+          node platform/pipeline/stages/03-release/scripts/run-production-smoke.mjs \
             --web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}"
           echo 'verdict=pass' >> "$GITHUB_OUTPUT"
 
       - name: Record release evidence
         run: |
           mkdir -p .artifacts/release
-          node pipeline/stages/03-release/scripts/record-release-evidence.mjs \
+          node platform/pipeline/stages/03-release/scripts/record-release-evidence.mjs \
             --manifest "$RUNNER_TEMP/release-candidate/release-candidate.json" \
             --stage-api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
             --stage-web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}" \

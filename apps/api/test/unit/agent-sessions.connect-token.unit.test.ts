@@ -3,7 +3,7 @@ import {
   createConnectTokenSecret,
   issueSessionConnectToken,
   verifySessionConnectToken
-} from "../../src/agent-sessions/connect-token.js";
+} from "../../src/modules/runtime/connect-token.js";
 
 describe("session connect token helpers", () => {
   it("issues and verifies a signed token", () => {

@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router";
-import { AppSidebar } from "~/components/shell/app-sidebar";
-import { SidebarProvider } from "~/components/ui/sidebar";
+import { SidebarProvider } from "@compass/ui/sidebar";
+import { AppSidebar } from "~/layout/app-sidebar";
 import type { AuthShellLoaderData } from "~/features/auth/types";
 
 const AUTH_FIXTURE: AuthShellLoaderData = {
@@ -90,8 +90,8 @@ describe("app sidebar", () => {
     const skillsLink = screen.getByRole("link", { name: "Skills" });
 
     expect(newThreadLink.getAttribute("href")).toContain("/w/personal-user-1/chat?thread=");
-    expect(automationsLink.getAttribute("href")).toBe("/automations");
-    expect(skillsLink.getAttribute("href")).toBe("/skills");
+    expect(automationsLink.getAttribute("href")).toBe("/w/personal-user-1/automations");
+    expect(skillsLink.getAttribute("href")).toBe("/w/personal-user-1/skills");
 
     expect(screen.getByText("Navigate")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Chat" })).toBeTruthy();

@@ -2,8 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 import type * as ReactRouter from "react-router";
-import { AppSidebar } from "~/components/shell/app-sidebar";
-import { SidebarProvider } from "~/components/ui/sidebar";
+import { SidebarProvider } from "@compass/ui/sidebar";
+import { AppSidebar } from "~/layout/app-sidebar";
 import type { AuthShellLoaderData } from "~/features/auth/types";
 
 vi.mock("react-router", async () => {

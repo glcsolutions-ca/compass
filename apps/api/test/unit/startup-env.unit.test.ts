@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { requireDatabaseUrl, verifyDatabaseReadiness } from "../../src/startup-env.js";
+import { requireDatabaseUrl, verifyDatabaseReadiness } from "../../src/bootstrap/startup-env.js";
 
 describe("startup-env", () => {
   it("requires explicit DATABASE_URL", () => {

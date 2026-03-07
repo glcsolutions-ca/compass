@@ -32,15 +32,15 @@ describe("buildOpenApiDocument", () => {
     expect(document.paths?.["/v1/workspaces/{workspaceSlug}/members"]).toBeTruthy();
     expect(document.paths?.["/v1/workspaces/{workspaceSlug}/invites"]).toBeTruthy();
     expect(document.paths?.["/v1/workspaces/{workspaceSlug}/invites/{token}/accept"]).toBeTruthy();
-    expect(document.paths?.["/v1/agent/threads"]).toBeTruthy();
-    expect(document.paths?.["/v1/agent/threads/{threadId}"]).toBeTruthy();
-    expect(document.paths?.["/v1/agent/threads/{threadId}/mode"]).toBeTruthy();
-    expect(document.paths?.["/v1/agent/threads/{threadId}/runtime/launch"]).toBeTruthy();
-    expect(document.paths?.["/v1/agent/threads/{threadId}/turns"]).toBeTruthy();
-    expect(document.paths?.["/v1/agent/threads/{threadId}/turns/{turnId}/interrupt"]).toBeTruthy();
-    expect(document.paths?.["/v1/agent/threads/{threadId}/events:batch"]).toBeTruthy();
-    expect(document.paths?.["/v1/agent/threads/{threadId}/events"]).toBeTruthy();
-    expect(document.paths?.["/v1/agent/threads/{threadId}/stream"]).toBeTruthy();
+    expect(document.paths?.["/v1/threads"]).toBeTruthy();
+    expect(document.paths?.["/v1/threads/{threadId}"]).toBeTruthy();
+    expect(document.paths?.["/v1/threads/{threadId}/mode"]).toBeTruthy();
+    expect(document.paths?.["/v1/threads/{threadId}/runtime/launch"]).toBeTruthy();
+    expect(document.paths?.["/v1/threads/{threadId}/turns"]).toBeTruthy();
+    expect(document.paths?.["/v1/threads/{threadId}/turns/{turnId}/interrupt"]).toBeTruthy();
+    expect(document.paths?.["/v1/threads/{threadId}/events:batch"]).toBeTruthy();
+    expect(document.paths?.["/v1/threads/{threadId}/events"]).toBeTruthy();
+    expect(document.paths?.["/v1/threads/{threadId}/stream"]).toBeTruthy();
     expect(document.paths?.["/health"]?.get?.operationId).toBe("getHealth");
     expect(document.paths?.["/v1/ping"]?.get?.operationId).toBe("getPing");
     expect(document.paths?.["/v1/auth/entra/start"]?.get?.operationId).toBe("startEntraLogin");
@@ -65,19 +65,13 @@ describe("buildOpenApiDocument", () => {
     expect(
       document.paths?.["/v1/workspaces/{workspaceSlug}/invites/{token}/accept"]?.post?.operationId
     ).toBe("acceptWorkspaceInvite");
-    expect(document.paths?.["/v1/agent/threads"]?.get?.operationId).toBe("listAgentThreads");
-    expect(document.paths?.["/v1/agent/threads"]?.post?.operationId).toBe("createAgentThread");
-    expect(document.paths?.["/v1/agent/threads/{threadId}"]?.get?.operationId).toBe(
-      "getAgentThread"
-    );
-    expect(document.paths?.["/v1/agent/threads/{threadId}"]?.patch?.operationId).toBe(
-      "patchAgentThread"
-    );
-    expect(document.paths?.["/v1/agent/threads/{threadId}"]?.delete?.operationId).toBe(
-      "deleteAgentThread"
-    );
-    expect(document.paths?.["/v1/agent/threads/{threadId}/runtime/launch"]?.post?.operationId).toBe(
-      "launchAgentThreadRuntime"
+    expect(document.paths?.["/v1/threads"]?.get?.operationId).toBe("listThreads");
+    expect(document.paths?.["/v1/threads"]?.post?.operationId).toBe("createThread");
+    expect(document.paths?.["/v1/threads/{threadId}"]?.get?.operationId).toBe("getThread");
+    expect(document.paths?.["/v1/threads/{threadId}"]?.patch?.operationId).toBe("patchThread");
+    expect(document.paths?.["/v1/threads/{threadId}"]?.delete?.operationId).toBe("deleteThread");
+    expect(document.paths?.["/v1/threads/{threadId}/runtime/launch"]?.post?.operationId).toBe(
+      "launchThreadRuntime"
     );
     expect(document.components?.securitySchemes?.sessionCookieAuth).toBeTruthy();
 

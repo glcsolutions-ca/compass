@@ -3,9 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { attachSessionAgentGateway } from "../../src/agent-sessions/gateway.js";
-import { LocalProcessSessionHost } from "../../src/agent-sessions/hosts/local-process.js";
-import { SessionControlPlane } from "../../src/agent-sessions/session-control-plane.js";
+import { attachSessionAgentGateway } from "../../src/modules/runtime/gateway.js";
+import { LocalProcessSessionHost } from "../../src/infrastructure/runtime-hosts/local-process.js";
+import { SessionControlPlane } from "../../src/modules/runtime/session-control-plane.js";
 
 describe("local process session agent integration", () => {
   let tempDir = "";
@@ -13,7 +13,7 @@ describe("local process session agent integration", () => {
   let controlPlane: SessionControlPlane | null = null;
 
   beforeAll(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "compass-session-agent-"));
+    tempDir = await mkdtemp(path.join(os.tmpdir(), "compass-runtime-agent-"));
     server = createServer((_request, response) => {
       response.statusCode = 404;
       response.end();

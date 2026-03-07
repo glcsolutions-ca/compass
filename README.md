@@ -77,7 +77,7 @@ The required merge-queue code gate is intentionally scoped to the deployed surfa
 - contracts
 - SDK
 
-Non-deployed code such as `apps/worker` is kept out of the critical path.
+Non-deployed platform tooling is kept out of the critical path.
 
 If the commit gates pass, it publishes:
 
@@ -117,7 +117,7 @@ It:
 
 1. verifies the acceptance attestation
 2. verifies that the previous `main` commit already completed `Mainline Promotion Complete`
-3. applies production Bicep first when `infra/azure/**` changed in the merged revision
+3. applies production Bicep first when `platform/infra/azure/**` changed in the merged revision
 4. deploys the candidate to long-lived stage apps in Azure Container Apps
 5. runs read-only stage smoke
 6. runs migrations against the production database
@@ -176,6 +176,7 @@ The stage apps use their ACA default hostnames.
 - `pnpm install`
 - `pnpm dev`
 - `pnpm check`
+- `pnpm check:product`
 - `pnpm check:commit`
 - `pnpm check:pipeline`
 - `pnpm test:full`
@@ -184,8 +185,8 @@ Commit should stay comfortably under the roughly ten-minute guidance Farley/Humb
 
 Local Postgres helpers:
 
-- `pnpm db:postgres:up`
-- `pnpm db:postgres:down`
+- `pnpm --filter @compass/database run postgres:up`
+- `pnpm --filter @compass/database run postgres:down`
 
 ## Admin bootstrap
 

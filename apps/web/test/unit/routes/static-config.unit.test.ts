@@ -15,7 +15,7 @@ describe("static route/config modules", () => {
   it("exports expected tailwind and route configuration", () => {
     expect(tailwindConfig.darkMode).toEqual(["class"]);
     expect(tailwindConfig.plugins).toHaveLength(1);
-    expect(routeConfig).toHaveLength(3);
+    expect(routeConfig).toHaveLength(4);
   });
 
   it("creates root layout and app route elements", () => {

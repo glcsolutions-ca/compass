@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { mergeAgentEvents } from "~/features/chat/agent-event-store";
-import type { AgentEvent } from "~/features/chat/agent-types";
+import { mergeChatEvents } from "~/features/chat/thread-event-store";
+import type { ChatEvent } from "~/features/chat/thread-types";
 
 describe("agent event merge", () => {
   it("merges deterministically and suppresses duplicate cursors", () => {
-    const existing: AgentEvent[] = [
+    const existing: ChatEvent[] = [
       {
         cursor: 1,
         threadId: "thread_1",
@@ -15,7 +15,7 @@ describe("agent event merge", () => {
       }
     ];
 
-    const incoming: AgentEvent[] = [
+    const incoming: ChatEvent[] = [
       {
         cursor: 1,
         threadId: "thread_1",
@@ -34,7 +34,7 @@ describe("agent event merge", () => {
       }
     ];
 
-    const result = mergeAgentEvents(existing, incoming);
+    const result = mergeChatEvents(existing, incoming);
 
     expect(result.nextCursor).toBe(2);
     expect(result.events).toHaveLength(2);

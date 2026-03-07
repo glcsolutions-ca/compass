@@ -1,0 +1,25 @@
+{
+  "name": "@compass/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "env:setup": "node ../../platform/scripts/dev/env-setup.mjs",
+    "lint": "eslint . --ext .mjs --max-warnings=0",
+    "test": "vitest run --config vitest.config.mts --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.ref.json --noEmit",
+    "migrate:create": "node scripts/migrate-create.mjs",
+    "migrate:check": "node scripts/check-migration-policy.mjs",
+    "migrate:checksums:update": "node scripts/check-migration-policy.mjs --write",
+    "migrate:up": "pnpm run env:setup && node scripts/check-migration-policy.mjs && node --env-file=postgres/.env --env-file-if-exists=postgres/.env.local scripts/migrate.mjs up",
+    "migrate:down": "pnpm run env:setup && node scripts/check-migration-policy.mjs && node --env-file=postgres/.env --env-file-if-exists=postgres/.env.local scripts/migrate.mjs down",
+    "migrate:status": "pnpm run env:setup && node --env-file=postgres/.env --env-file-if-exists=postgres/.env.local scripts/migrate-status.mjs",
+    "seed": "pnpm run env:setup && node --env-file=postgres/.env --env-file-if-exists=postgres/.env.local scripts/seed-postgres.mjs",
+    "postgres:wait": "pnpm run env:setup && node --env-file=postgres/.env --env-file-if-exists=postgres/.env.local scripts/wait-for-postgres.mjs",
+    "postgres:up": "pnpm run env:setup && node scripts/postgres-compose.mjs up -d --wait postgres && node scripts/check-migration-policy.mjs && node --env-file=postgres/.env --env-file-if-exists=postgres/.env.local scripts/migrate.mjs up && node --env-file=postgres/.env --env-file-if-exists=postgres/.env.local scripts/seed-postgres.mjs",
+    "postgres:down": "pnpm run env:setup && node scripts/postgres-compose.mjs down",
+    "postgres:reset": "pnpm run env:setup && node scripts/postgres-compose.mjs down --volumes && node scripts/postgres-compose.mjs up -d --wait postgres && node scripts/check-migration-policy.mjs && node --env-file=postgres/.env --env-file-if-exists=postgres/.env.local scripts/migrate.mjs up && node --env-file=postgres/.env --env-file-if-exists=postgres/.env.local scripts/seed-postgres.mjs",
+    "postgres:logs": "pnpm run env:setup && node scripts/postgres-compose.mjs logs -f postgres"
+  }
+}

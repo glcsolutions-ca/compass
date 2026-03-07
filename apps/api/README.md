@@ -18,5 +18,5 @@ pnpm --filter @compass/api test:integration
 
 ## Source Of Truth
 
-- `docs/contracts/agent-runtime-and-chat-contract.md`
-- `packages/contracts/**`
+- `packages/contracts/src/openapi/**`
+- `packages/contracts/openapi/openapi.json`

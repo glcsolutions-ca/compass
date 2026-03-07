@@ -31,7 +31,9 @@ function parsePositiveIntegerOption(value, { optionName, defaultValue }) {
 }
 
 export function parsePreviousMainlineCommit(revListLine, currentSha) {
-  const normalizedCurrentSha = String(currentSha || "").trim().toLowerCase();
+  const normalizedCurrentSha = String(currentSha || "")
+    .trim()
+    .toLowerCase();
   if (!PATTERNS.sourceRevision.test(normalizedCurrentSha)) {
     throw new Error(`Invalid current SHA: ${currentSha}`);
   }
@@ -53,7 +55,9 @@ export function parsePreviousMainlineCommit(revListLine, currentSha) {
     );
   }
 
-  const previousCommit = String(segments[1] || "").trim().toLowerCase();
+  const previousCommit = String(segments[1] || "")
+    .trim()
+    .toLowerCase();
   if (!PATTERNS.sourceRevision.test(previousCommit)) {
     throw new Error(`Invalid previous mainline commit: ${previousCommit}`);
   }
@@ -98,11 +102,10 @@ function classifyCheckRun(checkRun) {
   };
 }
 
-export function findPromotionCheckState(checkRuns, {
-  requiredCheckName,
-  legacyCheckName,
-  commitStageCheckName = DEFAULT_COMMIT_STAGE_CHECK_NAME
-}) {
+export function findPromotionCheckState(
+  checkRuns,
+  { requiredCheckName, legacyCheckName, commitStageCheckName = DEFAULT_COMMIT_STAGE_CHECK_NAME }
+) {
   const requiredCheck = latestMatchingCheckRun(checkRuns, requiredCheckName);
   const requiredState = classifyCheckRun(requiredCheck);
   if (requiredState.status !== "missing") {
@@ -171,8 +174,7 @@ export async function verifyPriorMainlinePromotion(options) {
   const repo = requireOption(options, "repo");
   const currentSha = requireOption(options, "current-sha").trim().toLowerCase();
   const requiredCheckName = requireOption(options, "required-check-name");
-  const legacyCheckName =
-    optionalOption(options, "legacy-check-name") ?? DEFAULT_LEGACY_CHECK_NAME;
+  const legacyCheckName = optionalOption(options, "legacy-check-name") ?? DEFAULT_LEGACY_CHECK_NAME;
   const commitStageCheckName =
     optionalOption(options, "commit-stage-check-name") ?? DEFAULT_COMMIT_STAGE_CHECK_NAME;
   const cwd = optionalOption(options, "cwd") ?? process.cwd();

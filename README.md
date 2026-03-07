@@ -35,7 +35,6 @@ It:
 - applies informational labels based on changed paths
 - runs the minimal Queue Admission sanity checks
 - emits `Commit Stage Complete` so the PR can enter merge queue
-- still emits legacy `Pipeline Complete` during the cutover window
 
 It does not build candidates, run acceptance, or deploy anything.
 
@@ -117,7 +116,7 @@ Release runs after `main` advances.
 It:
 
 1. verifies the acceptance attestation
-2. verifies that the previous `main` commit already completed `Mainline Promotion Complete` (or legacy `Pipeline Complete` during cutover)
+2. verifies that the previous `main` commit already completed `Mainline Promotion Complete`
 3. applies production Bicep first when `infra/azure/**` changed in the merged revision
 4. deploys the candidate to long-lived stage apps in Azure Container Apps
 5. runs read-only stage smoke

@@ -69,7 +69,7 @@ It applies informational labels using standard GitHub labeling behavior and runs
 
 It does **not** run the delivery pipeline. It does not build images, publish candidates, run acceptance tests, or deploy anything.
 
-It emits `Commit Stage Complete` on the pull request only so GitHub will admit the change to merge queue. During cutover it also emits legacy `Pipeline Complete`.
+It emits `Commit Stage Complete` on the pull request only so GitHub will admit the change to merge queue.
 
 Labels are metadata only. They communicate scope and risk hints; they do not control which delivery pipeline runs.
 
@@ -142,7 +142,7 @@ Release consumes the same candidate that Commit built and Acceptance validated.
 For normal forward delivery on `push` to `main`, Release:
 
 1. verifies the acceptance attestation
-2. verifies that the previous `main` commit already completed `Mainline Promotion Complete` (or legacy `Pipeline Complete` during cutover)
+2. verifies that the previous `main` commit already completed `Mainline Promotion Complete`
 3. applies infrastructure changes when required
 4. deploys the candidate to stage apps
 5. runs read-only stage smoke

@@ -32,10 +32,13 @@ export interface AssistantStoreMessage {
 }
 
 export interface ChatSurfaceState {
+  executionLabel: string;
   transportLifecycle: ChatTransportState["lifecycle"];
   transportLabel: string;
   actionError: string | null;
   transportError: string | null;
+  activityLabel: string | null;
+  isPending: boolean;
 }
 
 type ThreadMessagePartLike = Exclude<ThreadMessageLike["content"], string>[number];
@@ -130,19 +133,33 @@ export function buildAssistantStoreMessages({
     .filter((item) => item.kind === "message" || item.kind === "status")
     .map((item) => {
       if (item.kind === "message") {
-        return {
-          id: item.id,
-          role: item.role,
-          text: item.text,
-          parts:
-            item.parts.length > 0
-              ? item.parts
+        const assistantParts =
+          item.parts.length > 0
+            ? item.parts
+            : item.role === "assistant" && item.streaming && item.text.length < 1
+              ? []
               : [
                   {
                     type: "text" as const,
                     text: item.text
                   }
-                ],
+                ];
+
+        return {
+          id: item.id,
+          role: item.role,
+          text: item.text,
+          parts:
+            item.role === "assistant"
+              ? assistantParts
+              : item.parts.length > 0
+                ? item.parts
+                : [
+                    {
+                      type: "text" as const,
+                      text: item.text
+                    }
+                  ],
           turnId: item.turnId,
           cursor: item.cursor,
           createdAt: item.createdAt,
@@ -184,7 +201,7 @@ export function convertAssistantStoreMessage(message: AssistantStoreMessage): Th
       id: message.id,
       role: "assistant",
       content:
-        content.length > 0
+        content.length > 0 || Array.isArray(message.parts)
           ? content
           : [
               {

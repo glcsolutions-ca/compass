@@ -11,4 +11,13 @@ describe("azure bootstrap template", () => {
     expect(source).toContain("__SESSION_IDENTIFIER__");
     expect(source).toContain("COMPASS_SESSION_IDENTIFIER");
   });
+
+  it("starts the detached bundled agent without runtime npm install", async () => {
+    const source = await readFile(path.join(moduleDir, "azure-bootstrap-template.js"), "utf8");
+    expect(source).toContain('stdio: "ignore"');
+    expect(source).toContain("COMPASS_CONTROL_PLANE_URL");
+    expect(source).not.toContain("copyFile(");
+    expect(source).not.toContain("mkdir(");
+    expect(source).not.toContain('npm", [');
+  });
 });

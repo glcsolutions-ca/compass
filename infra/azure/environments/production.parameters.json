@@ -32,6 +32,9 @@
       "value": "98dddcec-5421-457b-8cac-aa8d27fbafb6,ee852daf-7ab7-4779-aae4-3b50eba7b266"
     },
     "publicWebBaseUrl": { "value": "https://compass.glcsolutions.ca" },
+    "dynamicSessionsPoolManagementEndpoint": {
+      "value": "https://canadacentral.dynamicsessions.io/subscriptions/4514a0d0-2cdc-468e-be25-895aef2846ad/resourceGroups/rg-compass-prd-cc-001/sessionPools/sp-compass-agent-prd-cc-001"
+    },
     "apiProdCustomDomainNames": { "value": [] },
     "apiStageCustomDomainNames": { "value": [] },
     "apiLogLevel": { "value": "warn" },

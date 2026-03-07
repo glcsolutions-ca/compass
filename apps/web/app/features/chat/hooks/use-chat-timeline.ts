@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { normalizeAgentEvents } from "~/features/chat/agent-event-normalizer";
 import type { AgentEvent, ChatTimelineItem } from "~/features/chat/agent-types";
 import type { ChatActionData } from "~/features/chat/chat-action";
+import type { PendingSubmissionState } from "~/features/chat/hooks/use-chat-actions";
 import {
   buildAssistantStoreMessages,
   type AssistantStoreMessage
@@ -22,6 +23,7 @@ interface UseChatTimelineInput {
   resetKey: string;
   events: readonly AgentEvent[];
   submitResult: ChatActionData | undefined;
+  pendingSubmission: PendingSubmissionState | null;
 }
 
 interface UseChatTimelineOutput {
@@ -98,7 +100,8 @@ function readActiveTurnId(events: readonly AgentEvent[]): string | null {
 export function useChatTimeline({
   resetKey,
   events,
-  submitResult
+  submitResult,
+  pendingSubmission
 }: UseChatTimelineInput): UseChatTimelineOutput {
   const [timelinePrompts, setTimelinePrompts] = useState<TimelinePromptRecord[]>([]);
 
@@ -109,6 +112,23 @@ export function useChatTimeline({
   const upsertTimelinePrompt = useCallback((nextRecord: TimelinePromptRecord) => {
     setTimelinePrompts((current) => upsertTimelinePromptRecords(current, nextRecord));
   }, []);
+
+  useEffect(() => {
+    if (!pendingSubmission) {
+      return;
+    }
+
+    upsertTimelinePrompt({
+      id: `prompt-${pendingSubmission.clientRequestId}`,
+      clientRequestId: pendingSubmission.clientRequestId,
+      turnId: null,
+      text: pendingSubmission.prompt,
+      answer: null,
+      state: "pending",
+      error: null,
+      createdAt: pendingSubmission.createdAt
+    });
+  }, [pendingSubmission, upsertTimelinePrompt]);
 
   useEffect(() => {
     if (
@@ -178,6 +198,20 @@ export function useChatTimeline({
           turnId: record.turnId,
           cursor: null,
           streaming: false,
+          createdAt: record.createdAt
+        });
+      }
+
+      if (record.state === "pending" && !hasNormalizedAssistant) {
+        items.push({
+          id: `${record.id}-assistant-pending`,
+          kind: "message",
+          role: "assistant",
+          text: "",
+          parts: [],
+          turnId: record.turnId,
+          cursor: null,
+          streaming: true,
           createdAt: record.createdAt
         });
       }

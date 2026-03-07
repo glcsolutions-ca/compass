@@ -1,0 +1,7 @@
+import { runSessionAgent } from "./agent.js";
+
+runSessionAgent().catch((error) => {
+  const message = error instanceof Error ? error.stack || error.message : String(error);
+  process.stderr.write(`${message}\n`);
+  process.exit(1);
+});

@@ -347,7 +347,8 @@ async function handlePromptIntent(input: {
   const startTurnResult = await startAgentTurn(input.request, {
     threadId: resolvedThreadId,
     text: parsedInput.prompt,
-    executionMode: input.executionMode
+    executionMode: input.executionMode,
+    clientRequestId: parsedInput.clientRequestId
   });
   if (!startTurnResult.data || startTurnResult.status >= 400) {
     return createErrorAction({

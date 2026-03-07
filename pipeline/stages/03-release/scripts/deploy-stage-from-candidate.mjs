@@ -16,6 +16,11 @@ export async function deployStageFromCandidate({
       resourceGroup,
       appName: apiAppName,
       image: manifest.artifacts.apiImage,
+      env: {
+        AGENT_GATEWAY_ENABLED: "true",
+        AGENT_CLOUD_MODE_ENABLED: "true",
+        API_PUBLIC_BASE_URL: stageApiBaseUrl
+      },
       minReplicas: 0
     }),
     updateContainerApp({

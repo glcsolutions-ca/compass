@@ -6,12 +6,60 @@ interface RawClientResult {
   error?: unknown;
 }
 
-export function createCompassClient(request: Request): ApiClient {
-  const baseUrl = new URL(request.url).origin;
+function resolveCompassBaseUrl(request: Request): string {
+  const configuredBaseUrl =
+    typeof process !== "undefined" && process.env
+      ? process.env.VITE_API_BASE_URL?.trim() || process.env.API_BASE_URL?.trim() || ""
+      : "";
 
+  if (configuredBaseUrl) {
+    return configuredBaseUrl;
+  }
+
+  return new URL(request.url).origin;
+}
+
+function createForwardingFetch(request: Request): typeof fetch {
+  return async (input, init) => {
+    const existingHeaders =
+      input instanceof Request ? new Headers(input.headers) : new Headers(init?.headers);
+    const headers = new Headers(existingHeaders);
+    const cookieHeader = request.headers.get("cookie");
+    const originHeader = request.headers.get("origin") ?? new URL(request.url).origin;
+    const refererHeader = request.headers.get("referer") ?? request.url;
+
+    if (cookieHeader && !headers.has("cookie")) {
+      headers.set("cookie", cookieHeader);
+    }
+
+    if (originHeader && !headers.has("origin")) {
+      headers.set("origin", originHeader);
+    }
+
+    if (refererHeader && !headers.has("referer")) {
+      headers.set("referer", refererHeader);
+    }
+
+    if (input instanceof Request) {
+      return globalThis.fetch(
+        new Request(input, {
+          ...init,
+          headers
+        })
+      );
+    }
+
+    return globalThis.fetch(input, {
+      ...init,
+      headers
+    });
+  };
+}
+
+export function createCompassClient(request: Request): ApiClient {
   return createApiClient({
-    baseUrl,
-    fetch: globalThis.fetch.bind(globalThis)
+    baseUrl: resolveCompassBaseUrl(request),
+    fetch: createForwardingFetch(request)
   });
 }
 
@@ -98,3 +146,8 @@ export async function logoutSession(request: Request): Promise<number> {
 
   return (result as RawClientResult).response.status;
 }
+
+export const __private__ = {
+  createForwardingFetch,
+  resolveCompassBaseUrl
+};

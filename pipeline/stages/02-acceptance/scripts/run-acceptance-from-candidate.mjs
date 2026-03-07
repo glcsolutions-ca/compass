@@ -168,7 +168,11 @@ export async function runAcceptanceFromCandidate({ manifestPath, outputDir }) {
       "-e",
       "LOG_LEVEL=warn",
       "-e",
-      "AGENT_GATEWAY_ENABLED=false",
+      "AGENT_GATEWAY_ENABLED=true",
+      "-e",
+      "AGENT_CLOUD_MODE_ENABLED=true",
+      "-e",
+      "AGENT_RUNTIME_PROVIDER=mock",
       manifest.artifacts.apiImage
     ]);
 

@@ -1,6 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ChatRoute from "~/routes/app/chat/route";
+
+afterEach(() => {
+  cleanup();
+});
 
 const useLoaderDataMock = vi.hoisted(() => vi.fn());
 const useLocationMock = vi.hoisted(() => vi.fn());
@@ -65,8 +69,18 @@ vi.mock("~/features/chat/agent-client", () => ({
 }));
 
 vi.mock("~/features/chat/presentation/chat-canvas", () => ({
-  ChatCanvas: (props: { runtime: unknown }) => (
+  ChatCanvas: (props: {
+    runtime: unknown;
+    isBusy: boolean;
+    canCancel: boolean;
+    surfaceState: { activityLabel: string | null; transportLabel: string };
+  }) => (
     <div data-testid="chat-canvas">
+      <span data-testid="chat-canvas-status">
+        {props.surfaceState.activityLabel ?? props.surfaceState.transportLabel}
+      </span>
+      <span data-testid="chat-canvas-submitting">{String(props.isBusy)}</span>
+      <span data-testid="chat-canvas-can-cancel">{String(props.canCancel)}</span>
       <button
         onClick={() => {
           void (props.runtime as { onCancel?: () => Promise<void> }).onCancel?.();
@@ -124,6 +138,11 @@ beforeEach(() => {
   useChatActionsMock.mockReturnValue({
     activeThreadId: "thread-1",
     submitFetcher: { data: undefined },
+    modeFetcher: { state: "idle", data: undefined },
+    interruptFetcher: { data: undefined },
+    actionError: null,
+    isSubmitting: false,
+    pendingSubmission: null,
     handleAssistantSend: vi.fn(async () => undefined),
     handleAssistantEdit: vi.fn(async () => undefined),
     handleAssistantReload: vi.fn(async () => undefined),
@@ -132,6 +151,12 @@ beforeEach(() => {
   useChatTransportMock.mockReturnValue({
     eventState: {
       events: []
+    },
+    transportState: {
+      lifecycle: "open",
+      cursor: 0,
+      reconnectCount: 0,
+      lastError: null
     }
   });
   useChatTimelineMock.mockReturnValue({
@@ -153,6 +178,9 @@ describe("chat route component", () => {
 
     expect(screen.getByTestId("chat-canvas")).toBeTruthy();
     expect(screen.getByTestId("chat-inspect-drawer")).toBeTruthy();
+    expect(screen.getByTestId("chat-canvas-status").textContent).toBe("Compass is responding…");
+    expect(screen.getByTestId("chat-canvas-submitting").textContent).toBe("true");
+    expect(screen.getByTestId("chat-canvas-can-cancel").textContent).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Change inspect" }));
 
     expect(navigate).toHaveBeenCalledWith(
@@ -210,5 +238,39 @@ describe("chat route component", () => {
         }
       ]
     });
+  });
+
+  it("marks the surface as submitting before a turn id exists", () => {
+    useChatActionsMock.mockReturnValue({
+      activeThreadId: null,
+      submitFetcher: { data: undefined },
+      modeFetcher: { state: "idle", data: undefined },
+      interruptFetcher: { data: undefined },
+      actionError: null,
+      isSubmitting: true,
+      pendingSubmission: {
+        clientRequestId: "req-1",
+        prompt: "hello",
+        threadId: null,
+        executionMode: "cloud",
+        createdAt: "2026-03-01T00:00:00.000Z"
+      },
+      handleAssistantSend: vi.fn(async () => undefined),
+      handleAssistantEdit: vi.fn(async () => undefined),
+      handleAssistantReload: vi.fn(async () => undefined),
+      submitInterruptTurn: vi.fn()
+    });
+    useChatTimelineMock.mockReturnValue({
+      activeTurnId: null,
+      assistantMessages: []
+    });
+
+    render(<ChatRoute />);
+
+    expect(screen.getByTestId("chat-canvas-status").textContent).toBe(
+      "Sending to the cloud runtime…"
+    );
+    expect(screen.getByTestId("chat-canvas-submitting").textContent).toBe("true");
+    expect(screen.getByTestId("chat-canvas-can-cancel").textContent).toBe("false");
   });
 });

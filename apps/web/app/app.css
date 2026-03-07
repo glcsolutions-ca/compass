@@ -158,24 +158,151 @@
 }
 
 .aui-thread-viewport {
-  @apply w-full px-4 pt-6 md:px-6;
+  @apply flex w-full flex-1 flex-col gap-6 px-4 pt-6 md:px-6;
 }
 
 .aui-thread-viewport-footer {
-  @apply w-full pb-4;
+  @apply w-full pb-4 pt-4;
+  background: linear-gradient(
+    180deg,
+    hsl(var(--background) / 0) 0%,
+    hsl(var(--background) / 0.86) 18%,
+    hsl(var(--background) / 1) 56%
+  );
   margin-inline: auto;
 }
 
 .aui-thread-followup-suggestions {
-  @apply mt-2;
+  @apply mt-2 grid gap-2;
+}
+
+.aui-thread-welcome-root {
+  @apply flex min-h-[min(32rem,55vh)] flex-col justify-center gap-8;
+}
+
+.aui-thread-welcome-center {
+  @apply flex flex-col items-center gap-4 text-center;
+}
+
+.aui-thread-welcome-center .aui-avatar-root {
+  @apply h-12 w-12 border border-border/70 bg-background shadow-sm;
+}
+
+.aui-thread-welcome-message {
+  @apply max-w-xl text-balance text-[1.65rem] font-semibold tracking-[-0.02em] text-foreground md:text-[1.9rem];
+  line-height: 1.15;
+}
+
+.aui-thread-welcome-suggestions {
+  @apply grid w-full gap-3 md:grid-cols-3;
+}
+
+.aui-thread-welcome-suggestion {
+  @apply flex h-full w-full items-start justify-start rounded-2xl border border-border/75 bg-background/90 px-4 py-3 text-left shadow-sm transition duration-150 ease-out;
+}
+
+.aui-thread-welcome-suggestion:hover {
+  @apply -translate-y-0.5 border-primary/30 bg-background shadow-md;
+}
+
+.aui-thread-welcome-suggestion:focus-visible {
+  @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+}
+
+.aui-thread-welcome-suggestion-text {
+  @apply text-sm font-medium leading-6 text-foreground;
+}
+
+.aui-user-message-root {
+  @apply ml-auto flex max-w-[min(80%,38rem)] flex-col items-end gap-2;
+}
+
+.aui-user-message-content {
+  @apply rounded-[1.4rem] border border-border/70 bg-secondary/70 px-4 py-3 text-sm leading-7 text-secondary-foreground shadow-sm;
+}
+
+.aui-user-message-content .aui-text {
+  @apply whitespace-pre-wrap;
+}
+
+.aui-branch-picker-root {
+  @apply flex items-center gap-1 pr-1 text-muted-foreground;
+}
+
+.aui-branch-picker-root .aui-button {
+  @apply h-7 w-7 rounded-full text-muted-foreground;
+}
+
+.aui-branch-picker-state {
+  @apply min-w-10 text-center text-[11px] font-medium tracking-[0.02em];
+}
+
+.aui-assistant-message-root {
+  @apply grid max-w-[min(82%,42rem)] grid-cols-[auto,1fr] items-start gap-x-3 gap-y-2;
+}
+
+.aui-assistant-message-root .aui-avatar-root {
+  @apply mt-1 h-10 w-10 border border-border/75 bg-background shadow-sm;
+}
+
+.aui-assistant-message-content {
+  @apply min-w-0 text-sm leading-7 text-foreground;
+}
+
+.aui-assistant-message-content > * {
+  @apply min-w-0;
+}
+
+.aui-assistant-message-content .aui-md-p,
+.aui-assistant-message-content .aui-text {
+  @apply whitespace-pre-wrap;
+}
+
+.aui-assistant-action-bar-root {
+  @apply col-start-2 flex flex-wrap items-center gap-1 pt-0.5;
+}
+
+.aui-assistant-action-bar-root .aui-button {
+  @apply h-8 w-8 rounded-full text-muted-foreground transition-colors;
+}
+
+.aui-assistant-action-bar-root .aui-button:hover {
+  @apply bg-muted/70 text-foreground;
+}
+
+.aui-thread-scroll-to-bottom {
+  @apply ml-auto mb-3 h-9 w-9 rounded-full border-border/70 bg-background/95 shadow-sm backdrop-blur;
 }
 
 .aui-composer-root {
-  @apply rounded-2xl border border-border/80 bg-background/95 shadow-sm backdrop-blur;
+  @apply rounded-[1.5rem] border border-border/80 bg-background/95 shadow-[0_10px_30px_-18px_rgba(15,23,42,0.28)] backdrop-blur;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease;
+}
+
+.aui-composer-root:focus-within {
+  @apply border-primary/35;
+  box-shadow:
+    0 0 0 4px hsl(var(--ring) / 0.12),
+    0 14px 40px -24px rgba(15, 23, 42, 0.34);
 }
 
 .aui-composer-input {
-  @apply text-sm leading-relaxed;
+  @apply resize-none bg-transparent text-sm leading-7;
+}
+
+.aui-composer-input::placeholder {
+  @apply text-muted-foreground;
+}
+
+.aui-chat-composer-mode {
+  @apply inline-flex shrink-0 items-center rounded-full border border-border/70 bg-muted/45 px-2.5 py-1 text-[11px] font-medium tracking-[0.02em] text-muted-foreground;
+}
+
+.aui-chat-assistant-empty {
+  @apply inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/90 px-3 py-1.5 text-sm text-muted-foreground shadow-sm;
 }
 
 @media (min-width: 768px) {
@@ -186,23 +313,40 @@
 
 @media (max-width: 767px) {
   .aui-thread-viewport {
-    @apply px-3 pt-4;
+    @apply gap-5 px-3 pt-4;
   }
 
   .aui-thread-viewport-footer {
     @apply px-3 pb-3;
   }
 
-  .aui-thread-followup-suggestions {
-    @apply grid grid-cols-1 gap-2;
+  .aui-thread-welcome-root {
+    @apply min-h-[calc(100svh-16rem)] gap-6;
+  }
+
+  .aui-thread-welcome-message {
+    @apply text-[1.4rem];
+  }
+
+  .aui-thread-welcome-suggestions {
+    @apply grid-cols-1 gap-2;
   }
 
   .aui-thread-followup-suggestions > * {
     width: 100%;
   }
 
+  .aui-user-message-root,
+  .aui-assistant-message-root {
+    max-width: 100%;
+  }
+
   .aui-composer-root {
-    @apply rounded-xl;
+    @apply rounded-[1.25rem];
+  }
+
+  .aui-chat-composer-mode {
+    @apply px-2 py-0.5 text-[10px];
   }
 }
 

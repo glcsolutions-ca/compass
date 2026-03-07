@@ -54,7 +54,8 @@ export default defineConfig({
         env: {
           ...process.env,
           AUTH_MODE: "mock",
-          AGENT_GATEWAY_ENABLED: process.env.AGENT_GATEWAY_ENABLED ?? "false",
+          AGENT_GATEWAY_ENABLED: process.env.AGENT_GATEWAY_ENABLED ?? "true",
+          AGENT_CLOUD_MODE_ENABLED: process.env.AGENT_CLOUD_MODE_ENABLED ?? "true",
           AGENT_RUNTIME_PROVIDER: process.env.AGENT_RUNTIME_PROVIDER ?? "mock"
         },
         reuseExistingServer: !process.env.CI,

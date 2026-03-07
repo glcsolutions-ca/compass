@@ -126,6 +126,42 @@ describe("chat runtime store mapping", () => {
     });
   });
 
+  it("preserves empty running assistant placeholders so assistant-ui can render its loading state", () => {
+    const mapped = buildAssistantStoreMessages({
+      timeline: [
+        {
+          id: "assistant-pending",
+          kind: "message",
+          role: "assistant",
+          text: "",
+          parts: [],
+          turnId: "turn_2",
+          cursor: null,
+          streaming: true,
+          createdAt: "2026-01-01T00:00:03.000Z"
+        }
+      ]
+    });
+
+    expect(mapped).toEqual([
+      expect.objectContaining({
+        id: "assistant-pending",
+        role: "assistant",
+        text: "",
+        parts: [],
+        streaming: true
+      })
+    ]);
+
+    const converted = convertAssistantStoreMessage(mapped[0]!);
+    expect(converted).toMatchObject({
+      id: "assistant-pending",
+      role: "assistant",
+      content: [],
+      status: { type: "running" }
+    });
+  });
+
   it("maps local thread history to assistant-ui thread list items", () => {
     const mapped = buildAssistantThreadListItems([
       {

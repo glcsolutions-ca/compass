@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError } from "../../src/auth-service.js";
+import type { ApiError } from "../../src/auth-service.js";
 import { __internalAzureDynamicSessionsHost } from "../../src/agent-sessions/hosts/azure-dynamic-sessions.js";
 
 describe("uploadFileWithFetch", () => {

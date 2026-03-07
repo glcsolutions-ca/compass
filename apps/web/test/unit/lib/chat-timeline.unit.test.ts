@@ -115,7 +115,8 @@ describe("useChatTimeline", () => {
         initialProps: {
           resetKey: "workspace-1:new",
           events: [createEvent({ turnId: "turn-9", method: "turn.started" })],
-          submitResult: undefined
+          submitResult: undefined,
+          pendingSubmission: null
         }
       }
     );
@@ -133,7 +134,8 @@ describe("useChatTimeline", () => {
         prompt: "Investigate failure",
         turnId: "turn-9",
         error: "Unable to submit this prompt."
-      } as ChatActionData
+      } as ChatActionData,
+      pendingSubmission: null
     });
 
     const timelineIds = result.current.timeline.map((item) => item.id);
@@ -160,6 +162,7 @@ describe("useChatTimeline", () => {
         initialProps: {
           resetKey: "workspace-1:thread-1",
           events: [],
+          pendingSubmission: null,
           submitResult: {
             intent: "sendMessage",
             ok: true,
@@ -207,6 +210,7 @@ describe("useChatTimeline", () => {
             createEvent({ cursor: 2, turnId: "turn-2", method: "turn.started" }),
             createEvent({ cursor: 3, turnId: "turn-2", method: "turn.completed" })
           ],
+          pendingSubmission: null,
           submitResult: {
             intent: "sendMessage",
             ok: false,
@@ -229,6 +233,7 @@ describe("useChatTimeline", () => {
         createEvent({ cursor: 5, turnId: "turn-1", method: "turn.started" }),
         createEvent({ cursor: 6, turnId: "turn-1", method: "turn.interrupted" })
       ],
+      pendingSubmission: null,
       submitResult: {
         intent: "switchMode",
         ok: false,
@@ -238,5 +243,60 @@ describe("useChatTimeline", () => {
 
     expect(result.current.activeTurnId).toBeNull();
     expect(result.current.timeline.some((item) => item.id.startsWith("prompt-"))).toBe(false);
+  });
+
+  it("shows an optimistic user message and running assistant placeholder while a submit is pending", () => {
+    normalizeAgentEventsMock.mockReturnValue([]);
+    buildAssistantStoreMessagesMock.mockImplementation(
+      ({ timeline }: { timeline: ChatTimelineItem[] }): AssistantStoreMessage[] =>
+        timeline as AssistantStoreMessage[]
+    );
+
+    const { result } = renderHook(
+      (props: {
+        resetKey: string;
+        events: AgentEvent[];
+        submitResult: ChatActionData | undefined;
+        pendingSubmission: {
+          intent: "sendMessage";
+          clientRequestId: string;
+          prompt: string;
+          threadId: string | null;
+          executionMode: "cloud";
+          createdAt: string;
+        } | null;
+      }) => useChatTimeline(props),
+      {
+        initialProps: {
+          resetKey: "workspace-1:thread-1",
+          events: [],
+          submitResult: undefined,
+          pendingSubmission: {
+            intent: "sendMessage",
+            clientRequestId: "req-pending",
+            prompt: "pending hello",
+            threadId: "thread-1",
+            executionMode: "cloud",
+            createdAt: "2026-03-01T00:00:00.000Z"
+          }
+        }
+      }
+    );
+
+    expect(result.current.timeline).toEqual([
+      expect.objectContaining({
+        id: "prompt-req-pending",
+        kind: "message",
+        role: "user",
+        text: "pending hello"
+      }),
+      expect.objectContaining({
+        id: "prompt-req-pending-assistant-pending",
+        kind: "message",
+        role: "assistant",
+        text: "",
+        streaming: true
+      })
+    ]);
   });
 });

@@ -1,8 +1,6 @@
-import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { request as httpsRequest } from "node:https";
+import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import os from "node:os";
-import path from "node:path";
 import { ApiError } from "../../auth-service.js";
 import type {
   BootstrapSessionAgentInput,
@@ -14,10 +12,8 @@ const require = createRequire(import.meta.url);
 
 const DYNAMIC_SESSIONS_API_VERSION = "2025-10-02-preview";
 const WORK_DIR = "/mnt/data/compass/session-agent";
-const UPLOADED_AGENT_FILE = "compass-session-agent.js";
-const UPLOADED_ECHO_FILE = "compass-echo-runtime.js";
+const UPLOADED_AGENT_FILE = "compass-session-agent.cjs";
 const UPLOADED_BOOTSTRAP_FILE = "compass-session-bootstrap.js";
-const WS_PACKAGE_VERSION = "8.18.3";
 
 interface AccessTokenProvider {
   getToken(): Promise<string>;
@@ -198,13 +194,11 @@ function renderBootstrapScript(input: {
   const replacements: Record<string, string> = {
     WORK_DIR: JSON.stringify(WORK_DIR),
     AGENT_SOURCE_FILE: JSON.stringify(`/mnt/data/${UPLOADED_AGENT_FILE}`),
-    ECHO_SOURCE_FILE: JSON.stringify(`/mnt/data/${UPLOADED_ECHO_FILE}`),
     SESSION_IDENTIFIER: JSON.stringify(input.sessionIdentifier),
     BOOT_ID: JSON.stringify(input.bootId),
     CONNECT_TOKEN: JSON.stringify(input.connectToken),
     CONTROL_PLANE_URL: JSON.stringify(input.controlPlaneUrl),
-    FORCE_RESTART: input.forceRestart ? "true" : "false",
-    WS_VERSION: JSON.stringify(WS_PACKAGE_VERSION)
+    FORCE_RESTART: input.forceRestart ? "true" : "false"
   };
 
   let rendered = input.template;
@@ -212,6 +206,70 @@ function renderBootstrapScript(input: {
     rendered = rendered.replaceAll(`__${key}__`, value);
   }
   return rendered;
+}
+
+function buildManagementUrl(input: {
+  endpoint: string;
+  pathname: string;
+  sessionIdentifier: string;
+}): URL {
+  const url = new URL(
+    `${input.endpoint.replace(/\/+$/u, "")}/${input.pathname.replace(/^\/+/u, "")}`
+  );
+  url.searchParams.set("api-version", DYNAMIC_SESSIONS_API_VERSION);
+  url.searchParams.set("identifier", input.sessionIdentifier);
+  return url;
+}
+
+function buildCodeExecutionRequestBody(code: string): Record<string, unknown> {
+  return {
+    codeInputType: "inline",
+    executionType: "synchronous",
+    code,
+    timeoutInSeconds: 120
+  };
+}
+
+async function postJsonWithHttps(input: {
+  url: URL;
+  token: string;
+  body: Record<string, unknown>;
+}): Promise<{ status: number; body: string }> {
+  const payload = JSON.stringify(input.body);
+
+  return await new Promise((resolve, reject) => {
+    const request = httpsRequest(
+      input.url,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${input.token}`,
+          "content-type": "application/json",
+          "content-length": Buffer.byteLength(payload)
+        }
+      },
+      (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          body += chunk;
+        });
+        response.on("end", () => {
+          resolve({
+            status: response.statusCode ?? 0,
+            body
+          });
+        });
+      }
+    );
+
+    request.on("error", (error) => {
+      reject(error);
+    });
+
+    request.write(payload);
+    request.end();
+  });
 }
 
 function tryParseBootstrapOutput(stdout: string): { status: string; pid: number | null } {
@@ -235,19 +293,55 @@ function tryParseBootstrapOutput(stdout: string): { status: string; pid: number 
   }
 }
 
+async function uploadFileWithFetch(input: {
+  url: URL;
+  token: string;
+  filename: string;
+  content: string;
+}): Promise<{ status: number; body: string }> {
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([input.content], {
+      type: "text/javascript"
+    }),
+    input.filename
+  );
+
+  let response: Response;
+  try {
+    response = await fetch(input.url, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${input.token}`
+      },
+      body: form
+    });
+  } catch (error) {
+    throw new ApiError(
+      502,
+      "AGENT_SESSION_BOOTSTRAP_FAILED",
+      `Azure file upload request failed: ${error instanceof Error ? error.message : String(error).slice(0, 256)}`
+    );
+  }
+
+  return {
+    status: response.status,
+    body: await response.text()
+  };
+}
+
 export class AzureDynamicSessionsSessionHost implements SessionHost {
   readonly executionHost = "dynamic_sessions";
   readonly requiresPublicControlPlaneUrl = true;
   readonly #endpoint: string;
   readonly #tokenProvider: AccessTokenProvider;
   readonly #assetPaths: {
-    agent: string;
-    echoRuntime: string;
+    agentBundle: string;
     bootstrapTemplate: string;
   };
   #assetCache: {
-    agent: string;
-    echoRuntime: string;
+    agentBundle: string;
     bootstrapTemplate: string;
   } | null = null;
 
@@ -255,8 +349,7 @@ export class AzureDynamicSessionsSessionHost implements SessionHost {
     this.#endpoint = input.endpoint.replace(/\/+$/u, "");
     this.#tokenProvider = input.tokenProvider;
     this.#assetPaths = {
-      agent: require.resolve("@compass/session-agent"),
-      echoRuntime: require.resolve("@compass/session-agent/echo-runtime"),
+      agentBundle: require.resolve("@compass/session-agent/azure-agent-bundle"),
       bootstrapTemplate: require.resolve("@compass/session-agent/azure-bootstrap-template")
     };
   }
@@ -268,12 +361,7 @@ export class AzureDynamicSessionsSessionHost implements SessionHost {
     await this.uploadFile({
       sessionIdentifier: input.sessionIdentifier,
       filename: UPLOADED_AGENT_FILE,
-      content: assets.agent
-    });
-    await this.uploadFile({
-      sessionIdentifier: input.sessionIdentifier,
-      filename: UPLOADED_ECHO_FILE,
-      content: assets.echoRuntime
+      content: assets.agentBundle
     });
 
     const bootstrapSource = renderBootstrapScript({
@@ -302,8 +390,7 @@ export class AzureDynamicSessionsSessionHost implements SessionHost {
   }
 
   private async readAssets(): Promise<{
-    agent: string;
-    echoRuntime: string;
+    agentBundle: string;
     bootstrapTemplate: string;
   }> {
     if (this.#assetCache) {
@@ -311,8 +398,7 @@ export class AzureDynamicSessionsSessionHost implements SessionHost {
     }
 
     this.#assetCache = {
-      agent: await readFile(this.#assetPaths.agent, "utf8"),
-      echoRuntime: await readFile(this.#assetPaths.echoRuntime, "utf8"),
+      agentBundle: await readFile(this.#assetPaths.agentBundle, "utf8"),
       bootstrapTemplate: await readFile(this.#assetPaths.bootstrapTemplate, "utf8")
     };
     return this.#assetCache;
@@ -323,112 +409,44 @@ export class AzureDynamicSessionsSessionHost implements SessionHost {
     filename: string;
     content: string;
   }): Promise<void> {
-    const url = this.buildUrl("/files", input.sessionIdentifier);
+    const url = buildManagementUrl({
+      endpoint: this.#endpoint,
+      pathname: "/files",
+      sessionIdentifier: input.sessionIdentifier
+    });
     const token = await this.#tokenProvider.getToken();
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "compass-session-upload-"));
-    const tempFile = path.join(tempDir, input.filename);
-
-    try {
-      await writeFile(tempFile, input.content, "utf8");
-      const { status, body } = await this.uploadFileWithCurl({
-        url: url.toString(),
-        token,
-        filename: input.filename,
-        tempFile
-      });
-
-      if (status >= 400) {
-        throw new ApiError(
-          502,
-          "AGENT_SESSION_BOOTSTRAP_FAILED",
-          `Azure file upload failed (${status}): ${body.slice(0, 256)}`
-        );
-      }
-    } finally {
-      await rm(tempDir, { recursive: true, force: true });
-    }
-  }
-
-  private async uploadFileWithCurl(input: {
-    url: string;
-    token: string;
-    filename: string;
-    tempFile: string;
-  }): Promise<{ status: number; body: string }> {
-    const stdout = await new Promise<string>((resolve, reject) => {
-      execFile(
-        "curl",
-        [
-          "-sS",
-          "-X",
-          "POST",
-          "-H",
-          `Authorization: Bearer ${input.token}`,
-          "-F",
-          `file=@${input.tempFile};filename=${input.filename};type=text/javascript`,
-          input.url,
-          "-w",
-          "\n%{http_code}"
-        ],
-        {
-          encoding: "utf8",
-          maxBuffer: 10 * 1024 * 1024
-        },
-        (error, commandStdout, commandStderr) => {
-          if (error) {
-            reject(
-              new ApiError(
-                502,
-                "AGENT_SESSION_BOOTSTRAP_FAILED",
-                `Azure file upload command failed: ${String(commandStderr || error.message).slice(0, 256)}`
-              )
-            );
-            return;
-          }
-
-          resolve(commandStdout);
-        }
-      );
+    const { status, body } = await uploadFileWithFetch({
+      url,
+      token,
+      filename: input.filename,
+      content: input.content
     });
 
-    const lines = stdout.split(/\r?\n/u);
-    const statusLine = lines.at(-1)?.trim() ?? "";
-    const body = lines.slice(0, -1).join("\n");
-    const status = Number.parseInt(statusLine, 10);
-    if (!Number.isFinite(status)) {
+    if (status >= 400) {
       throw new ApiError(
         502,
         "AGENT_SESSION_BOOTSTRAP_FAILED",
-        `Azure file upload returned an invalid status line: ${statusLine.slice(0, 64)}`
+        `Azure file upload failed (${status}): ${body.slice(0, 256)}`
       );
     }
-
-    return {
-      status,
-      body
-    };
   }
 
   private async executeCode(input: {
     sessionIdentifier: string;
     code: string;
   }): Promise<{ status: string; pid: number | null }> {
-    const url = this.buildUrl("/executions", input.sessionIdentifier);
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${await this.#tokenProvider.getToken()}`,
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        codeInputType: "inline",
-        executionType: "synchronous",
-        timeoutInSeconds: 120,
-        code: input.code
-      })
+    const url = buildManagementUrl({
+      endpoint: this.#endpoint,
+      pathname: "/executions",
+      sessionIdentifier: input.sessionIdentifier
+    });
+    const response = await postJsonWithHttps({
+      url,
+      token: await this.#tokenProvider.getToken(),
+      body: buildCodeExecutionRequestBody(input.code)
     });
 
-    const bodyText = await response.text();
+    const bodyText = response.body;
     let bodyJson: Record<string, unknown> | null;
     try {
       bodyJson = JSON.parse(bodyText) as Record<string, unknown>;
@@ -436,7 +454,7 @@ export class AzureDynamicSessionsSessionHost implements SessionHost {
       bodyJson = null;
     }
 
-    if (!response.ok) {
+    if (response.status >= 400) {
       throw new ApiError(
         502,
         "AGENT_SESSION_BOOTSTRAP_FAILED",
@@ -468,13 +486,6 @@ export class AzureDynamicSessionsSessionHost implements SessionHost {
 
     return tryParseBootstrapOutput(stdout);
   }
-
-  private buildUrl(pathname: string, sessionIdentifier: string): URL {
-    const url = new URL(`${this.#endpoint}/${pathname.replace(/^\/+/u, "")}`);
-    url.searchParams.set("api-version", DYNAMIC_SESSIONS_API_VERSION);
-    url.searchParams.set("identifier", sessionIdentifier);
-    return url;
-  }
 }
 
 export function buildDefaultAzureDynamicSessionsHost(env: NodeJS.ProcessEnv): SessionHost {
@@ -502,6 +513,9 @@ export function buildDefaultAzureDynamicSessionsHost(env: NodeJS.ProcessEnv): Se
 }
 
 export const __internalAzureDynamicSessionsHost = {
+  uploadFileWithFetch,
   renderBootstrapScript,
-  tryParseBootstrapOutput
+  tryParseBootstrapOutput,
+  buildManagementUrl,
+  buildCodeExecutionRequestBody
 };

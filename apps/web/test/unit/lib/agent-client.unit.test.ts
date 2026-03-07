@@ -384,7 +384,8 @@ describe("agent client", () => {
     const result = await startAgentTurn(new Request("http://web.test"), {
       threadId: "thread_1",
       text: "hello",
-      executionMode: "cloud"
+      executionMode: "cloud",
+      clientRequestId: "req_1"
     });
 
     expect(routeClientMock.POST).toHaveBeenCalledWith("/v1/agent/threads/{threadId}/turns", {
@@ -396,7 +397,8 @@ describe("agent client", () => {
       },
       body: {
         text: "hello",
-        executionMode: "cloud"
+        executionMode: "cloud",
+        clientRequestId: "req_1"
       }
     });
     expect(result.data).toEqual({

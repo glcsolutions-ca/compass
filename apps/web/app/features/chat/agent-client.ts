@@ -302,6 +302,7 @@ export async function startAgentTurn(
     threadId: string;
     text: string;
     executionMode?: AgentExecutionMode;
+    clientRequestId?: string;
   }
 ): Promise<ApiResult<AgentTurn>> {
   const client = createRouteClient(request);
@@ -314,7 +315,8 @@ export async function startAgentTurn(
     },
     body: {
       text: payload.text,
-      executionMode: payload.executionMode
+      executionMode: payload.executionMode,
+      clientRequestId: payload.clientRequestId
     }
   });
 

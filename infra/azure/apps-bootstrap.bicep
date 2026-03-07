@@ -20,6 +20,7 @@ param authMode string = 'entra'
 param entraClientId string = ''
 param entraAllowedTenantIds string = ''
 param publicWebBaseUrl string
+param dynamicSessionsPoolManagementEndpoint string = ''
 param apiLogLevel string = 'warn'
 param migrationLockTimeout string = '5s'
 param migrationStatementTimeout string = '15min'
@@ -57,6 +58,8 @@ module apiProd 'modules/containerapp-api.bicep' = {
     keyVaultUri: keyVault.properties.vaultUri
     databaseUrl: databaseUrl
     webBaseUrl: publicWebBaseUrl
+    apiPublicBaseUrl: prodApiBaseUrl
+    dynamicSessionsPoolManagementEndpoint: dynamicSessionsPoolManagementEndpoint
     authMode: authMode
     entraClientId: entraClientId
     entraAllowedTenantIds: entraAllowedTenantIds
@@ -78,6 +81,8 @@ module apiStage 'modules/containerapp-api.bicep' = {
     keyVaultUri: keyVault.properties.vaultUri
     databaseUrl: databaseUrl
     webBaseUrl: stageWebBaseUrl
+    apiPublicBaseUrl: stageApiBaseUrl
+    dynamicSessionsPoolManagementEndpoint: dynamicSessionsPoolManagementEndpoint
     authMode: authMode
     entraClientId: entraClientId
     entraAllowedTenantIds: entraAllowedTenantIds

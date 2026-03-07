@@ -1,14 +1,19 @@
 import { pathToFileURL } from "node:url";
 import { parseCliArgs, requireOption } from "../../../shared/scripts/cli-utils.mjs";
 import { readJsonFile } from "../../../shared/scripts/pipeline-contract-lib.mjs";
-import { updateContainerApp } from "./release-azure-lib.mjs";
+import {
+  buildManagedApiEnv,
+  buildManagedWebEnv,
+  updateContainerApp
+} from "./release-azure-lib.mjs";
 
 export async function deployStageFromCandidate({
   manifestPath,
   resourceGroup,
   apiAppName,
   webAppName,
-  stageApiBaseUrl
+  stageApiBaseUrl,
+  stageWebBaseUrl
 }) {
   const manifest = await readJsonFile(manifestPath);
   await Promise.all([
@@ -16,13 +21,17 @@ export async function deployStageFromCandidate({
       resourceGroup,
       appName: apiAppName,
       image: manifest.artifacts.apiImage,
+      env: buildManagedApiEnv({
+        apiPublicBaseUrl: stageApiBaseUrl,
+        webBaseUrl: stageWebBaseUrl
+      }),
       minReplicas: 0
     }),
     updateContainerApp({
       resourceGroup,
       appName: webAppName,
       image: manifest.artifacts.webImage,
-      env: { API_BASE_URL: stageApiBaseUrl },
+      env: buildManagedWebEnv({ apiBaseUrl: stageApiBaseUrl }),
       minReplicas: 0
     })
   ]);
@@ -36,7 +45,8 @@ export async function main(argv = process.argv.slice(2)) {
     resourceGroup: requireOption(options, "resource-group"),
     apiAppName: requireOption(options, "api-app-name"),
     webAppName: requireOption(options, "web-app-name"),
-    stageApiBaseUrl: requireOption(options, "stage-api-base-url")
+    stageApiBaseUrl: requireOption(options, "stage-api-base-url"),
+    stageWebBaseUrl: requireOption(options, "stage-web-base-url")
   });
 }
 

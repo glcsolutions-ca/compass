@@ -26,6 +26,7 @@ COPY db ./db
 
 RUN pnpm --filter @compass/contracts build
 RUN pnpm --filter @compass/session-agent-protocol build
+RUN pnpm --filter @compass/session-agent build
 RUN pnpm --filter @compass/api build
 RUN pnpm --filter @compass/api deploy --legacy --prod /opt/app
 

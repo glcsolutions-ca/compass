@@ -1,14 +1,26 @@
 import { AssistantRuntimeProvider, type AssistantRuntime } from "@assistant-ui/react";
 import { Thread } from "@assistant-ui/react-ui";
 import { useMemo } from "react";
+import type { ChatSurfaceState } from "~/features/chat/presentation/chat-runtime-store";
 import { createChatThreadConfig } from "~/features/chat/presentation/chat-thread-config";
 
 interface ChatCanvasProps {
   runtime: AssistantRuntime;
+  canCancel: boolean;
+  isBusy: boolean;
+  surfaceState: ChatSurfaceState;
 }
 
-export function ChatCanvas({ runtime }: ChatCanvasProps) {
-  const threadConfig = useMemo(() => createChatThreadConfig(), []);
+export function ChatCanvas({ runtime, canCancel, isBusy, surfaceState }: ChatCanvasProps) {
+  const threadConfig = useMemo(
+    () =>
+      createChatThreadConfig({
+        canCancel,
+        isBusy,
+        surfaceState
+      }),
+    [canCancel, isBusy, surfaceState]
+  );
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>

@@ -1,5 +1,5 @@
 import type { AppendMessage } from "@assistant-ui/react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher, useNavigate } from "react-router";
 import type { AgentExecutionMode } from "~/features/chat/agent-types";
 import type { ChatActionData } from "~/features/chat/chat-action";
@@ -58,6 +58,8 @@ export interface ChatActionsController {
   interruptFetcher: ReturnType<typeof useFetcher<ChatActionData>>;
   activeThreadId: string | null;
   actionError: string | null;
+  isSubmitting: boolean;
+  pendingSubmission: PendingSubmissionState | null;
   handleAssistantSend: (message: AppendMessage) => Promise<void>;
   handleAssistantEdit: (message: AppendMessage) => Promise<void>;
   handleAssistantReload: (input: { parentId: string | null; prompt: string }) => Promise<void>;
@@ -68,6 +70,15 @@ export interface ChatActionsController {
   }) => Promise<void>;
   submitInterruptTurn: (activeTurnId: string | null) => void;
   handleModeChange: (mode: AgentExecutionMode) => void;
+}
+
+export interface PendingSubmissionState {
+  intent: SubmitPromptIntentInput["intent"];
+  clientRequestId: string;
+  prompt: string;
+  threadId: string | null;
+  executionMode: AgentExecutionMode;
+  createdAt: string;
 }
 
 export function useChatActions({
@@ -82,6 +93,7 @@ export function useChatActions({
   const interruptFetcher = useFetcher<ChatActionData>();
   const pendingSubmitRef = useRef<SubmitPromptIntentInput | null>(null);
   const inFlightSubmitRef = useRef<SubmitPromptIntentInput | null>(null);
+  const [pendingSubmission, setPendingSubmission] = useState<PendingSubmissionState | null>(null);
 
   const activeThreadId = resolveActiveThreadId({
     loaderThreadId,
@@ -138,6 +150,14 @@ export function useChatActions({
       }
 
       inFlightSubmitRef.current = input;
+      setPendingSubmission({
+        intent: input.intent,
+        clientRequestId,
+        prompt: input.prompt,
+        threadId: activeThreadId,
+        executionMode,
+        createdAt: new Date().toISOString()
+      });
       void submitFetcher.submit(formData, { method: "post" });
     },
     [activeThreadId, executionMode, submitFetcher]
@@ -156,6 +176,7 @@ export function useChatActions({
     }
 
     inFlightSubmitRef.current = null;
+    setPendingSubmission(null);
   }, [submitFetcher.state, submitPromptIntentNow]);
 
   const submitPromptIntent = useCallback(
@@ -282,6 +303,7 @@ export function useChatActions({
       submitFetcher.data?.error ?? modeFetcher.data?.error ?? interruptFetcher.data?.error ?? null,
     [interruptFetcher.data?.error, modeFetcher.data?.error, submitFetcher.data?.error]
   );
+  const isSubmitting = submitFetcher.state !== "idle" || pendingSubmission !== null;
 
   return {
     submitFetcher,
@@ -289,6 +311,8 @@ export function useChatActions({
     interruptFetcher,
     activeThreadId,
     actionError,
+    isSubmitting,
+    pendingSubmission,
     handleAssistantSend,
     handleAssistantEdit,
     handleAssistantReload,

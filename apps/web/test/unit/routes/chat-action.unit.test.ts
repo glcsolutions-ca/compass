@@ -141,11 +141,15 @@ describe("chat action", () => {
       executionMode: "cloud",
       title: "hello"
     });
-    expect(startAgentTurn).toHaveBeenCalledWith(expect.any(Request), {
-      threadId: "thread_1",
-      text: "hello",
-      executionMode: "cloud"
-    });
+    expect(startAgentTurn).toHaveBeenCalledWith(
+      expect.any(Request),
+      expect.objectContaining({
+        threadId: "thread_1",
+        text: "hello",
+        executionMode: "cloud",
+        clientRequestId: "req_hello_1"
+      })
+    );
     expect(result).toEqual({
       intent: "sendMessage",
       ok: true,
@@ -503,11 +507,14 @@ describe("chat action", () => {
     });
 
     expect(createAgentThread).not.toHaveBeenCalled();
-    expect(startAgentTurn).toHaveBeenCalledWith(expect.any(Request), {
-      threadId: "thread_1",
-      text: "hello",
-      executionMode: "local"
-    });
+    expect(startAgentTurn).toHaveBeenCalledWith(
+      expect.any(Request),
+      expect.objectContaining({
+        threadId: "thread_1",
+        text: "hello",
+        executionMode: "local"
+      })
+    );
     expect(result).toEqual({
       intent: "sendMessage",
       ok: true,

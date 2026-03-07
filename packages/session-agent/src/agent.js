@@ -1,4 +1,3 @@
-import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
 import { ECHO_RUNTIME_KIND, runEchoRuntime } from "./echo-runtime.js";
 
@@ -200,10 +199,4 @@ export async function runSessionAgent(input = {}) {
       });
     });
   });
-}
-
-const currentFilePath = fileURLToPath(import.meta.url);
-const invokedPath = process.argv[1];
-if (invokedPath && currentFilePath === invokedPath) {
-  await runSessionAgent();
 }

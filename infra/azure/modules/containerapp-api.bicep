@@ -7,6 +7,8 @@ param keyVaultUri string
 @secure()
 param databaseUrl string
 param webBaseUrl string
+param apiPublicBaseUrl string
+param dynamicSessionsPoolManagementEndpoint string = ''
 param authMode string = 'entra'
 param entraClientId string = ''
 param entraAllowedTenantIds string = ''
@@ -116,7 +118,19 @@ resource containerApp 'Microsoft.App/containerApps@2025-07-01' = {
               }
               {
                 name: 'AGENT_GATEWAY_ENABLED'
-                value: 'false'
+                value: 'true'
+              }
+              {
+                name: 'AGENT_CLOUD_MODE_ENABLED'
+                value: 'true'
+              }
+              {
+                name: 'API_PUBLIC_BASE_URL'
+                value: apiPublicBaseUrl
+              }
+              {
+                name: 'DYNAMIC_SESSIONS_POOL_MANAGEMENT_ENDPOINT'
+                value: dynamicSessionsPoolManagementEndpoint
               }
             ],
             includeEntraSecrets

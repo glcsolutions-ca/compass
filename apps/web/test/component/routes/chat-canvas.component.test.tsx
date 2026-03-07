@@ -7,10 +7,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useMemo, useState } from "react";
 import { beforeAll, describe, expect, it } from "vitest";
 import { ChatCanvas } from "~/features/chat/presentation/chat-canvas";
-import {
-  type AssistantEventPartModel,
-  convertAssistantStoreMessage
-} from "~/features/chat/presentation/chat-runtime-store";
+import { convertAssistantStoreMessage } from "~/features/chat/presentation/chat-runtime-store";
 
 beforeAll(() => {
   if (typeof globalThis.ResizeObserver !== "undefined") {
@@ -46,17 +43,18 @@ function ChatCanvasHarness() {
 
   return (
     <ChatCanvas
-      executionMode="cloud"
-      localModeAvailable={false}
-      onExecutionModeChange={() => undefined}
+      canCancel={false}
+      isBusy={false}
       runtime={runtime}
       surfaceState={{
+        executionLabel: "Local runtime",
         transportLifecycle: "open",
         transportLabel: "Live",
         actionError: null,
-        transportError: null
+        transportError: null,
+        activityLabel: null,
+        isPending: false
       }}
-      switchingMode={false}
     />
   );
 }
@@ -70,14 +68,7 @@ function ChatCanvasInteractiveHarness() {
       turnId: "turn-1",
       cursor: 1,
       createdAt: "2026-01-01T00:00:00.000Z",
-      streaming: false,
-      eventPart: {
-        kind: "status",
-        label: "Turn started",
-        detail: null,
-        cursor: 1,
-        defaultTab: "activity"
-      } satisfies AssistantEventPartModel
+      streaming: false
     }),
     convertAssistantStoreMessage({
       id: "assistant-text-1",
@@ -86,8 +77,7 @@ function ChatCanvasInteractiveHarness() {
       turnId: "turn-1",
       cursor: 2,
       createdAt: "2026-01-01T00:00:00.100Z",
-      streaming: false,
-      eventPart: null
+      streaming: false
     })
   ]);
 
@@ -119,8 +109,7 @@ function ChatCanvasInteractiveHarness() {
             turnId: null,
             cursor: null,
             createdAt: new Date().toISOString(),
-            streaming: false,
-            eventPart: null
+            streaming: false
           })
         ]);
       }
@@ -132,17 +121,18 @@ function ChatCanvasInteractiveHarness() {
 
   return (
     <ChatCanvas
-      executionMode="cloud"
-      localModeAvailable={false}
-      onExecutionModeChange={() => undefined}
+      canCancel={false}
+      isBusy={false}
       runtime={runtime}
       surfaceState={{
+        executionLabel: "Local runtime",
         transportLifecycle: "open",
         transportLabel: "Live",
         actionError: null,
-        transportError: null
+        transportError: null,
+        activityLabel: null,
+        isPending: false
       }}
-      switchingMode={false}
     />
   );
 }
@@ -181,17 +171,18 @@ function ChatCanvasMultipartAssistantHarness() {
 
   return (
     <ChatCanvas
-      executionMode="cloud"
-      localModeAvailable={false}
-      onExecutionModeChange={() => undefined}
+      canCancel={false}
+      isBusy={false}
       runtime={runtime}
       surfaceState={{
+        executionLabel: "Local runtime",
         transportLifecycle: "open",
         transportLabel: "Live",
         actionError: null,
-        transportError: null
+        transportError: null,
+        activityLabel: null,
+        isPending: false
       }}
-      switchingMode={false}
     />
   );
 }
@@ -239,17 +230,18 @@ graph TD
 
   return (
     <ChatCanvas
-      executionMode="cloud"
-      localModeAvailable={false}
-      onExecutionModeChange={() => undefined}
+      canCancel={false}
+      isBusy={false}
       runtime={runtime}
       surfaceState={{
+        executionLabel: "Local runtime",
         transportLifecycle: "open",
         transportLabel: "Live",
         actionError: null,
-        transportError: null
+        transportError: null,
+        activityLabel: null,
+        isPending: false
       }}
-      switchingMode={false}
     />
   );
 }
@@ -298,17 +290,18 @@ function ChatCanvasToolFallbackHarness() {
 
   return (
     <ChatCanvas
-      executionMode="cloud"
-      localModeAvailable={false}
-      onExecutionModeChange={() => undefined}
+      canCancel={false}
+      isBusy={false}
       runtime={runtime}
       surfaceState={{
+        executionLabel: "Local runtime",
         transportLifecycle: "open",
         transportLabel: "Live",
         actionError: null,
-        transportError: null
+        transportError: null,
+        activityLabel: null,
+        isPending: false
       }}
-      switchingMode={false}
     />
   );
 }
@@ -316,7 +309,7 @@ function ChatCanvasToolFallbackHarness() {
 describe("chat canvas", () => {
   it("renders welcome state without crashing on empty runtime", () => {
     render(<ChatCanvasHarness />);
-    expect(screen.queryByText("What's on the agenda today?")).not.toBeNull();
+    expect(screen.queryByText("What do you want to work through?")).not.toBeNull();
   });
 
   it("supports type-and-send flow without runtime index errors", async () => {

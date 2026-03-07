@@ -44,10 +44,7 @@ describe("uploadFileWithFetch", () => {
   });
 
   it("maps fetch failures to a bootstrap api error", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockRejectedValue(new Error("socket hang up"))
-    );
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("socket hang up")));
 
     await expect(
       __internalAzureDynamicSessionsHost.uploadFileWithFetch({
@@ -87,12 +84,13 @@ describe("buildManagementUrl", () => {
 
 describe("buildCodeExecutionRequestBody", () => {
   it("wraps the bootstrap code using the Azure code execute request contract", () => {
-    expect(__internalAzureDynamicSessionsHost.buildCodeExecutionRequestBody("console.log('hi')"))
-      .toEqual({
-        codeInputType: "inline",
-        executionType: "synchronous",
-        code: "console.log('hi')",
-        timeoutInSeconds: 120
-      });
+    expect(
+      __internalAzureDynamicSessionsHost.buildCodeExecutionRequestBody("console.log('hi')")
+    ).toEqual({
+      codeInputType: "inline",
+      executionType: "synchronous",
+      code: "console.log('hi')",
+      timeoutInSeconds: 120
+    });
   });
 });

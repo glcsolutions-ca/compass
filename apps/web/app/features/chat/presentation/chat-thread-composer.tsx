@@ -10,11 +10,7 @@ interface ChatThreadComposerProps {
   canCancel: boolean;
 }
 
-export function ChatThreadComposer({
-  surfaceState,
-  isBusy,
-  canCancel
-}: ChatThreadComposerProps) {
+export function ChatThreadComposer({ surfaceState, isBusy, canCancel }: ChatThreadComposerProps) {
   const statusText =
     surfaceState.actionError ||
     surfaceState.transportError ||

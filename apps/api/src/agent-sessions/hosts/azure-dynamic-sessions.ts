@@ -213,7 +213,9 @@ function buildManagementUrl(input: {
   pathname: string;
   sessionIdentifier: string;
 }): URL {
-  const url = new URL(`${input.endpoint.replace(/\/+$/u, "")}/${input.pathname.replace(/^\/+/u, "")}`);
+  const url = new URL(
+    `${input.endpoint.replace(/\/+$/u, "")}/${input.pathname.replace(/^\/+/u, "")}`
+  );
   url.searchParams.set("api-version", DYNAMIC_SESSIONS_API_VERSION);
   url.searchParams.set("identifier", input.sessionIdentifier);
   return url;

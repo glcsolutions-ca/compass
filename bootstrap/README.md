@@ -24,8 +24,8 @@ Bootstrap is a manual admin workflow. It creates the control plane and the initi
 6. run `pnpm bootstrap:ghcr` to verify package visibility
 7. run `pnpm infra:apply`
 8. run `pnpm bootstrap:keyvault:seed`
-9. add the first PR to merge queue so the first candidate is published
-10. run `pnpm bootstrap:apps -- --candidate-id sha-<merge-group-sha>`
+9. add the first PR to merge queue so Commit publishes the first candidate
+10. run `pnpm bootstrap:apps -- --candidate-id sha-<merged-main-sha>`
 11. discover the stage web ACA FQDN
 12. rerun `pnpm bootstrap:entra -- --stage-web-fqdn <fqdn>`
 13. run `pnpm bootstrap:web-domain`
@@ -36,4 +36,4 @@ Bootstrap is a manual admin workflow. It creates the control plane and the initi
 - `bootstrap/.artifacts` is local-only and ignored by git.
 - `configure-github-repo.mjs` also ensures the repository labels required by `.github/labeler.yml` exist.
 - GitHub currently exposes container package visibility changes through the UI. The bootstrap path treats public GHCR package visibility as a one-time admin action and verifies it in CI/CD.
-- The real delivery pipeline runs only after a change is added to the GitHub merge queue.
+- The real delivery pipeline starts with Commit on GitHub merge queue and continues on `main` after the merge.

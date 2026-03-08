@@ -37,6 +37,11 @@ export function resolveCurrentWorkspaceSlug(input: {
     return decodeURIComponent(legacyWorkspaceMatch[1]).trim();
   }
 
+  const workspacePathMatch = /^\/workspaces\/([^/]+)(?:\/|$)/u.exec(input.pathname);
+  if (workspacePathMatch?.[1]) {
+    return decodeURIComponent(workspacePathMatch[1]).trim();
+  }
+
   const queryWorkspaceSlug = new URLSearchParams(input.search).get(CHAT_WORKSPACE_QUERY_PARAM);
   if (typeof queryWorkspaceSlug === "string" && queryWorkspaceSlug.trim().length > 0) {
     return queryWorkspaceSlug.trim();

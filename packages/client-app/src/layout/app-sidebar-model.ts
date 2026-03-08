@@ -7,6 +7,10 @@ import {
   SquarePen
 } from "lucide-react";
 import { buildNewThreadHref } from "~/features/chat/new-thread-routing";
+import {
+  buildWorkspaceAutomationsHref,
+  buildWorkspaceSkillsHref
+} from "~/lib/routes/workspace-routes";
 
 export interface SidebarNavItem {
   label: string;
@@ -49,18 +53,22 @@ export function buildUtilityItems(input: {
     {
       label: "Automations",
       to: input.defaultWorkspaceSlug
-        ? `/w/${encodeURIComponent(input.defaultWorkspaceSlug)}/automations`
+        ? buildWorkspaceAutomationsHref(input.defaultWorkspaceSlug)
         : "/workspaces",
       icon: Clock3,
-      active: /^\/w\/[^/]+\/automations(?:\/|$)/u.test(input.pathname)
+      active:
+        /^\/workspaces\/[^/]+\/automations(?:\/|$)/u.test(input.pathname) ||
+        /^\/w\/[^/]+\/automations(?:\/|$)/u.test(input.pathname)
     },
     {
       label: "Skills",
       to: input.defaultWorkspaceSlug
-        ? `/w/${encodeURIComponent(input.defaultWorkspaceSlug)}/skills`
+        ? buildWorkspaceSkillsHref(input.defaultWorkspaceSlug)
         : "/workspaces",
       icon: Boxes,
-      active: /^\/w\/[^/]+\/skills(?:\/|$)/u.test(input.pathname)
+      active:
+        /^\/workspaces\/[^/]+\/skills(?:\/|$)/u.test(input.pathname) ||
+        /^\/w\/[^/]+\/skills(?:\/|$)/u.test(input.pathname)
     }
   ];
 }

@@ -9,8 +9,11 @@ export default [
     route("chat/:threadHandle", "routes/app/chat-path-legacy/route.tsx"),
     route("c/:threadHandle", "routes/app/conversation/route.tsx"),
     route("w/:workspaceSlug/chat/:threadId?", "routes/app/chat-legacy/route.tsx"),
-    route("w/:workspaceSlug/settings", "routes/app/settings/route.tsx"),
-    route("w/:workspaceSlug/skills", "routes/app/skills/route.tsx"),
-    route("w/:workspaceSlug/automations", "routes/app/automations/route.tsx")
+    route("w/:workspaceSlug/settings", "routes/app/settings-legacy/route.tsx"),
+    route("w/:workspaceSlug/skills", "routes/app/skills-legacy/route.tsx"),
+    route("w/:workspaceSlug/automations", "routes/app/automations-legacy/route.tsx"),
+    route("workspaces/:workspaceSlug/settings", "routes/app/settings/route.tsx"),
+    route("workspaces/:workspaceSlug/skills", "routes/app/skills/route.tsx"),
+    route("workspaces/:workspaceSlug/automations", "routes/app/automations/route.tsx")
   ])
 ] satisfies RouteConfig;

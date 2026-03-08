@@ -99,8 +99,8 @@ describe("app sidebar", () => {
     const skillsLink = screen.getByRole("link", { name: "Skills" });
 
     expect(newThreadLink.getAttribute("href")).toContain("/chat?workspace=personal-user-1&thread=");
-    expect(automationsLink.getAttribute("href")).toBe("/w/personal-user-1/automations");
-    expect(skillsLink.getAttribute("href")).toBe("/w/personal-user-1/skills");
+    expect(automationsLink.getAttribute("href")).toBe("/workspaces/personal-user-1/automations");
+    expect(skillsLink.getAttribute("href")).toBe("/workspaces/personal-user-1/skills");
 
     expect(screen.getByText("Navigate")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Chat" })).toBeTruthy();

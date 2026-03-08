@@ -83,10 +83,10 @@ describe("app layout component", () => {
       throw new Error("Expected AppLayout to render AppSidebar with props.");
     }
     expect(sidebarProps.buildSettingsHref("general")).toBe(
-      "/w/personal-user-1/settings?section=general"
+      "/workspaces/personal-user-1/settings?section=general"
     );
     expect(sidebarProps.buildSettingsHref("personalization")).toBe(
-      "/w/personal-user-1/settings?section=personalization"
+      "/workspaces/personal-user-1/settings?section=personalization"
     );
   });
 

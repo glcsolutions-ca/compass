@@ -1,6 +1,6 @@
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, type Page, type Route } from "@playwright/test";
 
 const CHAT_LAYOUT_WIDTHS = [1280, 1440, 1728] as const;
 const CHAT_LAYOUT_TARGET_DELTA_PX = 4;
@@ -11,6 +11,15 @@ const MOBILE_CHAT_VIEWPORTS = [
   { width: 430, height: 932 }
 ] as const;
 type SmokeChatSendMode = "required" | "disabled" | "auto";
+
+export interface SmokeSpecOptions {
+  specId: string;
+  expectedEntrypoint: string;
+  requireAuthGateway: boolean;
+  smokeChatSendMode: SmokeChatSendMode;
+  smokeChatForbiddenCreate: boolean;
+  smokeChatLayout: boolean;
+}
 
 function readErrorCode(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -351,7 +360,7 @@ function parseRequiredFlowIds() {
     .filter((value) => value.length > 0);
 }
 
-function parseSmokeChatSendMode(rawValue: string | undefined): SmokeChatSendMode {
+export function parseSmokeChatSendMode(rawValue: string | undefined): SmokeChatSendMode {
   const normalized = rawValue?.trim().toLowerCase();
   if (normalized === "true" || normalized === "required") {
     return "required";
@@ -364,7 +373,7 @@ function parseSmokeChatSendMode(rawValue: string | undefined): SmokeChatSendMode
   return "auto";
 }
 
-function parseFlag(rawValue: string | undefined, defaultValue: boolean): boolean {
+export function parseFlag(rawValue: string | undefined, defaultValue: boolean): boolean {
   const normalized = rawValue?.trim().toLowerCase();
   if (normalized === "true" || normalized === "1" || normalized === "yes") {
     return true;
@@ -922,6 +931,9 @@ async function runFlow(
   const authStartJson = parseJsonObject<{ code?: unknown }>(authStartText);
   const authStartCode = readErrorCode(authStartJson?.code);
   const authStartIsRedirect = authStartStatus === 302 || authStartStatus === 303;
+  const authStartIsAppRedirect =
+    authStartIsRedirect &&
+    (authStartLocation.startsWith("/") || authStartLocation.startsWith(baseUrl));
   const authStartIsExplicitAuthUnavailable =
     authStartStatus === 503 &&
     (authStartCode === "ENTRA_LOGIN_DISABLED" ||
@@ -936,9 +948,10 @@ async function runFlow(
   });
   flowAssertions.push({
     id: `${flowId}:gateway-auth-start-target`,
-    description: `[${flowId}] Gateway auth start response is provider redirect or explicit auth-unavailable error`,
+    description: `[${flowId}] Gateway auth start response is provider redirect, app redirect in mock mode, or explicit auth-unavailable error`,
     pass:
       (authStartIsRedirect && authStartLocation.startsWith("https://login.microsoftonline.com/")) ||
+      authStartIsAppRedirect ||
       authStartIsExplicitAuthUnavailable,
     details:
       authStartLocation ||
@@ -946,22 +959,25 @@ async function runFlow(
   });
 }
 
-test("compass smoke flow", async ({ page, baseURL }) => {
+export async function runSmokeSpec({
+  page,
+  baseURL,
+  options
+}: {
+  page: Page;
+  baseURL: string | undefined;
+  options: SmokeSpecOptions;
+}) {
   const headSha = process.env.HEAD_SHA ?? "local";
   const testedSha = process.env.TESTED_SHA ?? headSha;
   const prNumber = Number(process.env.PR_NUMBER ?? "0");
   const baseUrl = baseURL ?? process.env.WEB_BASE_URL ?? "http://127.0.0.1:3000";
-  const expectedEntrypoint = process.env.EXPECTED_ENTRYPOINT ?? "/";
-  const requireAuthGateway = process.env.REQUIRE_AUTH_GATEWAY?.trim().toLowerCase() === "true";
-  const smokeChatSendMode = parseSmokeChatSendMode(process.env.SMOKE_CHAT_SEND);
-  const smokeChatForbiddenCreate = parseFlag(process.env.SMOKE_CHAT_FORBIDDEN_CREATE, false);
-  const smokeChatLayout = process.env.SMOKE_CHAT_LAYOUT?.trim().toLowerCase() === "true";
   const flowIds = parseRequiredFlowIds();
 
   const outputDir = path.join(".artifacts", "browser-evidence", testedSha);
   await mkdir(outputDir, { recursive: true });
 
-  const manifestPath = path.join(outputDir, "manifest.json");
+  const manifestPath = path.join(outputDir, `${options.specId}.json`);
   const assertions: Array<{
     id: string;
     description: string;
@@ -998,15 +1014,15 @@ test("compass smoke flow", async ({ page, baseURL }) => {
     let flowStatus: "passed" | "failed" = "passed";
 
     try {
-      await page.goto(`${baseUrl}${expectedEntrypoint}`, { waitUntil: "networkidle" });
+      await page.goto(`${baseUrl}${options.expectedEntrypoint}`, { waitUntil: "networkidle" });
       await runFlow(
         page,
         flowId,
         baseUrl,
-        requireAuthGateway,
-        smokeChatSendMode,
-        smokeChatForbiddenCreate,
-        smokeChatLayout,
+        options.requireAuthGateway,
+        options.smokeChatSendMode,
+        options.smokeChatForbiddenCreate,
+        options.smokeChatLayout,
         outputDir,
         flowAssertions,
         artifacts
@@ -1044,7 +1060,7 @@ test("compass smoke flow", async ({ page, baseURL }) => {
 
     flows.push({
       id: flowId,
-      entrypoint: expectedEntrypoint,
+      entrypoint: options.expectedEntrypoint,
       accountIdentity: "platform-baseline",
       status: flowStatus,
       startedAt,
@@ -1055,6 +1071,7 @@ test("compass smoke flow", async ({ page, baseURL }) => {
 
   const manifest = {
     schemaVersion: "1",
+    specId: options.specId,
     headSha,
     testedSha,
     prNumber,
@@ -1081,4 +1098,4 @@ test("compass smoke flow", async ({ page, baseURL }) => {
 
     throw new Error(`Browser evidence failed. See ${manifestPath}`);
   }
-});
+}

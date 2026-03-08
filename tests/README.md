@@ -1,12 +1,11 @@
 # Testing
 
-This repository uses a stage-aligned test taxonomy:
+This repository uses a simpler product-first test taxonomy:
 
-1. Unit tests.
-2. Integration tests (app-local integration behavior).
-3. Acceptance tests (cross-service/system + browser).
-4. Pipeline tooling tests.
-5. Nonfunctional tests (performance/security scaffolds).
+1. Unit tests beside the source they verify.
+2. App-local integration tests beside the module they exercise.
+3. Acceptance tests under `tests/acceptance/*`.
+4. Pipeline tooling tests under `platform/pipeline`.
 
 ## Core Commands
 
@@ -25,12 +24,12 @@ pnpm --filter @compass/pipeline-tools run test
 ## Directory Model
 
 - colocated `*.test.ts(x)` files beside the source they verify in `apps/*/src` and `packages/*/src`.
-- `apps/<app>/test/integration` for app-owned integration suites.
-- `tests/acceptance/system` for cross-service system flows.
-- `tests/acceptance/e2e` for browser/user journeys.
-- `tests/acceptance/*` for black-box API, web, and desktop workflows.
+- colocated `*.integration.test.ts` files beside the app module they exercise when real adapters are required.
+- `tests/acceptance/api` for black-box API flows.
+- `tests/acceptance/web` for browser/user journeys.
+- `tests/acceptance/desktop` for desktop black-box workflows.
 
 ## Acceptance References
 
-- `tests/acceptance/system/README.md`
-- `tests/acceptance/e2e/README.md`
+- `tests/acceptance/api/system/README.md`
+- `tests/acceptance/web/e2e/README.md`

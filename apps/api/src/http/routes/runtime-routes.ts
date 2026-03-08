@@ -1,11 +1,11 @@
 import {
-  type RuntimeAccountLoginCancelRequest,
   RuntimeAccountLoginCancelRequestSchema,
-  type RuntimeAccountLoginStartRequest,
   RuntimeAccountLoginStartRequestSchema,
-  type RuntimeAccountReadRequest,
-  RuntimeAccountReadRequestSchema
-} from "@compass/contracts";
+  RuntimeAccountReadRequestSchema,
+  type RuntimeAccountLoginCancelRequest,
+  type RuntimeAccountLoginStartRequest,
+  type RuntimeAccountReadRequest
+} from "../../modules/runtime/runtime-schemas.js";
 import type { ThreadServiceRoutesContext } from "./route-context.js";
 
 export function registerRuntimeRoutes(input: ThreadServiceRoutesContext): void {

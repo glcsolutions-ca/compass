@@ -42,7 +42,7 @@ const useManagedWebServer = process.env.WEB_BASE_URL === undefined;
 
 export default defineConfig({
   testDir: "./",
-  testMatch: ["smoke.spec.ts"],
+  testMatch: ["*.spec.ts"],
   timeout: 60_000,
   retries: 0,
   workers: 1,

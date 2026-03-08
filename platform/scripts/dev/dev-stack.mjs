@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import { mkdir, open, readFile, stat, unlink, writeFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import path from "node:path";
 import { ensureEnvSetup } from "./env-setup.mjs";
 import { resolveLocalDevEnv } from "./local-env.mjs";
@@ -9,14 +8,7 @@ import { resolveLocalDevEnv } from "./local-env.mjs";
 const ARTIFACTS_DIR = ".artifacts/dev";
 const LOCK_PATH = path.join(ARTIFACTS_DIR, "dev-stack.lock.json");
 const DEV_APPS_LOG_PATH = path.join(ARTIFACTS_DIR, "dev-apps.log");
-const TURBO_DEV_ARGS = [
-  "run",
-  "dev",
-  "--parallel",
-  "--filter=@compass/api",
-  "--filter=@compass/web"
-];
-const require = createRequire(import.meta.url);
+const DEV_APPS_RUNNER_PATH = path.resolve(process.cwd(), "platform/scripts/dev/run-apps.mjs");
 
 function nowIso() {
   return new Date().toISOString();
@@ -49,42 +41,6 @@ async function pathExists(filePath) {
   } catch {
     return false;
   }
-}
-
-function resolveTurboBinarySpecifier() {
-  const platform = process.platform === "win32" ? "windows" : process.platform;
-  const arch = process.arch === "x64" ? "64" : process.arch;
-  const supportedPlatforms = new Set(["darwin", "linux", "windows"]);
-  const supportedArch = new Set(["64", "arm64"]);
-
-  if (!supportedPlatforms.has(platform) || !supportedArch.has(arch)) {
-    return null;
-  }
-
-  const extension = platform === "windows" ? ".exe" : "";
-  return `turbo-${platform}-${arch}/bin/turbo${extension}`;
-}
-
-async function resolveTurboCommand(rootDir) {
-  const turboBinarySpecifier = resolveTurboBinarySpecifier();
-  if (turboBinarySpecifier) {
-    try {
-      return require.resolve(turboBinarySpecifier);
-    } catch {
-      // fall through
-    }
-  }
-
-  const localTurboBin =
-    process.platform === "win32"
-      ? path.resolve(rootDir, "node_modules/.bin/turbo.cmd")
-      : path.resolve(rootDir, "node_modules/.bin/turbo");
-
-  if (await pathExists(localTurboBin)) {
-    return localTurboBin;
-  }
-
-  return "turbo";
 }
 
 async function isPidRunning(pid) {
@@ -310,9 +266,9 @@ async function down(rootDir, env) {
   console.info("dev-stack: dependencies are down.");
 }
 
-function launchTurboDev(rootDir, env, turboCommand) {
+function launchAppStack(rootDir, env) {
   return new Promise((resolve, reject) => {
-    const child = spawn(turboCommand, TURBO_DEV_ARGS, {
+    const child = spawn(process.execPath, [DEV_APPS_RUNNER_PATH], {
       cwd: rootDir,
       stdio: "inherit",
       env
@@ -359,7 +315,7 @@ function launchTurboDev(rootDir, env, turboCommand) {
   });
 }
 
-async function launchTurboDevDetached(rootDir, env, turboCommand) {
+async function launchAppStackDetached(rootDir, env) {
   await ensureArtifactsDir(rootDir);
   const logPath = path.resolve(rootDir, DEV_APPS_LOG_PATH);
   const logHandle = await open(
@@ -367,7 +323,7 @@ async function launchTurboDevDetached(rootDir, env, turboCommand) {
     fsConstants.O_CREAT | fsConstants.O_APPEND | fsConstants.O_WRONLY
   );
 
-  const child = spawn(turboCommand, TURBO_DEV_ARGS, {
+  const child = spawn(process.execPath, [DEV_APPS_RUNNER_PATH], {
     cwd: rootDir,
     detached: true,
     stdio: ["ignore", logHandle.fd, logHandle.fd],
@@ -400,7 +356,6 @@ async function resolveRuntimeEnv(rootDir) {
 
 async function run(rootDir) {
   await clearStaleLockIfNeeded(rootDir);
-  const turboCommand = await resolveTurboCommand(rootDir);
   const { env, ports } = await resolveRuntimeEnv(rootDir);
   await writeLock(rootDir, {
     mode: "run",
@@ -416,7 +371,7 @@ async function run(rootDir) {
   try {
     await startDependencies(rootDir, env);
     console.info("dev-stack: dependencies are ready.");
-    turboExitCode = await launchTurboDev(rootDir, env, turboCommand);
+    turboExitCode = await launchAppStack(rootDir, env);
   } finally {
     try {
       await down(rootDir, env);
@@ -431,7 +386,6 @@ async function run(rootDir) {
 
 async function up(rootDir) {
   await clearStaleLockIfNeeded(rootDir);
-  const turboCommand = await resolveTurboCommand(rootDir);
   const { env, ports } = await resolveRuntimeEnv(rootDir);
 
   let appsPid = null;
@@ -439,7 +393,7 @@ async function up(rootDir) {
     await startDependencies(rootDir, env);
     console.info("dev-stack: dependencies are ready.");
 
-    const detached = await launchTurboDevDetached(rootDir, env, turboCommand);
+    const detached = await launchAppStackDetached(rootDir, env);
     appsPid = detached.pid;
     await writeLock(rootDir, {
       mode: "up",

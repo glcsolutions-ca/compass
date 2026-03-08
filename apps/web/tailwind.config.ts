@@ -1,9 +1,18 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Config } from "tailwindcss";
 import animate from "tailwindcss-animate";
 
+const webDir = path.dirname(fileURLToPath(import.meta.url));
+
 export default {
   darkMode: ["class"],
-  content: ["./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
+  content: [
+    path.resolve(webDir, "app/**/*.{ts,tsx}"),
+    path.resolve(webDir, "src/**/*.{ts,tsx}"),
+    path.resolve(webDir, "../../packages/client-app/src/**/*.{ts,tsx}"),
+    path.resolve(webDir, "../../packages/ui/src/**/*.{ts,tsx}")
+  ],
   theme: {
     container: {
       center: true,

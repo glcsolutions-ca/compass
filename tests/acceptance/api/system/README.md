@@ -1,6 +1,6 @@
-# System Smoke
+# API Acceptance Smoke
 
-Purpose: system-level smoke checks for runtime health.
+Purpose: black-box API smoke checks for runtime health.
 
 ## Run
 
@@ -15,4 +15,4 @@ Set target endpoint via:
 
 ## Source Of Truth
 
-- `tests/acceptance/system/smoke.ts`
+- `tests/acceptance/api/system/smoke.ts`

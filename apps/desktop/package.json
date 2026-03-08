@@ -6,8 +6,9 @@
   "main": "dist/main/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "dev": "tsx watch src/main/index.ts",
-    "lint": "eslint . --ext .ts --max-warnings=0",
+    "dev": "pnpm build && pnpm start",
+    "start": "pnpm exec electron dist/main/index.js",
+    "lint": "eslint . --ext .ts --ignore-pattern src/preload/index.mts --max-warnings=0",
     "test": "vitest run --config vitest.config.mts --passWithNoTests",
     "typecheck": "tsc -p tsconfig.ref.json --noEmit"
   },

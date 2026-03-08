@@ -20,5 +20,5 @@
       "path": "../../packages/runtime-protocol"
     }
   ],
-  "include": ["src/**/*.ts", "test/integration/**/*.ts"]
+  "include": ["src/**/*.ts"]
 }

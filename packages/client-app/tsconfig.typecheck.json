@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.ref.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true
+  }
+}

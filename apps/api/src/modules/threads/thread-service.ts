@@ -25,6 +25,7 @@ import {
   mapTurnRow,
   parseExecutionHost,
   parseExecutionMode,
+  readRecordBoolean,
   readRecordNullableString,
   readRecordString,
   readTurnOutputText
@@ -915,7 +916,7 @@ class LocalHttpExecutionDriver implements RuntimeExecutionDriver {
         ? (interrupt as Record<string, unknown>)
         : { driver: this.provider, operation: "interrupt" };
     const interrupted =
-      payload["status"] === "interrupted" || interruptMetadata["interrupted"] === true;
+      payload["status"] === "interrupted" || readRecordBoolean(interruptMetadata, "interrupted");
 
     return {
       interrupted,

@@ -54,7 +54,11 @@ export function readRecordNullableString(row: Record<string, unknown>, key: stri
   return null;
 }
 
-function readRecordBoolean(row: Record<string, unknown>, key: string, fallback = false): boolean {
+export function readRecordBoolean(
+  row: Record<string, unknown>,
+  key: string,
+  fallback = false
+): boolean {
   const value = row[key];
   if (typeof value === "boolean") {
     return value;

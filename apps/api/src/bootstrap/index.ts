@@ -5,6 +5,7 @@ import { loadEnvFile } from "node:process";
 import { buildDefaultAuthService } from "../modules/auth/auth-service.js";
 import { buildDefaultSessionControlPlane } from "../modules/runtime/session-control-plane.js";
 import { buildDefaultThreadService } from "../modules/threads/thread-service.js";
+import { buildDefaultWorkspacesService } from "../modules/workspaces/workspaces-service.js";
 import { buildApiApp } from "../http/build-app.js";
 import { attachThreadWebSocketGateway } from "../http/thread-websocket.js";
 import { attachSessionAgentGateway } from "../modules/runtime/gateway.js";
@@ -50,6 +51,10 @@ process.env.AUTH_MODE = config.authMode;
 await verifyDatabaseReadiness({ databaseUrl });
 
 const defaultAuth = buildDefaultAuthService(databaseUrl, process.env);
+const defaultWorkspacesService = buildDefaultWorkspacesService({
+  repository: defaultAuth.repository,
+  authService: defaultAuth.service
+});
 const sessionControlPlane = buildDefaultSessionControlPlane({
   env: process.env,
   apiPort: config.port,
@@ -62,6 +67,7 @@ const defaultThreadService = buildDefaultThreadService({
 });
 const app = buildApiApp({
   authService: defaultAuth.service,
+  workspacesService: defaultWorkspacesService,
   threadService: defaultThreadService.service
 });
 

@@ -4,6 +4,7 @@ import { type ExecutionMode, buildOpenApiDocument } from "@compass/contracts";
 import type { ZodType, ZodTypeDef } from "zod";
 import { type AuthService } from "../modules/auth/auth-service.js";
 import type { ThreadService } from "../modules/threads/thread-service.js";
+import type { WorkspacesService } from "../modules/workspaces/workspaces-service.js";
 import {
   DEFAULT_AUTH_RATE_LIMIT_MAX_ENTRIES,
   DEFAULT_AUTH_RATE_LIMIT_MAX_REQUESTS,
@@ -36,6 +37,7 @@ interface JsonParseError extends Error {
 interface ApiAppOptions {
   now?: () => Date;
   authService?: AuthService | null;
+  workspacesService?: WorkspacesService | null;
   threadService?: ThreadService | null;
   agentGatewayEnabled?: boolean;
   agentCloudModeEnabled?: boolean;
@@ -106,6 +108,7 @@ function parseFeatureFlag(value: string | undefined, fallback: boolean): boolean
 export function buildApiApp(options: ApiAppOptions = {}): Express {
   const now = options.now ?? (() => new Date());
   const authService = options.authService ?? null;
+  const workspacesService = options.workspacesService ?? null;
   const threadService = options.threadService ?? null;
   const agentGatewayEnabled =
     options.agentGatewayEnabled ?? parseFeatureFlag(process.env.AGENT_GATEWAY_ENABLED, false);
@@ -205,7 +208,7 @@ export function buildApiApp(options: ApiAppOptions = {}): Express {
   registerWorkspaceRoutes({
     app,
     now,
-    authService,
+    workspacesService,
     parseOrReply,
     currentSessionToken,
     sendAuthError

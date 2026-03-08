@@ -5,10 +5,8 @@ flowchart LR
     PR["Pull Request"] --> PF["Commit Stage / Preflight"]
     PF --> MQ["Merge Queue"]
 
-    MQ --> GM["Guard Mainline"]
     MQ --> VR["Verify"]
     MQ --> BC["Build Candidate\n(api, web, migrations)"]
-    GM --> PC["Publish Candidate"]
     VR --> PC
     BC --> PC
     PC --> CS["Commit Stage"]
@@ -48,12 +46,11 @@ PR preflight keeps the queue fast. It applies labels, lints workflows, validates
 
 The `merge_group` path is the real Commit Stage. It:
 
-1. checks that the latest mainline promotion is green
-2. runs `pnpm check:commit`
-3. runs `pnpm check:pipeline`
-4. runs `actionlint`
-5. builds and publishes the API, Web, and migrations images
-6. publishes the immutable release candidate manifest and release unit
+1. runs `pnpm check:commit`
+2. runs `pnpm check:pipeline`
+3. runs `actionlint`
+4. builds and publishes the API, Web, and migrations images
+5. publishes the immutable release candidate manifest and release unit
 
 `Commit Stage` is the only required merge-queue check.
 
@@ -93,7 +90,7 @@ Later stages do not rebuild images or substitute different digests.
 
 ## Operating Guidance
 
-- Treat `main` as blocked if `Mainline Promotion` fails.
+- Treat `main` as unhealthy if `Mainline Promotion` fails.
 - Prefer fix-forward over manual recovery.
 - Keep PR-time work cheap and integrated-code verification authoritative.
 - Keep delivery policy in `platform/pipeline` and repo/ruleset state in `bootstrap/config`.

@@ -281,48 +281,6 @@ jobs:
             exit 1
           fi
 
-      - name: Require previous mainline promotion to be green
-        if: ${{ github.event_name == 'push' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/20-mainline-promotion.yml/runs?branch=main&event=push&status=completed&per_page=100"
-          response_file="$(mktemp)"
-          status_code="$(curl -sSL -o "$response_file" -w '%{http_code}' \
-            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            -H 'Accept: application/vnd.github+json' \
-            "$api")"
-
-          if [ "$status_code" = '404' ]; then
-            echo 'No previous mainline promotion found; continuing.'
-            exit 0
-          fi
-
-          if [ "$status_code" != '200' ]; then
-            cat "$response_file" >&2
-            exit 1
-          fi
-
-          previous_conclusion="$(jq -r --argjson current "${GITHUB_RUN_NUMBER}" '
-            [.workflow_runs[]
-             | select(.run_number < $current)]
-            | sort_by(.run_number)
-            | last
-            | .conclusion // ""
-          ' "$response_file")"
-
-          if [ -z "$previous_conclusion" ]; then
-            echo 'No previous mainline promotion found; continuing.'
-            exit 0
-          fi
-
-          if [ "$previous_conclusion" != 'success' ]; then
-            echo "Previous mainline promotion is ${previous_conclusion}. Fix main before promoting newer candidates." >&2
-            exit 1
-          fi
-
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:

@@ -21,7 +21,7 @@ gh workflow run 20-mainline-promotion.yml --ref main -f candidate_id=sha-<previo
 Forward release (`push` to `main`):
 
 1. verify acceptance attestation
-2. verify the previous `main` promotion already completed `Mainline Promotion`
+2. wait for any older mainline promotion runs to finish
 3. apply support Bicep when `platform/infra/azure/**` changed in the merged revision
 4. deploy candidate digests to `api-stage` and `web-stage`
 5. run read-only stage health smoke

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useLocation, useMatches } from "react-router";
 import { ChatThreadRail } from "~/layout/chat-thread-rail";
 import { resolveCurrentWorkspaceSlug } from "~/layout/current-workspace";
@@ -21,6 +21,7 @@ import { SidebarAccountMenu } from "~/layout/app-sidebar-account-menu";
 import { SidebarBrandControl, SidebarCollapseControl } from "~/layout/app-sidebar-controls";
 import { buildPrimaryItems, buildUtilityItems } from "~/layout/app-sidebar-model";
 import type { SettingsSection } from "~/features/settings/types";
+import { writePreferredWorkspaceSlug } from "~/features/workspaces/workspace-preference";
 
 export interface AppSidebarProps {
   auth: AuthShellLoaderData;
@@ -57,6 +58,10 @@ export function AppSidebar({ auth, buildSettingsHref }: AppSidebarProps) {
       }),
     [currentWorkspaceSlug, location.pathname]
   );
+
+  useEffect(() => {
+    writePreferredWorkspaceSlug(currentWorkspaceSlug);
+  }, [currentWorkspaceSlug]);
 
   return (
     <Sidebar collapsible="icon" side="left" variant="sidebar">
@@ -128,7 +133,7 @@ export function AppSidebar({ auth, buildSettingsHref }: AppSidebarProps) {
               {workspaces
                 .filter((workspace) => workspace.status === "active")
                 .map((workspace) => {
-                  const href = `/chat?workspace=${encodeURIComponent(workspace.slug)}`;
+                  const href = "/chat";
                   const active = workspace.slug === currentWorkspaceSlug;
 
                   return (
@@ -137,6 +142,9 @@ export function AppSidebar({ auth, buildSettingsHref }: AppSidebarProps) {
                         <Link
                           aria-current={active ? "page" : undefined}
                           aria-label={workspace.name}
+                          onClick={() => {
+                            writePreferredWorkspaceSlug(workspace.slug);
+                          }}
                           to={href}
                         >
                           <span>{workspace.name}</span>

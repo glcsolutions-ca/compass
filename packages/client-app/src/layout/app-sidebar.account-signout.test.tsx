@@ -53,10 +53,7 @@ function renderSidebarRouter() {
   return render(
     <MemoryRouter initialEntries={["/chat"]}>
       <SidebarProvider>
-        <AppSidebar
-          auth={AUTH_FIXTURE}
-          buildSettingsHref={(section) => `/chat?modal=settings&section=${section}`}
-        />
+        <AppSidebar auth={AUTH_FIXTURE} buildSettingsHref={(section) => `/settings/${section}`} />
       </SidebarProvider>
     </MemoryRouter>
   );

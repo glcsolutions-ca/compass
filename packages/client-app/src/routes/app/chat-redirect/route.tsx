@@ -1,6 +1,5 @@
 import { redirect } from "react-router";
 import { loadAuthShellData } from "~/features/auth/shell-loader";
-import { resolveNewThreadTarget } from "~/lib/routes/chat-routes";
 
 export async function clientLoader({ request }: { request: Request }): Promise<Response> {
   const auth = await loadAuthShellData({ request });
@@ -18,7 +17,7 @@ export async function clientLoader({ request }: { request: Request }): Promise<R
     return redirect("/workspaces");
   }
 
-  return redirect(resolveNewThreadTarget(workspaceSlug));
+  return redirect("/chat");
 }
 
 export default function ChatRedirectRoute() {

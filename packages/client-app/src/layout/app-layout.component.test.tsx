@@ -53,7 +53,7 @@ beforeEach(() => {
   });
   useLocationMock.mockReturnValue({
     pathname: "/chat",
-    search: "?workspace=personal-user-1",
+    search: "",
     hash: ""
   });
   useMatchesMock.mockReturnValue([{ handle: { shellLayout: "default" } }]);
@@ -82,12 +82,8 @@ describe("app layout component", () => {
     if (!sidebarProps) {
       throw new Error("Expected AppLayout to render AppSidebar with props.");
     }
-    expect(sidebarProps.buildSettingsHref("general")).toBe(
-      "/workspaces/personal-user-1/settings?section=general"
-    );
-    expect(sidebarProps.buildSettingsHref("personalization")).toBe(
-      "/workspaces/personal-user-1/settings?section=personalization"
-    );
+    expect(sidebarProps.buildSettingsHref("general")).toBe("/settings/general");
+    expect(sidebarProps.buildSettingsHref("personalization")).toBe("/settings/personalization");
   });
 
   it("uses immersive shell layout when deepest route handle requests it", () => {

@@ -86,10 +86,7 @@ describe("app sidebar", () => {
     render(
       <MemoryRouter initialEntries={["/workspaces"]}>
         <SidebarProvider>
-          <AppSidebar
-            auth={AUTH_FIXTURE}
-            buildSettingsHref={(section) => `/chat?modal=settings&section=${section}`}
-          />
+          <AppSidebar auth={AUTH_FIXTURE} buildSettingsHref={(section) => `/settings/${section}`} />
         </SidebarProvider>
       </MemoryRouter>
     );
@@ -98,7 +95,7 @@ describe("app sidebar", () => {
     const automationsLink = screen.getByRole("link", { name: "Automations" });
     const skillsLink = screen.getByRole("link", { name: "Skills" });
 
-    expect(newThreadLink.getAttribute("href")).toContain("/chat?workspace=personal-user-1&thread=");
+    expect(newThreadLink.getAttribute("href")).toBe("/chat");
     expect(automationsLink.getAttribute("href")).toBe("/workspaces/personal-user-1/automations");
     expect(skillsLink.getAttribute("href")).toBe("/workspaces/personal-user-1/skills");
 
@@ -112,10 +109,7 @@ describe("app sidebar", () => {
     const { container } = render(
       <MemoryRouter initialEntries={["/workspaces"]}>
         <SidebarProvider>
-          <AppSidebar
-            auth={AUTH_FIXTURE}
-            buildSettingsHref={(section) => `/chat?modal=settings&section=${section}`}
-          />
+          <AppSidebar auth={AUTH_FIXTURE} buildSettingsHref={(section) => `/settings/${section}`} />
         </SidebarProvider>
       </MemoryRouter>
     );
@@ -147,7 +141,7 @@ describe("app sidebar", () => {
               activeWorkspaceSlug: null,
               personalWorkspaceSlug: null
             }}
-            buildSettingsHref={(section) => `/workspaces?modal=settings&section=${section}`}
+            buildSettingsHref={(section) => `/settings/${section}`}
           />
         </SidebarProvider>
       </MemoryRouter>
@@ -161,10 +155,7 @@ describe("app sidebar", () => {
     const { container } = render(
       <MemoryRouter initialEntries={["/chat"]}>
         <SidebarProvider defaultOpen={false}>
-          <AppSidebar
-            auth={AUTH_FIXTURE}
-            buildSettingsHref={(section) => `/chat?modal=settings&section=${section}`}
-          />
+          <AppSidebar auth={AUTH_FIXTURE} buildSettingsHref={(section) => `/settings/${section}`} />
         </SidebarProvider>
       </MemoryRouter>
     );
@@ -177,9 +168,7 @@ describe("app sidebar", () => {
     expect(chatLink.getAttribute("aria-label")).toBe("Chat");
 
     const utilityNewThread = scoped.getByRole("link", { name: "New thread" });
-    expect(utilityNewThread.getAttribute("href")).toContain(
-      "/chat?workspace=personal-user-1&thread="
-    );
+    expect(utilityNewThread.getAttribute("href")).toBe("/chat");
     expect(scoped.getByRole("link", { name: "Automations" })).toBeTruthy();
     expect(scoped.getByRole("link", { name: "Skills" })).toBeTruthy();
 
@@ -197,7 +186,7 @@ describe("app sidebar", () => {
             <SidebarProvider>
               <AppSidebar
                 auth={AUTH_FIXTURE}
-                buildSettingsHref={(section) => `/chat?modal=settings&section=${section}`}
+                buildSettingsHref={(section) => `/settings/${section}`}
               />
             </SidebarProvider>
           )
@@ -229,8 +218,8 @@ describe("app sidebar", () => {
       personalizationItem.querySelector("a")?.getAttribute("href") ??
       "";
 
-    expect(settingsHref).toContain("modal=settings&section=general");
-    expect(personalizationHref).toContain("modal=settings&section=personalization");
+    expect(settingsHref).toBe("/settings/general");
+    expect(personalizationHref).toBe("/settings/personalization");
     expect(menuItemLabels).toEqual(["Personalization", "Settings", "Help", "Log out"]);
     expect(screen.queryByRole("menuitem", { name: "Manage workspaces" })).toBeNull();
     expect(screen.queryByText("No workspaces found.")).toBeNull();

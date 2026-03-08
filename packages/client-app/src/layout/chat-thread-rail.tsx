@@ -40,19 +40,7 @@ import {
 function readActiveThreadHandle(pathname: string): string | null {
   const match = /^\/c\/([^/]+)$/u.exec(pathname);
   if (!match?.[1]) {
-    const priorCanonicalMatch = /^\/chat\/([^/]+)$/u.exec(pathname);
-    if (priorCanonicalMatch?.[1]) {
-      const priorCanonicalDecoded = decodeURIComponent(priorCanonicalMatch[1]).trim();
-      return priorCanonicalDecoded.length > 0 ? priorCanonicalDecoded : null;
-    }
-
-    const legacyMatch = /^\/w\/[^/]+\/chat\/([^/]+)$/u.exec(pathname);
-    if (!legacyMatch?.[1]) {
-      return null;
-    }
-
-    const legacyDecoded = decodeURIComponent(legacyMatch[1]).trim();
-    return legacyDecoded.length > 0 ? legacyDecoded : null;
+    return null;
   }
 
   const decoded = decodeURIComponent(match[1]).trim();

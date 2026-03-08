@@ -1,8 +1,8 @@
 import type { MetaFunction } from "react-router";
-import { Link, useLocation, useParams } from "react-router";
-import type { ShellRouteHandle } from "~/features/auth/types";
+import { Link, useOutletContext, useParams } from "react-router";
+import type { AuthShellLoaderData, ShellRouteHandle } from "~/features/auth/types";
 import { resolveNewThreadTarget } from "~/lib/routes/chat-routes";
-import { buildWorkspaceSettingsHref } from "~/lib/routes/workspace-routes";
+import { buildSettingsHref, resolveSettingsSection } from "~/lib/routes/settings-routes";
 import { Button } from "@compass/ui/button";
 import type { SettingsSection } from "~/features/settings/types";
 
@@ -25,9 +25,14 @@ const SETTINGS_SECTIONS: Array<{
   }
 ];
 
-function readSection(search: string): SettingsSection {
-  const section = new URLSearchParams(search).get("section");
-  return section === "personalization" ? "personalization" : "general";
+function resolveChatReturnTarget(auth: AuthShellLoaderData): string {
+  const workspaceSlug =
+    auth.activeWorkspaceSlug?.trim() ||
+    auth.personalWorkspaceSlug?.trim() ||
+    auth.workspaces.find((workspace) => workspace.status === "active")?.slug?.trim() ||
+    "";
+
+  return workspaceSlug ? resolveNewThreadTarget(workspaceSlug) : "/workspaces";
 }
 
 export const meta: MetaFunction = () => {
@@ -40,21 +45,20 @@ export const handle: ShellRouteHandle = {
 };
 
 export default function SettingsRoute() {
-  const location = useLocation();
   const params = useParams();
-  const section = readSection(location.search);
-  const workspaceSlug = params.workspaceSlug ?? "";
+  const { auth } = useOutletContext<{ auth: AuthShellLoaderData }>();
+  const section = resolveSettingsSection(params.section);
+  const chatHref = resolveChatReturnTarget(auth);
 
   return (
     <section className="mx-auto flex w-full max-w-4xl flex-col gap-8" data-testid="settings-page">
       <header className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-          Workspace Settings
+          Account Settings
         </p>
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">Settings</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Settings are now part of the workspace route model so navigation stays predictable and
-          deep-linkable.
+          Settings now use a dedicated account route so links stay clean, short, and predictable.
         </p>
       </header>
 
@@ -67,23 +71,19 @@ export default function SettingsRoute() {
           >
             <h2 className="text-sm font-semibold text-card-foreground">{item.title}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
-            {workspaceSlug ? (
-              <Link
-                className="mt-3 inline-flex text-sm font-medium text-muted-foreground hover:text-foreground"
-                to={buildWorkspaceSettingsHref(workspaceSlug, item.key)}
-              >
-                Open {item.title}
-              </Link>
-            ) : null}
+            <Link
+              className="mt-3 inline-flex text-sm font-medium text-muted-foreground hover:text-foreground"
+              to={buildSettingsHref(item.key)}
+            >
+              Open {item.title}
+            </Link>
           </article>
         ))}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <Button asChild type="button">
-          <Link to={workspaceSlug ? resolveNewThreadTarget(workspaceSlug) : "/workspaces"}>
-            Return to chat
-          </Link>
+          <Link to={chatHref}>Return to chat</Link>
         </Button>
       </div>
     </section>

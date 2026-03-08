@@ -56,9 +56,7 @@ export function buildUtilityItems(input: {
         ? buildWorkspaceAutomationsHref(input.defaultWorkspaceSlug)
         : "/workspaces",
       icon: Clock3,
-      active:
-        /^\/workspaces\/[^/]+\/automations(?:\/|$)/u.test(input.pathname) ||
-        /^\/w\/[^/]+\/automations(?:\/|$)/u.test(input.pathname)
+      active: /^\/workspaces\/[^/]+\/automations(?:\/|$)/u.test(input.pathname)
     },
     {
       label: "Skills",
@@ -66,9 +64,7 @@ export function buildUtilityItems(input: {
         ? buildWorkspaceSkillsHref(input.defaultWorkspaceSlug)
         : "/workspaces",
       icon: Boxes,
-      active:
-        /^\/workspaces\/[^/]+\/skills(?:\/|$)/u.test(input.pathname) ||
-        /^\/w\/[^/]+\/skills(?:\/|$)/u.test(input.pathname)
+      active: /^\/workspaces\/[^/]+\/skills(?:\/|$)/u.test(input.pathname)
     }
   ];
 }
@@ -80,15 +76,9 @@ export function buildPrimaryItems(input: {
   return [
     {
       label: "Chat",
-      to: input.defaultWorkspaceSlug
-        ? `/chat?workspace=${encodeURIComponent(input.defaultWorkspaceSlug)}`
-        : "/chat",
+      to: "/chat",
       icon: MessageSquareText,
-      active:
-        input.pathname === "/chat" ||
-        input.pathname.startsWith("/c/") ||
-        input.pathname.startsWith("/chat/") ||
-        /^\/w\/[^/]+\/chat(?:\/|$)/u.test(input.pathname)
+      active: input.pathname === "/chat" || input.pathname.startsWith("/c/")
     },
     {
       label: "Workspaces",

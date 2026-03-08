@@ -92,6 +92,54 @@ async function waitForChatEntryState({
   return "none";
 }
 
+async function submitComposerPrompt({
+  page,
+  composerInput,
+  sendButton,
+  promptText
+}: {
+  page: Page;
+  composerInput: ReturnType<Page["locator"]>;
+  sendButton: ReturnType<Page["getByRole"]>;
+  promptText: string;
+}): Promise<void> {
+  const tryClickSendButton = async (): Promise<boolean> => {
+    const sendVisible = await sendButton.isVisible().catch(() => false);
+    if (!sendVisible) {
+      return false;
+    }
+
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline) {
+      const sendEnabled = await sendButton.isEnabled().catch(() => false);
+      if (sendEnabled) {
+        await sendButton.click();
+        return true;
+      }
+
+      await page.waitForTimeout(100);
+    }
+
+    return false;
+  };
+
+  await composerInput.click();
+  await composerInput.fill(promptText);
+  if (await tryClickSendButton()) {
+    return;
+  }
+
+  // CI occasionally fills before the controlled composer fully hydrates, so
+  // re-type once with real key events before falling back to Enter submit.
+  await composerInput.fill("");
+  await composerInput.pressSequentially(promptText);
+  if (await tryClickSendButton()) {
+    return;
+  }
+
+  await composerInput.press("Enter");
+}
+
 async function ensureSidebarState(
   page: Page,
   targetState: "expanded" | "collapsed"
@@ -509,13 +557,12 @@ async function runForbiddenCreateThreadScenario({
     }
 
     const blockedPrompt = "Smoke forbidden create-thread prompt";
-    await composerInput.fill(blockedPrompt);
-    const sendVisible = await sendButton.isVisible().catch(() => false);
-    if (sendVisible) {
-      await sendButton.click();
-    } else {
-      await composerInput.press("Enter");
-    }
+    await submitComposerPrompt({
+      page: forbiddenPage,
+      composerInput,
+      sendButton,
+      promptText: blockedPrompt
+    });
 
     const blockedPromptVisible = await forbiddenPage
       .getByText(blockedPrompt, { exact: true })
@@ -741,13 +788,12 @@ async function runFlow(
         const promptValues = ["Smoke test prompt 1", "Smoke test prompt 2"] as const;
 
         for (const [index, promptText] of promptValues.entries()) {
-          await composerInput.fill(promptText);
-          const sendVisible = await sendButton.isVisible().catch(() => false);
-          if (sendVisible) {
-            await sendButton.click();
-          } else {
-            await composerInput.press("Enter");
-          }
+          await submitComposerPrompt({
+            page,
+            composerInput,
+            sendButton,
+            promptText
+          });
 
           const sentPromptLocator = chatCanvasRoot.getByText(promptText, { exact: true });
           let sentPromptVisible = false;

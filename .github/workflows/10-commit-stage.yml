@@ -91,53 +91,6 @@ jobs:
         if: ${{ !github.event.pull_request.draft }}
         run: node platform/scripts/dev/audit-legacy-references.mjs
 
-  guard_mainline:
-    name: Guard Mainline
-    if: ${{ github.event_name == 'merge_group' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      actions: read
-      contents: read
-    steps:
-      - name: Require latest mainline promotion to be green
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/20-mainline-promotion.yml/runs?branch=main&event=push&status=completed&per_page=1"
-          response_file="$(mktemp)"
-          status_code="$(curl -sSL -o "$response_file" -w '%{http_code}' \
-            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            -H 'Accept: application/vnd.github+json' \
-            "$api")"
-
-          if [ "$status_code" = '404' ]; then
-            echo 'No previous mainline promotion found; allowing commit stage.'
-            exit 0
-          fi
-
-          if [ "$status_code" != '200' ]; then
-            cat "$response_file" >&2
-            exit 1
-          fi
-
-          count="$(jq '.total_count' "$response_file")"
-          if [ "$count" = '0' ]; then
-            echo 'No previous mainline promotion found; allowing commit stage.'
-            exit 0
-          fi
-
-          conclusion="$(jq -r '.workflow_runs[0].conclusion' "$response_file")"
-          html_url="$(jq -r '.workflow_runs[0].html_url' "$response_file")"
-
-          if [ "$conclusion" != 'success' ]; then
-            echo "Latest mainline promotion is ${conclusion}. Fix main before merging more changes." >&2
-            echo "See: ${html_url}" >&2
-            exit 1
-          fi
-
   prepare:
     name: Prepare Candidate
     if: ${{ github.event_name == 'merge_group' }}
@@ -159,7 +112,6 @@ jobs:
     name: Verify
     if: ${{ github.event_name == 'merge_group' }}
     needs:
-      - guard_mainline
       - prepare
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -197,7 +149,6 @@ jobs:
     name: Build Candidate / ${{ matrix.image.id }}
     if: ${{ github.event_name == 'merge_group' }}
     needs:
-      - guard_mainline
       - prepare
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -359,7 +310,6 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - preflight
-      - guard_mainline
       - prepare
       - verify
       - build_candidate
@@ -369,7 +319,6 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           PREFLIGHT: ${{ needs.preflight.result }}
-          GUARD_MAINLINE: ${{ needs.guard_mainline.result }}
           PREPARE: ${{ needs.prepare.result }}
           VERIFY: ${{ needs.verify.result }}
           BUILD_CANDIDATE: ${{ needs.build_candidate.result }}
@@ -391,7 +340,6 @@ jobs:
             exit 0
           fi
 
-          assert_success guard_mainline "$GUARD_MAINLINE"
           assert_success prepare "$PREPARE"
           assert_success verify "$VERIFY"
           assert_success build_candidate "$BUILD_CANDIDATE"

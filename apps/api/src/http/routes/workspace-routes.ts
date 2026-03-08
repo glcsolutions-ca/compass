@@ -8,7 +8,9 @@ import {
 } from "../../modules/workspaces/workspaces-schemas.js";
 import type { WorkspaceRoutesContext } from "./route-context.js";
 
-function requireWorkspacesService(input: WorkspaceRoutesContext): input is WorkspaceRoutesContext & {
+function requireWorkspacesService(
+  input: WorkspaceRoutesContext
+): input is WorkspaceRoutesContext & {
   workspacesService: NonNullable<WorkspaceRoutesContext["workspacesService"]>;
 } {
   return input.workspacesService !== null;

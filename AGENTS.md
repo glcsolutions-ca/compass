@@ -19,9 +19,9 @@ The current target architecture is:
 
 - one Azure production resource group: `rg-compass-prd-cc-001`
 - one GitHub deployment environment: `production`
-- one PR-only workflow for metadata and queue admission: `00-pr-metadata-and-admission.yml`
-- one cloud delivery workflow for the real stage model: `01-cloud-development-pipeline.yml`
-- one required merge-queue status check: `Pipeline Complete`
+- one commit workflow: `10-commit-stage.yml`
+- one mainline promotion workflow: `20-mainline-promotion.yml`
+- one required merge-queue status check: `Commit Stage`
 - GHCR only
 - no Terraform
 - no ACR
@@ -57,14 +57,12 @@ The current target architecture is:
 - Treat `platform/scripts/bootstrap/*` as admin-only control-plane tooling.
 - Treat `platform/pipeline` as the source of truth for delivery policy and evidence.
 - Treat merge queue as the native entry point to the real development pipeline.
-- Treat `00-pr-metadata-and-admission.yml` as PR metadata and GitHub prerequisite only:
-  - labels
-  - queue admission sanity
-  - no delivery stages
-- Treat `01-cloud-development-pipeline.yml` as the real delivery path:
-  - Commit
-  - Acceptance
-  - Release
+- Treat `10-commit-stage.yml` as the one required check path:
+  - `pull_request`: cheap preflight plus labels
+  - `merge_group`: the full authoritative commit stage and candidate publication
+- Treat `20-mainline-promotion.yml` as the post-merge delivery path:
+  - `push` to `main`: Acceptance then Release
+  - `workflow_dispatch`: rare recovery redeploy of a previously published candidate
 - Treat manual `workflow_dispatch` as rare recovery redeploy:
   - previously released candidates only
   - no infra apply

@@ -1,7 +1,10 @@
 {
-  "extends": "./tsconfig.ref.json",
+  "extends": "./tsconfig.json",
   "compilerOptions": {
     "composite": false,
-    "noEmit": true
-  }
+    "noEmit": true,
+    "rootDir": ".."
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

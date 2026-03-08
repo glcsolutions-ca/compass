@@ -50,12 +50,12 @@ jobs:
       - name: Install actionlint
         run: |
           install_dir="$RUNNER_TEMP/actionlint-bin"
+          archive="$RUNNER_TEMP/actionlint_1.7.8_linux_amd64.tar.gz"
           mkdir -p "$install_dir"
-          (
-            cd "$install_dir"
-            curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash \
-              | bash -s -- 1.7.8
-          )
+          curl --fail --retry 5 --retry-all-errors --retry-delay 2 --location \
+            --output "$archive" \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.8/actionlint_1.7.8_linux_amd64.tar.gz
+          tar -xzf "$archive" -C "$install_dir" actionlint
           echo "$install_dir" >> "$GITHUB_PATH"
 
       - name: Workflow lint

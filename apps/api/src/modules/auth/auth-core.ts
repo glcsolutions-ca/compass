@@ -339,15 +339,22 @@ export function sanitizeReturnTo(returnTo: string | undefined): string | null {
     return null;
   }
 
-  return value;
-}
-
-export function normalizePostLoginReturnTo(returnTo: string): string {
-  if (/^\/(?:t|w)\/[a-z0-9-]+(?:\/|$)/u.test(returnTo)) {
-    return "/chat";
+  const parsed = new URL(value, "https://compass.local");
+  const pathname = parsed.pathname;
+  const isCanonicalPath =
+    pathname === "/" ||
+    pathname === "/login" ||
+    pathname === "/chat" ||
+    pathname.startsWith("/chat/") ||
+    pathname === "/settings" ||
+    pathname.startsWith("/settings/") ||
+    pathname === "/workspaces" ||
+    pathname.startsWith("/workspaces/");
+  if (!isCanonicalPath) {
+    return null;
   }
 
-  return returnTo;
+  return `${pathname}${parsed.search}`;
 }
 
 export function buildLoginRedirect(input: {
@@ -416,7 +423,6 @@ export const __internalAuthService = {
   encryptOidcRequestPayload,
   decryptOidcRequestPayload,
   sanitizeReturnTo,
-  normalizePostLoginReturnTo,
   buildLoginRedirect,
   nowPlusSeconds,
   extractClientIp,

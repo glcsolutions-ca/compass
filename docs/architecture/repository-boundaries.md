@@ -43,6 +43,6 @@ Platform code never owns product business logic.
 
 ## CI ownership
 
-- `check:product` validates all first-class product packages.
-- `check:commit` validates the deployable cloud surface: `api`, `web`, `database`, `contracts`, and `sdk`.
-- `check:pipeline` validates delivery policy, infrastructure templates, and legacy-reference guards.
+- `pnpm test` is the common fast local suite for developers and agents.
+- `Commit Stage` builds, smokes, and publishes the release candidate once.
+- `Acceptance` and `Release` promote the exact published candidate.

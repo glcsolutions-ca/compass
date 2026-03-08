@@ -61,7 +61,7 @@ describe("buildEntraAuthConfig", () => {
   it("parses AUTH_MODE and rejects unsupported values", () => {
     expect(buildEntraAuthConfig({ AUTH_MODE: "entra" }).authMode).toBe("entra");
     expect(buildEntraAuthConfig({ AUTH_MODE: "mock" }).authMode).toBe("mock");
-    expect(() => buildEntraAuthConfig({ AUTH_MODE: "legacy" })).toThrow(
+    expect(() => buildEntraAuthConfig({ AUTH_MODE: "unsupported" })).toThrow(
       "AUTH_MODE must be 'mock' or 'entra'"
     );
   });

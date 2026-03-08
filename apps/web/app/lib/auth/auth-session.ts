@@ -17,7 +17,22 @@ export function resolveReturnTo(candidate: string | null): string {
     return "/";
   }
 
-  return trimmed;
+  const parsed = new URL(trimmed, "https://compass.local");
+  const pathname = parsed.pathname;
+  const isCanonicalPath =
+    pathname === "/" ||
+    pathname === "/login" ||
+    pathname === "/chat" ||
+    pathname.startsWith("/chat/") ||
+    pathname === "/settings" ||
+    pathname.startsWith("/settings/") ||
+    pathname === "/workspaces" ||
+    pathname.startsWith("/workspaces/");
+  if (!isCanonicalPath) {
+    return "/";
+  }
+
+  return `${pathname}${parsed.search}`;
 }
 
 export function buildEntraStartHref(returnTo: string): string {

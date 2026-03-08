@@ -1,0 +1,68 @@
+name: Infra
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - bootstrap/config/production.json
+      - platform/infra/**
+      - platform/scripts/infra/**
+  push:
+    branches:
+      - main
+    paths:
+      - bootstrap/config/production.json
+      - platform/infra/**
+      - platform/scripts/infra/**
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Infra
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Validate Bicep templates
+        run: node platform/scripts/dev/validate-bicep-templates.mjs
+
+  apply:
+    name: Apply Infra
+    if: ${{ github.event_name == 'push' }}
+    needs:
+      - validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Azure login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Apply platform infrastructure
+        run: pnpm infra:apply

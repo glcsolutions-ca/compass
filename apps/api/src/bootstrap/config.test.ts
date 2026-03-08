@@ -68,6 +68,8 @@ describe("loadApiConfig", () => {
   });
 
   it("rejects invalid AUTH_MODE", () => {
-    expect(() => loadApiConfig({ AUTH_MODE: "legacy" })).toThrow("Invalid AUTH_MODE: legacy");
+    expect(() => loadApiConfig({ AUTH_MODE: "unsupported" })).toThrow(
+      "Invalid AUTH_MODE: unsupported"
+    );
   });
 });

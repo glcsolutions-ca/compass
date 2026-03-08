@@ -1,0 +1,136 @@
+name: Acceptance
+run-name: ${{ format('Acceptance / {0}', github.event.workflow_run.head_sha) }}
+
+on:
+  workflow_run:
+    workflows:
+      - Commit Stage
+    branches:
+      - main
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+env:
+  MANIFESTS_REPO: ghcr.io/glcsolutions-ca/compass-release-manifests
+  RELEASE_UNITS_REPO: ghcr.io/glcsolutions-ca/compass-release-units
+  ACCEPTANCE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/acceptance/v1
+
+jobs:
+  acceptance:
+    name: Acceptance
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
+
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve release candidate manifest
+        id: resolve
+        run: |
+          set -euo pipefail
+
+          candidate_id="sha-${{ github.event.workflow_run.head_sha }}"
+
+          pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
+            --candidate-id "$candidate_id" \
+            --registry-repo "${MANIFESTS_REPO}" \
+            --out "$RUNNER_TEMP/release-candidate.json"
+
+          pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
+
+          source_revision="$(jq -r '.source.revision' "$RUNNER_TEMP/release-candidate.json")"
+          if [ "$source_revision" != "${{ github.event.workflow_run.head_sha }}" ]; then
+            echo "Resolved candidate ${candidate_id} points at ${source_revision}, expected ${{ github.event.workflow_run.head_sha }}." >&2
+            exit 1
+          fi
+
+          release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${candidate_id}" | jq -r '.digest')"
+
+          {
+            echo "candidate_id=${candidate_id}"
+            echo "source_revision=${source_revision}"
+            echo "release_unit_digest=${release_unit_digest}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Fetch release candidate manifest
+        run: |
+          pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
+            --candidate-id "${{ steps.resolve.outputs.candidate_id }}" \
+            --registry-repo "${MANIFESTS_REPO}" \
+            --out "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run acceptance tests
+        run: |
+          node platform/pipeline/stages/02-acceptance/scripts/run-acceptance-from-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
+            --diagnostics-dir "$RUNNER_TEMP/acceptance-diagnostics"
+
+      - name: Record candidate metadata
+        run: |
+          mkdir -p .artifacts/acceptance
+          jq -n \
+            --arg candidate_id "${{ steps.resolve.outputs.candidate_id }}" \
+            --arg source_revision "${{ steps.resolve.outputs.source_revision }}" \
+            '{candidateId: $candidate_id, sourceRevision: $source_revision}' \
+            > .artifacts/acceptance/candidate-metadata.json
+
+      - name: Generate acceptance attestation predicate
+        run: |
+          predicate_path="${GITHUB_WORKSPACE}/.artifacts/attestations/acceptance-predicate.json"
+          mkdir -p "$(dirname "${predicate_path}")"
+          pnpm --filter @compass/pipeline-tools run acceptance:predicate:generate -- \
+            --out "${predicate_path}" \
+            --candidate-id "${{ steps.resolve.outputs.candidate_id }}" \
+            --source-revision "${{ steps.resolve.outputs.source_revision }}" \
+            --verdict pass \
+            --workflow-run-id "${{ github.run_id }}" \
+            --tested-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --suite-summary 'system=pass browser=pass'
+
+      - name: Attest acceptance verdict to candidate subject
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-name: ${{ env.RELEASE_UNITS_REPO }}
+          subject-digest: ${{ steps.resolve.outputs.release_unit_digest }}
+          predicate-type: ${{ env.ACCEPTANCE_PREDICATE_TYPE }}
+          predicate-path: ${{ github.workspace }}/.artifacts/attestations/acceptance-predicate.json
+
+      - name: Upload acceptance artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-artifacts
+          path: |
+            ${{ runner.temp }}/acceptance-diagnostics
+            .artifacts/acceptance/candidate-metadata.json
+            .artifacts/attestations/acceptance-predicate.json
+          if-no-files-found: warn
+          retention-days: 7

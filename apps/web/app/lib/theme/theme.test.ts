@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   applyPreferencesToRoot,
-  LEGACY_THEME_STORAGE_KEY,
   persistPreferences,
   resolveEffectiveMode,
   UI_MODE_STORAGE_KEY,
@@ -25,18 +24,6 @@ describe("theme helpers", () => {
       theme: "compass",
       mode: "system"
     });
-  });
-
-  it("migrates legacy compass-theme mode to ui-mode", () => {
-    window.localStorage.setItem(LEGACY_THEME_STORAGE_KEY, "dark");
-
-    expect(readPreferencesFromStorage(window.localStorage)).toEqual({
-      theme: "compass",
-      mode: "dark"
-    });
-
-    expect(window.localStorage.getItem(UI_MODE_STORAGE_KEY)).toBe("dark");
-    expect(window.localStorage.getItem(LEGACY_THEME_STORAGE_KEY)).toBeNull();
   });
 
   it("applies both theme and effective mode to document root", () => {

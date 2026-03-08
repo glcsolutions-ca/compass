@@ -15,9 +15,6 @@ pnpm test:integration
 pnpm test:system
 pnpm test:e2e
 pnpm test:full
-pnpm check
-pnpm check:commit
-pnpm check:pipeline
 pnpm --filter @compass/pipeline-tools run test
 ```
 

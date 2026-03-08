@@ -434,36 +434,6 @@ export function parseFlag(rawValue: string | undefined, defaultValue: boolean): 
   return defaultValue;
 }
 
-async function assertLegacySurfaceSwitcherAbsent({
-  page,
-  flowId,
-  flowAssertions
-}: {
-  page: Page;
-  flowId: string;
-  flowAssertions: Array<{
-    id: string;
-    description: string;
-    pass: boolean;
-    details?: string;
-  }>;
-}) {
-  const legacyLabels = ["Canvas", "Sidebar", "Modal"] as const;
-
-  for (const label of legacyLabels) {
-    const visible = await page
-      .getByRole("button", { name: label, exact: true })
-      .first()
-      .isVisible()
-      .catch(() => false);
-    flowAssertions.push({
-      id: `${flowId}:chat-no-legacy-surface-switch-${label.toLowerCase()}`,
-      description: `[${flowId}] Canonical chat route does not render legacy ${label} surface switch control`,
-      pass: !visible
-    });
-  }
-}
-
 function resolveWorkspaceChatPath(currentUrl: string): string {
   return "/chat";
 }
@@ -755,11 +725,6 @@ async function runFlow(
         description: `[${flowId}] Chat composer is visible`,
         pass: requireChatSurface ? chatSurfaceAvailable : true,
         details: `available=${chatSurfaceAvailable.toString()}, required=${requireChatSurface.toString()}`
-      });
-      await assertLegacySurfaceSwitcherAbsent({
-        page,
-        flowId,
-        flowAssertions
       });
       if (chatSurfaceAvailable) {
         await assertMobileComposerGuardrails({

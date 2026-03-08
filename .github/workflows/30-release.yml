@@ -1,0 +1,269 @@
+name: Release
+run-name: ${{ format('Release / Run {0}', github.event.workflow_run.id) }}
+
+on:
+  workflow_run:
+    workflows:
+      - Acceptance
+    branches:
+      - main
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+env:
+  MANIFESTS_REPO: ghcr.io/glcsolutions-ca/compass-release-manifests
+  RELEASE_UNITS_REPO: ghcr.io/glcsolutions-ca/compass-release-units
+  ACCEPTANCE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/acceptance/v1
+  RELEASE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/release/v2
+
+jobs:
+  release:
+    name: Release
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    concurrency:
+      group: production-release
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      id-token: write
+      attestations: write
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
+    steps:
+      - name: Download acceptance artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: acceptance-artifacts
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/acceptance-artifacts
+
+      - name: Read candidate metadata
+        id: metadata
+        run: |
+          set -euo pipefail
+          metadata_path="${RUNNER_TEMP}/acceptance-artifacts/candidate-metadata.json"
+          {
+            echo "candidate_id=$(jq -r '.candidateId' "$metadata_path")"
+            echo "source_revision=$(jq -r '.sourceRevision' "$metadata_path")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ steps.metadata.outputs.source_revision }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
+
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve release unit digest
+        id: resolve
+        run: |
+          set -euo pipefail
+          release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ steps.metadata.outputs.candidate_id }}" | jq -r '.digest')"
+          echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch release candidate manifest
+        run: |
+          pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
+            --candidate-id "${{ steps.metadata.outputs.candidate_id }}" \
+            --registry-repo "${MANIFESTS_REPO}" \
+            --out "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Assert production environment config
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          ACA_API_PROD_APP_NAME: ${{ vars.ACA_API_PROD_APP_NAME }}
+          ACA_WEB_PROD_APP_NAME: ${{ vars.ACA_WEB_PROD_APP_NAME }}
+          ACA_API_STAGE_APP_NAME: ${{ vars.ACA_API_STAGE_APP_NAME }}
+          ACA_WEB_STAGE_APP_NAME: ${{ vars.ACA_WEB_STAGE_APP_NAME }}
+          ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          PRODUCTION_WEB_BASE_URL: ${{ vars.PRODUCTION_WEB_BASE_URL }}
+          ENTRA_WEB_CLIENT_ID: ${{ vars.ENTRA_WEB_CLIENT_ID }}
+        run: |
+          pnpm --filter @compass/pipeline-tools run env:assert -- \
+            --required AZURE_RESOURCE_GROUP \
+            --required ACA_API_PROD_APP_NAME \
+            --required ACA_WEB_PROD_APP_NAME \
+            --required ACA_API_STAGE_APP_NAME \
+            --required ACA_WEB_STAGE_APP_NAME \
+            --required ACA_MIGRATE_JOB_NAME \
+            --required AZURE_CLIENT_ID \
+            --required AZURE_TENANT_ID \
+            --required AZURE_SUBSCRIPTION_ID \
+            --required PRODUCTION_WEB_BASE_URL \
+            --required ENTRA_WEB_CLIENT_ID
+
+      - name: Azure login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify acceptance attestation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pnpm --filter @compass/pipeline-tools run attest:verify -- \
+            --candidate-id "${{ steps.metadata.outputs.candidate_id }}" \
+            --source-revision "${{ steps.metadata.outputs.source_revision }}" \
+            --predicate-type "${ACCEPTANCE_PREDICATE_TYPE}" \
+            --repo "${{ github.repository }}" \
+            --subject "${RELEASE_UNITS_REPO}@${{ steps.resolve.outputs.release_unit_digest }}"
+
+      - name: Resolve runtime context
+        id: runtime
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          API_PROD: ${{ vars.ACA_API_PROD_APP_NAME }}
+          API_STAGE: ${{ vars.ACA_API_STAGE_APP_NAME }}
+          WEB_STAGE: ${{ vars.ACA_WEB_STAGE_APP_NAME }}
+        run: |
+          json="$(node platform/pipeline/stages/03-release/scripts/resolve-runtime-context.mjs \
+            --resource-group "$RG" \
+            --api-stage-app-name "$API_STAGE" \
+            --web-stage-app-name "$WEB_STAGE" \
+            --api-prod-app-name "$API_PROD")"
+          {
+            echo "api_stage_base_url=$(printf '%s' "$json" | jq -r '.apiStageBaseUrl')"
+            echo "web_stage_base_url=$(printf '%s' "$json" | jq -r '.webStageBaseUrl')"
+            echo "prod_api_base_url=$(printf '%s' "$json" | jq -r '.prodApiBaseUrl')"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Deploy stage apps from candidate
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          API_STAGE: ${{ vars.ACA_API_STAGE_APP_NAME }}
+          WEB_STAGE: ${{ vars.ACA_WEB_STAGE_APP_NAME }}
+        run: |
+          node platform/pipeline/stages/03-release/scripts/deploy-stage-from-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
+            --resource-group "$RG" \
+            --api-app-name "$API_STAGE" \
+            --web-app-name "$WEB_STAGE" \
+            --stage-api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
+            --stage-web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}"
+
+      - name: Stage health smoke
+        id: stage_health_smoke
+        run: |
+          node platform/pipeline/stages/03-release/scripts/run-stage-smoke.mjs \
+            --api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
+            --web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}" \
+            --include-auth false
+          echo "verdict=pass" >> "$GITHUB_OUTPUT"
+
+      - name: Run production migrations
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          JOB: ${{ vars.ACA_MIGRATE_JOB_NAME }}
+        run: |
+          node platform/pipeline/stages/03-release/scripts/run-production-migrations.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
+            --resource-group "$RG" \
+            --job-name "$JOB"
+
+      - name: Stage auth smoke
+        id: stage_smoke
+        run: |
+          node platform/pipeline/stages/03-release/scripts/run-stage-smoke.mjs \
+            --api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
+            --web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}" \
+            --include-auth true
+          echo "verdict=pass" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy prod apps from candidate
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          API_PROD: ${{ vars.ACA_API_PROD_APP_NAME }}
+          WEB_PROD: ${{ vars.ACA_WEB_PROD_APP_NAME }}
+        run: |
+          node platform/pipeline/stages/03-release/scripts/deploy-prod-from-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
+            --resource-group "$RG" \
+            --api-app-name "$API_PROD" \
+            --web-app-name "$WEB_PROD" \
+            --prod-api-base-url "${{ steps.runtime.outputs.prod_api_base_url }}" \
+            --prod-web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}"
+
+      - name: Production smoke
+        id: production_smoke
+        run: |
+          node platform/pipeline/stages/03-release/scripts/run-production-smoke.mjs \
+            --web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}"
+          echo "verdict=pass" >> "$GITHUB_OUTPUT"
+
+      - name: Record release evidence
+        run: |
+          mkdir -p .artifacts/release
+          node platform/pipeline/stages/03-release/scripts/record-release-evidence.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
+            --stage-api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
+            --stage-web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}" \
+            --stage-smoke-verdict "${{ steps.stage_smoke.outputs.verdict }}" \
+            --production-web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}" \
+            --production-smoke-verdict "${{ steps.production_smoke.outputs.verdict }}" \
+            --out .artifacts/release/release-evidence.json
+
+      - name: Generate release attestation predicate
+        run: |
+          predicate_path="${GITHUB_WORKSPACE}/.artifacts/attestations/release-predicate.json"
+          mkdir -p "$(dirname "$predicate_path")"
+          pnpm --filter @compass/pipeline-tools run release:predicate:generate -- \
+            --out "$predicate_path" \
+            --candidate-id "${{ steps.metadata.outputs.candidate_id }}" \
+            --source-revision "${{ steps.metadata.outputs.source_revision }}" \
+            --verdict pass \
+            --workflow-run-id "${{ github.run_id }}" \
+            --released-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --deployment-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --api-image "$(jq -r '.artifacts.apiImage' "$RUNNER_TEMP/release-candidate.json")" \
+            --web-image "$(jq -r '.artifacts.webImage' "$RUNNER_TEMP/release-candidate.json")" \
+            --stage-api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
+            --stage-web-base-url "${{ steps.runtime.outputs.web_stage_base_url }}" \
+            --stage-smoke-verdict "${{ steps.stage_smoke.outputs.verdict }}" \
+            --production-web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}" \
+            --production-smoke-verdict "${{ steps.production_smoke.outputs.verdict }}"
+
+      - name: Attest release verdict to candidate subject
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-name: ${{ env.RELEASE_UNITS_REPO }}
+          subject-digest: ${{ steps.resolve.outputs.release_unit_digest }}
+          predicate-type: ${{ env.RELEASE_PREDICATE_TYPE }}
+          predicate-path: ${{ github.workspace }}/.artifacts/attestations/release-predicate.json
+
+      - name: Upload release artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: |
+            .artifacts/release
+            .artifacts/attestations/release-predicate.json
+          if-no-files-found: warn
+          retention-days: 7

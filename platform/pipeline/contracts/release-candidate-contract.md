@@ -25,9 +25,8 @@ Each candidate manifest contains digest-pinned references for:
 The required promotion path is:
 
 1. `Commit Stage`
-2. merge to `main`
-3. `Acceptance Stage`
-4. `Release Stage`
+2. `Acceptance Stage`
+3. `Release Stage`
 
 A candidate is releasable only if:
 
@@ -42,20 +41,4 @@ A candidate is releasable only if:
 - Stage auth smoke runs after migrations because Entra login startup persists OIDC request state in the database.
 - Prod deploy uses the same candidate image digests that were tested on stage.
 - Production smoke must pass before release attestation is written.
-- Release happens after the queued change merges to `main`.
-
-## Recovery Rules
-
-Recovery redeploy is a previously released-candidate redeploy:
-
-1. choose a previously released candidate id
-2. rerun `20 Mainline Promotion` manually with that `candidate_id`
-
-Recovery redeploy:
-
-- verifies prior release attestation
-- skips infra apply
-- skips migrations
-- still uses stage deploy, read-only stage smoke, prod deploy, and production smoke
-
-If a previously released candidate is not compatible with the current schema, recovery redeploy is unsupported and the preferred response is a forward fix.
+- Release begins from successful Acceptance against the merge-queue candidate.

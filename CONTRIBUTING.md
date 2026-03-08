@@ -1,21 +1,21 @@
 # Contributing
 
-Purpose: standard local workflow while the delivery pipeline is being rebuilt.
+Purpose: standard local workflow for the current build-once delivery model.
 
 ## Local Workflow
 
 ```bash
 pnpm install
-pnpm check
+pnpm test
 pnpm build
 ```
 
 For integration-only runs:
 
 ```bash
-pnpm --filter @compass/db-tools run postgres:up
+pnpm --filter @compass/database run postgres:up
 pnpm test:integration
-pnpm --filter @compass/db-tools run postgres:down
+pnpm --filter @compass/database run postgres:down
 ```
 
 ## Branching

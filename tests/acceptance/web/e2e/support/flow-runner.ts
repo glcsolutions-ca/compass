@@ -737,6 +737,7 @@ async function runFlow(
       const shouldSendSmoke = smokeChatSendMode !== "disabled" && chatSurfaceAvailable;
       if (shouldSendSmoke) {
         await page.goto(`${baseUrl}/chat`, { waitUntil: "networkidle" });
+        const chatCanvasRoot = page.getByTestId("chat-canvas-root").first();
         const promptValues = ["Smoke test prompt 1", "Smoke test prompt 2"] as const;
 
         for (const [index, promptText] of promptValues.entries()) {
@@ -748,7 +749,7 @@ async function runFlow(
             await composerInput.press("Enter");
           }
 
-          const sentPromptLocator = page.getByText(promptText, { exact: true });
+          const sentPromptLocator = chatCanvasRoot.getByText(promptText, { exact: true });
           let sentPromptVisible = false;
           let renderedPromptCount = 0;
           try {
@@ -787,7 +788,7 @@ async function runFlow(
           pass: !applicationErrorVisible
         });
 
-        const threadIdMatch = /\/chat\/([^/?#]+)/u.exec(page.url());
+        const threadIdMatch = /\/c\/([^/?#]+)/u.exec(page.url());
         const threadId = threadIdMatch?.[1] ? decodeURIComponent(threadIdMatch[1]) : null;
         let runtimeEventMethod: string | null = null;
         let runtimeEventCursor: number | null = null;

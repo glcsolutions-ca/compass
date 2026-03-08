@@ -4,6 +4,13 @@ import { runAz } from "./az-command.mjs";
 
 const POLL_INTERVAL_MS = 10_000;
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
+const CONTAINER_APP_JOB_API_VERSION = "2024-03-01";
+export const MIGRATIONS_CONTAINER_NAME = "migrate";
+export const MIGRATIONS_JOB_COMMAND = [
+  "sh",
+  "-c",
+  "node packages/database/scripts/migrate.mjs up && node packages/database/scripts/seed-postgres.mjs"
+];
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -27,23 +34,110 @@ function deriveExecutionName(startResult) {
   return undefined;
 }
 
+function serializeCompactJson(value) {
+  return JSON.stringify(value, null, 2);
+}
+
+function normalizeJobContainer(container) {
+  const normalized = {};
+  for (const key of ["name", "image", "env", "resources", "command", "args", "volumeMounts"]) {
+    if (typeof container?.[key] !== "undefined" && container[key] !== null) {
+      normalized[key] = container[key];
+    }
+  }
+  return normalized;
+}
+
+export function buildMigrationsJobPatchDocument({ job, migrationsImage }) {
+  const template = job?.properties?.template ?? {};
+  const containers = Array.isArray(template.containers) ? template.containers : [];
+  if (containers.length === 0) {
+    throw new Error("Migration job template does not contain any containers to update");
+  }
+
+  const patchedContainers = containers.map((container, index) => {
+    const name =
+      typeof container?.name === "string" && container.name.trim().length > 0
+        ? container.name.trim()
+        : index === 0
+          ? MIGRATIONS_CONTAINER_NAME
+          : "";
+
+    const normalized = normalizeJobContainer(container);
+    if (name === MIGRATIONS_CONTAINER_NAME || (index === 0 && !name)) {
+      return {
+        ...normalized,
+        name: name || MIGRATIONS_CONTAINER_NAME,
+        image: migrationsImage,
+        command: MIGRATIONS_JOB_COMMAND
+      };
+    }
+
+    return normalized;
+  });
+
+  return {
+    properties: {
+      template: {
+        containers: patchedContainers,
+        initContainers: Array.isArray(template.initContainers) ? template.initContainers : [],
+        volumes: Array.isArray(template.volumes) ? template.volumes : []
+      }
+    }
+  };
+}
+
+export function buildMigrationsJobUpdateArgs({ jobId, patchDocument }) {
+  return [
+    "rest",
+    "--method",
+    "PATCH",
+    "--uri",
+    `https://management.azure.com${jobId}?api-version=${CONTAINER_APP_JOB_API_VERSION}`,
+    "--body",
+    serializeCompactJson(patchDocument)
+  ];
+}
+
+export function buildMigrationsFailureMessage({ executionName, status, execution }) {
+  const container = execution?.properties?.template?.containers?.[0] ?? {};
+  const templateSummary = {
+    image: container.image ?? "",
+    command: Array.isArray(container.command) ? container.command : [],
+    startTime: execution?.properties?.startTime ?? ""
+  };
+  return [
+    `Migration job execution ${executionName} failed with status '${status || "unknown"}'`,
+    `Execution template:\n${serializeCompactJson(templateSummary)}`
+  ].join("\n\n");
+}
+
 export async function runMigrationsAzure({
   resourceGroup,
   jobName,
   migrationsImage,
   timeoutMs = DEFAULT_TIMEOUT_MS
 }) {
-  await runAz([
+  const job = await runAz([
     "containerapp",
     "job",
-    "update",
+    "show",
     "--resource-group",
     resourceGroup,
     "--name",
-    jobName,
-    "--image",
-    migrationsImage
+    jobName
   ]);
+  const jobId = String(job?.id ?? "").trim();
+  if (!jobId) {
+    throw new Error(`Could not resolve Azure resource id for migration job ${jobName}`);
+  }
+
+  await runAz(
+    buildMigrationsJobUpdateArgs({
+      jobId,
+      patchDocument: buildMigrationsJobPatchDocument({ job, migrationsImage })
+    })
+  );
 
   const startResult = await runAz([
     "containerapp",
@@ -93,7 +187,11 @@ export async function runMigrationsAzure({
 
     if (["failed", "canceled", "cancelled", "error"].includes(status)) {
       throw new Error(
-        `Migration job execution ${executionName} failed with status '${status || "unknown"}'`
+        buildMigrationsFailureMessage({
+          executionName,
+          status,
+          execution
+        })
       );
     }
 

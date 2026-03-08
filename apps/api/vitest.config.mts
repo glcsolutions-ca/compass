@@ -7,7 +7,7 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/*.test.ts"],
     exclude: ["src/**/*.integration.test.ts"],
-    setupFiles: ["../../packages/testing/guardrails/commit-stage.setup.mjs"],
+    setupFiles: ["../../packages/testkit/guardrails/commit-stage.setup.mjs"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary", "html", "clover"]

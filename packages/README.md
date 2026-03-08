@@ -8,11 +8,9 @@ Purpose: shared foundations for product code, contracts, runtime integrations, a
 - `packages/sdk`
 - `packages/database`
 - `packages/ui`
-- `packages/client-app`
 - `packages/runtime-agent`
 - `packages/runtime-protocol`
-- `packages/shared`
-- `packages/testing`
+- `packages/testkit`
 
 ## Run
 

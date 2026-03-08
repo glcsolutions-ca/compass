@@ -12,7 +12,7 @@
   },
   "aliases": {
     "components": "~/components",
-    "utils": "@compass/shared/cn",
+    "utils": "@compass/ui/cn",
     "ui": "@compass/ui",
     "lib": "~/lib"
   }

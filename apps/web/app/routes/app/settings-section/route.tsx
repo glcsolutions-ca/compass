@@ -1,1 +1,1 @@
-export { default, handle, meta } from "@compass/client-app/routes/app/settings/route";
+export { default, handle, meta } from "~/features/settings/settings-route";

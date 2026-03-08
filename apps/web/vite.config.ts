@@ -5,10 +5,9 @@ import { defineConfig, loadEnv } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 const webDir = path.dirname(fileURLToPath(import.meta.url));
-const clientAppSrcDir = path.resolve(webDir, "../../packages/client-app/src");
+const appDir = path.resolve(webDir, "./app");
 const contractsSrcDir = path.resolve(webDir, "../../packages/contracts/src");
 const sdkSrcDir = path.resolve(webDir, "../../packages/sdk/src");
-const sharedSrcDir = path.resolve(webDir, "../../packages/shared/src");
 const uiSrcDir = path.resolve(webDir, "../../packages/ui/src");
 
 function resolveWebPort(rawPort: string | undefined) {
@@ -35,15 +34,11 @@ export default defineConfig(({ mode }) => {
     plugins: [reactRouter(), tsconfigPaths()],
     resolve: {
       alias: [
-        { find: /^~\/(.*)$/, replacement: `${clientAppSrcDir}/$1` },
-        { find: /^@compass\/client-app$/, replacement: `${clientAppSrcDir}/index.ts` },
-        { find: /^@compass\/client-app\/(.*)$/, replacement: `${clientAppSrcDir}/$1` },
+        { find: /^~\/(.*)$/, replacement: `${appDir}/$1` },
         { find: /^@compass\/contracts$/, replacement: `${contractsSrcDir}/index.ts` },
         { find: /^@compass\/contracts\/(.*)$/, replacement: `${contractsSrcDir}/$1` },
         { find: /^@compass\/sdk$/, replacement: `${sdkSrcDir}/index.ts` },
         { find: /^@compass\/sdk\/(.*)$/, replacement: `${sdkSrcDir}/$1` },
-        { find: /^@compass\/shared$/, replacement: `${sharedSrcDir}/index.ts` },
-        { find: /^@compass\/shared\/(.*)$/, replacement: `${sharedSrcDir}/$1` },
         { find: /^@compass\/ui$/, replacement: `${uiSrcDir}/index.ts` },
         { find: /^@compass\/ui\/(.*)$/, replacement: `${uiSrcDir}/$1` }
       ]

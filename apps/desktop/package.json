@@ -13,7 +13,6 @@
     "typecheck": "tsc -p tsconfig.ref.json --noEmit"
   },
   "dependencies": {
-    "@compass/client-app": "workspace:*",
     "electron": "^37.2.6"
   },
   "devDependencies": {

@@ -9,7 +9,7 @@
       "~/*": ["./src/*"],
       "@compass/contracts": ["../../packages/contracts/src/index.ts"],
       "@compass/runtime-protocol": ["../../packages/runtime-protocol/src/index.ts"],
-      "@compass/testing": ["../../packages/testing/src/index.ts"]
+      "@compass/testkit": ["../../packages/testkit/src/index.ts"]
     }
   },
   "references": [

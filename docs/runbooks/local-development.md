@@ -6,8 +6,8 @@ Compass is a product-first monorepo. Local development should start from the pro
 
 - `apps/api`: Express API for auth, workspaces, threads, and runtime endpoints
 - `apps/web`: React Router web host
-- `apps/desktop`: Electron host for the shared client app
-- `packages/client-app`: shared frontend application used by web and desktop
+- `apps/web/app`: frontend routes, screens, loaders, and feature logic
+- `apps/desktop`: Electron host for the web product shell
 
 ## Core commands
 
@@ -25,6 +25,7 @@ Compass is a product-first monorepo. Local development should start from the pro
 - keep HTTP contracts in `packages/contracts`
 - keep generated clients in `packages/sdk`
 - keep migrations and local postgres helpers in `packages/database`
+- keep reusable test helpers in `packages/testkit`
 - keep delivery and infra code in `platform/*`
 
 ## Testing model

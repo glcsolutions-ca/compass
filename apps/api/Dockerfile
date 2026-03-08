@@ -12,7 +12,7 @@ COPY apps/api/package.json apps/api/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/runtime-agent/package.json packages/runtime-agent/package.json
 COPY packages/runtime-protocol/package.json packages/runtime-protocol/package.json
-COPY packages/testing/package.json packages/testing/package.json
+COPY packages/testkit/package.json packages/testkit/package.json
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm install --frozen-lockfile --filter . --filter @compass/contracts... --filter @compass/api...

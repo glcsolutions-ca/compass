@@ -5,20 +5,18 @@ Compass is organized as a product-first monorepo.
 ## Product surfaces
 
 - `apps/api`: the only HTTP and websocket control plane
-- `apps/web`: browser host for the shared product shell
-- `apps/desktop`: Electron host for the shared product shell
+- `apps/web`: browser host and owner of the React Router product app under `apps/web/app`
+- `apps/desktop`: Electron host for the web product shell
 
 ## Shared packages
 
-- `packages/client-app`: shared client application for web and desktop
 - `packages/ui`: reusable UI primitives
 - `packages/contracts`: external API schemas and OpenAPI generation
 - `packages/sdk`: generated client surface derived from contracts
 - `packages/database`: migrations, local Postgres runtime, and seed scripts
 - `packages/runtime-agent`: runtime host process implementations
 - `packages/runtime-protocol`: runtime message contracts
-- `packages/shared`: cross-package utilities with no product ownership
-- `packages/testing`: reusable test helpers
+- `packages/testkit`: reusable test helpers and isolation guardrails
 
 ## Platform namespace
 
@@ -30,9 +28,10 @@ Platform code never owns product business logic.
 
 ## Dependency rules
 
-- `apps/web` and `apps/desktop` depend on `packages/client-app`, not on each other.
+- `apps/web` owns its app code directly under `apps/web/app`.
+- `apps/desktop` hosts the web product shell and should stay limited to Electron shell concerns.
 - `packages/sdk` depends on generated contracts only.
-- `packages/client-app` may depend on `ui`, `shared`, `contracts`, and `sdk`, but not on platform code.
+- `apps/web/app` may depend on `ui`, `contracts`, and `sdk`, but not on platform code.
 - `apps/api` owns transport and orchestration; runtime host adapters live under `apps/api/src/infrastructure`.
 - `platform/*` may automate product surfaces, but product code must not import `platform/*`.
 

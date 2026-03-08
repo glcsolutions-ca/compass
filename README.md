@@ -6,7 +6,9 @@ Compass is a product-first TypeScript monorepo with three primary surfaces:
 - `apps/web`: browser host
 - `apps/desktop`: Electron host
 
-The shared frontend application lives in `packages/client-app`. Shared UI, contracts, generated clients, data tooling, and runtime helpers live in `packages/*`. Delivery and infrastructure live in `platform/*`.
+The web application now lives directly in `apps/web/app`. Shared UI, contracts, generated clients,
+data tooling, runtime helpers, and test utilities live in `packages/*`. Delivery and infrastructure
+live in `platform/*`.
 
 ## Repository shape
 
@@ -17,15 +19,13 @@ apps/
   desktop/
 
 packages/
-  client-app/
-  ui/
   contracts/
   sdk/
   database/
   runtime-agent/
   runtime-protocol/
-  shared/
-  testing/
+  testkit/
+  ui/
 
 platform/
   infra/
@@ -48,11 +48,12 @@ tests/
 ## Product boundaries
 
 - `apps/*` own platform entrypoints and host-specific adapters
-- `packages/client-app` owns the shared frontend routes, screens, loaders, and feature logic
+- `apps/web/app` owns the frontend routes, screens, loaders, and feature logic
 - `packages/ui` owns reusable UI primitives
 - `packages/contracts` defines the HTTP contract
 - `packages/sdk` is generated from the contract
 - `packages/database` owns migrations and local postgres tooling
+- `packages/testkit` owns reusable test helpers and isolation guardrails
 - `platform/*` owns delivery and infrastructure only
 
 ## Testing

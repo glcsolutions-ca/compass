@@ -11,13 +11,9 @@
     "rootDirs": [".", "./.react-router/types"],
     "baseUrl": ".",
     "paths": {
-      "~/*": ["../../packages/client-app/src/*"],
-      "@compass/client-app": ["../../packages/client-app/src/index.ts"],
-      "@compass/client-app/*": ["../../packages/client-app/src/*"],
+      "~/*": ["./app/*"],
       "@compass/contracts": ["../../packages/contracts/src/index.ts"],
       "@compass/sdk": ["../../packages/sdk/src/index.ts"],
-      "@compass/shared": ["../../packages/shared/src/index.ts"],
-      "@compass/shared/*": ["../../packages/shared/src/*"],
       "@compass/ui": ["../../packages/ui/src/index.ts"],
       "@compass/ui/*": ["../../packages/ui/src/*"]
     },

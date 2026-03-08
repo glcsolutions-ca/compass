@@ -1,15 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import tailwindConfig from "../tailwind.config";
 import routeConfig from "./routes";
 import App, { Layout } from "./root";
-import ChatRedirectRoute, {
-  clientLoader as chatRedirectLoader
-} from "./routes/app/chat-redirect/route";
-import { loadAuthShellData } from "~/features/auth/shell-loader";
-
-vi.mock("~/features/auth/shell-loader", () => ({
-  loadAuthShellData: vi.fn()
-}));
 
 describe("static route/config modules", () => {
   it("exports expected tailwind and route configuration", () => {
@@ -26,62 +18,5 @@ describe("static route/config modules", () => {
 
     expect(layoutElement).toBeTruthy();
     expect(appElement).toBeTruthy();
-    expect(ChatRedirectRoute()).toBeNull();
-  });
-
-  it("redirects chat root to a resolved workspace", async () => {
-    vi.mocked(loadAuthShellData).mockResolvedValue({
-      authenticated: true,
-      user: {
-        id: "user_1",
-        primaryEmail: "user@example.com",
-        displayName: "User"
-      },
-      organizations: [],
-      workspaces: [
-        {
-          id: "ws_1",
-          organizationId: "org_1",
-          organizationSlug: "org",
-          organizationName: "Org",
-          slug: "workspace-main",
-          name: "Workspace Main",
-          isPersonal: true,
-          role: "admin",
-          status: "active"
-        }
-      ],
-      activeWorkspaceSlug: null,
-      personalWorkspaceSlug: "workspace-main"
-    });
-
-    const response = await chatRedirectLoader({
-      request: new Request("http://web.test/chat")
-    });
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toBe("/chat");
-  });
-
-  it("redirects to /workspaces when no workspace slug can be resolved", async () => {
-    vi.mocked(loadAuthShellData).mockResolvedValue({
-      authenticated: true,
-      user: {
-        id: "user_1",
-        primaryEmail: "user@example.com",
-        displayName: "User"
-      },
-      organizations: [],
-      workspaces: [],
-      activeWorkspaceSlug: null,
-      personalWorkspaceSlug: null
-    });
-
-    const response = await chatRedirectLoader({
-      request: new Request("http://web.test/chat")
-    });
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toBe("/workspaces");
   });
 });

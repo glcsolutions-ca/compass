@@ -3,7 +3,14 @@
   "compilerOptions": {
     "composite": true,
     "rootDir": ".",
-    "outDir": "dist-types"
+    "outDir": "dist-types",
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["./src/*"],
+      "@compass/contracts": ["../../packages/contracts/src/index.ts"],
+      "@compass/runtime-protocol": ["../../packages/runtime-protocol/src/index.ts"],
+      "@compass/testing": ["../../packages/testing/src/index.ts"]
+    }
   },
   "references": [
     {
@@ -13,5 +20,5 @@
       "path": "../../packages/runtime-protocol"
     }
   ],
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": ["src/**/*.ts", "test/integration/**/*.ts"]
 }

@@ -8,7 +8,7 @@ compass/
 ├─ apps/{api,web,desktop}
 ├─ bootstrap/{README.md,config}
 ├─ docs/{architecture,adr,spikes}
-├─ packages/{app-shell,contracts,database,runtime-agent,runtime-protocol,sdk,shared,testing,ui}
+├─ packages/{client-app,contracts,database,runtime-agent,runtime-protocol,sdk,shared,testing,ui}
 ├─ platform/{infra,pipeline,scripts}
 └─ tests/acceptance/{api,desktop,web}
 ```

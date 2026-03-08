@@ -9,7 +9,7 @@
       "path": "./packages/ui/tsconfig.ref.json"
     },
     {
-      "path": "./packages/app-shell/tsconfig.ref.json"
+      "path": "./packages/client-app/tsconfig.ref.json"
     },
     {
       "path": "./packages/contracts/tsconfig.ref.json"

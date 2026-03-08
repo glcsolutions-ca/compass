@@ -24,12 +24,11 @@ pnpm --filter @compass/pipeline-tools run test
 
 ## Directory Model
 
-- `apps/<app>/test/unit` for app-owned unit tests.
-- `apps/web/test/component` for UI component tests.
+- colocated `*.test.ts(x)` files beside the source they verify in `apps/*/src` and `packages/*/src`.
 - `apps/<app>/test/integration` for app-owned integration suites.
 - `tests/acceptance/system` for cross-service system flows.
 - `tests/acceptance/e2e` for browser/user journeys.
-- `tests/nonfunctional/*` for optional later-stage suites.
+- `tests/acceptance/*` for black-box API, web, and desktop workflows.
 
 ## Acceptance References
 

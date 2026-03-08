@@ -3,4 +3,4 @@ export {
   clientLoader,
   default,
   handle
-} from "@compass/app-shell/routes/app/layout/route";
+} from "@compass/client-app/routes/app/layout/route";

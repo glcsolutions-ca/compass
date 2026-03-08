@@ -12,13 +12,26 @@
     "app/**/*.tsx",
     "react-router.config.ts",
     "vite.config.ts",
-    "../../packages/app-shell/src/**/*.ts",
-    "../../packages/app-shell/src/**/*.tsx",
+    "../../packages/client-app/src/**/*.ts",
+    "../../packages/client-app/src/**/*.tsx",
     "../../packages/contracts/src/**/*.ts",
     "../../packages/sdk/src/**/*.ts",
     "../../packages/shared/src/**/*.ts",
     "../../packages/ui/src/**/*.ts",
     "../../packages/ui/src/**/*.tsx"
   ],
-  "exclude": ["app/**/*.test.ts", "app/**/*.test.tsx"]
+  "exclude": [
+    "app/**/*.test.ts",
+    "app/**/*.test.tsx",
+    "../../packages/client-app/src/**/*.test.ts",
+    "../../packages/client-app/src/**/*.test.tsx",
+    "../../packages/ui/src/**/*.test.ts",
+    "../../packages/ui/src/**/*.test.tsx",
+    "../../packages/contracts/src/**/*.test.ts",
+    "../../packages/contracts/src/**/*.test.tsx",
+    "../../packages/sdk/src/**/*.test.ts",
+    "../../packages/sdk/src/**/*.test.tsx",
+    "../../packages/shared/src/**/*.test.ts",
+    "../../packages/shared/src/**/*.test.tsx"
+  ]
 }

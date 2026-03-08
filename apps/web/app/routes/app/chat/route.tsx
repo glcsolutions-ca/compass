@@ -4,4 +4,4 @@ export {
   default,
   handle,
   meta
-} from "@compass/app-shell/routes/app/chat/route";
+} from "@compass/client-app/routes/app/chat/route";

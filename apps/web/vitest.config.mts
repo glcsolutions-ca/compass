@@ -4,7 +4,7 @@ import { defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 const webDir = path.dirname(fileURLToPath(import.meta.url));
-const appShellSrcDir = path.resolve(webDir, "../../packages/app-shell/src");
+const clientAppSrcDir = path.resolve(webDir, "../../packages/client-app/src");
 const contractsSrcDir = path.resolve(webDir, "../../packages/contracts/src");
 const sdkSrcDir = path.resolve(webDir, "../../packages/sdk/src");
 const sharedSrcDir = path.resolve(webDir, "../../packages/shared/src");
@@ -14,7 +14,7 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   resolve: {
     alias: [
-      { find: /^~\/(.*)$/, replacement: `${appShellSrcDir}/$1` },
+      { find: /^~\/(.*)$/, replacement: `${clientAppSrcDir}/$1` },
       { find: /^@compass\/contracts$/, replacement: `${contractsSrcDir}/index.ts` },
       { find: /^@compass\/contracts\/(.*)$/, replacement: `${contractsSrcDir}/$1` },
       { find: /^@compass\/sdk$/, replacement: `${sdkSrcDir}/index.ts` },
@@ -27,7 +27,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
-    include: ["test/unit/**/*.unit.test.ts", "test/component/**/*.component.test.tsx"],
+    include: ["app/**/*.test.ts", "app/**/*.test.tsx"],
     setupFiles: ["../../packages/testing/guardrails/commit-stage.setup.mjs"],
     coverage: {
       provider: "v8",

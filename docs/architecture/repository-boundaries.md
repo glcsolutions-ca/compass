@@ -10,7 +10,7 @@ Compass is organized as a product-first monorepo.
 
 ## Shared packages
 
-- `packages/app-shell`: shared feature shell for web and desktop
+- `packages/client-app`: shared client application for web and desktop
 - `packages/ui`: reusable UI primitives
 - `packages/contracts`: external API schemas and OpenAPI generation
 - `packages/sdk`: generated client surface derived from contracts
@@ -30,9 +30,9 @@ Platform code never owns product business logic.
 
 ## Dependency rules
 
-- `apps/web` and `apps/desktop` depend on `packages/app-shell`, not on each other.
+- `apps/web` and `apps/desktop` depend on `packages/client-app`, not on each other.
 - `packages/sdk` depends on generated contracts only.
-- `packages/app-shell` may depend on `ui`, `shared`, `contracts`, and `sdk`, but not on platform code.
+- `packages/client-app` may depend on `ui`, `shared`, `contracts`, and `sdk`, but not on platform code.
 - `apps/api` owns transport and orchestration; runtime host adapters live under `apps/api/src/infrastructure`.
 - `platform/*` may automate product surfaces, but product code must not import `platform/*`.
 

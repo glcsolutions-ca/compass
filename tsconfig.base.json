@@ -5,8 +5,8 @@
     "moduleResolution": "NodeNext",
     "baseUrl": ".",
     "paths": {
-      "@compass/app-shell": ["packages/app-shell/src/index.ts"],
-      "@compass/app-shell/*": ["packages/app-shell/src/*"],
+      "@compass/client-app": ["packages/client-app/src/index.ts"],
+      "@compass/client-app/*": ["packages/client-app/src/*"],
       "@compass/contracts": ["packages/contracts/src/index.ts"],
       "@compass/database": ["packages/database/index.d.ts"],
       "@compass/runtime-protocol": ["packages/runtime-protocol/src/index.ts"],

@@ -164,7 +164,7 @@ export default tseslint.config(
     }
   },
   {
-    files: ["packages/app-shell/src/routes/**/*.ts", "packages/app-shell/src/routes/**/*.tsx"],
+    files: ["packages/client-app/src/routes/**/*.ts", "packages/client-app/src/routes/**/*.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -177,7 +177,7 @@ export default tseslint.config(
             "../../*",
             "../../../*",
             "~/routes/*",
-            "packages/app-shell/src/routes/*"
+            "packages/client-app/src/routes/*"
           ]
         }
       ]
@@ -185,8 +185,8 @@ export default tseslint.config(
   },
   {
     files: [
-      "packages/app-shell/src/features/auth/**/*.ts",
-      "packages/app-shell/src/features/auth/**/*.tsx"
+      "packages/client-app/src/features/auth/**/*.ts",
+      "packages/client-app/src/features/auth/**/*.tsx"
     ],
     rules: {
       "no-restricted-imports": [
@@ -199,8 +199,8 @@ export default tseslint.config(
   },
   {
     files: [
-      "packages/app-shell/src/features/workspace/**/*.ts",
-      "packages/app-shell/src/features/workspace/**/*.tsx"
+      "packages/client-app/src/features/workspace/**/*.ts",
+      "packages/client-app/src/features/workspace/**/*.tsx"
     ],
     rules: {
       "no-restricted-imports": [
@@ -213,8 +213,8 @@ export default tseslint.config(
   },
   {
     files: [
-      "packages/app-shell/src/features/chat/**/*.ts",
-      "packages/app-shell/src/features/chat/**/*.tsx"
+      "packages/client-app/src/features/chat/**/*.ts",
+      "packages/client-app/src/features/chat/**/*.tsx"
     ],
     rules: {
       "no-restricted-imports": [

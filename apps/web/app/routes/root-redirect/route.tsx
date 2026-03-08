@@ -1,1 +1,1 @@
-export { clientLoader, default } from "@compass/app-shell/routes/root-redirect/route";
+export { clientLoader, default } from "@compass/client-app/routes/root-redirect/route";

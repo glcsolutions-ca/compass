@@ -42,4 +42,4 @@ COPY --from=build /workspace/packages/database/scripts ./packages/database/scrip
 COPY --from=build /workspace/packages/database/seeds ./packages/database/seeds
 
 EXPOSE 3001
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/bootstrap/index.js"]

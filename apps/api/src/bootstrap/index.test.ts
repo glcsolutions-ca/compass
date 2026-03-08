@@ -118,6 +118,7 @@ describe("API entrypoint", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    delete process.env.NODE_ENV;
   });
 
   it("boots server and shuts down auth/agent services on termination signal", async () => {
@@ -149,5 +150,13 @@ describe("API entrypoint", () => {
     } finally {
       onSpy.mockRestore();
     }
+  });
+
+  it("does not load repo env files in production", async () => {
+    process.env.NODE_ENV = "production";
+
+    await import("./index.js");
+
+    expect(mocks.loadEnvFile).not.toHaveBeenCalled();
   });
 });

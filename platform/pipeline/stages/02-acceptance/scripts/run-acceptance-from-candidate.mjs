@@ -54,6 +54,21 @@ function runSync(command, args, { env = process.env, cwd } = {}) {
   return String(result.stdout || "").trim();
 }
 
+function readCommandOutput(command, args, { env = process.env, cwd } = {}) {
+  const result = spawnSync(command, args, {
+    env,
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  return {
+    status: result.status ?? null,
+    stdout: String(result.stdout || ""),
+    stderr: String(result.stderr || "")
+  };
+}
+
 async function waitForPostgres(containerName) {
   const deadline = Date.now() + 60000;
   while (Date.now() < deadline) {
@@ -69,9 +84,44 @@ async function waitForPostgres(containerName) {
   throw new Error("Timed out waiting for local Postgres");
 }
 
-async function waitForHttp(url, { timeoutMs = 60000, expectedStatuses = [200] } = {}) {
+function readContainerState(containerName) {
+  const result = readCommandOutput("docker", [
+    "inspect",
+    containerName,
+    "--format",
+    "{{json .State}}"
+  ]);
+
+  if (result.status !== 0) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(result.stdout.trim());
+  } catch {
+    return null;
+  }
+}
+
+async function waitForContainerHttp(
+  containerName,
+  url,
+  { timeoutMs = 60000, expectedStatuses = [200] } = {}
+) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    const state = readContainerState(containerName);
+    if (state && state.Running === false) {
+      const status = typeof state.Status === "string" ? state.Status : "exited";
+      const exitCode =
+        typeof state.ExitCode === "number" && Number.isFinite(state.ExitCode)
+          ? state.ExitCode
+          : "unknown";
+      throw new Error(
+        `Container ${containerName} stopped before ${url} was ready (status=${status}, exitCode=${exitCode})`
+      );
+    }
+
     try {
       const response = await fetch(url);
       if (expectedStatuses.includes(response.status)) {
@@ -88,8 +138,14 @@ async function waitForHttp(url, { timeoutMs = 60000, expectedStatuses = [200] } 
 async function captureLogs(outputDir, containers) {
   for (const container of containers) {
     try {
-      const logs = runSync("docker", ["logs", container]);
-      await writeFile(path.join(outputDir, `${container}.log`), logs, "utf8");
+      const logs = readCommandOutput("docker", ["logs", container]);
+      const combined = `${logs.stdout}${logs.stderr}`.trim();
+      await writeFile(path.join(outputDir, `${container}.log`), combined, "utf8");
+    } catch {}
+
+    try {
+      const inspect = runSync("docker", ["inspect", container]);
+      await writeFile(path.join(outputDir, `${container}.inspect.json`), `${inspect}\n`, "utf8");
     } catch {}
   }
 }
@@ -206,8 +262,8 @@ export async function runAcceptanceFromCandidate({ manifestPath, outputDir }) {
       manifest.artifacts.webImage
     ]);
 
-    await waitForHttp("http://127.0.0.1:3001/health");
-    await waitForHttp("http://127.0.0.1:3000/login");
+    await waitForContainerHttp(apiContainer, "http://127.0.0.1:3001/health");
+    await waitForContainerHttp(webContainer, "http://127.0.0.1:3000/login");
 
     const systemEnv = {
       ...process.env,

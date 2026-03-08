@@ -11,7 +11,14 @@ import { attachSessionAgentGateway } from "../modules/runtime/gateway.js";
 import { loadApiConfig } from "./config.js";
 import { requireDatabaseUrl, verifyDatabaseReadiness } from "./startup-env.js";
 
-function loadApiServiceEnvFiles(cwd: string = process.cwd()): void {
+function loadApiServiceEnvFiles(
+  cwd: string = process.cwd(),
+  env: NodeJS.ProcessEnv = process.env
+): void {
+  if (env.NODE_ENV?.trim().toLowerCase() === "production") {
+    return;
+  }
+
   const candidateServiceDirs = [path.resolve(cwd), path.resolve(cwd, "apps/api")];
   const seen = new Set<string>();
 

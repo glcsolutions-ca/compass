@@ -52,8 +52,8 @@ beforeEach(() => {
     }))
   });
   useLocationMock.mockReturnValue({
-    pathname: "/w/personal-user-1/chat/thread-1",
-    search: "",
+    pathname: "/chat",
+    search: "?workspace=personal-user-1",
     hash: ""
   });
   useMatchesMock.mockReturnValue([{ handle: { shellLayout: "default" } }]);

@@ -116,6 +116,17 @@ interface RuntimeExecutionDriver {
   subscribeNotifications(handler: (notification: RuntimeNotificationRecord) => void): () => void;
 }
 
+function createThreadSessionIdentifier(): string {
+  return randomUUID();
+}
+
+function resolveRuntimeSessionIdentifier(input: {
+  sessionIdentifier: string | null;
+  threadId: string;
+}): string {
+  return input.sessionIdentifier?.trim() || input.threadId;
+}
+
 class MockCloudExecutionDriver implements RuntimeExecutionDriver {
   readonly provider: RuntimeProvider = "mock";
   readonly capabilities: RuntimeCapabilities = {
@@ -149,7 +160,7 @@ class MockCloudExecutionDriver implements RuntimeExecutionDriver {
         turnId: input.turnId
       },
       runtime: {
-        sessionIdentifier: input.thread.sessionIdentifier || `thr-${input.thread.threadId}`,
+        sessionIdentifier: resolveRuntimeSessionIdentifier(input.thread),
         connectionState: "reused",
         runtimeKind: "mock",
         bootId: "mock",
@@ -226,7 +237,7 @@ class MockCloudExecutionDriver implements RuntimeExecutionDriver {
     runtimeKind: string;
   }> {
     return {
-      sessionIdentifier: input.thread.sessionIdentifier || `thr-${input.thread.threadId}`,
+      sessionIdentifier: resolveRuntimeSessionIdentifier(input.thread),
       bootId: "mock",
       controlPlaneUrl: "ws://localhost/mock",
       connectToken: "mock",
@@ -334,7 +345,7 @@ class SessionBackedExecutionDriver implements RuntimeExecutionDriver {
     return {
       runtimeMetadata: {
         provider: this.provider,
-        sessionIdentifier: input.thread.sessionIdentifier || `thr-${input.thread.threadId}`
+        sessionIdentifier: resolveRuntimeSessionIdentifier(input.thread)
       }
     };
   }
@@ -347,7 +358,7 @@ class SessionBackedExecutionDriver implements RuntimeExecutionDriver {
     const result = await this.#controlPlane.runTurn({
       thread: {
         threadId: input.thread.threadId,
-        sessionIdentifier: input.thread.sessionIdentifier || `thr-${input.thread.threadId}`,
+        sessionIdentifier: resolveRuntimeSessionIdentifier(input.thread),
         executionHost: input.thread.executionHost
       },
       turnId: input.turnId,
@@ -368,7 +379,7 @@ class SessionBackedExecutionDriver implements RuntimeExecutionDriver {
     this.#controlPlane.interruptTurn({
       thread: {
         threadId: input.thread.threadId,
-        sessionIdentifier: input.thread.sessionIdentifier || `thr-${input.thread.threadId}`,
+        sessionIdentifier: resolveRuntimeSessionIdentifier(input.thread),
         executionHost: input.thread.executionHost
       },
       turnId: input.turnId
@@ -378,7 +389,7 @@ class SessionBackedExecutionDriver implements RuntimeExecutionDriver {
       interrupted: true,
       runtimeMetadata: {
         provider: this.provider,
-        sessionIdentifier: input.thread.sessionIdentifier || `thr-${input.thread.threadId}`,
+        sessionIdentifier: resolveRuntimeSessionIdentifier(input.thread),
         turnId: input.turnId
       }
     };
@@ -439,7 +450,7 @@ class SessionBackedExecutionDriver implements RuntimeExecutionDriver {
     return this.#controlPlane.issueDesktopLaunchBundle({
       thread: {
         threadId: input.thread.threadId,
-        sessionIdentifier: input.thread.sessionIdentifier || `thr-${input.thread.threadId}`,
+        sessionIdentifier: resolveRuntimeSessionIdentifier(input.thread),
         executionHost: input.thread.executionHost
       }
     });
@@ -606,7 +617,7 @@ class DynamicSessionsCloudExecutionDriver implements RuntimeExecutionDriver {
   }
 
   async bootstrapSession(input: { thread: ThreadRecord }): Promise<CloudBootstrapResult> {
-    const identifier = input.thread.sessionIdentifier || `thr-${input.thread.threadId}`;
+    const identifier = resolveRuntimeSessionIdentifier(input.thread);
     const payload = await this.callRuntime({
       path: "/agent/session/bootstrap",
       identifier,
@@ -628,7 +639,7 @@ class DynamicSessionsCloudExecutionDriver implements RuntimeExecutionDriver {
     turnId: string;
     text: string;
   }): Promise<CloudTurnResult> {
-    const identifier = input.thread.sessionIdentifier || `thr-${input.thread.threadId}`;
+    const identifier = resolveRuntimeSessionIdentifier(input.thread);
     const payload = await this.callRuntime({
       path: "/agent/turns/start",
       identifier,
@@ -654,7 +665,7 @@ class DynamicSessionsCloudExecutionDriver implements RuntimeExecutionDriver {
     thread: ThreadRecord;
     turnId: string;
   }): Promise<CloudInterruptResult> {
-    const identifier = input.thread.sessionIdentifier || `thr-${input.thread.threadId}`;
+    const identifier = resolveRuntimeSessionIdentifier(input.thread);
     const payload = await this.callRuntime({
       path: `/agent/turns/${encodeURIComponent(input.turnId)}/interrupt`,
       identifier,
@@ -818,7 +829,7 @@ class LocalHttpExecutionDriver implements RuntimeExecutionDriver {
   }
 
   async bootstrapSession(input: { thread: ThreadRecord }): Promise<CloudBootstrapResult> {
-    const identifier = input.thread.sessionIdentifier || `thr-${input.thread.threadId}`;
+    const identifier = resolveRuntimeSessionIdentifier(input.thread);
     const payload = await this.callRuntimePost({
       path: "/agent/session/bootstrap",
       identifier,
@@ -840,7 +851,7 @@ class LocalHttpExecutionDriver implements RuntimeExecutionDriver {
     turnId: string;
     text: string;
   }): Promise<CloudTurnResult> {
-    const identifier = input.thread.sessionIdentifier || `thr-${input.thread.threadId}`;
+    const identifier = resolveRuntimeSessionIdentifier(input.thread);
     const payload = await this.callRuntimePost({
       path: "/agent/turns/start",
       identifier,
@@ -866,7 +877,7 @@ class LocalHttpExecutionDriver implements RuntimeExecutionDriver {
     thread: ThreadRecord;
     turnId: string;
   }): Promise<CloudInterruptResult> {
-    const identifier = input.thread.sessionIdentifier || `thr-${input.thread.threadId}`;
+    const identifier = resolveRuntimeSessionIdentifier(input.thread);
     const payload = await this.callRuntimePost({
       path: `/agent/turns/${encodeURIComponent(input.turnId)}/interrupt`,
       identifier,
@@ -1483,7 +1494,7 @@ class PostgresThreadService implements ThreadService {
     const threadId = randomUUID();
     const executionMode = input.executionMode;
     const executionHost = input.executionHost ?? resolveDefaultExecutionHost(executionMode);
-    const sessionIdentifier = `thr-${threadId}`;
+    const sessionIdentifier = createThreadSessionIdentifier();
 
     const result = await this.pool.query(
       `
@@ -1570,7 +1581,7 @@ class PostgresThreadService implements ThreadService {
       );
 
       const updates: string[] = ["updated_at = $2"];
-      const params: unknown[] = [input.threadId, input.now.toISOString()];
+      const params: unknown[] = [access.thread.threadId, input.now.toISOString()];
       let parameterIndex = 3;
 
       if (input.title !== undefined) {
@@ -1636,7 +1647,7 @@ class PostgresThreadService implements ThreadService {
     threadId: string;
     now: Date;
   }): Promise<{ deleted: true }> {
-    await this.requireThreadAccess({
+    const access = await this.requireThreadAccess({
       userId: input.userId,
       threadId: input.threadId
     });
@@ -1646,7 +1657,7 @@ class PostgresThreadService implements ThreadService {
         delete from agent_threads
         where thread_id = $1
       `,
-      [input.threadId]
+      [access.thread.threadId]
     );
 
     if ((deleted.rowCount ?? 0) < 1) {
@@ -1686,7 +1697,7 @@ class PostgresThreadService implements ThreadService {
           where thread_id = $1 and status = 'inProgress'
           limit 1
         `,
-        [input.threadId]
+        [access.thread.threadId]
       );
 
       if ((inProgress.rowCount ?? 0) > 0) {
@@ -1722,11 +1733,11 @@ class PostgresThreadService implements ThreadService {
             $6::text as workspace_slug
         `,
         [
-          input.threadId,
+          access.thread.threadId,
           executionMode,
           executionHost,
           input.now.toISOString(),
-          `thr-${input.threadId}`,
+          createThreadSessionIdentifier(),
           access.thread.workspaceSlug
         ]
       );
@@ -1738,7 +1749,7 @@ class PostgresThreadService implements ThreadService {
       const thread = mapThreadRow(updated.rows[0] as Record<string, unknown>);
       const event = await this.insertEvent(
         {
-          threadId: input.threadId,
+          threadId: access.thread.threadId,
           turnId: null,
           method: "thread.modeSwitched",
           payload: {
@@ -2064,7 +2075,10 @@ class PostgresThreadService implements ThreadService {
       ...input.accessThread,
       executionMode: input.turnContext.executionMode,
       executionHost: input.turnContext.executionHost,
-      sessionIdentifier: input.accessThread.sessionIdentifier || `thr-${input.turnContext.threadId}`
+      sessionIdentifier: resolveRuntimeSessionIdentifier({
+        sessionIdentifier: input.accessThread.sessionIdentifier,
+        threadId: input.turnContext.threadId
+      })
     };
 
     let cloudResult: CloudTurnResult | null = null;
@@ -2275,6 +2289,7 @@ class PostgresThreadService implements ThreadService {
     });
     const resolvedInput = this.normalizeStartTurnInput({
       ...input,
+      threadId: access.thread.threadId,
       threadDefaults: access.thread
     });
     const startTransaction = await this.createTurnStartTransaction(resolvedInput);
@@ -2337,7 +2352,7 @@ class PostgresThreadService implements ThreadService {
             execution_mode,
             execution_host
         `,
-        [input.threadId, input.turnId, input.now.toISOString()]
+        [access.thread.threadId, input.turnId, input.now.toISOString()]
       );
 
       if ((update.rowCount ?? 0) < 1) {
@@ -2347,7 +2362,7 @@ class PostgresThreadService implements ThreadService {
       const turn = mapTurnRow(update.rows[0] as Record<string, unknown>);
       const event = await this.insertEvent(
         {
-          threadId: input.threadId,
+          threadId: access.thread.threadId,
           turnId: input.turnId,
           method: "turn.completed",
           payload: {
@@ -2368,7 +2383,7 @@ class PostgresThreadService implements ThreadService {
           set status = 'interrupted', updated_at = $2
           where thread_id = $1
         `,
-        [input.threadId, input.now.toISOString()]
+        [access.thread.threadId, input.now.toISOString()]
       );
 
       await client.query("commit");
@@ -2380,7 +2395,7 @@ class PostgresThreadService implements ThreadService {
             ...access.thread,
             executionMode: turn.executionMode,
             executionHost: turn.executionHost,
-            sessionIdentifier: access.thread.sessionIdentifier || `thr-${input.threadId}`
+            sessionIdentifier: resolveRuntimeSessionIdentifier(access.thread)
           },
           turnId: input.turnId
         })
@@ -2403,7 +2418,7 @@ class PostgresThreadService implements ThreadService {
     events: Array<{ turnId?: string; method: string; payload: unknown }>;
     now: Date;
   }): Promise<{ accepted: number }> {
-    await this.requireThreadAccess({
+    const access = await this.requireThreadAccess({
       userId: input.userId,
       threadId: input.threadId
     });
@@ -2416,7 +2431,7 @@ class PostgresThreadService implements ThreadService {
       for (const event of input.events) {
         const inserted = await this.insertEvent(
           {
-            threadId: input.threadId,
+            threadId: access.thread.threadId,
             turnId: event.turnId || null,
             method: event.method,
             payload: event.payload,
@@ -2433,7 +2448,7 @@ class PostgresThreadService implements ThreadService {
           set updated_at = $2
           where thread_id = $1
         `,
-        [input.threadId, input.now.toISOString()]
+        [access.thread.threadId, input.now.toISOString()]
       );
 
       await client.query("commit");
@@ -2459,7 +2474,7 @@ class PostgresThreadService implements ThreadService {
     cursor?: number;
     limit?: number;
   }): Promise<ThreadEventRecord[]> {
-    await this.requireThreadAccess({
+    const access = await this.requireThreadAccess({
       userId: input.userId,
       threadId: input.threadId
     });
@@ -2477,7 +2492,7 @@ class PostgresThreadService implements ThreadService {
         order by id asc
         limit $3
       `,
-      [input.threadId, cursor, limit]
+      [access.thread.threadId, cursor, limit]
     );
 
     return result.rows.map((row) => mapEventRow(row as Record<string, unknown>));
@@ -2696,7 +2711,9 @@ class PostgresThreadService implements ThreadService {
           at.mode_switched_at
         from agent_threads at
         inner join workspaces w on w.id = at.workspace_id
-        where at.thread_id = $1
+        where at.thread_id = $1 or at.session_identifier = $1
+        order by case when at.thread_id = $1 then 0 else 1 end
+        limit 1
         ${lockThread ? "for update" : ""}
       `,
       [input.threadId]

@@ -8,7 +8,7 @@ import {
 describe("new thread routing", () => {
   it("targets workspace chat routes", () => {
     const target = resolveNewThreadTarget("acme");
-    expect(target).toBe("/w/acme/chat");
+    expect(target).toBe("/chat?workspace=acme");
   });
 
   it("adds a fresh thread token to workspace chat targets", () => {
@@ -16,15 +16,17 @@ describe("new thread routing", () => {
       workspaceSlug: "acme",
       threadToken: "thread-123"
     });
-    expect(href).toBe("/w/acme/chat?thread=thread-123");
+    expect(href).toBe("/chat?workspace=acme&thread=thread-123");
   });
 
-  it("builds deep links for workspace chat thread routes", () => {
-    expect(buildThreadHref("acme", "thread_123")).toBe("/w/acme/chat/thread_123");
+  it("builds deep links for chat thread routes", () => {
+    expect(buildThreadHref("69ad25e0-6594-8320-aa96-9569d9f9864a")).toBe(
+      "/c/69ad25e0-6594-8320-aa96-9569d9f9864a"
+    );
   });
 
   it("falls back to /chat when workspace slug is missing", () => {
     expect(resolveNewThreadTarget("")).toBe("/chat");
-    expect(buildThreadHref("", "thread_123")).toBe("/chat/thread_123");
+    expect(buildThreadHref("")).toBe("/chat");
   });
 });

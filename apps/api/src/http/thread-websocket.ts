@@ -146,6 +146,7 @@ export function attachThreadWebSocketGateway(input: {
 
       let userId = "";
       let runtimeCursor = 0;
+      let resolvedThreadId: string | null = null;
       try {
         const auth = await input.authService.readAuthMe({
           sessionToken,
@@ -159,10 +160,11 @@ export function attachThreadWebSocketGateway(input: {
 
         userId = auth.user.id;
         if (parsedThread) {
-          await input.threadService.readThread({
+          const thread = await input.threadService.readThread({
             userId,
             threadId: parsedThread.threadId
           });
+          resolvedThreadId = thread.threadId;
         } else if (parsedRuntime) {
           runtimeCursor = parseRuntimeStreamCursor(request);
         }
@@ -177,7 +179,7 @@ export function attachThreadWebSocketGateway(input: {
             if (parsedThread) {
               const historical = await input.threadService!.listThreadEvents({
                 userId,
-                threadId: parsedThread.threadId,
+                threadId: resolvedThreadId || parsedThread.threadId,
                 cursor: parsedThread.cursor,
                 limit: 500
               });
@@ -187,7 +189,7 @@ export function attachThreadWebSocketGateway(input: {
               }
 
               const unsubscribe = input.threadService!.subscribeThreadEvents(
-                parsedThread.threadId,
+                resolvedThreadId || parsedThread.threadId,
                 (event) => {
                   try {
                     sendEvent(ws, event);

@@ -7,6 +7,7 @@ const loadAuthShellDataMock = vi.hoisted(() => vi.fn());
 const getChatThreadMock = vi.hoisted(() => vi.fn());
 const listChatThreadEventsMock = vi.hoisted(() => vi.fn());
 const readPersonalContextLabelMock = vi.hoisted(() => vi.fn());
+const resolveThreadCreateWorkspaceSlugMock = vi.hoisted(() => vi.fn());
 const buildReturnToMock = vi.hoisted(() => vi.fn());
 
 vi.mock("~/features/auth/shell-loader", () => ({
@@ -19,14 +20,15 @@ vi.mock("~/features/chat/thread-client", () => ({
 }));
 
 vi.mock("~/features/chat/chat-context", () => ({
-  readPersonalContextLabel: readPersonalContextLabelMock
+  readPersonalContextLabel: readPersonalContextLabelMock,
+  resolveThreadCreateWorkspaceSlug: resolveThreadCreateWorkspaceSlugMock
 }));
 
 vi.mock("~/lib/auth/auth-session", () => ({
   buildReturnTo: buildReturnToMock
 }));
 
-function createRequest(url = "https://example.test/w/workspace-a/chat"): Request {
+function createRequest(url = "https://example.test/chat?workspace=workspace-a"): Request {
   return new Request(url, { method: "GET" });
 }
 
@@ -69,28 +71,36 @@ describe("loadChatData", () => {
 
     const result = await loadChatData({
       request: createRequest(),
-      workspaceSlug: "workspace-a",
-      threadId: undefined
+      threadHandle: undefined
     });
 
     expect(result).toBe(redirectResponse);
   });
 
-  it("redirects to /chat when workspace slug is missing", async () => {
+  it("returns default chat data when no thread is selected", async () => {
     loadAuthShellDataMock.mockResolvedValue(createAuth());
+    readPersonalContextLabelMock.mockReturnValue("Personal");
+    resolveThreadCreateWorkspaceSlugMock.mockReturnValue("workspace-a");
 
     const result = await loadChatData({
       request: createRequest("https://example.test/chat"),
-      workspaceSlug: undefined,
-      threadId: undefined
+      threadHandle: undefined
     });
 
-    expect(result).toBeInstanceOf(Response);
-    expect((result as Response).status).toBe(302);
-    expect((result as Response).headers.get("location")).toBe("/chat");
+    expect(result).not.toBeInstanceOf(Response);
+    expect(result).toMatchObject({
+      workspaceSlug: "workspace-a",
+      threadId: null,
+      threadHandle: null,
+      requestedThreadSeed: null,
+      thread: null,
+      initialEvents: [],
+      initialCursor: 0,
+      executionMode: readDefaultExecutionMode()
+    });
   });
 
-  it("redirects to fallback workspace when user cannot access requested workspace", async () => {
+  it("redirects to fallback workspace query when requested workspace is inaccessible", async () => {
     loadAuthShellDataMock.mockResolvedValue(
       createAuth({
         activeWorkspaceSlug: "workspace-b",
@@ -110,15 +120,15 @@ describe("loadChatData", () => {
         ]
       })
     );
+    resolveThreadCreateWorkspaceSlugMock.mockReturnValue("workspace-b");
 
     const result = await loadChatData({
-      request: createRequest(),
-      workspaceSlug: "workspace-a",
-      threadId: undefined
+      request: createRequest("https://example.test/chat?workspace=workspace-a"),
+      threadHandle: undefined
     });
 
     expect(result).toBeInstanceOf(Response);
-    expect((result as Response).headers.get("location")).toBe("/w/workspace-b/chat");
+    expect((result as Response).headers.get("location")).toBe("/chat?workspace=workspace-b");
   });
 
   it("redirects to /workspaces when user has no active fallback workspace", async () => {
@@ -129,11 +139,13 @@ describe("loadChatData", () => {
         workspaces: []
       })
     );
+    resolveThreadCreateWorkspaceSlugMock.mockImplementation(() => {
+      throw new Error("missing workspace");
+    });
 
     const result = await loadChatData({
-      request: createRequest(),
-      workspaceSlug: "workspace-a",
-      threadId: undefined
+      request: createRequest("https://example.test/chat"),
+      threadHandle: undefined
     });
 
     expect(result).toBeInstanceOf(Response);
@@ -142,6 +154,7 @@ describe("loadChatData", () => {
 
   it("returns login redirect when thread fetch returns 401", async () => {
     loadAuthShellDataMock.mockResolvedValue(createAuth());
+    resolveThreadCreateWorkspaceSlugMock.mockReturnValue("workspace-a");
     buildReturnToMock.mockReturnValue("/return");
     getChatThreadMock.mockResolvedValue({
       status: 401,
@@ -150,17 +163,17 @@ describe("loadChatData", () => {
     });
 
     const result = await loadChatData({
-      request: createRequest(),
-      workspaceSlug: "workspace-a",
-      threadId: "thread-1"
+      request: createRequest("https://example.test/c/69ad25e0-6594-8320-aa96-9569d9f9864a"),
+      threadHandle: "69ad25e0-6594-8320-aa96-9569d9f9864a"
     });
 
     expect(result).toBeInstanceOf(Response);
     expect((result as Response).headers.get("location")).toBe("/login?returnTo=%2Freturn");
   });
 
-  it("redirects to workspace chat when thread is inaccessible", async () => {
+  it("redirects to the selected workspace when thread is inaccessible", async () => {
     loadAuthShellDataMock.mockResolvedValue(createAuth());
+    resolveThreadCreateWorkspaceSlugMock.mockReturnValue("workspace-a");
     getChatThreadMock.mockResolvedValue({
       status: 404,
       data: null,
@@ -168,13 +181,14 @@ describe("loadChatData", () => {
     });
 
     const result = await loadChatData({
-      request: createRequest(),
-      workspaceSlug: "workspace-a",
-      threadId: "thread-1"
+      request: createRequest(
+        "https://example.test/c/69ad25e0-6594-8320-aa96-9569d9f9864a?workspace=workspace-a"
+      ),
+      threadHandle: "69ad25e0-6594-8320-aa96-9569d9f9864a"
     });
 
     expect(result).toBeInstanceOf(Response);
-    expect((result as Response).headers.get("location")).toBe("/w/workspace-a/chat");
+    expect((result as Response).headers.get("location")).toBe("/chat?workspace=workspace-a");
   });
 
   it("throws when thread fetch returns no data with non-error status", async () => {
@@ -187,33 +201,10 @@ describe("loadChatData", () => {
 
     await expect(
       loadChatData({
-        request: createRequest(),
-        workspaceSlug: "workspace-a",
-        threadId: "thread-1"
+        request: createRequest("https://example.test/c/69ad25e0-6594-8320-aa96-9569d9f9864a"),
+        threadHandle: "69ad25e0-6594-8320-aa96-9569d9f9864a"
       })
     ).rejects.toThrow("failed to load");
-  });
-
-  it("redirects to thread's workspace when it differs from route workspace", async () => {
-    loadAuthShellDataMock.mockResolvedValue(createAuth());
-    getChatThreadMock.mockResolvedValue({
-      status: 200,
-      data: {
-        threadId: "thread-1",
-        workspaceSlug: "workspace-b",
-        executionMode: "cloud"
-      },
-      message: null
-    });
-
-    const result = await loadChatData({
-      request: createRequest(),
-      workspaceSlug: "workspace-a",
-      threadId: "thread-1"
-    });
-
-    expect(result).toBeInstanceOf(Response);
-    expect((result as Response).headers.get("location")).toBe("/w/workspace-b/chat/thread-1");
   });
 
   it("returns login redirect when events fetch returns 401", async () => {
@@ -223,6 +214,7 @@ describe("loadChatData", () => {
       status: 200,
       data: {
         threadId: "thread-1",
+        sessionIdentifier: "69ad25e0-6594-8320-aa96-9569d9f9864a",
         workspaceSlug: "workspace-a",
         executionMode: "cloud"
       },
@@ -234,9 +226,8 @@ describe("loadChatData", () => {
     });
 
     const result = await loadChatData({
-      request: createRequest(),
-      workspaceSlug: "workspace-a",
-      threadId: "thread-1"
+      request: createRequest("https://example.test/c/69ad25e0-6594-8320-aa96-9569d9f9864a"),
+      threadHandle: "69ad25e0-6594-8320-aa96-9569d9f9864a"
     });
 
     expect(result).toBeInstanceOf(Response);
@@ -250,7 +241,8 @@ describe("loadChatData", () => {
       status: 200,
       data: {
         threadId: "thread-1",
-        workspaceSlug: "workspace-a",
+        sessionIdentifier: "69ad25e0-6594-8320-aa96-9569d9f9864a",
+        workspaceSlug: "workspace-b",
         executionMode: "cloud"
       },
       message: null
@@ -264,50 +256,29 @@ describe("loadChatData", () => {
     });
 
     const result = await loadChatData({
-      request: createRequest("https://example.test/w/workspace-a/chat?thread=seed-42"),
-      workspaceSlug: "workspace-a",
-      threadId: "thread-1"
+      request: createRequest(
+        "https://example.test/c/69ad25e0-6594-8320-aa96-9569d9f9864a?thread=seed-42"
+      ),
+      threadHandle: "69ad25e0-6594-8320-aa96-9569d9f9864a"
     });
 
     expect(result).not.toBeInstanceOf(Response);
     expect(result).toEqual({
       contextMode: "personal",
       contextLabel: "Personal",
-      workspaceSlug: "workspace-a",
+      workspaceSlug: "workspace-b",
       threadId: "thread-1",
+      threadHandle: "69ad25e0-6594-8320-aa96-9569d9f9864a",
       requestedThreadSeed: "seed-42",
       thread: {
         threadId: "thread-1",
-        workspaceSlug: "workspace-a",
+        sessionIdentifier: "69ad25e0-6594-8320-aa96-9569d9f9864a",
+        workspaceSlug: "workspace-b",
         executionMode: "cloud"
       },
       initialEvents: [{ cursor: 1, method: "turn.started" }],
       initialCursor: 5,
       executionMode: "cloud"
     });
-  });
-
-  it("returns defaults when no thread is selected", async () => {
-    loadAuthShellDataMock.mockResolvedValue(createAuth());
-    readPersonalContextLabelMock.mockReturnValue("Personal");
-
-    const result = await loadChatData({
-      request: createRequest("https://example.test/w/workspace-a/chat"),
-      workspaceSlug: "workspace-a",
-      threadId: undefined
-    });
-
-    expect(result).not.toBeInstanceOf(Response);
-    expect(result).toMatchObject({
-      workspaceSlug: "workspace-a",
-      threadId: null,
-      requestedThreadSeed: null,
-      thread: null,
-      initialEvents: [],
-      initialCursor: 0,
-      executionMode: readDefaultExecutionMode()
-    });
-    expect(getChatThreadMock).not.toHaveBeenCalled();
-    expect(listChatThreadEventsMock).not.toHaveBeenCalled();
   });
 });

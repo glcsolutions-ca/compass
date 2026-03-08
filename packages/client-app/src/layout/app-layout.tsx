@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useLocation, useMatches } from "react-router";
 import { AppSidebar } from "~/layout/app-sidebar";
+import { resolveCurrentWorkspaceSlug } from "~/layout/current-workspace";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@compass/ui/sidebar";
 import type { AuthShellLoaderData, ShellRouteHandle } from "~/features/auth/types";
 import type { SettingsSection } from "~/features/settings/types";
@@ -48,18 +49,13 @@ export function AppLayout({ auth, children }: { auth: AuthShellLoaderData; child
     return "default";
   }, [matches]);
   const settingsWorkspaceSlug = useMemo(() => {
-    const pathnameMatch = /^\/w\/([^/]+)/u.exec(location.pathname);
-    if (pathnameMatch?.[1]) {
-      return pathnameMatch[1];
-    }
-
-    return (
-      auth.personalWorkspaceSlug?.trim() ||
-      auth.activeWorkspaceSlug?.trim() ||
-      auth.workspaces.find((workspace) => workspace.status === "active")?.slug ||
-      ""
-    );
-  }, [auth.activeWorkspaceSlug, auth.personalWorkspaceSlug, auth.workspaces, location.pathname]);
+    return resolveCurrentWorkspaceSlug({
+      auth,
+      pathname: location.pathname,
+      search: location.search,
+      matches
+    });
+  }, [auth, location.pathname, location.search, matches]);
 
   const buildSettingsHref = (section: SettingsSection) => {
     if (!settingsWorkspaceSlug) {

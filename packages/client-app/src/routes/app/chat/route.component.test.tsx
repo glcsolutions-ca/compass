@@ -130,7 +130,7 @@ beforeEach(() => {
     initialEvents: []
   });
   useLocationMock.mockReturnValue({
-    pathname: "/w/personal-user-1/chat/thread-1",
+    pathname: "/c/69ad25e0-6594-8320-aa96-9569d9f9864a",
     search: "?inspect=2&inspectTab=activity",
     hash: ""
   });
@@ -185,7 +185,7 @@ describe("chat route component", () => {
 
     expect(navigate).toHaveBeenCalledWith(
       {
-        pathname: "/w/personal-user-1/chat/thread-1",
+        pathname: "/c/69ad25e0-6594-8320-aa96-9569d9f9864a",
         search: "?inspect=9&inspectTab=raw",
         hash: ""
       },

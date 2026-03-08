@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AuthShellLoaderData } from "~/features/auth/types";
+import { resolveNewThreadTarget } from "~/lib/routes/chat-routes";
 
 const OrganizationMembershipSchema = z.object({
   organizationId: z.string().min(1),
@@ -74,5 +75,5 @@ export function resolveAuthenticatedLandingPath(data: {
     return "/workspaces";
   }
 
-  return `/w/${encodeURIComponent(preferred)}/chat`;
+  return resolveNewThreadTarget(preferred);
 }

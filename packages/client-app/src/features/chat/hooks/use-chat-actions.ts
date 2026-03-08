@@ -113,7 +113,7 @@ export function useChatActions({
     }
 
     if (actionResult.threadId && actionResult.threadId !== loaderThreadId) {
-      void navigate(buildThreadHref(workspaceSlug, actionResult.threadId), {
+      void navigate(buildThreadHref(actionResult.threadHandle ?? actionResult.threadId), {
         replace: true
       });
     }

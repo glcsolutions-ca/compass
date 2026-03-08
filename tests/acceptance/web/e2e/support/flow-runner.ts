@@ -419,9 +419,14 @@ async function assertLegacySurfaceSwitcherAbsent({
 function resolveWorkspaceChatPath(currentUrl: string): string {
   try {
     const parsed = new URL(currentUrl);
+    const queryWorkspace = parsed.searchParams.get("workspace")?.trim();
+    if (queryWorkspace) {
+      return `/chat?workspace=${encodeURIComponent(queryWorkspace)}`;
+    }
+
     const pathSegments = parsed.pathname.split("/").filter((segment) => segment.length > 0);
     if (pathSegments[0] === "w" && pathSegments[1]) {
-      return `/w/${encodeURIComponent(pathSegments[1])}/chat`;
+      return `/chat?workspace=${encodeURIComponent(pathSegments[1])}`;
     }
   } catch {
     // Ignore parse failures and fall back to the canonical chat route.

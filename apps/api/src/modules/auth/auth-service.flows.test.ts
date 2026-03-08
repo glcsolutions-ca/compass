@@ -22,7 +22,6 @@ const {
   encryptOidcRequestPayload,
   decryptOidcRequestPayload,
   sanitizeReturnTo,
-  normalizePostLoginReturnTo,
   buildLoginRedirect,
   nowPlusSeconds,
   extractClientIp,
@@ -343,11 +342,13 @@ describe("auth-service helpers", () => {
   it("builds normalized redirects and request metadata", () => {
     expect(sanitizeReturnTo(undefined)).toBeNull();
     expect(sanitizeReturnTo("/chat")).toBe("/chat");
+    expect(sanitizeReturnTo("/chat?from=login")).toBe("/chat?from=login");
+    expect(sanitizeReturnTo("/settings/profile")).toBe("/settings/profile");
+    expect(sanitizeReturnTo("/workspaces/acme/skills")).toBe("/workspaces/acme/skills");
     expect(sanitizeReturnTo("//evil.example")).toBeNull();
     expect(sanitizeReturnTo("https://evil.example")).toBeNull();
-    expect(normalizePostLoginReturnTo("/t/acme/chat")).toBe("/chat");
-    expect(normalizePostLoginReturnTo("/w/acme")).toBe("/chat");
-    expect(normalizePostLoginReturnTo("/chat?from=login")).toBe("/chat?from=login");
+    expect(sanitizeReturnTo("/t/acme/projects/123")).toBeNull();
+    expect(sanitizeReturnTo("/w/acme")).toBeNull();
     expect(
       buildLoginRedirect({
         returnTo: "/chat",

@@ -3,6 +3,8 @@ packages:
   - "packages/*"
   - "platform/pipeline"
 
+injectWorkspacePackages: true
+
 onlyBuiltDependencies:
   - "esbuild"
   - "sharp"

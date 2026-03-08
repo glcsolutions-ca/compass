@@ -527,7 +527,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
     const callbackLocation = parseAppRedirect(String(callback.headers.location));
     expect(callbackLocation.pathname).toBe("/login");
     expect(callbackLocation.searchParams.get("error")).toBe("admin_consent_required");
-    expect(callbackLocation.searchParams.get("returnTo")).toBe("/t/acme/projects/123");
+    expect(callbackLocation.searchParams.get("returnTo")).toBe("/");
   });
 
   it("fails closed when Entra login is enabled without OIDC state encryption key", async () => {
@@ -579,7 +579,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
     const callbackLocation = parseAppRedirect(String(callback.headers.location));
     expect(callbackLocation.pathname).toBe("/login");
     expect(callbackLocation.searchParams.get("consent")).toBe("granted");
-    expect(callbackLocation.searchParams.get("returnTo")).toBe("/t/acme");
+    expect(callbackLocation.searchParams.get("returnTo")).toBe("/");
     expect(callbackLocation.searchParams.get("tenantHint")).toBe(
       "11111111-1111-1111-1111-111111111111"
     );
@@ -622,7 +622,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
     const callbackLocation = parseAppRedirect(String(callback.headers.location));
     expect(callbackLocation.pathname).toBe("/login");
     expect(callbackLocation.searchParams.get("consent")).toBe("denied");
-    expect(callbackLocation.searchParams.get("returnTo")).toBe("/t/acme/projects/123");
+    expect(callbackLocation.searchParams.get("returnTo")).toBe("/");
     expect(callbackLocation.searchParams.get("tenantHint")).toBe("contoso.onmicrosoft.com");
   });
 
@@ -929,65 +929,6 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       displayName: "UPN Only User",
       primaryEmail: null
     });
-  });
-
-  it("normalizes legacy tenant returnTo targets to /chat", async () => {
-    const authService = new AuthService({
-      config: buildConfig(),
-      repository,
-      oidcClient: new FakeOidcClient({
-        claimsByCode: {
-          "code-user-1": buildClaims(
-            "11111111-1111-1111-1111-111111111111",
-            "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-            "owner@acme.test",
-            "Owner User"
-          )
-        }
-      })
-    });
-
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
-
-    const initialStart = await request(app).get("/v1/auth/entra/start");
-    const initialState = parseRedirectLocation(initialStart.headers.location).searchParams.get(
-      "state"
-    );
-    const initialCallback = await request(app).get(
-      `/v1/auth/entra/callback?code=code-user-1&state=${encodeURIComponent(String(initialState))}`
-    );
-    const cookie = extractCookie(initialCallback.headers["set-cookie"]);
-
-    const createTenant = await request(app)
-      .post("/v1/workspaces")
-      .set("Cookie", cookie)
-      .set("origin", SAME_ORIGIN)
-      .send({ slug: "acme", name: "Acme Corp" });
-    expect(createTenant.status).toBe(201);
-
-    const allowedReturnStart = await request(app).get(
-      "/v1/auth/entra/start?returnTo=%2Ft%2Facme%2Fprojects%2F123"
-    );
-    const allowedReturnState = parseRedirectLocation(
-      allowedReturnStart.headers.location
-    ).searchParams.get("state");
-    const allowedReturnCallback = await request(app).get(
-      `/v1/auth/entra/callback?code=code-user-1&state=${encodeURIComponent(String(allowedReturnState))}`
-    );
-    expect(allowedReturnCallback.status).toBe(302);
-    expect(allowedReturnCallback.headers.location).toBe("/chat");
-
-    const blockedReturnStart = await request(app).get(
-      "/v1/auth/entra/start?returnTo=%2Ft%2Fglobex%2Fprojects%2F999"
-    );
-    const blockedReturnState = parseRedirectLocation(
-      blockedReturnStart.headers.location
-    ).searchParams.get("state");
-    const blockedReturnCallback = await request(app).get(
-      `/v1/auth/entra/callback?code=code-user-1&state=${encodeURIComponent(String(blockedReturnState))}`
-    );
-    expect(blockedReturnCallback.status).toBe(302);
-    expect(blockedReturnCallback.headers.location).toBe("/chat");
   });
 
   it("emits audit events for login success/failure and invite lifecycle", async () => {

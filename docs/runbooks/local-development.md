@@ -13,10 +13,10 @@ Compass is a product-first monorepo. Local development should start from the pro
 
 - `pnpm install`
 - `pnpm dev`
-- `pnpm check`
-- `pnpm check:commit`
+- `pnpm test`
+- `pnpm build`
 - `pnpm test:acceptance`
-- `pnpm check:pipeline`
+- `pnpm infra:whatif`
 
 ## Package boundaries
 
@@ -32,6 +32,7 @@ Compass is a product-first monorepo. Local development should start from the pro
 
 - colocated unit tests live beside source as `*.test.ts(x)`
 - black-box acceptance tests live under `tests/acceptance/{api,web,desktop}`
+- `pnpm test` is the common fast local gate and is installed as a `pre-push` hook
 - pipeline and infra validation stays under `platform/`
 
 ## Local database helpers

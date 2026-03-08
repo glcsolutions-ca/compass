@@ -39,7 +39,6 @@ import {
   encryptOidcRequestPayload,
   hashValue,
   normalizeEmail,
-  normalizePostLoginReturnTo,
   nowPlusSeconds,
   parseBooleanQueryFlag,
   parseOidcStateEncryptionKey,
@@ -1778,12 +1777,9 @@ export class AuthService {
     });
 
     const workspaces = await this.repository.listWorkspaceMemberships(user.id);
-    const normalizedReturnTo = oidcRequest.returnTo
-      ? normalizePostLoginReturnTo(oidcRequest.returnTo)
-      : null;
     const redirectTo =
-      normalizedReturnTo && this.canVisitReturnTo(normalizedReturnTo, workspaces)
-        ? normalizedReturnTo
+      oidcRequest.returnTo && this.canVisitReturnTo(oidcRequest.returnTo, workspaces)
+        ? oidcRequest.returnTo
         : this.pickPostLoginRoute(workspaces);
 
     if (oidcSecrets.client === "desktop") {
@@ -1911,16 +1907,7 @@ export class AuthService {
   }
 
   private canVisitReturnTo(returnTo: string, _workspaces: WorkspaceMembershipRecord[]): boolean {
-    if (returnTo === "/" || returnTo === "/login") {
-      return false;
-    }
-
-    const match = returnTo.match(/^\/w\/([a-z0-9-]+)(?:\/|$)/u);
-    if (!match) {
-      return true;
-    }
-
-    return false;
+    return returnTo !== "/" && returnTo !== "/login";
   }
 
   private async startMockLogin(input: {
@@ -1968,10 +1955,9 @@ export class AuthService {
 
     const workspaces = await this.repository.listWorkspaceMemberships(user.id);
     const returnTo = sanitizeReturnTo(input.returnTo);
-    const normalizedReturnTo = returnTo ? normalizePostLoginReturnTo(returnTo) : null;
     const redirectTo =
-      normalizedReturnTo && this.canVisitReturnTo(normalizedReturnTo, workspaces)
-        ? normalizedReturnTo
+      returnTo && this.canVisitReturnTo(returnTo, workspaces)
+        ? returnTo
         : this.pickPostLoginRoute(workspaces);
 
     return {

@@ -22,19 +22,15 @@ Commit publishes:
 
 ## Structure
 
-Commit Stage has two modes:
+Commit Stage runs on `merge_group`. Pull request labeling lives in `05 PR Labels` and is not part of the delivery stage model.
 
-1. `pull_request`: cheap preflight only
-2. `merge_group`: the full authoritative stage
+The `merge_group` path runs:
 
-The authoritative `merge_group` path runs:
+1. candidate image builds
+2. fast candidate smoke against the published digests
+3. candidate publication
 
-1. mainline guard
-2. commit verification (`pnpm check:commit`, `pnpm check:pipeline`, `actionlint`)
-3. candidate image builds
-4. candidate publication
-
-The candidate is published only after verification and image builds pass.
+The candidate is published only after the image builds and candidate smoke pass.
 
 ## Scope
 
@@ -46,7 +42,7 @@ The required merge-queue commit gate covers the deployed surface only:
 - `contracts`
 - `sdk`
 
-Non-deployed platform tooling is intentionally out of the required path, even though `check:pipeline` still validates the delivery mechanics that protect those deployed surfaces.
+Non-deployed platform tooling is intentionally out of the required path. Infra validation and apply live in the separate infra workflow.
 
 ## Operational rule
 

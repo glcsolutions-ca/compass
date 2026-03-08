@@ -88,6 +88,21 @@ describe("frontend route loaders", () => {
     });
   });
 
+  it("drops non-canonical login return targets", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 401 }));
+
+    const data = await loginLoader({
+      request: new Request("http://web.test/login?returnTo=%2Ft%2Facme%2Fprojects%2F123")
+    });
+
+    expect(data).toEqual({
+      signInHref: "/v1/auth/entra/start",
+      adminConsentHref: "/v1/auth/entra/admin-consent/start?returnTo=%2F",
+      showAdminConsentNotice: false,
+      showAdminConsentSuccess: false
+    });
+  });
+
   it("redirects login route to chat when already authenticated", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(

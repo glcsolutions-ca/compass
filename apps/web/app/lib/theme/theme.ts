@@ -1,6 +1,5 @@
 export const UI_THEME_STORAGE_KEY = "ui-theme";
 export const UI_MODE_STORAGE_KEY = "ui-mode";
-export const LEGACY_THEME_STORAGE_KEY = "compass-theme";
 
 const UI_THEME_IDS = ["compass", "slate", "rose"] as const;
 const UI_MODE_IDS = ["system", "light", "dark"] as const;
@@ -107,18 +106,6 @@ function writeStorage(storage: StorageLike, key: string, value: string): void {
   }
 }
 
-function removeStorage(storage: StorageLike, key: string): void {
-  if (typeof storage.removeItem !== "function") {
-    return;
-  }
-
-  try {
-    storage.removeItem(key);
-  } catch {
-    // Ignore storage removal failures in restricted browser contexts.
-  }
-}
-
 function isTheme(value: string | null | undefined): value is UiThemeId {
   return typeof value === "string" && (UI_THEME_IDS as readonly string[]).includes(value);
 }
@@ -161,28 +148,10 @@ export function applyPreferencesToRoot(
   applyModeToRoot(root, resolveEffectiveMode(preference.mode, prefersDark));
 }
 
-export function migrateLegacyModePreference(storage: StorageLike): UiMode | null {
-  const persistedMode = readStorage(storage, UI_MODE_STORAGE_KEY);
-  if (isMode(persistedMode)) {
-    return persistedMode;
-  }
-
-  const legacyValue = readStorage(storage, LEGACY_THEME_STORAGE_KEY);
-  if (legacyValue === "light" || legacyValue === "dark") {
-    writeStorage(storage, UI_MODE_STORAGE_KEY, legacyValue);
-    removeStorage(storage, LEGACY_THEME_STORAGE_KEY);
-    return legacyValue;
-  }
-
-  return null;
-}
-
 export function readPreferencesFromStorage(storage: StorageLike): ThemePreference {
-  const migratedMode = migrateLegacyModePreference(storage);
-
   return {
     theme: resolveStoredTheme(readStorage(storage, UI_THEME_STORAGE_KEY)),
-    mode: migratedMode ?? resolveStoredMode(readStorage(storage, UI_MODE_STORAGE_KEY))
+    mode: resolveStoredMode(readStorage(storage, UI_MODE_STORAGE_KEY))
   };
 }
 
@@ -196,7 +165,6 @@ export function createThemeBootstrapScript(): string {
   const root = document.documentElement;
   const themeKey = ${JSON.stringify(UI_THEME_STORAGE_KEY)};
   const modeKey = ${JSON.stringify(UI_MODE_STORAGE_KEY)};
-  const legacyKey = ${JSON.stringify(LEGACY_THEME_STORAGE_KEY)};
 
   const themeCandidates = ${JSON.stringify(UI_THEME_IDS)};
   const modeCandidates = ${JSON.stringify(UI_MODE_IDS)};
@@ -223,25 +191,7 @@ export function createThemeBootstrapScript(): string {
     }
   };
 
-  const removeStorage = (key) => {
-    try {
-      window.localStorage.removeItem(key);
-    } catch {
-      // Ignore remove failures.
-    }
-  };
-
-  let rawMode = readStorage(modeKey);
-  if (!modeCandidates.includes(rawMode)) {
-    const legacyMode = readStorage(legacyKey);
-    if (legacyMode === "light" || legacyMode === "dark") {
-      rawMode = legacyMode;
-      writeStorage(modeKey, legacyMode);
-      removeStorage(legacyKey);
-    }
-  }
-
-  const mode = resolveMode(rawMode);
+  const mode = resolveMode(readStorage(modeKey));
   const theme = resolveTheme(readStorage(themeKey));
 
   const prefersDark =

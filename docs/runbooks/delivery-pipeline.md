@@ -1,11 +1,14 @@
 # Delivery Pipeline
 
-Compass uses a production-first delivery model with two canonical workflows.
+Compass uses a production-first delivery model with four focused workflows.
 
 ## Workflow topology
 
-- `10-commit-stage.yml`: the required merge-queue check on both `pull_request` and `merge_group`
-- `20-mainline-promotion.yml`: post-merge promotion on `push` to `main`, plus rare recovery redeploy by `workflow_dispatch`
+- `05-pr-labels.yml`: metadata only on `pull_request`
+- `10-commit-stage.yml`: authoritative candidate build on `merge_group`
+- `20-acceptance.yml`: triggered by successful `Commit Stage` completion for the merge-queue SHA
+- `30-release.yml`: triggered by successful `Acceptance` completion for the same candidate
+- `40-infra.yml`: validates/applies infrastructure only for infra-owned changes
 
 ## Stage model
 
@@ -27,14 +30,14 @@ The candidate is built once during Commit and then promoted without rebuilds.
 
 ## Validation ownership
 
-- `pnpm check`: product repo health and fast feedback
-- `pnpm check:commit`: deployed surfaces plus generated artifacts
-- `pnpm check:pipeline`: delivery and infrastructure validation
+- `pnpm test`: fast local lint, typecheck, and unit-test suite
+- `20-acceptance.yml`: behavioral validation of the published candidate
+- `30-release.yml`: deployment of the exact accepted candidate
+- `40-infra.yml`: Bicep validation and infra apply for infra-owned changes
 
 ## Operating guidance
 
 - prefer fix-forward through the normal pipeline
-- use manual `workflow_dispatch` only for rare redeploy of a previously released candidate
 - keep merge queue as the native entry point for publishing integrated candidates
 - keep platform policy and evidence in `platform/pipeline`
 - require only `Commit Stage` in the GitHub ruleset

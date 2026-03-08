@@ -160,6 +160,20 @@ async function prefetchCandidateImages(manifest) {
 }
 
 export async function runAcceptanceFromCandidate({ manifestPath, outputDir }) {
+  return runCandidateRuntimeChecks({
+    manifestPath,
+    outputDir,
+    includeBrowserSmoke: true,
+    includeSystemSmoke: true
+  });
+}
+
+export async function runCandidateRuntimeChecks({
+  manifestPath,
+  outputDir,
+  includeBrowserSmoke = true,
+  includeSystemSmoke = true
+}) {
   const manifest = await readJsonFile(manifestPath);
   const network = `compass-acceptance-${Date.now()}`;
   const postgresContainer = `${network}-postgres`;
@@ -277,12 +291,16 @@ export async function runAcceptanceFromCandidate({ manifestPath, outputDir }) {
       WEB_BASE_URL: "http://127.0.0.1:3000"
     };
 
-    await run("pnpm", ["test:system"], {
-      env: systemEnv,
-      cwd: path.resolve("."),
-      stdio: "inherit"
-    });
-    await run("pnpm", ["test:e2e"], { env: e2eEnv, cwd: path.resolve("."), stdio: "inherit" });
+    if (includeSystemSmoke) {
+      await run("pnpm", ["test:system"], {
+        env: systemEnv,
+        cwd: path.resolve("."),
+        stdio: "inherit"
+      });
+    }
+    if (includeBrowserSmoke) {
+      await run("pnpm", ["test:e2e"], { env: e2eEnv, cwd: path.resolve("."), stdio: "inherit" });
+    }
 
     const result = {
       schemaVersion: "acceptance-runtime.v1",
@@ -326,9 +344,11 @@ export async function runAcceptanceFromCandidate({ manifestPath, outputDir }) {
 export async function main(argv = process.argv.slice(2)) {
   const options = parseCliArgs(argv);
   const diagnosticsDir = requireOption(options, "diagnostics-dir");
-  await runAcceptanceFromCandidate({
+  await runCandidateRuntimeChecks({
     manifestPath: requireOption(options, "manifest"),
-    outputDir: diagnosticsDir
+    outputDir: diagnosticsDir,
+    includeBrowserSmoke: true,
+    includeSystemSmoke: true
   });
 }
 

@@ -40,10 +40,10 @@ tests/
 
 - `pnpm install`
 - `pnpm dev`
-- `pnpm check`
-- `pnpm check:commit`
+- `pnpm test`
+- `pnpm build`
 - `pnpm test:acceptance`
-- `pnpm check:pipeline`
+- `pnpm infra:apply`
 
 ## Product boundaries
 

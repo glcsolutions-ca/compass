@@ -19,8 +19,11 @@ The current target architecture is:
 
 - one Azure production resource group: `rg-compass-prd-cc-001`
 - one GitHub deployment environment: `production`
+- one PR labels workflow: `05-pr-labels.yml`
 - one commit workflow: `10-commit-stage.yml`
-- one mainline promotion workflow: `20-mainline-promotion.yml`
+- one acceptance workflow: `20-acceptance.yml`
+- one release workflow: `30-release.yml`
+- one infra workflow: `40-infra.yml`
 - one required merge-queue status check: `Commit Stage`
 - GHCR only
 - no Terraform
@@ -35,17 +38,14 @@ The current target architecture is:
 - `Commit Stage -> Acceptance Stage -> Release Stage`
 - `Queue Admission` exists only as a GitHub merge-queue prerequisite; it is not part of the deployment pipeline stage model
 - pull request labels are metadata only; they do not control delivery routing
-- manual `workflow_dispatch` is rare recovery redeploy only for a previously released candidate
 
 ## Main commands
 
 - `pnpm install`
 - `pnpm dev`
 - `pnpm build`
-- `pnpm check`
-- `pnpm check:product`
-- `pnpm check:commit`
-- `pnpm check:pipeline`
+- `pnpm test`
+- `pnpm test:acceptance`
 - `pnpm --filter @compass/pipeline-tools run test`
 - `pnpm infra:whatif`
 - `pnpm infra:apply`
@@ -57,21 +57,11 @@ The current target architecture is:
 - Treat `platform/scripts/bootstrap/*` as admin-only control-plane tooling.
 - Treat `platform/pipeline` as the source of truth for delivery policy and evidence.
 - Treat merge queue as the native entry point to the real development pipeline.
-- Treat `10-commit-stage.yml` as the one required check path:
-  - `pull_request`: cheap preflight plus labels
-  - `merge_group`: the full authoritative commit stage and candidate publication
-- Treat `20-mainline-promotion.yml` as the post-merge delivery path:
-  - `push` to `main`: Acceptance then Release
-  - `workflow_dispatch`: rare recovery redeploy of a previously published candidate
-- Treat manual `workflow_dispatch` as rare recovery redeploy:
-  - previously released candidates only
-  - no infra apply
-  - no migrations
-  - preferred operational response remains fix-forward with a new candidate
-- Treat `check:commit` as the deployed-surface gate only:
-  - `api`
-  - `web`
-  - `db-tools`
-  - `contracts`
-  - `sdk`
+- Treat `pnpm test` as the one common fast local suite for developers and agents.
+- Treat `05-pr-labels.yml` as metadata only.
+- Treat `10-commit-stage.yml` as the one required merge-queue check path:
+  - `merge_group`: build, smoke, and publish the candidate once
+- Treat `20-acceptance.yml` as the candidate-validation path triggered from successful Commit Stage runs.
+- Treat `30-release.yml` as the candidate-promotion path triggered from successful Acceptance runs.
+- Treat `40-infra.yml` as the separate infra validation/apply path for infra-owned changes.
 - Treat non-deployed platform tooling as out of the required merge-queue path unless it is brought back into deploy scope.

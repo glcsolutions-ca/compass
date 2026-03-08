@@ -1,18 +1,7 @@
 name: Commit Stage
-run-name: >-
-  ${{ github.event_name == 'pull_request'
-      && format('Commit Stage / PR #{0}', github.event.pull_request.number)
-      || format('Commit Stage / {0}', github.sha) }}
+run-name: ${{ format('Commit Stage / {0}', github.sha) }}
 
 on:
-  pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
   merge_group:
     types:
       - checks_requested
@@ -21,11 +10,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: >-
-    commit-stage-${{ github.event_name }}-${{
-      github.event_name == 'pull_request' && github.event.pull_request.number || github.sha
-    }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: commit-stage-${{ github.sha }}
+  cancel-in-progress: false
 
 env:
   REGISTRY_BASE: ghcr.io/glcsolutions-ca
@@ -36,64 +22,8 @@ env:
   RELEASE_UNITS_REPO: ghcr.io/glcsolutions-ca/compass-release-units
 
 jobs:
-  preflight:
-    name: Preflight
-    if: ${{ github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Apply labels from changed paths
-        uses: actions/labeler@8558fd74291d67161a8a78ce36a881fa63b766a9 # v5
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          configuration-path: .github/labeler.yml
-          sync-labels: false
-
-      - name: Skip draft pull request
-        if: ${{ github.event.pull_request.draft }}
-        run: echo "Draft pull request; skipping preflight."
-
-      - name: Checkout
-        if: ${{ !github.event.pull_request.draft }}
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Setup Node and pnpm
-        if: ${{ !github.event.pull_request.draft }}
-        uses: ./.github/actions/setup-node-pnpm
-
-      - name: Install actionlint
-        if: ${{ !github.event.pull_request.draft }}
-        run: |
-          set -euo pipefail
-          install_dir="$RUNNER_TEMP/actionlint-bin"
-          archive="$RUNNER_TEMP/actionlint_1.7.8_linux_amd64.tar.gz"
-          mkdir -p "$install_dir"
-          curl --fail --retry 5 --retry-all-errors --retry-delay 2 --location \
-            --output "$archive" \
-            https://github.com/rhysd/actionlint/releases/download/v1.7.8/actionlint_1.7.8_linux_amd64.tar.gz
-          tar -xzf "$archive" -C "$install_dir" actionlint
-          echo "$install_dir" >> "$GITHUB_PATH"
-
-      - name: Workflow lint
-        if: ${{ !github.event.pull_request.draft }}
-        run: actionlint -color
-
-      - name: Validate Bicep templates
-        if: ${{ !github.event.pull_request.draft }}
-        run: node platform/scripts/dev/validate-bicep-templates.mjs
-
-      - name: Audit retired references
-        if: ${{ !github.event.pull_request.draft }}
-        run: node platform/scripts/dev/audit-legacy-references.mjs
-
   prepare:
     name: Prepare Candidate
-    if: ${{ github.event_name == 'merge_group' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -108,46 +38,8 @@ jobs:
         id: source
         run: echo "source_revision=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
-  verify:
-    name: Verify
-    if: ${{ github.event_name == 'merge_group' }}
-    needs:
-      - prepare
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Setup Node and pnpm
-        uses: ./.github/actions/setup-node-pnpm
-
-      - name: Install actionlint
-        run: |
-          set -euo pipefail
-          install_dir="$RUNNER_TEMP/actionlint-bin"
-          archive="$RUNNER_TEMP/actionlint_1.7.8_linux_amd64.tar.gz"
-          mkdir -p "$install_dir"
-          curl --fail --retry 5 --retry-all-errors --retry-delay 2 --location \
-            --output "$archive" \
-            https://github.com/rhysd/actionlint/releases/download/v1.7.8/actionlint_1.7.8_linux_amd64.tar.gz
-          tar -xzf "$archive" -C "$install_dir" actionlint
-          echo "$install_dir" >> "$GITHUB_PATH"
-
-      - name: Run commit checks
-        run: pnpm check:commit
-
-      - name: Run pipeline checks
-        run: pnpm check:pipeline
-
-      - name: Workflow lint
-        run: actionlint -color
-
   build_candidate:
     name: Build Candidate / ${{ matrix.image.id }}
-    if: ${{ github.event_name == 'merge_group' }}
     needs:
       - prepare
     runs-on: ubuntu-latest
@@ -215,13 +107,83 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  publish_candidate:
-    name: Publish Candidate
-    if: ${{ github.event_name == 'merge_group' }}
+  smoke_candidate:
+    name: Candidate Smoke
     needs:
       - prepare
-      - verify
       - build_candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.prepare.outputs.source_revision }}
+          persist-credentials: false
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download digest artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: image-digest-*
+          path: .artifacts/image-digests
+          merge-multiple: true
+
+      - name: Create smoke manifest
+        run: |
+          set -euo pipefail
+          api_digest="$(cat .artifacts/image-digests/api.digest)"
+          web_digest="$(cat .artifacts/image-digests/web.digest)"
+          migrations_digest="$(cat .artifacts/image-digests/migrations.digest)"
+          jq -n \
+            --arg candidate_id "${{ needs.prepare.outputs.candidate_id }}" \
+            --arg source_revision "${{ needs.prepare.outputs.source_revision }}" \
+            --arg api_image "${REGISTRY_BASE}/${API_IMAGE_NAME}@${api_digest}" \
+            --arg web_image "${REGISTRY_BASE}/${WEB_IMAGE_NAME}@${web_digest}" \
+            --arg migrations_image "${REGISTRY_BASE}/${MIGRATIONS_IMAGE_NAME}@${migrations_digest}" \
+            '{
+              candidateId: $candidate_id,
+              source: { revision: $source_revision },
+              artifacts: {
+                apiImage: $api_image,
+                webImage: $web_image,
+                migrationsArtifact: $migrations_image
+              }
+            }' > "$RUNNER_TEMP/release-candidate-smoke.json"
+
+      - name: Run candidate smoke
+        run: |
+          node platform/pipeline/stages/01-commit/scripts/run-candidate-smoke.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate-smoke.json" \
+            --diagnostics-dir "$RUNNER_TEMP/commit-smoke-diagnostics"
+
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-smoke-artifacts
+          path: ${{ runner.temp }}/commit-smoke-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
+
+  publish_candidate:
+    name: Publish Candidate
+    needs:
+      - prepare
+      - build_candidate
+      - smoke_candidate
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -306,22 +268,18 @@ jobs:
 
   commit_stage:
     name: Commit Stage
-    if: ${{ always() }}
     runs-on: ubuntu-latest
     needs:
-      - preflight
       - prepare
-      - verify
       - build_candidate
+      - smoke_candidate
       - publish_candidate
     steps:
       - name: Assert expected path succeeded
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          PREFLIGHT: ${{ needs.preflight.result }}
           PREPARE: ${{ needs.prepare.result }}
-          VERIFY: ${{ needs.verify.result }}
           BUILD_CANDIDATE: ${{ needs.build_candidate.result }}
+          SMOKE_CANDIDATE: ${{ needs.smoke_candidate.result }}
           PUBLISH_CANDIDATE: ${{ needs.publish_candidate.result }}
         run: |
           set -euo pipefail
@@ -335,24 +293,15 @@ jobs:
             fi
           }
 
-          if [ "$EVENT_NAME" = 'pull_request' ]; then
-            assert_success preflight "$PREFLIGHT"
-            exit 0
-          fi
-
           assert_success prepare "$PREPARE"
-          assert_success verify "$VERIFY"
           assert_success build_candidate "$BUILD_CANDIDATE"
+          assert_success smoke_candidate "$SMOKE_CANDIDATE"
           assert_success publish_candidate "$PUBLISH_CANDIDATE"
 
       - name: Write commit summary
         run: |
           {
             echo "## Commit Stage"
-            if [ "${{ github.event_name }}" = 'pull_request' ]; then
-              echo "- Mode: PR preflight"
-            else
-              echo "- Mode: merge_group authoritative commit stage"
-              echo "- Candidate: ${{ needs.prepare.outputs.candidate_id }}"
-            fi
+            echo "- Mode: merge_group authoritative commit stage"
+            echo "- Candidate: ${{ needs.prepare.outputs.candidate_id }}"
           } >> "$GITHUB_STEP_SUMMARY"

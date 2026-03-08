@@ -2,6 +2,7 @@ import type { MetaFunction } from "react-router";
 import { Link, useLocation, useParams } from "react-router";
 import type { ShellRouteHandle } from "~/features/auth/types";
 import { resolveNewThreadTarget } from "~/lib/routes/chat-routes";
+import { buildWorkspaceSettingsHref } from "~/lib/routes/workspace-routes";
 import { Button } from "@compass/ui/button";
 import type { SettingsSection } from "~/features/settings/types";
 
@@ -66,6 +67,14 @@ export default function SettingsRoute() {
           >
             <h2 className="text-sm font-semibold text-card-foreground">{item.title}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
+            {workspaceSlug ? (
+              <Link
+                className="mt-3 inline-flex text-sm font-medium text-muted-foreground hover:text-foreground"
+                to={buildWorkspaceSettingsHref(workspaceSlug, item.key)}
+              >
+                Open {item.title}
+              </Link>
+            ) : null}
           </article>
         ))}
       </div>

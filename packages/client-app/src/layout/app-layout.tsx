@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useLocation, useMatches } from "react-router";
 import { AppSidebar } from "~/layout/app-sidebar";
 import { resolveCurrentWorkspaceSlug } from "~/layout/current-workspace";
+import { buildWorkspaceSettingsHref } from "~/lib/routes/workspace-routes";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@compass/ui/sidebar";
 import type { AuthShellLoaderData, ShellRouteHandle } from "~/features/auth/types";
 import type { SettingsSection } from "~/features/settings/types";
@@ -62,7 +63,7 @@ export function AppLayout({ auth, children }: { auth: AuthShellLoaderData; child
       return "/workspaces";
     }
 
-    return `/w/${encodeURIComponent(settingsWorkspaceSlug)}/settings?section=${encodeURIComponent(section)}`;
+    return buildWorkspaceSettingsHref(settingsWorkspaceSlug, section);
   };
 
   return (

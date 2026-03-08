@@ -69,6 +69,22 @@ async function waitForPostgres(containerName) {
   throw new Error("Timed out waiting for local Postgres");
 }
 
+async function waitForHttp(url, { timeoutMs = 60000, expectedStatuses = [200] } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url);
+      if (expectedStatuses.includes(response.status)) {
+        return;
+      }
+    } catch {}
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  throw new Error(`Timed out waiting for ${url}`);
+}
+
 async function captureLogs(outputDir, containers) {
   for (const container of containers) {
     try {
@@ -189,6 +205,9 @@ export async function runAcceptanceFromCandidate({ manifestPath, outputDir }) {
       `API_BASE_URL=http://${apiContainer}:3001`,
       manifest.artifacts.webImage
     ]);
+
+    await waitForHttp("http://127.0.0.1:3001/health");
+    await waitForHttp("http://127.0.0.1:3000/login");
 
     const systemEnv = {
       ...process.env,

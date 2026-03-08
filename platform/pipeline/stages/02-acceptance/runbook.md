@@ -6,7 +6,7 @@ Acceptance proves that the candidate produced by Commit behaves as users expect.
 
 ## Trigger
 
-Acceptance runs inside `01 Cloud Development Pipeline` on `push` to `main`, after the workflow resolves the candidate that Commit already published for the merged revision.
+Acceptance runs inside `20 Mainline Promotion` on `push` to `main`, after the workflow resolves the candidate that Commit already published for the merged revision.
 
 ## Runtime model
 

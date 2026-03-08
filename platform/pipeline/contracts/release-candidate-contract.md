@@ -49,7 +49,7 @@ A candidate is releasable only if:
 Recovery redeploy is a previously released-candidate redeploy:
 
 1. choose a previously released candidate id
-2. rerun `01 Cloud Development Pipeline` manually with that `candidate_id`
+2. rerun `20 Mainline Promotion` manually with that `candidate_id`
 
 Recovery redeploy:
 

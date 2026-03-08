@@ -3,22 +3,23 @@
 The active stage model is:
 
 1. `Commit Stage`
-2. `Acceptance Stage`
-3. `Release Stage`
+2. `Acceptance`
+3. `Release`
 
-Those three stages run inside the cloud delivery workflow:
+Those stages are implemented across two workflows:
 
-- [01-cloud-development-pipeline.yml](/Users/justinkropp/.codex/worktrees/2bfd/compass/.github/workflows/01-cloud-development-pipeline.yml)
+- `10-commit-stage.yml`
+- `20-mainline-promotion.yml`
 
-Normal forward delivery is split across two triggers:
+## Trigger Map
 
-- `merge_group` runs `Commit Stage`
-- `push` to `main` runs `Acceptance Stage` then `Release Stage`
+- `pull_request` runs `Commit Stage` in preflight mode only.
+- `merge_group` runs the authoritative `Commit Stage`.
+- `push` to `main` runs `Acceptance` then `Release`.
+- `workflow_dispatch` runs recovery redeploy through `Release`.
 
-The same workflow also supports `workflow_dispatch` for rare recovery redeploy of a previously released candidate by `candidate_id`.
+## Notes
 
-PR-time concerns live separately in:
-
-- [00-pr-metadata-and-admission.yml](/Users/justinkropp/.codex/worktrees/2bfd/compass/.github/workflows/00-pr-metadata-and-admission.yml)
-
-That PR workflow applies informational labels and runs Queue Admission so a pull request can enter merge queue. It emits `Commit Stage Complete` on the PR only as a GitHub prerequisite and is not part of the deployment pipeline stage model.
+- `Commit Stage` is the only required merge-queue check.
+- PR labels are metadata only and are applied inside `Commit Stage` preflight.
+- The delivery pipeline begins with integrated code on `merge_group`, not with PR head builds.

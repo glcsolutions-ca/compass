@@ -1,11 +1,11 @@
 # Delivery Pipeline
 
-Compass uses a production-first delivery model with one canonical cloud pipeline and one PR-only prerequisite workflow.
+Compass uses a production-first delivery model with two canonical workflows.
 
 ## Workflow topology
 
-- `00-pr-metadata-and-admission.yml`: PR metadata and merge-queue prerequisite only
-- `01-cloud-development-pipeline.yml`: the real delivery path
+- `10-commit-stage.yml`: the required merge-queue check on both `pull_request` and `merge_group`
+- `20-mainline-promotion.yml`: post-merge promotion on `push` to `main`, plus rare recovery redeploy by `workflow_dispatch`
 
 ## Stage model
 
@@ -37,6 +37,7 @@ The candidate is built once during Commit and then promoted without rebuilds.
 - use manual `workflow_dispatch` only for rare redeploy of a previously released candidate
 - keep merge queue as the native entry point for publishing integrated candidates
 - keep platform policy and evidence in `platform/pipeline`
+- require only `Commit Stage` in the GitHub ruleset
 
 ## Related docs
 

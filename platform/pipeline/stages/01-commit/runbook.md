@@ -6,7 +6,7 @@ Provide fast feedback on integrated code and produce the immutable release candi
 
 ## Trigger
 
-Commit Stage runs inside `01 Cloud Development Pipeline` on `merge_group`.
+Commit Stage runs inside `10 Commit Stage` on `merge_group`.
 
 It is the first hard gate on code that GitHub has already integrated for the merge queue check. If Commit passes, the queued change is allowed to merge to `main`.
 
@@ -22,16 +22,19 @@ Commit publishes:
 
 ## Structure
 
-Commit is split into parallel jobs:
+Commit Stage has two modes:
 
-1. code gate
-2. pipeline gate
-3. image builds
+1. `pull_request`: cheap preflight only
+2. `merge_group`: the full authoritative stage
+
+The authoritative `merge_group` path runs:
+
+1. mainline guard
+2. commit verification (`pnpm check:commit`, `pnpm check:pipeline`, `actionlint`)
+3. candidate image builds
 4. candidate publication
 
-The candidate is published only after both gates pass.
-
-`check:product`, `check:commit`, and `check:pipeline` are all part of Commit Stage. `check:product` validates the full first-class product surface, `check:commit` validates the cloud deployable surface, and `check:pipeline` validates delivery mechanics. They divide the work for clarity and parallelism; they are not separate conceptual stages.
+The candidate is published only after verification and image builds pass.
 
 ## Scope
 
@@ -43,7 +46,7 @@ The required merge-queue commit gate covers the deployed surface only:
 - `contracts`
 - `sdk`
 
-Non-deployed platform tooling is intentionally out of the required path.
+Non-deployed platform tooling is intentionally out of the required path, even though `check:pipeline` still validates the delivery mechanics that protect those deployed surfaces.
 
 ## Operational rule
 

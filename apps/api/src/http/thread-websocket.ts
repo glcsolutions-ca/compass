@@ -3,11 +3,11 @@ import type { Duplex } from "node:stream";
 import { WebSocketServer } from "ws";
 import type { AuthService } from "../modules/auth/auth-service.js";
 import { readSessionTokenFromCookie } from "../modules/auth/auth-service.js";
+import type { ThreadService } from "../modules/threads/thread-service.js";
 import type {
-  ThreadEventRecord,
-  ThreadService,
-  RuntimeNotificationRecord
-} from "../modules/threads/thread-service.js";
+  RuntimeNotificationRecord,
+  ThreadEventRecord
+} from "../modules/threads/thread-types.js";
 
 interface ThreadWebSocketConnection {
   send(data: string): void;

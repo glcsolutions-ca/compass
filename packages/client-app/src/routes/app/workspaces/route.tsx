@@ -6,11 +6,11 @@ import type { AuthShellLoaderData, ShellRouteHandle } from "~/features/auth/type
 import {
   submitWorkspacesAction,
   type WorkspacesActionData
-} from "~/features/workspace/workspaces-action";
+} from "~/features/workspaces/workspaces-action";
 import {
   loadWorkspacesData,
   type WorkspacesLoaderData
-} from "~/features/workspace/workspaces-loader";
+} from "~/features/workspaces/workspaces-loader";
 
 function BusyLabel({
   currentIntent,

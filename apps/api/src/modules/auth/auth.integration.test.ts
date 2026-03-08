@@ -10,8 +10,8 @@ import {
   type EntraAuthConfig,
   type OidcClient,
   type OidcIdTokenClaims
-} from "../../src/modules/auth/auth-service.js";
-import { buildApiApp } from "../../src/http/build-app.js";
+} from "./auth-service.js";
+import { buildApiApp } from "../../http/build-app.js";
 
 const FIXED_NOW = new Date("2026-02-26T17:00:00.000Z");
 const SAME_ORIGIN = "http://localhost:3000";
@@ -184,10 +184,23 @@ function parseAppRedirect(location: string): URL {
   return new URL(location, "https://compass.glcsolutions.ca");
 }
 
-const repoRoot = path.resolve(import.meta.dirname, "../../../../");
-const databaseUrl = resolveIntegrationDatabaseUrl(repoRoot);
+async function canConnectToDatabase(connectionString: string): Promise<boolean> {
+  const client = new Client({ connectionString });
+  try {
+    await client.connect();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
 
-describe("API auth integration", () => {
+const repoRoot = path.resolve(import.meta.dirname, "../../../../../");
+const databaseUrl = resolveIntegrationDatabaseUrl(repoRoot);
+const databaseAvailable = await canConnectToDatabase(databaseUrl);
+
+describe.skipIf(!databaseAvailable)("API auth integration", () => {
   const repository = new AuthRepository(databaseUrl);
 
   beforeAll(async () => {

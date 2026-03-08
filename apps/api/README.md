@@ -12,7 +12,7 @@ Purpose: contract-backed HTTP API for auth, workspaces, threads, and runtime end
 ## Test layout
 
 - colocated unit tests under `apps/api/src/**/*.test.ts`
-- integration tests under `apps/api/test/integration`
+- colocated integration tests under `apps/api/src/**/*.integration.test.ts`
 
 ## Run and verify
 

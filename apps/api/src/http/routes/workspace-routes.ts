@@ -1,20 +1,12 @@
 import {
-  type WorkspaceCreateRequest,
+  InviteTokenParamsSchema,
   WorkspaceCreateRequestSchema,
-  type WorkspaceInviteCreateRequest,
-  WorkspaceInviteCreateRequestSchema
-} from "@compass/contracts";
-import { z } from "zod";
+  WorkspaceSlugParamsSchema,
+  WorkspaceInviteCreateRequestSchema,
+  type WorkspaceCreateRequest,
+  type WorkspaceInviteCreateRequest
+} from "../../modules/workspaces/workspaces-schemas.js";
 import type { WorkspaceRoutesContext } from "./route-context.js";
-
-const WorkspaceSlugParamsSchema = z.object({
-  workspaceSlug: z.string().min(1)
-});
-
-const InviteTokenParamsSchema = z.object({
-  workspaceSlug: z.string().min(1),
-  token: z.string().min(1)
-});
 
 function requireAuthService(input: WorkspaceRoutesContext): input is WorkspaceRoutesContext & {
   authService: NonNullable<WorkspaceRoutesContext["authService"]>;

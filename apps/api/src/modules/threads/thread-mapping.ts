@@ -4,7 +4,7 @@ import {
   type ExecutionHost,
   type ExecutionMode
 } from "@compass/contracts";
-import type { ThreadEventRecord, ThreadRecord, TurnRecord } from "./thread-service.js";
+import type { ThreadEventRecord, ThreadRecord, TurnRecord } from "./thread-types.js";
 
 export function parseExecutionMode(value: string): ExecutionMode {
   const parsed = ExecutionModeSchema.safeParse(value);

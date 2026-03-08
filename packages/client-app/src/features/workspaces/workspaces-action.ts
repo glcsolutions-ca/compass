@@ -10,7 +10,7 @@ import {
   CreateWorkspaceSchema,
   WorkspacesIntentSchema,
   type WorkspacesIntent
-} from "~/features/workspace/workspaces-schema";
+} from "~/features/workspaces/workspaces-schema";
 
 export interface WorkspacesActionData {
   intent: WorkspacesIntent | null;

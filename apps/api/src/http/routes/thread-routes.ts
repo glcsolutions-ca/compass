@@ -1,33 +1,21 @@
 import {
-  ThreadEventsBatchRequestSchema,
   type ExecutionMode,
-  type ThreadEventsBatchRequest,
+  ThreadEventsBatchRequestSchema,
+  ThreadEventsQuerySchema,
+  ThreadParamsSchema,
   ThreadCreateRequestSchema,
   ThreadListQuerySchema,
-  type ThreadListQuery,
   ThreadModePatchRequestSchema,
-  type ThreadModePatchRequest,
   ThreadPatchRequestSchema,
-  type ThreadPatchRequest,
+  ThreadTurnParamsSchema,
   TurnStartRequestSchema,
+  type ThreadEventsBatchRequest,
+  type ThreadListQuery,
+  type ThreadModePatchRequest,
+  type ThreadPatchRequest,
   type TurnStartRequest
-} from "@compass/contracts";
-import { z } from "zod";
+} from "../../modules/threads/threads-schemas.js";
 import type { ThreadRoutesContext } from "./route-context.js";
-
-const ThreadParamsSchema = z.object({
-  threadId: z.string().min(1)
-});
-
-const ThreadTurnParamsSchema = z.object({
-  threadId: z.string().min(1),
-  turnId: z.string().min(1)
-});
-
-const ThreadEventsQuerySchema = z.object({
-  cursor: z.coerce.number().int().nonnegative().optional(),
-  limit: z.coerce.number().int().min(1).max(500).optional()
-});
 
 function ensureExecutionModeEnabled(
   input: ThreadRoutesContext,
@@ -61,11 +49,7 @@ export function registerThreadRoutes(input: ThreadRoutesContext): void {
 
   input.app.post("/v1/threads", async (request, response) => {
     await input.withThreadContext(request, response, async ({ userId, service }) => {
-      const body = input.parseOrReply<z.output<typeof ThreadCreateRequestSchema>>(
-        request.body,
-        ThreadCreateRequestSchema,
-        response
-      );
+      const body = input.parseOrReply(request.body, ThreadCreateRequestSchema, response);
       if (!body) {
         return;
       }

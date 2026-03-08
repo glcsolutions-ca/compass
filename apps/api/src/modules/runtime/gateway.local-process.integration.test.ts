@@ -3,9 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { attachSessionAgentGateway } from "../../src/modules/runtime/gateway.js";
-import { LocalProcessSessionHost } from "../../src/infrastructure/runtime-hosts/local-process.js";
-import { SessionControlPlane } from "../../src/modules/runtime/session-control-plane.js";
+import { LocalProcessSessionHost } from "../../infrastructure/runtime-hosts/local-process.js";
+import { attachSessionAgentGateway } from "./gateway.js";
+import { SessionControlPlane } from "./session-control-plane.js";
 
 describe("local process session agent integration", () => {
   let tempDir = "";

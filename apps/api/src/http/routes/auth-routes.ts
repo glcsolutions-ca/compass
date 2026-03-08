@@ -1,31 +1,11 @@
-import { z } from "zod";
+import {
+  EntraAdminConsentQuerySchema,
+  EntraCallbackQuerySchema,
+  EntraDesktopCompleteQuerySchema,
+  EntraStartQuerySchema
+} from "../../modules/auth/auth-schemas.js";
 import { parseAuthError } from "../../modules/auth/auth-service.js";
 import type { AuthRoutesContext } from "./route-context.js";
-
-const EntraStartQuerySchema = z.object({
-  returnTo: z.string().optional(),
-  client: z.enum(["browser", "desktop"]).optional()
-});
-
-const EntraAdminConsentQuerySchema = z.object({
-  tenantHint: z.string().optional(),
-  returnTo: z.string().optional(),
-  client: z.enum(["browser", "desktop"]).optional()
-});
-
-const EntraCallbackQuerySchema = z.object({
-  code: z.string().optional(),
-  state: z.string().optional(),
-  admin_consent: z.string().optional(),
-  tenant: z.string().optional(),
-  scope: z.string().optional(),
-  error: z.string().optional(),
-  error_description: z.string().optional()
-});
-
-const EntraDesktopCompleteQuerySchema = z.object({
-  handoff: z.string().min(1)
-});
 
 function requireAuthService(input: AuthRoutesContext): input is AuthRoutesContext & {
   authService: NonNullable<AuthRoutesContext["authService"]>;

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Client } from "pg";
 
-const repoRoot = path.resolve(import.meta.dirname, "../../../../");
+const repoRoot = path.resolve(import.meta.dirname, "../../../../../");
 function resolveIntegrationDatabaseUrl(repoRootPath: string): string {
   const explicit = process.env.DATABASE_URL?.trim();
   if (explicit) {
@@ -39,8 +39,21 @@ function resolveIntegrationDatabaseUrl(repoRootPath: string): string {
 }
 
 const databaseUrl = resolveIntegrationDatabaseUrl(repoRoot);
+async function canConnectToDatabase(connectionString: string): Promise<boolean> {
+  const client = new Client({ connectionString });
+  try {
+    await client.connect();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
 
-describe("organization/workspace auth schema constraints", () => {
+const databaseAvailable = await canConnectToDatabase(databaseUrl);
+
+describe.skipIf(!databaseAvailable)("organization/workspace auth schema constraints", () => {
   const client = new Client({ connectionString: databaseUrl });
 
   beforeAll(async () => {

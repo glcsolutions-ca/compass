@@ -6,7 +6,7 @@ export default defineConfig({
   test: {
     environment: "node",
     fileParallelism: false,
-    include: ["test/integration/**/*.integration.test.ts"],
+    include: ["src/**/*.integration.test.ts"],
     setupFiles: ["../../packages/testing/guardrails/integration.setup.mjs"]
   }
 });

@@ -19,7 +19,7 @@
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint . --ext .ts,.tsx --max-warnings=0",
     "test": "vitest run --config vitest.config.mts --passWithNoTests",
-    "typecheck": "pnpm exec tsc -b ../contracts/tsconfig.ref.json ../sdk/tsconfig.ref.json ../shared/tsconfig.ref.json ../ui/tsconfig.ref.json tsconfig.ref.json --noEmit"
+    "typecheck": "pnpm exec tsc -p tsconfig.ref.json --noEmit"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.12.14",

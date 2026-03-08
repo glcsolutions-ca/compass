@@ -1,9 +1,18 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router";
+import type * as ReactRouter from "react-router";
 import { SidebarProvider } from "@compass/ui/sidebar";
 import { AppSidebar } from "~/layout/app-sidebar";
 import type { AuthShellLoaderData } from "~/features/auth/types";
+
+vi.mock("react-router", async () => {
+  const actual = await vi.importActual<typeof ReactRouter>("react-router");
+  return {
+    ...actual,
+    useMatches: () => []
+  };
+});
 
 const AUTH_FIXTURE: AuthShellLoaderData = {
   authenticated: true,
@@ -89,7 +98,7 @@ describe("app sidebar", () => {
     const automationsLink = screen.getByRole("link", { name: "Automations" });
     const skillsLink = screen.getByRole("link", { name: "Skills" });
 
-    expect(newThreadLink.getAttribute("href")).toContain("/w/personal-user-1/chat?thread=");
+    expect(newThreadLink.getAttribute("href")).toContain("/chat?workspace=personal-user-1&thread=");
     expect(automationsLink.getAttribute("href")).toBe("/w/personal-user-1/automations");
     expect(skillsLink.getAttribute("href")).toBe("/w/personal-user-1/skills");
 
@@ -168,7 +177,9 @@ describe("app sidebar", () => {
     expect(chatLink.getAttribute("aria-label")).toBe("Chat");
 
     const utilityNewThread = scoped.getByRole("link", { name: "New thread" });
-    expect(utilityNewThread.getAttribute("href")).toContain("/w/personal-user-1/chat?thread=");
+    expect(utilityNewThread.getAttribute("href")).toContain(
+      "/chat?workspace=personal-user-1&thread="
+    );
     expect(scoped.getByRole("link", { name: "Automations" })).toBeTruthy();
     expect(scoped.getByRole("link", { name: "Skills" })).toBeTruthy();
 

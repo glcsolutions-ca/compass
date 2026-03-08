@@ -1,6 +1,7 @@
 import { useMemo } from "react";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useMatches } from "react-router";
 import { ChatThreadRail } from "~/layout/chat-thread-rail";
+import { resolveCurrentWorkspaceSlug } from "~/layout/current-workspace";
 import {
   Sidebar,
   SidebarContent,
@@ -28,30 +29,33 @@ export interface AppSidebarProps {
 
 export function AppSidebar({ auth, buildSettingsHref }: AppSidebarProps) {
   const location = useLocation();
+  const matches = useMatches();
   const workspaces = auth.workspaces ?? [];
-  const defaultWorkspaceSlug = useMemo(() => {
-    return (
-      auth.personalWorkspaceSlug?.trim() ||
-      auth.activeWorkspaceSlug?.trim() ||
-      workspaces.find((workspace) => workspace.status === "active")?.slug ||
-      ""
-    );
-  }, [auth.activeWorkspaceSlug, auth.personalWorkspaceSlug, workspaces]);
+  const currentWorkspaceSlug = useMemo(
+    () =>
+      resolveCurrentWorkspaceSlug({
+        auth,
+        pathname: location.pathname,
+        search: location.search,
+        matches
+      }),
+    [auth, location.pathname, location.search, matches]
+  );
   const utilityItems = useMemo(
     () =>
       buildUtilityItems({
-        defaultWorkspaceSlug,
+        defaultWorkspaceSlug: currentWorkspaceSlug,
         pathname: location.pathname
       }),
-    [defaultWorkspaceSlug, location.pathname]
+    [currentWorkspaceSlug, location.pathname]
   );
   const primaryItems = useMemo(
     () =>
       buildPrimaryItems({
-        defaultWorkspaceSlug,
+        defaultWorkspaceSlug: currentWorkspaceSlug,
         pathname: location.pathname
       }),
-    [defaultWorkspaceSlug, location.pathname]
+    [currentWorkspaceSlug, location.pathname]
   );
 
   return (
@@ -124,11 +128,8 @@ export function AppSidebar({ auth, buildSettingsHref }: AppSidebarProps) {
               {workspaces
                 .filter((workspace) => workspace.status === "active")
                 .map((workspace) => {
-                  const href = `/w/${encodeURIComponent(workspace.slug)}/chat`;
-                  const active =
-                    location.pathname === href ||
-                    location.pathname.startsWith(`${href}/`) ||
-                    (location.pathname === "/chat" && workspace.slug === defaultWorkspaceSlug);
+                  const href = `/chat?workspace=${encodeURIComponent(workspace.slug)}`;
+                  const active = workspace.slug === currentWorkspaceSlug;
 
                   return (
                     <SidebarMenuItem key={workspace.id}>
@@ -148,11 +149,8 @@ export function AppSidebar({ auth, buildSettingsHref }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {defaultWorkspaceSlug ? (
-          <ChatThreadRail
-            defaultWorkspaceSlug={defaultWorkspaceSlug}
-            pathname={location.pathname}
-          />
+        {currentWorkspaceSlug ? (
+          <ChatThreadRail activeWorkspaceSlug={currentWorkspaceSlug} pathname={location.pathname} />
         ) : null}
       </SidebarContent>
 

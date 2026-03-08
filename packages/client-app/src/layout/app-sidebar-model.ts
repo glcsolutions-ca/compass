@@ -73,11 +73,12 @@ export function buildPrimaryItems(input: {
     {
       label: "Chat",
       to: input.defaultWorkspaceSlug
-        ? `/w/${encodeURIComponent(input.defaultWorkspaceSlug)}/chat`
+        ? `/chat?workspace=${encodeURIComponent(input.defaultWorkspaceSlug)}`
         : "/chat",
       icon: MessageSquareText,
       active:
         input.pathname === "/chat" ||
+        input.pathname.startsWith("/c/") ||
         input.pathname.startsWith("/chat/") ||
         /^\/w\/[^/]+\/chat(?:\/|$)/u.test(input.pathname)
     },

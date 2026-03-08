@@ -1,6 +1,7 @@
 import type { MetaFunction } from "react-router";
 import { Link, useLocation, useParams } from "react-router";
 import type { ShellRouteHandle } from "~/features/auth/types";
+import { resolveNewThreadTarget } from "~/lib/routes/chat-routes";
 import { Button } from "@compass/ui/button";
 import type { SettingsSection } from "~/features/settings/types";
 
@@ -71,7 +72,7 @@ export default function SettingsRoute() {
 
       <div className="flex flex-wrap items-center gap-3">
         <Button asChild type="button">
-          <Link to={workspaceSlug ? `/w/${encodeURIComponent(workspaceSlug)}/chat` : "/workspaces"}>
+          <Link to={workspaceSlug ? resolveNewThreadTarget(workspaceSlug) : "/workspaces"}>
             Return to chat
           </Link>
         </Button>

@@ -9,7 +9,7 @@
     "start": "serve -s build/client -l 3000",
     "lint": "eslint . --ext .ts,.tsx --max-warnings=0",
     "test": "vitest run --config vitest.config.mts",
-    "typecheck": "react-router typegen && tsc -p tsconfig.ref.json --noEmit"
+    "typecheck": "rm -rf .react-router/types && react-router typegen && tsc -p tsconfig.ref.json --noEmit"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.12.14",

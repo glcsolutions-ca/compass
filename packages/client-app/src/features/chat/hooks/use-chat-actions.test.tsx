@@ -142,7 +142,7 @@ function renderChatActions(options?: {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  buildThreadHrefMock.mockReturnValue("/w/workspace-a/chat/thread-new");
+  buildThreadHrefMock.mockReturnValue("/c/69ad25e0-6594-8320-aa96-9569d9f9864a");
 });
 
 describe("resolveActiveThreadId", () => {

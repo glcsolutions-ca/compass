@@ -37,7 +37,7 @@ describe("chat action", () => {
         method: "POST",
         body: formData
       }),
-      params: { workspaceSlug: "personal-user-1" }
+      params: {}
     });
 
     expect(result).toEqual({
@@ -45,6 +45,7 @@ describe("chat action", () => {
       ok: false,
       error: "Prompt is required.",
       threadId: null,
+      threadHandle: null,
       turnId: null,
       executionMode: defaultExecutionMode,
       prompt: null,
@@ -95,7 +96,7 @@ describe("chat action", () => {
         executionMode: "cloud",
         executionHost: "dynamic_sessions",
         status: "idle",
-        sessionIdentifier: null,
+        sessionIdentifier: "69ad25e0-6594-8320-aa96-9569d9f9864a",
         title: "hello",
         archived: false,
         createdAt: null,
@@ -135,7 +136,7 @@ describe("chat action", () => {
         method: "POST",
         body: formData
       }),
-      params: { workspaceSlug: "personal-user-1" }
+      params: {}
     });
 
     expect(createChatThread).toHaveBeenCalledTimes(1);
@@ -160,6 +161,7 @@ describe("chat action", () => {
       ok: true,
       error: null,
       threadId: "thread_1",
+      threadHandle: "69ad25e0-6594-8320-aa96-9569d9f9864a",
       turnId: "turn_1",
       executionMode: "cloud",
       prompt: "hello",
@@ -211,7 +213,7 @@ describe("chat action", () => {
         executionMode: "cloud",
         executionHost: "dynamic_sessions",
         status: "idle",
-        sessionIdentifier: null,
+        sessionIdentifier: "69ad25e0-6594-8320-aa96-9569d9f9864b",
         title: "hello from chat",
         archived: false,
         createdAt: null,
@@ -266,6 +268,7 @@ describe("chat action", () => {
       ok: true,
       error: null,
       threadId: "thread_2",
+      threadHandle: "69ad25e0-6594-8320-aa96-9569d9f9864b",
       turnId: "turn_2",
       executionMode: "cloud",
       prompt: "hello from chat",
@@ -324,7 +327,7 @@ describe("chat action", () => {
         method: "POST",
         body: formData
       }),
-      params: { workspaceSlug: "personal-user-1" }
+      params: {}
     });
 
     expect(startChatTurn).not.toHaveBeenCalled();
@@ -333,6 +336,7 @@ describe("chat action", () => {
       ok: false,
       error: "Forbidden.",
       threadId: null,
+      threadHandle: null,
       turnId: null,
       executionMode: defaultExecutionMode,
       prompt: "blocked prompt",
@@ -373,6 +377,7 @@ describe("chat action", () => {
       ok: false,
       error: "Workspace membership is required but was not found in /v1/auth/me.",
       threadId: null,
+      threadHandle: null,
       turnId: null,
       executionMode: defaultExecutionMode,
       prompt: "hello",
@@ -406,7 +411,7 @@ describe("chat action", () => {
     formData.set("turnId", "turn_1");
 
     const result = await chatAction({
-      request: new Request("http://web.test/w/personal-user-1/chat/thread_1", {
+      request: new Request("http://web.test/c/69ad25e0-6594-8320-aa96-9569d9f9864a", {
         method: "POST",
         body: formData
       }),
@@ -456,7 +461,7 @@ describe("chat action", () => {
     formData.set("executionMode", "cloud");
 
     const result = await chatAction({
-      request: new Request("http://web.test/w/personal-user-1/chat/thread_1", {
+      request: new Request("http://web.test/c/69ad25e0-6594-8320-aa96-9569d9f9864a", {
         method: "POST",
         body: formData
       }),
@@ -500,18 +505,16 @@ describe("chat action", () => {
 
     const formData = new FormData();
     formData.set("intent", "sendMessage");
+    formData.set("threadId", "thread_1");
     formData.set("executionMode", "local");
     formData.set("prompt", "hello");
 
     const result = await chatAction({
-      request: new Request("http://web.test/w/personal-user-1/chat/thread_1", {
+      request: new Request("http://web.test/c/69ad25e0-6594-8320-aa96-9569d9f9864a", {
         method: "POST",
         body: formData
       }),
-      params: {
-        workspaceSlug: "personal-user-1",
-        threadId: "thread_1"
-      }
+      params: {}
     });
 
     expect(createChatThread).not.toHaveBeenCalled();
@@ -525,6 +528,7 @@ describe("chat action", () => {
       ok: true,
       error: null,
       threadId: "thread_1",
+      threadHandle: null,
       turnId: "turn_local_1",
       executionMode: "local",
       prompt: "hello",

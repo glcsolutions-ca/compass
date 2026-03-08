@@ -11,7 +11,8 @@ vi.mock("react-router", async () => {
 
   return {
     ...actual,
-    Form: ({ children, ...props }: Record<string, unknown>) => <form {...props}>{children}</form>
+    Form: ({ children, ...props }: Record<string, unknown>) => <form {...props}>{children}</form>,
+    useMatches: () => []
   };
 });
 

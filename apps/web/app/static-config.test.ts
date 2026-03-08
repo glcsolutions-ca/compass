@@ -60,7 +60,7 @@ describe("static route/config modules", () => {
     });
 
     expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toBe("/w/workspace-main/chat");
+    expect(response.headers.get("Location")).toBe("/chat?workspace=workspace-main");
   });
 
   it("redirects to /workspaces when no workspace slug can be resolved", async () => {

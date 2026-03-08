@@ -31,34 +31,39 @@ import {
   patchChatThreadClient
 } from "~/features/chat/thread-client";
 import type { ChatThread } from "~/features/chat/thread-types";
-import { buildThreadHref, buildNewThreadHref } from "~/features/chat/new-thread-routing";
+import {
+  buildThreadHref,
+  buildNewThreadHref,
+  resolveThreadHandle
+} from "~/features/chat/new-thread-routing";
 
-function readActiveThreadId(pathname: string): string | null {
-  const match = /^\/w\/[^/]+\/chat\/([^/]+)$/u.exec(pathname);
+function readActiveThreadHandle(pathname: string): string | null {
+  const match = /^\/c\/([^/]+)$/u.exec(pathname);
   if (!match?.[1]) {
-    return null;
+    const priorCanonicalMatch = /^\/chat\/([^/]+)$/u.exec(pathname);
+    if (priorCanonicalMatch?.[1]) {
+      const priorCanonicalDecoded = decodeURIComponent(priorCanonicalMatch[1]).trim();
+      return priorCanonicalDecoded.length > 0 ? priorCanonicalDecoded : null;
+    }
+
+    const legacyMatch = /^\/w\/[^/]+\/chat\/([^/]+)$/u.exec(pathname);
+    if (!legacyMatch?.[1]) {
+      return null;
+    }
+
+    const legacyDecoded = decodeURIComponent(legacyMatch[1]).trim();
+    return legacyDecoded.length > 0 ? legacyDecoded : null;
   }
 
   const decoded = decodeURIComponent(match[1]).trim();
   return decoded.length > 0 ? decoded : null;
 }
 
-function readWorkspaceSlug(pathname: string): string | null {
-  const match = /^\/w\/([^/]+)\/chat(?:\/|$)/u.exec(pathname);
-  if (!match?.[1]) {
-    return null;
-  }
-
-  const decoded = decodeURIComponent(match[1]).trim();
-  return decoded.length > 0 ? decoded : null;
-}
-
-function resolveThreadTitle(thread: ChatThread): string {
+function readThreadTitle(thread: ChatThread): string {
   const title = thread.title?.trim();
   if (title) {
     return title;
   }
-
   return `Thread ${thread.threadId.slice(0, 8)}`;
 }
 
@@ -156,10 +161,10 @@ function SidebarThreadListItem() {
 
 export function ChatThreadRail({
   pathname,
-  defaultWorkspaceSlug
+  activeWorkspaceSlug
 }: {
   pathname: string;
-  defaultWorkspaceSlug: string;
+  activeWorkspaceSlug: string;
 }) {
   const navigate = useNavigate();
   const [threads, setThreads] = useState<ChatThread[]>([]);
@@ -167,8 +172,7 @@ export function ChatThreadRail({
   const [loadError, setLoadError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
 
-  const activeThreadId = readActiveThreadId(pathname);
-  const activeWorkspaceSlug = readWorkspaceSlug(pathname) ?? defaultWorkspaceSlug;
+  const activeThreadHandle = readActiveThreadHandle(pathname);
 
   useEffect(() => {
     return () => {
@@ -225,7 +229,7 @@ export function ChatThreadRail({
         .map((thread) => ({
           status: "regular" as const,
           id: thread.threadId,
-          title: resolveThreadTitle(thread)
+          title: readThreadTitle(thread)
         })),
     [threads]
   );
@@ -236,13 +240,27 @@ export function ChatThreadRail({
         .map((thread) => ({
           status: "archived" as const,
           id: thread.threadId,
-          title: resolveThreadTitle(thread)
+          title: readThreadTitle(thread)
         })),
     [threads]
   );
 
-  const threadWorkspaceById = useMemo(
-    () => new Map(threads.map((thread) => [thread.threadId, thread.workspaceSlug])),
+  const activeThreadId = useMemo(() => {
+    if (!activeThreadHandle) {
+      return null;
+    }
+
+    return (
+      threads.find(
+        (thread) =>
+          resolveThreadHandle(thread) === activeThreadHandle ||
+          thread.threadId === activeThreadHandle
+      )?.threadId ?? null
+    );
+  }, [activeThreadHandle, threads]);
+
+  const threadHandleById = useMemo(
+    () => new Map(threads.map((thread) => [thread.threadId, resolveThreadHandle(thread)])),
     [threads]
   );
 
@@ -261,9 +279,8 @@ export function ChatThreadRail({
             void navigate(buildNewThreadHref({ workspaceSlug: activeWorkspaceSlug }));
           },
           onSwitchToThread: async (threadId: string) => {
-            const targetWorkspaceSlug =
-              threadWorkspaceById.get(threadId) || activeWorkspaceSlug || defaultWorkspaceSlug;
-            void navigate(buildThreadHref(targetWorkspaceSlug, threadId));
+            const threadHandle = threadHandleById.get(threadId) || threadId;
+            void navigate(buildThreadHref(threadHandle));
           },
           onRename: async (threadId: string, newTitle: string) => {
             const title = newTitle.trim();
@@ -309,11 +326,10 @@ export function ChatThreadRail({
       activeThreadId,
       activeWorkspaceSlug,
       archivedThreadItems,
-      defaultWorkspaceSlug,
       navigate,
       refreshThreads,
       regularThreadItems,
-      threadWorkspaceById
+      threadHandleById
     ]
   );
 

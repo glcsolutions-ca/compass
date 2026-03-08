@@ -9,6 +9,10 @@ import {
 import { resolveThreadCreateWorkspaceSlug } from "~/features/chat/chat-context";
 import { readDefaultExecutionMode } from "~/features/chat/default-execution-mode";
 import {
+  CHAT_WORKSPACE_QUERY_PARAM,
+  resolveThreadHandle
+} from "~/features/chat/new-thread-routing";
+import {
   ChatClientRequestIdSchema,
   ChatExecutionModeSchema,
   ChatIntentSchema,
@@ -30,6 +34,7 @@ export interface ChatActionData {
   ok: boolean;
   error: string | null;
   threadId: string | null;
+  threadHandle: string | null;
   turnId: string | null;
   executionMode: ChatExecutionMode;
   prompt: string | null;
@@ -48,6 +53,23 @@ interface PromptActionInput {
   parentMessageId: string | null;
 }
 
+interface ResolvedThreadTarget {
+  threadId: string;
+  threadHandle: string | null;
+}
+
+function parseRequestedWorkspaceSlug(request: Request): string | null {
+  const requestedWorkspaceCandidate = new URL(request.url).searchParams.get(
+    CHAT_WORKSPACE_QUERY_PARAM
+  );
+  if (!requestedWorkspaceCandidate) {
+    return null;
+  }
+
+  const requestedWorkspaceSlug = requestedWorkspaceCandidate.trim();
+  return requestedWorkspaceSlug.length > 0 ? requestedWorkspaceSlug : null;
+}
+
 function createErrorAction(input: {
   intent: ChatActionData["intent"];
   error: string;
@@ -64,6 +86,7 @@ function createErrorAction(input: {
     ok: false,
     error: input.error,
     threadId: input.threadId ?? null,
+    threadHandle: null,
     turnId: input.turnId ?? null,
     executionMode: input.executionMode ?? "cloud",
     prompt: input.prompt ?? null,
@@ -88,6 +111,7 @@ function createErrorAction(input: {
 function createSuccessAction(input: {
   intent: ChatActionData["intent"];
   threadId: string;
+  threadHandle?: string | null;
   turnId: string | null;
   executionMode: ChatExecutionMode;
   prompt?: string | null;
@@ -101,6 +125,7 @@ function createSuccessAction(input: {
     ok: true,
     error: null,
     threadId: input.threadId,
+    threadHandle: input.threadHandle ?? null,
     turnId: input.turnId,
     executionMode: input.executionMode,
     prompt: input.prompt ?? null,
@@ -127,14 +152,9 @@ function resolveExecutionMode(formData: FormData): ChatExecutionMode {
   return requestedExecutionMode.success ? requestedExecutionMode.data : readDefaultExecutionMode();
 }
 
-function resolveTargetThreadId(
-  formData: FormData,
-  routeThreadId: string | undefined
-): string | null {
+function resolveTargetThreadId(formData: FormData): string | null {
   const formThreadId = ChatThreadIdSchema.safeParse(formData.get("threadId"));
-  return formThreadId.success
-    ? (formThreadId.data ?? routeThreadId ?? null)
-    : (routeThreadId ?? null);
+  return formThreadId.success ? (formThreadId.data ?? null) : null;
 }
 
 function parsePromptActionInput(
@@ -177,15 +197,17 @@ function parsePromptActionInput(
 
 async function resolveThreadForPromptAction(input: {
   request: Request;
-  workspaceSlug: string | undefined;
   intent: PromptIntent;
   executionMode: ChatExecutionMode;
   prompt: string;
   clientRequestId: string | undefined;
   targetThreadId: string | null;
-}): Promise<string | Response | ChatActionData> {
+}): Promise<ResolvedThreadTarget | Response | ChatActionData> {
   if (input.targetThreadId) {
-    return input.targetThreadId;
+    return {
+      threadId: input.targetThreadId,
+      threadHandle: null
+    };
   }
 
   const requiresExistingThread = input.intent === "editMessage" || input.intent === "reloadMessage";
@@ -206,7 +228,8 @@ async function resolveThreadForPromptAction(input: {
 
   let resolvedWorkspaceSlug: string;
   try {
-    resolvedWorkspaceSlug = input.workspaceSlug?.trim() || resolveThreadCreateWorkspaceSlug(auth);
+    resolvedWorkspaceSlug =
+      parseRequestedWorkspaceSlug(input.request) || resolveThreadCreateWorkspaceSlug(auth);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to resolve workspace context.";
     return createErrorAction({
@@ -234,7 +257,10 @@ async function resolveThreadForPromptAction(input: {
     });
   }
 
-  return createThreadResult.data.threadId;
+  return {
+    threadId: createThreadResult.data.threadId,
+    threadHandle: resolveThreadHandle(createThreadResult.data)
+  };
 }
 
 async function handleSwitchModeIntent(input: {
@@ -266,6 +292,7 @@ async function handleSwitchModeIntent(input: {
   return createSuccessAction({
     intent: "switchMode",
     threadId: modeSwitchResult.data.threadId,
+    threadHandle: resolveThreadHandle(modeSwitchResult.data),
     turnId: null,
     executionMode: modeSwitchResult.data.executionMode
   });
@@ -313,7 +340,6 @@ async function handleInterruptTurnIntent(input: {
 async function handlePromptIntent(input: {
   request: Request;
   formData: FormData;
-  workspaceSlug: string | undefined;
   intent: PromptIntent;
   executionMode: ChatExecutionMode;
   targetThreadId: string | null;
@@ -330,7 +356,6 @@ async function handlePromptIntent(input: {
 
   const resolvedThreadId = await resolveThreadForPromptAction({
     request: input.request,
-    workspaceSlug: input.workspaceSlug,
     intent: input.intent,
     executionMode: input.executionMode,
     prompt: parsedInput.prompt,
@@ -340,12 +365,12 @@ async function handlePromptIntent(input: {
   if (resolvedThreadId instanceof Response) {
     return resolvedThreadId;
   }
-  if (typeof resolvedThreadId !== "string") {
+  if ("ok" in resolvedThreadId) {
     return resolvedThreadId;
   }
 
   const startTurnResult = await startChatTurn(input.request, {
-    threadId: resolvedThreadId,
+    threadId: resolvedThreadId.threadId,
     text: parsedInput.prompt,
     executionMode: input.executionMode,
     clientRequestId: parsedInput.clientRequestId
@@ -354,7 +379,7 @@ async function handlePromptIntent(input: {
     return createErrorAction({
       intent: input.intent,
       executionMode: input.executionMode,
-      threadId: resolvedThreadId,
+      threadId: resolvedThreadId.threadId,
       prompt: parsedInput.prompt,
       clientRequestId: parsedInput.clientRequestId,
       error: startTurnResult.message || "Unable to submit this prompt."
@@ -364,6 +389,7 @@ async function handlePromptIntent(input: {
   return createSuccessAction({
     intent: input.intent,
     threadId: startTurnResult.data.threadId,
+    threadHandle: resolvedThreadId.threadHandle,
     turnId: startTurnResult.data.turnId,
     executionMode: startTurnResult.data.executionMode,
     prompt: parsedInput.prompt,
@@ -376,12 +402,10 @@ async function handlePromptIntent(input: {
 
 export async function submitChatAction({
   request,
-  workspaceSlug,
-  threadId
+  threadHandle: _threadHandle
 }: {
   request: Request;
-  workspaceSlug: string | undefined;
-  threadId: string | undefined;
+  threadHandle: string | undefined;
 }): Promise<Response | ChatActionData> {
   const formData = await request.formData();
   const intentResult = ChatIntentSchema.safeParse(formData.get("intent"));
@@ -398,7 +422,7 @@ export async function submitChatAction({
   }
 
   const executionMode = resolveExecutionMode(formData);
-  const targetThreadId = resolveTargetThreadId(formData, threadId);
+  const targetThreadId = resolveTargetThreadId(formData);
   if (intent === "switchMode") {
     return handleSwitchModeIntent({
       request,
@@ -419,7 +443,6 @@ export async function submitChatAction({
   return handlePromptIntent({
     request,
     formData,
-    workspaceSlug,
     intent,
     executionMode,
     targetThreadId

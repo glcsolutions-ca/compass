@@ -35,8 +35,8 @@ describe("chat thread rail", () => {
     listChatThreadsClientMock.mockResolvedValue([]);
 
     render(
-      <MemoryRouter initialEntries={["/w/personal-user-1/chat"]}>
-        <ChatThreadRail defaultWorkspaceSlug="personal-user-1" pathname="/w/personal-user-1/chat" />
+      <MemoryRouter initialEntries={["/chat?workspace=personal-user-1"]}>
+        <ChatThreadRail activeWorkspaceSlug="personal-user-1" pathname="/chat" />
       </MemoryRouter>
     );
 
@@ -81,8 +81,8 @@ describe("chat thread rail", () => {
     ]);
 
     render(
-      <MemoryRouter initialEntries={["/w/personal-user-1/chat"]}>
-        <ChatThreadRail defaultWorkspaceSlug="personal-user-1" pathname="/w/personal-user-1/chat" />
+      <MemoryRouter initialEntries={["/chat?workspace=personal-user-1"]}>
+        <ChatThreadRail activeWorkspaceSlug="personal-user-1" pathname="/chat" />
       </MemoryRouter>
     );
 

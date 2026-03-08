@@ -1,9 +1,16 @@
 import { redirect } from "react-router";
-import type { AuthShellLoaderData } from "~/features/auth/types";
-import type { ChatContextMode } from "~/features/auth/types";
+import type { AuthShellLoaderData, ChatContextMode } from "~/features/auth/types";
 import { loadAuthShellData } from "~/features/auth/shell-loader";
-import { readPersonalContextLabel } from "~/features/chat/chat-context";
+import {
+  readPersonalContextLabel,
+  resolveThreadCreateWorkspaceSlug
+} from "~/features/chat/chat-context";
 import { readDefaultExecutionMode } from "~/features/chat/default-execution-mode";
+import {
+  buildNewThreadHref,
+  CHAT_WORKSPACE_QUERY_PARAM,
+  resolveThreadHandle
+} from "~/features/chat/new-thread-routing";
 import { getChatThread, listChatThreadEvents } from "~/features/chat/thread-client";
 import type { ChatEvent, ChatExecutionMode, ChatThread } from "~/features/chat/thread-types";
 import { buildReturnTo } from "~/lib/auth/auth-session";
@@ -13,6 +20,7 @@ export interface ChatLoaderData {
   contextLabel: string;
   workspaceSlug: string;
   threadId: string | null;
+  threadHandle: string | null;
   requestedThreadSeed: string | null;
   thread: ChatThread | null;
   initialEvents: ChatEvent[];
@@ -20,33 +28,56 @@ export interface ChatLoaderData {
   executionMode: ChatExecutionMode;
 }
 
-function resolveWorkspaceSlugOrRedirect(workspaceSlug: string | undefined): string | Response {
-  const normalizedWorkspaceSlug = workspaceSlug?.trim() || null;
-  return normalizedWorkspaceSlug ? normalizedWorkspaceSlug : redirect("/chat");
-}
-
-function resolveWorkspaceAccessRedirect(input: {
-  workspaceSlug: string;
-  auth: AuthShellLoaderData;
-}): Response | null {
-  const { workspaceSlug, auth } = input;
-  const hasWorkspaceAccess = auth.workspaces.some(
-    (workspace) => workspace.status === "active" && workspace.slug === workspaceSlug
+function parseRequestedWorkspaceSlug(request: Request): string | null {
+  const requestedWorkspaceCandidate = new URL(request.url).searchParams.get(
+    CHAT_WORKSPACE_QUERY_PARAM
   );
-  if (hasWorkspaceAccess) {
+  if (!requestedWorkspaceCandidate) {
     return null;
   }
 
-  const fallbackWorkspace =
-    auth.personalWorkspaceSlug?.trim() ||
-    auth.activeWorkspaceSlug?.trim() ||
-    auth.workspaces.find((workspace) => workspace.status === "active")?.slug ||
-    null;
-  if (!fallbackWorkspace) {
+  const requestedWorkspaceSlug = requestedWorkspaceCandidate.trim();
+  return requestedWorkspaceSlug.length > 0 ? requestedWorkspaceSlug : null;
+}
+
+function hasWorkspaceAccess(input: { auth: AuthShellLoaderData; workspaceSlug: string }): boolean {
+  return input.auth.workspaces.some(
+    (workspace) => workspace.status === "active" && workspace.slug === input.workspaceSlug
+  );
+}
+
+function resolveNewChatWorkspace(input: {
+  auth: AuthShellLoaderData;
+  request: Request;
+  requestedThreadSeed: string | null;
+}): string | Response {
+  const requestedWorkspaceSlug = parseRequestedWorkspaceSlug(input.request);
+  if (
+    requestedWorkspaceSlug &&
+    hasWorkspaceAccess({ auth: input.auth, workspaceSlug: requestedWorkspaceSlug })
+  ) {
+    return requestedWorkspaceSlug;
+  }
+
+  let fallbackWorkspaceSlug: string;
+  try {
+    fallbackWorkspaceSlug = resolveThreadCreateWorkspaceSlug(input.auth);
+  } catch {
     return redirect("/workspaces");
   }
 
-  return redirect(`/w/${encodeURIComponent(fallbackWorkspace)}/chat`);
+  if (requestedWorkspaceSlug && requestedWorkspaceSlug !== fallbackWorkspaceSlug) {
+    return redirect(
+      input.requestedThreadSeed
+        ? buildNewThreadHref({
+            workspaceSlug: fallbackWorkspaceSlug,
+            threadToken: input.requestedThreadSeed
+          })
+        : `/chat?${CHAT_WORKSPACE_QUERY_PARAM}=${encodeURIComponent(fallbackWorkspaceSlug)}`
+    );
+  }
+
+  return fallbackWorkspaceSlug;
 }
 
 function parseRequestedThreadSeed(request: Request): string | null {
@@ -71,10 +102,11 @@ interface ThreadLoadResult {
 
 async function loadThreadContext(input: {
   request: Request;
-  workspaceSlug: string;
-  threadId: string | null;
+  threadHandle: string | null;
+  auth: AuthShellLoaderData;
+  requestedThreadSeed: string | null;
 }): Promise<ThreadLoadResult | Response> {
-  if (!input.threadId) {
+  if (!input.threadHandle) {
     return {
       thread: null,
       initialEvents: [],
@@ -83,23 +115,33 @@ async function loadThreadContext(input: {
     };
   }
 
-  const threadResult = await getChatThread(input.request, input.threadId);
+  const threadResult = await getChatThread(input.request, input.threadHandle);
   if (threadResult.status === 401) {
     return buildLoginRedirect(input.request);
   }
 
   if (threadResult.status === 403 || threadResult.status === 404) {
-    return redirect(`/w/${encodeURIComponent(input.workspaceSlug)}/chat`);
+    const workspaceSlug = resolveNewChatWorkspace({
+      auth: input.auth,
+      request: input.request,
+      requestedThreadSeed: input.requestedThreadSeed
+    });
+    if (workspaceSlug instanceof Response) {
+      return workspaceSlug;
+    }
+
+    return redirect(
+      input.requestedThreadSeed
+        ? buildNewThreadHref({
+            workspaceSlug,
+            threadToken: input.requestedThreadSeed
+          })
+        : `/chat?${CHAT_WORKSPACE_QUERY_PARAM}=${encodeURIComponent(workspaceSlug)}`
+    );
   }
 
   if (!threadResult.data) {
     throw new Error(threadResult.message || "Unable to load chat thread.");
-  }
-
-  if (threadResult.data.workspaceSlug && threadResult.data.workspaceSlug !== input.workspaceSlug) {
-    return redirect(
-      `/w/${encodeURIComponent(threadResult.data.workspaceSlug)}/chat/${encodeURIComponent(input.threadId)}`
-    );
   }
 
   const resolvedThread = threadResult.data;
@@ -123,47 +165,45 @@ async function loadThreadContext(input: {
 
 export async function loadChatData({
   request,
-  workspaceSlug,
-  threadId
+  threadHandle
 }: {
   request: Request;
-  workspaceSlug: string | undefined;
-  threadId: string | undefined;
+  threadHandle: string | undefined;
 }): Promise<ChatLoaderData | Response> {
   const auth = await loadAuthShellData({ request });
   if (auth instanceof Response) {
     return auth;
   }
 
-  const resolvedWorkspaceSlug = resolveWorkspaceSlugOrRedirect(workspaceSlug);
-  if (resolvedWorkspaceSlug instanceof Response) {
-    return resolvedWorkspaceSlug;
-  }
-
-  const workspaceAccessRedirect = resolveWorkspaceAccessRedirect({
-    workspaceSlug: resolvedWorkspaceSlug,
-    auth
-  });
-  if (workspaceAccessRedirect) {
-    return workspaceAccessRedirect;
-  }
-
   const requestedThreadSeed = parseRequestedThreadSeed(request);
-  const normalizedThreadId = threadId?.trim() || null;
+  const normalizedThreadHandle = threadHandle?.trim() || null;
   const threadContext = await loadThreadContext({
     request,
-    workspaceSlug: resolvedWorkspaceSlug,
-    threadId: normalizedThreadId
+    threadHandle: normalizedThreadHandle,
+    auth,
+    requestedThreadSeed
   });
   if (threadContext instanceof Response) {
     return threadContext;
   }
 
+  const workspaceSlug =
+    threadContext.thread?.workspaceSlug ||
+    resolveNewChatWorkspace({
+      auth,
+      request,
+      requestedThreadSeed
+    });
+  if (workspaceSlug instanceof Response) {
+    return workspaceSlug;
+  }
+
   return {
     contextMode: "personal",
     contextLabel: readPersonalContextLabel({ user: auth.user }),
-    workspaceSlug: resolvedWorkspaceSlug,
-    threadId: normalizedThreadId,
+    workspaceSlug,
+    threadId: threadContext.thread?.threadId ?? null,
+    threadHandle: threadContext.thread ? resolveThreadHandle(threadContext.thread) : null,
     requestedThreadSeed,
     thread: threadContext.thread,
     initialEvents: threadContext.initialEvents,

@@ -70,7 +70,7 @@ describe("frontend route loaders", () => {
       throw new Error("Expected redirect response");
     }
     expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toBe("/w/personal-user-1/chat");
+    expect(response.headers.get("Location")).toBe("/chat?workspace=personal-user-1");
   });
 
   it("builds login route links when unauthenticated", async () => {
@@ -129,7 +129,7 @@ describe("frontend route loaders", () => {
 
     expect(response).toBeInstanceOf(Response);
     expect((response as Response).status).toBe(302);
-    expect((response as Response).headers.get("Location")).toBe("/w/acme/chat");
+    expect((response as Response).headers.get("Location")).toBe("/chat?workspace=acme");
   });
 
   it("reads workspaces error from query", async () => {

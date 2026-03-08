@@ -32,8 +32,8 @@ import type { ChatLoaderData } from "~/features/chat/chat-loader";
 import { loadChatData } from "~/features/chat/chat-loader";
 
 export const meta: MetaFunction<typeof clientLoader> = ({ params }) => {
-  const threadId = params.threadId?.trim();
-  return [{ title: threadId ? `Compass Chat · ${threadId.slice(0, 8)}` : "Compass Chat" }];
+  const threadHandle = params.threadHandle?.trim();
+  return [{ title: threadHandle ? `Compass Chat · ${threadHandle.slice(0, 8)}` : "Compass Chat" }];
 };
 
 export const handle: ShellRouteHandle = {
@@ -47,12 +47,11 @@ export async function clientLoader({
   params
 }: {
   request: Request;
-  params: { workspaceSlug?: string; threadId?: string };
+  params: { threadHandle?: string };
 }): Promise<ChatLoaderData | Response> {
   return loadChatData({
     request,
-    workspaceSlug: params.workspaceSlug,
-    threadId: params.threadId
+    threadHandle: params.threadHandle
   });
 }
 
@@ -61,12 +60,11 @@ export async function clientAction({
   params
 }: {
   request: Request;
-  params: { workspaceSlug?: string; threadId?: string };
+  params: { threadHandle?: string };
 }): Promise<Response | ChatActionData> {
   return submitChatAction({
     request,
-    workspaceSlug: params.workspaceSlug,
-    threadId: params.threadId
+    threadHandle: params.threadHandle
   });
 }
 

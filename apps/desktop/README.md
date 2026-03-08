@@ -1,6 +1,6 @@
 # Desktop Host
 
-The desktop app is a thin Electron host for the shared Compass client application.
+The desktop app is a thin Electron host for the Compass web product shell.
 
 Current ownership:
 
@@ -8,8 +8,8 @@ Current ownership:
 - `src/preload`: renderer bridge surface
 - `src/renderer`: reserved for renderer-only host assets when needed
 
-The product UI should continue to live in `packages/client-app`; desktop-specific code here should
-stay limited to shell and platform integration concerns.
+The product UI lives in `apps/web/app`; desktop-specific code here should stay limited to shell and
+platform integration concerns.
 
 ## Local usage
 
@@ -19,4 +19,4 @@ stay limited to shell and platform integration concerns.
 
 The desktop host now registers the `ca.glsolutions.compass://` protocol handler, routes desktop auth
 handoffs back into `/v1/auth/desktop/complete`, and exposes the runtime-account bridge expected by
-the shared client app.
+the web product shell.

@@ -3,13 +3,7 @@
   "files": [],
   "references": [
     {
-      "path": "./packages/shared/tsconfig.ref.json"
-    },
-    {
       "path": "./packages/ui/tsconfig.ref.json"
-    },
-    {
-      "path": "./packages/client-app/tsconfig.ref.json"
     },
     {
       "path": "./packages/contracts/tsconfig.ref.json"
@@ -21,7 +15,7 @@
       "path": "./packages/sdk/tsconfig.ref.json"
     },
     {
-      "path": "./packages/testing/tsconfig.ref.json"
+      "path": "./packages/testkit/tsconfig.ref.json"
     },
     {
       "path": "./packages/database/tsconfig.ref.json"

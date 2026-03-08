@@ -5,7 +5,6 @@ const PRODUCT_PACKAGES = [
   "@compass/api",
   "@compass/web",
   "@compass/desktop",
-  "@compass/client-app",
   "@compass/ui",
   "@compass/contracts",
   "@compass/sdk",

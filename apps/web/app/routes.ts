@@ -6,7 +6,7 @@ export default [
   route("workspaces", "routes/app/workspaces/route.tsx"),
   route("", "routes/app/layout/route.tsx", [
     route("chat", "routes/app/chat/route.tsx"),
-    route("c/:threadHandle", "routes/app/conversation/route.tsx"),
+    route("chat/:threadHandle", "routes/app/chat-thread/route.tsx"),
     route("settings", "routes/app/settings/route.tsx"),
     route("settings/:section", "routes/app/settings-section/route.tsx"),
     route("workspaces/:workspaceSlug/skills", "routes/app/skills/route.tsx"),

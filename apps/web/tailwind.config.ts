@@ -10,7 +10,6 @@ export default {
   content: [
     path.resolve(webDir, "app/**/*.{ts,tsx}"),
     path.resolve(webDir, "src/**/*.{ts,tsx}"),
-    path.resolve(webDir, "../../packages/client-app/src/**/*.{ts,tsx}"),
     path.resolve(webDir, "../../packages/ui/src/**/*.{ts,tsx}")
   ],
   theme: {

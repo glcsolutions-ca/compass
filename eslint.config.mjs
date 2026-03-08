@@ -83,7 +83,7 @@ export default tseslint.config(
       "**/coverage/**",
       "**/vitest*.config.*",
       "**/postcss.config.mjs",
-      "packages/testing/guardrails/**"
+      "packages/testkit/guardrails/**"
     ]
   },
   js.configs.recommended,
@@ -164,7 +164,7 @@ export default tseslint.config(
     }
   },
   {
-    files: ["packages/client-app/src/routes/**/*.ts", "packages/client-app/src/routes/**/*.tsx"],
+    files: ["apps/web/app/routes/**/*.ts", "apps/web/app/routes/**/*.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -177,30 +177,27 @@ export default tseslint.config(
             "../../*",
             "../../../*",
             "~/routes/*",
-            "packages/client-app/src/routes/*"
+            "apps/web/app/routes/*"
           ]
         }
       ]
     }
   },
   {
-    files: [
-      "packages/client-app/src/features/auth/**/*.ts",
-      "packages/client-app/src/features/auth/**/*.tsx"
-    ],
+    files: ["apps/web/app/features/auth/**/*.ts", "apps/web/app/features/auth/**/*.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          patterns: ["~/features/workspace/*", "~/features/chat/*"]
+          patterns: ["~/features/workspaces/*", "~/features/chat/*"]
         }
       ]
     }
   },
   {
     files: [
-      "packages/client-app/src/features/workspace/**/*.ts",
-      "packages/client-app/src/features/workspace/**/*.tsx"
+      "apps/web/app/features/workspaces/**/*.ts",
+      "apps/web/app/features/workspaces/**/*.tsx"
     ],
     rules: {
       "no-restricted-imports": [
@@ -212,15 +209,12 @@ export default tseslint.config(
     }
   },
   {
-    files: [
-      "packages/client-app/src/features/chat/**/*.ts",
-      "packages/client-app/src/features/chat/**/*.tsx"
-    ],
+    files: ["apps/web/app/features/chat/**/*.ts", "apps/web/app/features/chat/**/*.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          patterns: ["~/features/workspace/*"]
+          patterns: ["~/features/workspaces/*"]
         }
       ]
     }

@@ -3,6 +3,7 @@ import type { Express, Request, Response } from "express";
 import type { ZodType, ZodTypeDef } from "zod";
 import type { AuthService } from "../../modules/auth/auth-service.js";
 import type { ThreadService } from "../../modules/threads/thread-service.js";
+import type { WorkspacesService } from "../../modules/workspaces/workspaces-service.js";
 
 export interface AuthRateLimiter {
   check(input: { key: string; now: Date }): { allowed: boolean; retryAfterSeconds: number };
@@ -39,7 +40,7 @@ export interface AuthRoutesContext extends RouteSharedContext {
 }
 
 export interface WorkspaceRoutesContext extends RouteSharedContext {
-  authService: AuthService | null;
+  workspacesService: WorkspacesService | null;
   currentSessionToken(request: Request): string | null;
   sendAuthError(request: Request, response: Response, error: unknown): void;
 }

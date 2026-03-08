@@ -4,6 +4,7 @@ import { buildApiApp } from "./build-app.js";
 import { ApiError } from "~/modules/auth/auth-service.js";
 import type { AuthService } from "~/modules/auth/auth-service.js";
 import type { ThreadService } from "~/modules/threads/thread-service.js";
+import type { WorkspacesService } from "~/modules/workspaces/workspaces-service.js";
 
 function activeSessionRecord() {
   return {
@@ -165,7 +166,7 @@ describe("API app additional route coverage", () => {
 
   it("creates, reads, and lists workspace members", async () => {
     const app = buildApiApp({
-      authService: {
+      workspacesService: {
         createWorkspace: vi.fn(async () => ({
           workspace: {
             id: "ws-1",
@@ -205,7 +206,7 @@ describe("API app additional route coverage", () => {
             }
           ]
         }))
-      } as unknown as AuthService
+      } as unknown as WorkspacesService
     });
 
     const createResponse = await request(app).post("/v1/workspaces").send({
@@ -225,7 +226,7 @@ describe("API app additional route coverage", () => {
 
   it("creates and accepts workspace invites", async () => {
     const app = buildApiApp({
-      authService: {
+      workspacesService: {
         createWorkspaceInvite: vi.fn(async () => ({
           inviteId: "invite-1",
           expiresAt: "2026-03-10T00:00:00.000Z",
@@ -237,7 +238,7 @@ describe("API app additional route coverage", () => {
           role: "member",
           status: "active"
         }))
-      } as unknown as AuthService
+      } as unknown as WorkspacesService
     });
 
     const createResponse = await request(app)

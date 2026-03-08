@@ -619,7 +619,7 @@ describe("AuthService flows", () => {
     expect(timedOutRepository.revokeSessionByTokenHash).toHaveBeenCalledTimes(1);
   });
 
-  it("completes desktop handoff and supports workspace invite flow", async () => {
+  it("completes desktop handoff", async () => {
     const repository = createRepositoryStub({
       readSessionByTokenHash: vi.fn(async () => ({
         id: "session-1",
@@ -634,17 +634,6 @@ describe("AuthService flows", () => {
         id: "handoff-1",
         userId: "usr-1",
         redirectTo: "/chat"
-      })),
-      findWorkspaceInviteByToken: vi.fn(async () => ({
-        id: "invite-1",
-        workspaceId: "ws-1",
-        workspaceSlug: "acme",
-        organizationId: "org-1",
-        emailNormalized: "owner@acme.test",
-        role: "member",
-        expiresAt: "2026-03-10T00:00:00.000Z",
-        acceptedAt: null,
-        acceptedByUserId: null
       }))
     });
 
@@ -661,61 +650,6 @@ describe("AuthService flows", () => {
     });
     expect(desktop.sessionToken).toBeTruthy();
     expect(desktop.redirectTo).toBe("/chat");
-
-    const invite = await service.createWorkspaceInvite({
-      sessionToken: "session-token",
-      workspaceSlug: "acme",
-      request: {
-        email: "owner@acme.test",
-        role: "member",
-        expiresInDays: 3
-      },
-      now
-    });
-    expect(invite.inviteId).toBe("invite-1");
-    expect(invite.token).toBeTruthy();
-
-    const accepted = await service.acceptWorkspaceInvite({
-      sessionToken: "session-token",
-      workspaceSlug: "acme",
-      inviteToken: "token-value",
-      now
-    });
-    expect(accepted.joined).toBe(true);
-    expect(accepted.workspaceSlug).toBe("acme");
-  });
-
-  it("maps workspace creation slug conflicts to API error", async () => {
-    const { service } = buildService({
-      repository: createRepositoryStub({
-        readSessionByTokenHash: vi.fn(async () => ({
-          id: "session-1",
-          userId: "usr-1",
-          expiresAt: "2026-03-03T08:00:00.000Z",
-          revokedAt: null,
-          lastSeenAt: "2026-03-03T00:00:00.000Z",
-          primaryEmail: "owner@acme.test",
-          displayName: "Owner User"
-        })),
-        createWorkspace: vi.fn(async () => {
-          throw new Error("duplicate key value violates unique constraint workspaces_unique_slug");
-        })
-      })
-    });
-
-    await expect(
-      service.createWorkspace({
-        sessionToken: "session-token",
-        request: {
-          name: "Acme",
-          slug: "acme"
-        },
-        now: new Date("2026-03-03T00:00:00.000Z")
-      })
-    ).rejects.toMatchObject({
-      status: 409,
-      code: "WORKSPACE_SLUG_CONFLICT"
-    });
   });
 
   it("throws invalid callback when state or code is missing", async () => {

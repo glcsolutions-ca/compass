@@ -8,15 +8,17 @@ import {
 } from "../../modules/workspaces/workspaces-schemas.js";
 import type { WorkspaceRoutesContext } from "./route-context.js";
 
-function requireAuthService(input: WorkspaceRoutesContext): input is WorkspaceRoutesContext & {
-  authService: NonNullable<WorkspaceRoutesContext["authService"]>;
+function requireWorkspacesService(
+  input: WorkspaceRoutesContext
+): input is WorkspaceRoutesContext & {
+  workspacesService: NonNullable<WorkspaceRoutesContext["workspacesService"]>;
 } {
-  return input.authService !== null;
+  return input.workspacesService !== null;
 }
 
 export function registerWorkspaceRoutes(input: WorkspaceRoutesContext): void {
   input.app.post("/v1/workspaces", async (request, response) => {
-    if (!requireAuthService(input)) {
+    if (!requireWorkspacesService(input)) {
       response.status(503).json({ code: "AUTH_NOT_CONFIGURED", message: "Auth is not configured" });
       return;
     }
@@ -31,7 +33,7 @@ export function registerWorkspaceRoutes(input: WorkspaceRoutesContext): void {
     }
 
     try {
-      const result = await input.authService.createWorkspace({
+      const result = await input.workspacesService.createWorkspace({
         sessionToken: input.currentSessionToken(request),
         request: body,
         now: input.now()
@@ -44,7 +46,7 @@ export function registerWorkspaceRoutes(input: WorkspaceRoutesContext): void {
   });
 
   input.app.get("/v1/workspaces/:workspaceSlug", async (request, response) => {
-    if (!requireAuthService(input)) {
+    if (!requireWorkspacesService(input)) {
       response.status(503).json({ code: "AUTH_NOT_CONFIGURED", message: "Auth is not configured" });
       return;
     }
@@ -55,7 +57,7 @@ export function registerWorkspaceRoutes(input: WorkspaceRoutesContext): void {
     }
 
     try {
-      const result = await input.authService.readWorkspace({
+      const result = await input.workspacesService.readWorkspace({
         sessionToken: input.currentSessionToken(request),
         workspaceSlug: params.workspaceSlug,
         now: input.now()
@@ -67,7 +69,7 @@ export function registerWorkspaceRoutes(input: WorkspaceRoutesContext): void {
   });
 
   input.app.get("/v1/workspaces/:workspaceSlug/members", async (request, response) => {
-    if (!requireAuthService(input)) {
+    if (!requireWorkspacesService(input)) {
       response.status(503).json({ code: "AUTH_NOT_CONFIGURED", message: "Auth is not configured" });
       return;
     }
@@ -78,7 +80,7 @@ export function registerWorkspaceRoutes(input: WorkspaceRoutesContext): void {
     }
 
     try {
-      const result = await input.authService.listWorkspaceMembers({
+      const result = await input.workspacesService.listWorkspaceMembers({
         sessionToken: input.currentSessionToken(request),
         workspaceSlug: params.workspaceSlug,
         now: input.now()
@@ -90,7 +92,7 @@ export function registerWorkspaceRoutes(input: WorkspaceRoutesContext): void {
   });
 
   input.app.post("/v1/workspaces/:workspaceSlug/invites", async (request, response) => {
-    if (!requireAuthService(input)) {
+    if (!requireWorkspacesService(input)) {
       response.status(503).json({ code: "AUTH_NOT_CONFIGURED", message: "Auth is not configured" });
       return;
     }
@@ -110,7 +112,7 @@ export function registerWorkspaceRoutes(input: WorkspaceRoutesContext): void {
     }
 
     try {
-      const result = await input.authService.createWorkspaceInvite({
+      const result = await input.workspacesService.createWorkspaceInvite({
         sessionToken: input.currentSessionToken(request),
         workspaceSlug: params.workspaceSlug,
         request: body,
@@ -125,7 +127,7 @@ export function registerWorkspaceRoutes(input: WorkspaceRoutesContext): void {
   input.app.post(
     "/v1/workspaces/:workspaceSlug/invites/:token/accept",
     async (request, response) => {
-      if (!requireAuthService(input)) {
+      if (!requireWorkspacesService(input)) {
         response
           .status(503)
           .json({ code: "AUTH_NOT_CONFIGURED", message: "Auth is not configured" });
@@ -138,7 +140,7 @@ export function registerWorkspaceRoutes(input: WorkspaceRoutesContext): void {
       }
 
       try {
-        const result = await input.authService.acceptWorkspaceInvite({
+        const result = await input.workspacesService.acceptWorkspaceInvite({
           sessionToken: input.currentSessionToken(request),
           workspaceSlug: params.workspaceSlug,
           inviteToken: params.token,

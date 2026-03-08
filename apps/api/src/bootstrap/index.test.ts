@@ -21,8 +21,10 @@ const mocks = vi.hoisted(() => {
   const buildApiApp = vi.fn(() => ({ mocked: true }));
   const buildDefaultAuthService = vi.fn(() => ({
     service: { auth: "service" },
+    repository: { auth: "repository" },
     close: closeAuth
   }));
+  const buildDefaultWorkspacesService = vi.fn(() => ({ workspaces: "service" }));
   const buildDefaultThreadService = vi.fn(() => ({
     service: { agent: "service" },
     close: closeAgent
@@ -55,6 +57,7 @@ const mocks = vi.hoisted(() => {
     attachSessionAgentGateway,
     buildApiApp,
     buildDefaultAuthService,
+    buildDefaultWorkspacesService,
     buildDefaultThreadService,
     buildDefaultSessionControlPlane,
     existsSync,
@@ -91,6 +94,10 @@ vi.mock("../http/build-app.js", () => ({
 
 vi.mock("../modules/auth/auth-service.js", () => ({
   buildDefaultAuthService: mocks.buildDefaultAuthService
+}));
+
+vi.mock("../modules/workspaces/workspaces-service.js", () => ({
+  buildDefaultWorkspacesService: mocks.buildDefaultWorkspacesService
 }));
 
 vi.mock("../modules/threads/thread-service.js", () => ({
@@ -138,6 +145,7 @@ describe("API entrypoint", () => {
       expect(mocks.requireDatabaseUrl).toHaveBeenCalledTimes(1);
       expect(mocks.verifyDatabaseReadiness).toHaveBeenCalledTimes(1);
       expect(mocks.buildDefaultAuthService).toHaveBeenCalledTimes(1);
+      expect(mocks.buildDefaultWorkspacesService).toHaveBeenCalledTimes(1);
       expect(mocks.buildDefaultThreadService).toHaveBeenCalledTimes(1);
       expect(mocks.buildDefaultSessionControlPlane).toHaveBeenCalledTimes(1);
       expect(mocks.buildApiApp).toHaveBeenCalledTimes(1);

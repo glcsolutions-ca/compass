@@ -9,7 +9,7 @@ WORKDIR /workspace
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig*.json ./
 COPY apps/web/package.json apps/web/package.json
-COPY packages/app-shell/package.json packages/app-shell/package.json
+COPY packages/client-app/package.json packages/client-app/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/sdk/package.json packages/sdk/package.json
 COPY packages/shared/package.json packages/shared/package.json
@@ -19,7 +19,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm install --frozen-lockfile --filter . --filter @compass/web...
 
 FROM deps AS build
-COPY packages/app-shell ./packages/app-shell
+COPY packages/client-app ./packages/client-app
 COPY packages/contracts ./packages/contracts
 COPY packages/sdk ./packages/sdk
 COPY packages/shared ./packages/shared

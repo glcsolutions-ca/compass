@@ -11,7 +11,7 @@
     "start": "node dist/bootstrap/index.js",
     "test": "vitest run --config vitest.config.mts",
     "test:integration": "vitest run --config vitest.integration.config.mts",
-    "typecheck": "pnpm exec tsc -b ../../packages/contracts/tsconfig.ref.json ../../packages/runtime-protocol/tsconfig.ref.json tsconfig.ref.json"
+    "typecheck": "pnpm exec tsc -b ../../packages/contracts/tsconfig.ref.json ../../packages/runtime-protocol/tsconfig.ref.json tsconfig.ref.json --noEmit"
   },
   "dependencies": {
     "@compass/contracts": "workspace:*",

@@ -31,7 +31,7 @@ Legacy route families, transitional package names, and compatibility shims are n
 
 ## Consequences
 
-- New features should land in `app-shell`, `api`, or a clearly owned shared package, not in ad hoc host-specific folders.
+- New features should land in `client-app`, `api`, or a clearly owned shared package, not in ad hoc host-specific folders.
 - Deprecated package names and path aliases should be removed rather than preserved behind compatibility layers.
 - Pipeline and bootstrap documentation must reference only canonical repo paths.
 - Breaking API renames happen as explicit cutovers instead of indefinite dual support.

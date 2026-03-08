@@ -11,9 +11,9 @@
     "rootDirs": [".", "./.react-router/types"],
     "baseUrl": ".",
     "paths": {
-      "~/*": ["../../packages/app-shell/src/*"],
-      "@compass/app-shell": ["../../packages/app-shell/src/index.ts"],
-      "@compass/app-shell/*": ["../../packages/app-shell/src/*"],
+      "~/*": ["../../packages/client-app/src/*"],
+      "@compass/client-app": ["../../packages/client-app/src/index.ts"],
+      "@compass/client-app/*": ["../../packages/client-app/src/*"],
       "@compass/contracts": ["../../packages/contracts/src/index.ts"],
       "@compass/sdk": ["../../packages/sdk/src/index.ts"],
       "@compass/shared": ["../../packages/shared/src/index.ts"],

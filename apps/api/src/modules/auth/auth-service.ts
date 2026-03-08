@@ -1,561 +1,77 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
-import { z } from "zod";
 import {
   AuthMeResponseSchema,
-  OrganizationMembershipRoleSchema,
   WorkspaceCreateRequestSchema,
   WorkspaceInviteCreateRequestSchema,
   type AuthMeResponse,
-  type OrganizationMembershipRole,
   type WorkspaceCreateRequest,
   type WorkspaceInviteCreateRequest
 } from "@compass/contracts";
-
-export const SESSION_COOKIE_NAME = "__Host-compass_session";
-const DEFAULT_OIDC_SCOPE = "openid profile email";
-const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 8;
-const DEFAULT_SESSION_IDLE_TTL_SECONDS = 60 * 60;
-const OIDC_REQUEST_TTL_SECONDS = 10 * 60;
-const DESKTOP_HANDOFF_TTL_SECONDS = 2 * 60;
-const ADMIN_CONSENT_REQUEST_MARKER = "admin-consent";
-const EmailAddressSchema = z.string().email();
-const OIDC_ENCRYPTED_PAYLOAD_PREFIX = "enc:v1:";
-const OIDC_STATE_ENCRYPTION_KEY_BYTES = 32;
-const DEFAULT_DESKTOP_AUTH_SCHEME = "ca.glsolutions.compass";
-const DEFAULT_MOCK_ENTRA_TID = "00000000-0000-0000-0000-000000000000";
-const DEFAULT_MOCK_ENTRA_OID = "11111111-1111-1111-1111-111111111111";
-const DEFAULT_MOCK_EMAIL = "developer@local.test";
-const DEFAULT_MOCK_DISPLAY_NAME = "Local Developer";
-
-export type AuthMode = "mock" | "entra";
-export type AuthClient = "browser" | "desktop";
-
-export interface EntraAuthConfig {
-  authMode: AuthMode;
-  clientId?: string;
-  clientSecret?: string;
-  oidcStateEncryptionKey?: string;
-  redirectUri?: string;
-  authorityHost: string;
-  tenantSegment: string;
-  allowedTenantIds: string[];
-  scope: string;
-  webBaseUrl: string;
-  desktopAuthScheme: string;
-  sessionTtlSeconds: number;
-  sessionIdleTtlSeconds: number;
-}
-
-export interface OidcIdTokenClaims {
-  tid: string;
-  oid: string;
-  iss: string;
-  email: string | null;
-  upn: string | null;
-  name: string | null;
-}
-
-export interface OidcClient {
-  buildAuthorizeUrl(input: {
-    state: string;
-    nonce: string;
-    codeChallenge: string;
-    redirectUri: string;
-  }): string;
-  buildAdminConsentUrl(input: { tenantHint?: string; redirectUri: string; state: string }): string;
-  exchangeCodeForIdToken(input: {
-    code: string;
-    redirectUri: string;
-    codeVerifier: string;
-  }): Promise<string>;
-  verifyIdToken(input: { idToken: string; expectedNonce: string }): Promise<OidcIdTokenClaims>;
-}
-
-export class ApiError extends Error {
-  readonly status: number;
-  readonly code: string;
-
-  constructor(status: number, code: string, message: string) {
-    super(message);
-    this.status = status;
-    this.code = code;
-  }
-}
-
-interface UserRecord {
-  id: string;
-  primaryEmail: string | null;
-  displayName: string | null;
-}
-
-interface OrganizationMembershipRecord {
-  organizationId: string;
-  organizationSlug: string;
-  organizationName: string;
-  role: OrganizationMembershipRole;
-  status: "active" | "invited" | "disabled";
-}
-
-interface WorkspaceMembershipRecord {
-  workspaceId: string;
-  workspaceSlug: string;
-  workspaceName: string;
-  organizationId: string;
-  organizationSlug: string;
-  organizationName: string;
-  isPersonal: boolean;
-  role: "admin" | "member";
-  status: "active" | "invited" | "disabled";
-}
-
-interface WorkspaceRecord {
-  id: string;
-  organizationId: string;
-  organizationSlug: string;
-  organizationName: string;
-  slug: string;
-  name: string;
-  isPersonal: boolean;
-  status: "active" | "disabled";
-}
-
-interface SessionRecord {
-  id: string;
-  userId: string;
-  expiresAt: string;
-  revokedAt: string | null;
-  lastSeenAt: string;
-  primaryEmail: string | null;
-  displayName: string | null;
-}
-
-interface OidcRequestRecord {
-  id: string;
-  nonceHash: string;
-  encryptedPayload: string;
-  returnTo: string | null;
-}
-
-interface OidcRequestSecrets {
-  flow: "entra-login" | "admin-consent";
-  client: AuthClient;
-  nonce: string;
-  pkceVerifier: string;
-}
-
-interface DesktopHandoffRecord {
-  id: string;
-  userId: string;
-  redirectTo: string;
-}
-
-interface InviteRecord {
-  id: string;
-  workspaceId: string;
-  workspaceSlug: string;
-  organizationId: string;
-  emailNormalized: string;
-  role: "admin" | "member";
-  expiresAt: string;
-  acceptedAt: string | null;
-  acceptedByUserId: string | null;
-}
-
-interface WorkspaceMembershipCheck {
-  workspaceId: string;
-  workspaceSlug: string;
-  workspaceName: string;
-  organizationId: string;
-  organizationSlug: string;
-  organizationName: string;
-  isPersonal: boolean;
-  membershipRole: "admin" | "member";
-  membershipStatus: "active" | "invited" | "disabled";
-}
-
-function normalizeEmail(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function hashValue(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
-}
-
-function randomToken(bytes = 32): string {
-  return randomBytes(bytes).toString("base64url");
-}
-
-function encodePkceChallenge(verifier: string): string {
-  return createHash("sha256").update(verifier).digest("base64url");
-}
-
-function asStringOrNull(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function parseBooleanQueryFlag(value: string | undefined): boolean {
-  const normalized = value?.trim().toLowerCase();
-  return normalized === "true" || normalized === "1" || normalized === "yes";
-}
-
-function sanitizeUriScheme(value: string | undefined): string {
-  const normalized = asStringOrNull(value)?.toLowerCase() ?? DEFAULT_DESKTOP_AUTH_SCHEME;
-  return /^[a-z][a-z0-9+.-]*$/u.test(normalized) ? normalized : DEFAULT_DESKTOP_AUTH_SCHEME;
-}
-
-function asValidEmailOrNull(value: string | null): string | null {
-  if (!value) {
-    return null;
-  }
-
-  return EmailAddressSchema.safeParse(value).success ? value : null;
-}
-
-function resolvePrimaryEmail(input: { email: string | null; upn: string | null }): string | null {
-  return asValidEmailOrNull(input.email) ?? asValidEmailOrNull(input.upn);
-}
-
-function buildPersonalTenantSlug(userId: string): string {
-  const normalized = userId
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/gu, "-");
-  const slugSuffix = normalized.replace(/^-+|-+$/gu, "") || "user";
-  return `personal-${slugSuffix}`;
-}
-
-function buildPersonalTenantName(input: {
-  displayName: string | null;
-  primaryEmail: string | null;
-}): string {
-  const displayName = asStringOrNull(input.displayName);
-  if (displayName) {
-    return `${displayName} Personal Workspace`;
-  }
-
-  const email = asValidEmailOrNull(input.primaryEmail);
-  if (email) {
-    return `${email} Personal Workspace`;
-  }
-
-  return "Personal Workspace";
-}
-
-function parseOidcStateEncryptionKey(raw: string | undefined): Buffer | null {
-  const value = asStringOrNull(raw);
-  if (!value) {
-    return null;
-  }
-
-  try {
-    const decoded = Buffer.from(value, "base64url");
-    if (decoded.length !== OIDC_STATE_ENCRYPTION_KEY_BYTES) {
-      return null;
-    }
-
-    return decoded;
-  } catch {
-    return null;
-  }
-}
-
-function encryptOidcRequestPayload(input: {
-  encryptionKey: Buffer;
-  flow: "entra-login" | "admin-consent";
-  client: AuthClient;
-  nonce: string;
-  pkceVerifier: string;
-}): string {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", input.encryptionKey, iv);
-  const plaintext = JSON.stringify({
-    flow: input.flow,
-    client: input.client,
-    nonce: input.nonce,
-    pkceVerifier: input.pkceVerifier
-  });
-  const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-
-  return `${OIDC_ENCRYPTED_PAYLOAD_PREFIX}${iv.toString("base64url")}.${ciphertext.toString("base64url")}.${tag.toString("base64url")}`;
-}
-
-function decryptOidcRequestPayload(input: { encryptionKey: Buffer; encodedPayload: string }): {
-  flow: "entra-login" | "admin-consent";
-  client: AuthClient;
-  nonce: string;
-  pkceVerifier: string;
-} {
-  if (!input.encodedPayload.startsWith(OIDC_ENCRYPTED_PAYLOAD_PREFIX)) {
-    throw new Error("OIDC request payload format is invalid");
-  }
-
-  const encodedParts = input.encodedPayload.slice(OIDC_ENCRYPTED_PAYLOAD_PREFIX.length).split(".");
-  if (encodedParts.length !== 3) {
-    throw new Error("OIDC request payload format is invalid");
-  }
-
-  const [ivEncoded, ciphertextEncoded, tagEncoded] = encodedParts as [string, string, string];
-  const iv = Buffer.from(ivEncoded, "base64url");
-  const ciphertext = Buffer.from(ciphertextEncoded, "base64url");
-  const tag = Buffer.from(tagEncoded, "base64url");
-
-  const decipher = createDecipheriv("aes-256-gcm", input.encryptionKey, iv);
-  decipher.setAuthTag(tag);
-  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
-  const payload = JSON.parse(decrypted) as {
-    flow?: unknown;
-    client?: unknown;
-    nonce?: unknown;
-    pkceVerifier?: unknown;
-  };
-
-  const flow = payload.flow;
-  if (flow !== "entra-login" && flow !== "admin-consent") {
-    throw new Error("OIDC request payload flow is invalid");
-  }
-
-  const nonce = asStringOrNull(payload.nonce);
-  const pkceVerifier = asStringOrNull(payload.pkceVerifier);
-  const client =
-    payload.client === "browser" || payload.client === "desktop" ? payload.client : "browser";
-  if (!nonce || !pkceVerifier) {
-    throw new Error("OIDC request payload is missing required fields");
-  }
-
-  return {
-    flow,
-    client,
-    nonce,
-    pkceVerifier
-  };
-}
-
-function sanitizeReturnTo(returnTo: string | undefined): string | null {
-  if (!returnTo) {
-    return null;
-  }
-
-  const trimmed = returnTo.trim();
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
-    return null;
-  }
-
-  return trimmed;
-}
-
-function normalizePostLoginReturnTo(returnTo: string): string {
-  if (/^\/(?:t|w)\/[a-z0-9-]+(?:\/|$)/u.test(returnTo)) {
-    return "/chat";
-  }
-
-  return returnTo;
-}
-
-function buildLoginRedirect(input: {
-  error?: string;
-  consent?: "granted" | "denied";
-  returnTo?: string | null;
-  tenantHint?: string | null;
-}): string {
-  const query = new URLSearchParams();
-  if (input.error) {
-    query.set("error", input.error);
-  }
-  if (input.consent) {
-    query.set("consent", input.consent);
-  }
-
-  const returnTo = sanitizeReturnTo(input.returnTo ?? undefined) || "/";
-  query.set("returnTo", returnTo);
-
-  const tenantHint = asStringOrNull(input.tenantHint);
-  if (tenantHint) {
-    query.set("tenantHint", tenantHint);
-  }
-
-  return `/login?${query.toString()}`;
-}
-
-function nowPlusSeconds(now: Date, seconds: number): Date {
-  return new Date(now.getTime() + seconds * 1000);
-}
-
-function extractClientIp(forwardedFor: string | undefined, fallback: string | undefined): string {
-  const forwarded = asStringOrNull(forwardedFor)?.split(",").at(0)?.trim();
-  return forwarded || asStringOrNull(fallback) || "unknown";
-}
-
-function toOrganizationRole(value: unknown): OrganizationMembershipRole {
-  const parsed = OrganizationMembershipRoleSchema.safeParse(value);
-  if (!parsed.success) {
-    throw new Error(`Unexpected organization role '${String(value)}'`);
-  }
-
-  return parsed.data;
-}
-
-function toWorkspaceRole(value: unknown): "admin" | "member" {
-  return value === "admin" ? "admin" : "member";
-}
-
-export class EntraOidcClient implements OidcClient {
-  private readonly authorityHost: string;
-  private readonly tenantSegment: string;
-  private readonly clientId: string;
-  private readonly clientSecret: string;
-  private readonly scope: string;
-  private readonly jwks: ReturnType<typeof createRemoteJWKSet>;
-
-  constructor(input: {
-    authorityHost: string;
-    tenantSegment: string;
-    clientId: string;
-    clientSecret: string;
-    scope?: string;
-    jwksOptions?: Parameters<typeof createRemoteJWKSet>[1];
-  }) {
-    this.authorityHost = input.authorityHost.replace(/\/+$/u, "");
-    this.tenantSegment = input.tenantSegment;
-    this.clientId = input.clientId;
-    this.clientSecret = input.clientSecret;
-    this.scope = input.scope ?? DEFAULT_OIDC_SCOPE;
-
-    const jwksUrl = new URL(`${this.authorityHost}/${this.tenantSegment}/discovery/v2.0/keys`);
-    this.jwks = createRemoteJWKSet(jwksUrl, input.jwksOptions);
-  }
-
-  buildAuthorizeUrl(input: {
-    state: string;
-    nonce: string;
-    codeChallenge: string;
-    redirectUri: string;
-  }): string {
-    const url = new URL(`${this.authorityHost}/${this.tenantSegment}/oauth2/v2.0/authorize`);
-    url.searchParams.set("client_id", this.clientId);
-    url.searchParams.set("response_type", "code");
-    url.searchParams.set("redirect_uri", input.redirectUri);
-    url.searchParams.set("response_mode", "query");
-    url.searchParams.set("scope", this.scope);
-    url.searchParams.set("state", input.state);
-    url.searchParams.set("nonce", input.nonce);
-    url.searchParams.set("code_challenge", input.codeChallenge);
-    url.searchParams.set("code_challenge_method", "S256");
-    url.searchParams.set("prompt", "select_account");
-    return url.toString();
-  }
-
-  buildAdminConsentUrl(input: { tenantHint?: string; redirectUri: string; state: string }): string {
-    const targetTenant = input.tenantHint?.trim() || this.tenantSegment;
-    const url = new URL(`${this.authorityHost}/${targetTenant}/v2.0/adminconsent`);
-    url.searchParams.set("client_id", this.clientId);
-    url.searchParams.set("redirect_uri", input.redirectUri);
-    url.searchParams.set("state", input.state);
-    return url.toString();
-  }
-
-  async exchangeCodeForIdToken(input: {
-    code: string;
-    redirectUri: string;
-    codeVerifier: string;
-  }): Promise<string> {
-    const tokenUrl = new URL(`${this.authorityHost}/${this.tenantSegment}/oauth2/v2.0/token`);
-    const body = new URLSearchParams({
-      client_id: this.clientId,
-      client_secret: this.clientSecret,
-      grant_type: "authorization_code",
-      code: input.code,
-      redirect_uri: input.redirectUri,
-      code_verifier: input.codeVerifier,
-      scope: this.scope
-    });
-
-    const response = await fetch(tokenUrl, {
-      method: "POST",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded"
-      },
-      body
-    });
-
-    const payload = (await response.json().catch(() => null)) as {
-      id_token?: unknown;
-      error?: unknown;
-      error_description?: unknown;
-    } | null;
-
-    if (!response.ok) {
-      throw new ApiError(
-        401,
-        "OIDC_TOKEN_EXCHANGE_FAILED",
-        asStringOrNull(payload?.error_description) ||
-          asStringOrNull(payload?.error) ||
-          `Token endpoint failed with ${response.status}`
-      );
-    }
-
-    const idToken = asStringOrNull(payload?.id_token);
-    if (!idToken) {
-      throw new ApiError(
-        401,
-        "OIDC_TOKEN_EXCHANGE_FAILED",
-        "Token endpoint did not return id_token"
-      );
-    }
-
-    return idToken;
-  }
-
-  async verifyIdToken(input: {
-    idToken: string;
-    expectedNonce: string;
-  }): Promise<OidcIdTokenClaims> {
-    let payload: Awaited<ReturnType<typeof jwtVerify>>["payload"];
-    try {
-      ({ payload } = await jwtVerify(input.idToken, this.jwks, {
-        audience: this.clientId,
-        clockTolerance: 5
-      }));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "ID token validation failed";
-      throw new ApiError(401, "OIDC_TOKEN_INVALID", message);
-    }
-
-    const tid = asStringOrNull(payload.tid);
-    const oid = asStringOrNull(payload.oid);
-    const iss = asStringOrNull(payload.iss);
-    const nonce = asStringOrNull(payload.nonce);
-
-    if (!tid || !oid || !iss || !nonce) {
-      throw new ApiError(401, "OIDC_TOKEN_INVALID", "ID token missing required claims");
-    }
-
-    const expectedIssuer = `${this.authorityHost}/${tid}/v2.0`;
-    if (iss !== expectedIssuer) {
-      throw new ApiError(401, "OIDC_TOKEN_INVALID", "ID token issuer is invalid");
-    }
-
-    if (nonce !== input.expectedNonce) {
-      throw new ApiError(401, "OIDC_TOKEN_INVALID", "ID token nonce mismatch");
-    }
-
-    return {
-      tid,
-      oid,
-      iss,
-      email: asStringOrNull(payload.email),
-      upn: asStringOrNull(payload.preferred_username),
-      name: asStringOrNull(payload.name)
-    };
-  }
-}
+import {
+  ADMIN_CONSENT_REQUEST_MARKER,
+  DEFAULT_MOCK_DISPLAY_NAME,
+  DEFAULT_MOCK_EMAIL,
+  DEFAULT_MOCK_ENTRA_OID,
+  DEFAULT_MOCK_ENTRA_TID,
+  DESKTOP_HANDOFF_TTL_SECONDS,
+  OIDC_REQUEST_TTL_SECONDS,
+  SESSION_COOKIE_NAME,
+  type AuthClient,
+  type EntraAuthConfig,
+  type DesktopHandoffRecord,
+  type InviteRecord,
+  type OidcClient,
+  type OidcIdTokenClaims,
+  type OidcRequestRecord,
+  type OidcRequestSecrets,
+  type OrganizationMembershipRecord,
+  type SessionRecord,
+  type UserRecord,
+  type WorkspaceMembershipCheck,
+  type WorkspaceMembershipRecord,
+  type WorkspaceRecord,
+  ApiError,
+  asStringOrNull,
+  asValidEmailOrNull,
+  buildLoginRedirect,
+  buildPersonalTenantName,
+  buildPersonalTenantSlug,
+  decryptOidcRequestPayload,
+  encodePkceChallenge,
+  encryptOidcRequestPayload,
+  hashValue,
+  normalizeEmail,
+  normalizePostLoginReturnTo,
+  nowPlusSeconds,
+  parseBooleanQueryFlag,
+  parseOidcStateEncryptionKey,
+  randomToken,
+  resolvePrimaryEmail,
+  sanitizeReturnTo,
+  toOrganizationRole,
+  toWorkspaceRole
+} from "./auth-core.js";
+import { buildEntraAuthConfig } from "./auth-config.js";
+import { EntraOidcClient } from "./auth-oidc-client.js";
+
+export {
+  SESSION_COOKIE_NAME,
+  type AuthClient,
+  type AuthMode,
+  type EntraAuthConfig,
+  type OidcClient,
+  type OidcIdTokenClaims,
+  ApiError,
+  __internalAuthService
+} from "./auth-core.js";
+export { EntraOidcClient } from "./auth-oidc-client.js";
+export {
+  buildEntraAuthConfig,
+  parseActorContext,
+  parseAuthError,
+  readSessionTokenFromCookie
+} from "./auth-config.js";
 
 export class AuthRepository {
   private readonly pool: Pool;
@@ -2830,142 +2346,6 @@ export class AuthService {
   }
 }
 
-export const __internalAuthService = {
-  normalizeEmail,
-  hashValue,
-  randomToken,
-  encodePkceChallenge,
-  asStringOrNull,
-  parseBooleanQueryFlag,
-  sanitizeUriScheme,
-  asValidEmailOrNull,
-  resolvePrimaryEmail,
-  buildPersonalTenantSlug,
-  buildPersonalTenantName,
-  parseOidcStateEncryptionKey,
-  encryptOidcRequestPayload,
-  decryptOidcRequestPayload,
-  sanitizeReturnTo,
-  normalizePostLoginReturnTo,
-  buildLoginRedirect,
-  nowPlusSeconds,
-  extractClientIp,
-  toOrganizationRole,
-  toWorkspaceRole
-};
-
-function parseRequiredUrl(value: string, name: string): URL {
-  try {
-    return new URL(value);
-  } catch {
-    throw new Error(`${name} must be a valid absolute URL (received '${value}')`);
-  }
-}
-
-function resolveAuthUrls({
-  webBaseUrlCandidate,
-  redirectUriCandidate
-}: {
-  webBaseUrlCandidate: string;
-  redirectUriCandidate?: string;
-}): { webBaseUrl: string; redirectUri: string } {
-  const webUrl = parseRequiredUrl(webBaseUrlCandidate, "WEB_BASE_URL");
-  const webBaseUrl = webUrl.origin;
-  const redirectUri =
-    redirectUriCandidate ?? `${webBaseUrl.replace(/\/+$/u, "")}/v1/auth/entra/callback`;
-  const redirectUrl = parseRequiredUrl(redirectUri, "ENTRA_REDIRECT_URI");
-
-  if (redirectUrl.origin !== webBaseUrl) {
-    throw new Error(
-      `ENTRA_REDIRECT_URI origin (${redirectUrl.origin}) must match WEB_BASE_URL origin (${webBaseUrl})`
-    );
-  }
-
-  if (redirectUrl.pathname !== "/v1/auth/entra/callback") {
-    throw new Error("ENTRA_REDIRECT_URI path must be '/v1/auth/entra/callback'");
-  }
-
-  return {
-    webBaseUrl,
-    redirectUri: redirectUrl.toString()
-  };
-}
-
-export function buildEntraAuthConfig(env: NodeJS.ProcessEnv): EntraAuthConfig {
-  const rawAuthMode = asStringOrNull(env.AUTH_MODE)?.toLowerCase();
-  if (rawAuthMode && rawAuthMode !== "mock" && rawAuthMode !== "entra") {
-    throw new Error(`AUTH_MODE must be 'mock' or 'entra' (received '${rawAuthMode}')`);
-  }
-
-  const authMode: AuthMode = rawAuthMode === "entra" ? "entra" : "mock";
-  const { webBaseUrl, redirectUri } = resolveAuthUrls({
-    webBaseUrlCandidate: asStringOrNull(env.WEB_BASE_URL) ?? "http://localhost:3000",
-    redirectUriCandidate: asStringOrNull(env.ENTRA_REDIRECT_URI) ?? undefined
-  });
-
-  const parseSeconds = (value: string | undefined, fallback: number): number => {
-    if (!value || value.trim().length === 0) {
-      return fallback;
-    }
-
-    const parsed = Number.parseInt(value, 10);
-    if (!Number.isFinite(parsed) || parsed < 1) {
-      return fallback;
-    }
-
-    return parsed;
-  };
-
-  const parseCommaList = (value: string | undefined): string[] => {
-    if (!value) {
-      return [];
-    }
-
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0);
-  };
-
-  return {
-    authMode,
-    clientId: asStringOrNull(env.ENTRA_CLIENT_ID) ?? undefined,
-    clientSecret: asStringOrNull(env.ENTRA_CLIENT_SECRET) ?? undefined,
-    oidcStateEncryptionKey: asStringOrNull(env.AUTH_OIDC_STATE_ENCRYPTION_KEY) ?? undefined,
-    redirectUri,
-    authorityHost: asStringOrNull(env.ENTRA_AUTHORITY_HOST) ?? "https://login.microsoftonline.com",
-    tenantSegment: asStringOrNull(env.ENTRA_TENANT_SEGMENT) ?? "organizations",
-    allowedTenantIds: parseCommaList(env.ENTRA_ALLOWED_TENANT_IDS),
-    scope: asStringOrNull(env.ENTRA_SCOPE) ?? DEFAULT_OIDC_SCOPE,
-    webBaseUrl,
-    desktopAuthScheme: sanitizeUriScheme(env.DESKTOP_AUTH_SCHEME),
-    sessionTtlSeconds: parseSeconds(env.AUTH_SESSION_TTL_SECONDS, DEFAULT_SESSION_TTL_SECONDS),
-    sessionIdleTtlSeconds: parseSeconds(
-      env.AUTH_SESSION_IDLE_TTL_SECONDS,
-      DEFAULT_SESSION_IDLE_TTL_SECONDS
-    )
-  };
-}
-
-export function readSessionTokenFromCookie(cookieHeader: string | undefined): string | null {
-  if (!cookieHeader) {
-    return null;
-  }
-
-  const pieces = cookieHeader.split(";");
-  for (const piece of pieces) {
-    const [rawName, ...rest] = piece.trim().split("=");
-    if (rawName !== SESSION_COOKIE_NAME) {
-      continue;
-    }
-
-    const value = rest.join("=");
-    return value ? decodeURIComponent(value) : null;
-  }
-
-  return null;
-}
-
 export function buildDefaultAuthService(
   databaseUrl: string | undefined,
   env: NodeJS.ProcessEnv
@@ -3013,32 +2393,5 @@ export function buildDefaultAuthService(
     close: async () => {
       await repository.close();
     }
-  };
-}
-
-export function parseAuthError(error: unknown): { status: number; code: string; message: string } {
-  if (error instanceof ApiError) {
-    return {
-      status: error.status,
-      code: error.code,
-      message: error.message
-    };
-  }
-
-  return {
-    status: 500,
-    code: "INTERNAL_SERVER_ERROR",
-    message: "Unexpected server error"
-  };
-}
-
-export function parseActorContext(headers: {
-  forwardedFor?: string;
-  remoteAddress?: string;
-  userAgent?: string;
-}): { ip: string; userAgent: string | undefined } {
-  return {
-    ip: extractClientIp(headers.forwardedFor, headers.remoteAddress),
-    userAgent: headers.userAgent
   };
 }

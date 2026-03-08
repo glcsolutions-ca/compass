@@ -1,0 +1,692 @@
+import { describe, expect, it, vi } from "vitest";
+import request from "supertest";
+import { buildApiApp } from "./build-app.js";
+import { ApiError } from "~/modules/auth/auth-service.js";
+import type { AuthService } from "~/modules/auth/auth-service.js";
+import type { ThreadService } from "~/modules/threads/thread-service.js";
+
+describe("API app", () => {
+  it("returns health status", async () => {
+    const app = buildApiApp({
+      now: () => new Date("2026-02-25T00:00:00.000Z")
+    });
+
+    const response = await request(app).get("/health");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      status: "ok",
+      timestamp: "2026-02-25T00:00:00.000Z"
+    });
+    expect(response.headers["x-powered-by"]).toBeUndefined();
+  });
+
+  it("serves openapi document", async () => {
+    const app = buildApiApp();
+
+    const response = await request(app).get("/openapi.json");
+
+    expect(response.status).toBe(200);
+    expect(response.body.openapi).toBe("3.1.0");
+    expect(response.body.paths["/health"]).toBeTruthy();
+    expect(response.body.paths["/v1/ping"]).toBeTruthy();
+  });
+
+  it("returns v1 ping", async () => {
+    const app = buildApiApp();
+
+    const response = await request(app).get("/v1/ping");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ ok: true, service: "api" });
+  });
+
+  it("returns JSON for unknown routes", async () => {
+    const app = buildApiApp();
+
+    const response = await request(app).get("/does-not-exist");
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      code: "NOT_FOUND",
+      message: "Route not found"
+    });
+  });
+
+  it("returns JSON error for malformed request bodies", async () => {
+    const app = buildApiApp();
+
+    const response = await request(app)
+      .post("/v1/ping")
+      .set("content-type", "application/json")
+      .send('{"broken":');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      code: "INVALID_JSON",
+      message: "Malformed JSON request body"
+    });
+  });
+
+  it("rate limits Entra start endpoint by client IP", async () => {
+    const authService = {
+      startEntraLogin: vi.fn(async () => ({
+        redirectUrl: "https://login.microsoftonline.com/test"
+      }))
+    } as unknown as AuthService;
+
+    const app = buildApiApp({
+      authService,
+      authRateLimitWindowMs: 60_000,
+      authRateLimitMaxRequests: 1
+    });
+
+    const first = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-for", "203.0.113.1");
+    expect(first.status).toBe(302);
+
+    const second = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-for", "203.0.113.1");
+    expect(second.status).toBe(429);
+    expect(second.body).toEqual({
+      code: "RATE_LIMITED",
+      message: "Too many authentication requests"
+    });
+  });
+
+  it("passes browser-facing callback URL to Entra start", async () => {
+    const startEntraLogin = vi.fn(async () => ({
+      redirectUrl: "https://login.microsoftonline.com/test"
+    }));
+    const authService = {
+      startEntraLogin
+    } as unknown as AuthService;
+
+    const app = buildApiApp({ authService });
+    const response = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-host", "compass.clac.ca:443, internal-gateway")
+      .set("x-forwarded-proto", "https,http");
+
+    expect(response.status).toBe(302);
+    expect(startEntraLogin).toHaveBeenCalledWith(
+      expect.objectContaining({
+        redirectUri: "https://compass.clac.ca/v1/auth/entra/callback"
+      })
+    );
+  });
+
+  it("fails closed when callback host cannot be resolved", async () => {
+    const startEntraLogin = vi.fn(async () => ({
+      redirectUrl: "https://login.microsoftonline.com/test"
+    }));
+    const authService = {
+      startEntraLogin
+    } as unknown as AuthService;
+
+    const app = buildApiApp({ authService });
+    const response = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-host", "bad host")
+      .set("x-forwarded-proto", "https");
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      code: "INVALID_REQUEST_HOST",
+      message: "Unable to resolve callback host for authentication request"
+    });
+    expect(startEntraLogin).not.toHaveBeenCalled();
+  });
+
+  it("sets session cookie when Entra start returns a session token", async () => {
+    const authService = {
+      startEntraLogin: vi.fn(async () => ({
+        redirectUrl: "/chat",
+        sessionToken: "mock-session-token"
+      })),
+      createSessionCookie: vi.fn(
+        () =>
+          "__Host-compass_session=mock-session-token; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=28800"
+      )
+    } as unknown as AuthService;
+
+    const app = buildApiApp({ authService });
+    const response = await request(app).get("/v1/auth/entra/start");
+
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/chat");
+    expect(response.headers["set-cookie"]?.[0]).toContain("__Host-compass_session=");
+  });
+
+  it("redirects to login when desktop handoff token is invalid", async () => {
+    const authService = {
+      completeDesktopLogin: vi.fn(async () => {
+        throw new ApiError(401, "DESKTOP_HANDOFF_INVALID", "Desktop auth handoff is invalid");
+      })
+    } as unknown as AuthService;
+
+    const app = buildApiApp({ authService });
+    const response = await request(app).get("/v1/auth/desktop/complete?handoff=expired");
+
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/login?error=desktop_handoff_invalid");
+  });
+
+  it("blocks cross-origin state-changing requests when session cookie is present", async () => {
+    const authService = {
+      logout: vi.fn(async () => {}),
+      clearSessionCookie: vi.fn(() => "__Host-compass_session=; Path=/; Max-Age=0")
+    } as unknown as AuthService;
+
+    const app = buildApiApp({
+      authService,
+      allowedOrigins: ["https://compass.glcsolutions.ca"]
+    });
+
+    const response = await request(app)
+      .post("/v1/auth/logout")
+      .set("cookie", "__Host-compass_session=test")
+      .set("origin", "https://evil.example");
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({
+      code: "CSRF_ORIGIN_DENIED",
+      message: "Cross-origin state-changing requests are not allowed"
+    });
+  });
+
+  it("requires origin header for state-changing requests with session cookie", async () => {
+    const authService = {
+      logout: vi.fn(async () => {}),
+      clearSessionCookie: vi.fn(() => "__Host-compass_session=; Path=/; Max-Age=0")
+    } as unknown as AuthService;
+
+    const app = buildApiApp({
+      authService,
+      allowedOrigins: ["https://compass.glcsolutions.ca"]
+    });
+
+    const response = await request(app)
+      .post("/v1/auth/logout")
+      .set("cookie", "__Host-compass_session=test");
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({
+      code: "CSRF_ORIGIN_REQUIRED",
+      message: "Origin header is required for state-changing requests"
+    });
+  });
+
+  it("allows state-changing requests when origin matches WEB_BASE_URL", async () => {
+    const previousWebBaseUrl = process.env.WEB_BASE_URL;
+    process.env.WEB_BASE_URL = "http://localhost:59160";
+
+    try {
+      const authService = {
+        logout: vi.fn(async () => {}),
+        clearSessionCookie: vi.fn(() => "__Host-compass_session=; Path=/; Max-Age=0")
+      } as unknown as AuthService;
+
+      const app = buildApiApp({ authService });
+
+      const response = await request(app)
+        .post("/v1/auth/logout")
+        .set("cookie", "__Host-compass_session=test")
+        .set("origin", "http://localhost:59160");
+
+      expect(response.status).toBe(204);
+    } finally {
+      if (previousWebBaseUrl === undefined) {
+        delete process.env.WEB_BASE_URL;
+      } else {
+        process.env.WEB_BASE_URL = previousWebBaseUrl;
+      }
+    }
+  });
+
+  it("rejects state-changing requests when origin does not match WEB_BASE_URL", async () => {
+    const previousWebBaseUrl = process.env.WEB_BASE_URL;
+    process.env.WEB_BASE_URL = "http://localhost:59160";
+
+    try {
+      const authService = {
+        logout: vi.fn(async () => {}),
+        clearSessionCookie: vi.fn(() => "__Host-compass_session=; Path=/; Max-Age=0")
+      } as unknown as AuthService;
+
+      const app = buildApiApp({ authService });
+
+      const response = await request(app)
+        .post("/v1/auth/logout")
+        .set("cookie", "__Host-compass_session=test")
+        .set("origin", "http://localhost:59161");
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({
+        code: "CSRF_ORIGIN_DENIED",
+        message: "Cross-origin state-changing requests are not allowed"
+      });
+    } finally {
+      if (previousWebBaseUrl === undefined) {
+        delete process.env.WEB_BASE_URL;
+      } else {
+        process.env.WEB_BASE_URL = previousWebBaseUrl;
+      }
+    }
+  });
+
+  it("allows same-origin state-changing requests on forwarded custom domains", async () => {
+    const authService = {
+      logout: vi.fn(async () => {}),
+      clearSessionCookie: vi.fn(() => "__Host-compass_session=; Path=/; Max-Age=0")
+    } as unknown as AuthService;
+
+    const app = buildApiApp({ authService });
+
+    const response = await request(app)
+      .post("/v1/auth/logout")
+      .set("cookie", "__Host-compass_session=test")
+      .set("origin", "https://compass.clac.ca")
+      .set("x-forwarded-host", "compass.clac.ca")
+      .set("x-forwarded-proto", "https");
+
+    expect(response.status).toBe(204);
+  });
+
+  it("redacts unexpected auth handler errors and emits structured logs with request id", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const authService = {
+      readAuthMe: vi.fn(async () => {
+        throw new Error("sensitive database detail");
+      })
+    } as unknown as AuthService;
+
+    const app = buildApiApp({ authService });
+
+    const response = await request(app).get("/v1/auth/me").set("x-request-id", "req-123");
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Unexpected server error"
+    });
+    expect(response.headers["x-request-id"]).toBe("req-123");
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+    expect(String(consoleErrorSpy.mock.calls[0]?.[0] ?? "")).toContain(
+      '"event":"api.auth.unhandled_error"'
+    );
+    expect(String(consoleErrorSpy.mock.calls[0]?.[0] ?? "")).toContain('"requestId":"req-123"');
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("caps auth rate limiter key cardinality to avoid unbounded growth", async () => {
+    const authService = {
+      startEntraLogin: vi.fn(async () => ({
+        redirectUrl: "https://login.microsoftonline.com/test"
+      }))
+    } as unknown as AuthService;
+
+    const app = buildApiApp({
+      authService,
+      authRateLimitWindowMs: 60_000,
+      authRateLimitMaxRequests: 1,
+      authRateLimitMaxEntries: 2
+    });
+
+    const firstIpFirst = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-for", "203.0.113.1");
+    expect(firstIpFirst.status).toBe(302);
+
+    const secondIpFirst = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-for", "203.0.113.2");
+    expect(secondIpFirst.status).toBe(302);
+
+    const thirdIpFirst = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-for", "203.0.113.3");
+    expect(thirdIpFirst.status).toBe(302);
+
+    const firstIpSecond = await request(app)
+      .get("/v1/auth/entra/start")
+      .set("x-forwarded-for", "203.0.113.1");
+    expect(firstIpSecond.status).toBe(302);
+  });
+
+  it("returns disabled error for agent routes when feature flag is off", async () => {
+    const app = buildApiApp({
+      authService: {
+        readAuthMe: vi.fn()
+      } as unknown as AuthService,
+      threadService: {
+        createThread: vi.fn()
+      } as unknown as ThreadService,
+      agentGatewayEnabled: false
+    });
+
+    const response = await request(app)
+      .post("/v1/threads")
+      .send({ workspaceSlug: "acme", executionMode: "cloud" });
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      code: "AGENT_GATEWAY_DISABLED",
+      message: "Thread gateway is disabled"
+    });
+  });
+
+  it("returns runtime account state when authenticated", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const readRuntimeAccountState = vi.fn(async () => ({
+      provider: "local_process",
+      capabilities: {
+        interactiveAuth: true,
+        supportsChatgptManaged: true,
+        supportsApiKey: true,
+        supportsChatgptAuthTokens: true,
+        supportsRateLimits: true,
+        supportsRuntimeStream: true
+      },
+      authMode: null,
+      requiresOpenaiAuth: true,
+      account: null
+    }));
+
+    const app = buildApiApp({
+      authService,
+      threadService: {
+        readRuntimeAccountState
+      } as unknown as ThreadService,
+      agentGatewayEnabled: true
+    });
+
+    const response = await request(app)
+      .post("/v1/runtime/account/read")
+      .send({ refreshToken: false });
+
+    expect(response.status).toBe(200);
+    expect(response.body.provider).toBe("local_process");
+    expect(readRuntimeAccountState).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires apiKey payload for runtime apiKey login mode", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const app = buildApiApp({
+      authService,
+      threadService: {
+        startRuntimeAccountLogin: vi.fn()
+      } as unknown as ThreadService,
+      agentGatewayEnabled: true
+    });
+
+    const response = await request(app)
+      .post("/v1/runtime/account/login/start")
+      .send({ type: "apiKey" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("INVALID_REQUEST");
+  });
+
+  it("creates an agent thread when authenticated", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const createThread = vi.fn(async () => {
+      return {
+        threadId: "thread-1",
+        workspaceId: "workspace-1",
+        workspaceSlug: "acme",
+        executionMode: "cloud",
+        executionHost: "dynamic_sessions",
+        status: "idle",
+        sessionIdentifier: "thr-thread-1",
+        title: null,
+        createdAt: "2026-02-27T00:00:00.000Z",
+        updatedAt: "2026-02-27T00:00:00.000Z",
+        modeSwitchedAt: null
+      };
+    });
+    const threadService = {
+      createThread
+    } as unknown as ThreadService;
+
+    const app = buildApiApp({
+      authService,
+      threadService,
+      agentGatewayEnabled: true,
+      agentCloudModeEnabled: true
+    });
+
+    const response = await request(app).post("/v1/threads").send({
+      workspaceSlug: "acme",
+      executionMode: "cloud"
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body.thread.threadId).toBe("thread-1");
+    expect(createThread).toHaveBeenCalledTimes(1);
+  });
+
+  it("lists agent threads when authenticated", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const listThreads = vi.fn(async () => [
+      {
+        threadId: "thread-1",
+        workspaceId: "workspace-1",
+        workspaceSlug: "acme",
+        executionMode: "cloud",
+        executionHost: "dynamic_sessions",
+        status: "idle",
+        sessionIdentifier: "thr-thread-1",
+        title: "First thread",
+        archived: false,
+        createdAt: "2026-02-27T00:00:00.000Z",
+        updatedAt: "2026-02-27T00:00:00.000Z",
+        modeSwitchedAt: null
+      }
+    ]);
+
+    const app = buildApiApp({
+      authService,
+      threadService: {
+        listThreads
+      } as unknown as ThreadService,
+      agentGatewayEnabled: true,
+      agentCloudModeEnabled: true
+    });
+
+    const response = await request(app)
+      .get("/v1/threads")
+      .query({ workspaceSlug: "acme", state: "regular", limit: 25 });
+
+    expect(response.status).toBe(200);
+    expect(response.body.threads).toHaveLength(1);
+    expect(response.body.threads[0].threadId).toBe("thread-1");
+    expect(listThreads).toHaveBeenCalledTimes(1);
+    expect(listThreads).toHaveBeenCalledWith({
+      userId: "usr-1",
+      workspaceSlug: "acme",
+      state: "regular",
+      limit: 25
+    });
+  });
+
+  it("patches thread metadata when authenticated", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const updateThread = vi.fn(async () => ({
+      threadId: "thread-1",
+      workspaceId: "workspace-1",
+      workspaceSlug: "acme",
+      executionMode: "cloud",
+      executionHost: "dynamic_sessions",
+      status: "idle",
+      sessionIdentifier: "thr-thread-1",
+      title: "Renamed thread",
+      archived: true,
+      createdAt: "2026-02-27T00:00:00.000Z",
+      updatedAt: "2026-02-27T00:05:00.000Z",
+      modeSwitchedAt: null
+    }));
+
+    const app = buildApiApp({
+      authService,
+      threadService: {
+        updateThread
+      } as unknown as ThreadService,
+      agentGatewayEnabled: true,
+      agentCloudModeEnabled: true
+    });
+
+    const response = await request(app)
+      .patch("/v1/threads/thread-1")
+      .send({ title: "Renamed thread", archived: true });
+
+    expect(response.status).toBe(200);
+    expect(response.body.thread.title).toBe("Renamed thread");
+    expect(response.body.thread.archived).toBe(true);
+    expect(updateThread).toHaveBeenCalledTimes(1);
+    expect(updateThread.mock.calls[0]?.[0]).toMatchObject({
+      userId: "usr-1",
+      threadId: "thread-1",
+      title: "Renamed thread",
+      archived: true
+    });
+  });
+
+  it("deletes a thread when authenticated", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const deleteThread = vi.fn(async () => ({ deleted: true as const }));
+
+    const app = buildApiApp({
+      authService,
+      threadService: {
+        deleteThread
+      } as unknown as ThreadService,
+      agentGatewayEnabled: true,
+      agentCloudModeEnabled: true
+    });
+
+    const response = await request(app).delete("/v1/threads/thread-1");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ deleted: true });
+    expect(deleteThread).toHaveBeenCalledTimes(1);
+    expect(deleteThread.mock.calls[0]?.[0]).toMatchObject({
+      userId: "usr-1",
+      threadId: "thread-1"
+    });
+  });
+
+  it("returns explicit local mode not implemented error when starting local turns", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const app = buildApiApp({
+      authService,
+      threadService: {
+        startTurn: vi.fn(async () => {
+          throw new ApiError(
+            503,
+            "AGENT_LOCAL_MODE_NOT_IMPLEMENTED",
+            "Local mode turns are not implemented yet."
+          );
+        })
+      } as unknown as ThreadService,
+      agentGatewayEnabled: true,
+      agentCloudModeEnabled: true,
+      agentLocalModeEnabledDesktop: true
+    });
+
+    const response = await request(app).post("/v1/threads/thread-1/turns").send({
+      text: "hello",
+      executionMode: "local"
+    });
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      code: "AGENT_LOCAL_MODE_NOT_IMPLEMENTED",
+      message: "Local mode turns are not implemented yet."
+    });
+  });
+
+  it("returns upgrade required on HTTP access to agent stream route", async () => {
+    const app = buildApiApp();
+
+    const response = await request(app).get("/v1/threads/thread-1/stream");
+
+    expect(response.status).toBe(426);
+    expect(response.body).toEqual({
+      code: "UPGRADE_REQUIRED",
+      message: "Use websocket upgrade for this endpoint"
+    });
+  });
+
+  it("blocks mode switching when AGENT_MODE_SWITCH_ENABLED is false", async () => {
+    const authService = {
+      readAuthMe: vi.fn(async () => ({
+        authenticated: true,
+        user: { id: "usr-1" }
+      }))
+    } as unknown as AuthService;
+
+    const app = buildApiApp({
+      authService,
+      threadService: {
+        switchThreadMode: vi.fn()
+      } as unknown as ThreadService,
+      agentGatewayEnabled: true,
+      agentModeSwitchEnabled: false
+    });
+
+    const response = await request(app)
+      .patch("/v1/threads/thread-1/mode")
+      .send({ executionMode: "local" });
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      code: "AGENT_MODE_SWITCH_DISABLED",
+      message: "Mode switching is disabled"
+    });
+  });
+});

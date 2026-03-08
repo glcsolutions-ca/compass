@@ -1,1 +1,1 @@
-export { clientLoader, default, meta } from "@compass/app-shell/routes/public/login/route";
+export { clientLoader, default, meta } from "@compass/client-app/routes/public/login/route";

@@ -1,1 +1,1 @@
-export { Layout, default } from "@compass/app-shell/root";
+export { Layout, default } from "@compass/client-app/root";

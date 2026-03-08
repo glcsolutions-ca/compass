@@ -1,11 +1,9 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { useLocation, useMatches } from "react-router";
+import { useMatches } from "react-router";
 import { AppSidebar } from "~/layout/app-sidebar";
-import { resolveCurrentWorkspaceSlug } from "~/layout/current-workspace";
-import { buildWorkspaceSettingsHref } from "~/lib/routes/workspace-routes";
+import { buildSettingsHref } from "~/lib/routes/settings-routes";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@compass/ui/sidebar";
 import type { AuthShellLoaderData, ShellRouteHandle } from "~/features/auth/types";
-import type { SettingsSection } from "~/features/settings/types";
 import { cn } from "@compass/shared/cn";
 
 const SIDEBAR_OPEN_STORAGE_KEY = "compass-sidebar-open";
@@ -36,7 +34,6 @@ function persistSidebarOpenState(open: boolean): void {
 }
 
 export function AppLayout({ auth, children }: { auth: AuthShellLoaderData; children: ReactNode }) {
-  const location = useLocation();
   const matches = useMatches();
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => resolveInitialSidebarOpen());
   const shellLayout = useMemo<NonNullable<ShellRouteHandle["shellLayout"]>>(() => {
@@ -49,22 +46,6 @@ export function AppLayout({ auth, children }: { auth: AuthShellLoaderData; child
 
     return "default";
   }, [matches]);
-  const settingsWorkspaceSlug = useMemo(() => {
-    return resolveCurrentWorkspaceSlug({
-      auth,
-      pathname: location.pathname,
-      search: location.search,
-      matches
-    });
-  }, [auth, location.pathname, location.search, matches]);
-
-  const buildSettingsHref = (section: SettingsSection) => {
-    if (!settingsWorkspaceSlug) {
-      return "/workspaces";
-    }
-
-    return buildWorkspaceSettingsHref(settingsWorkspaceSlug, section);
-  };
 
   return (
     <SidebarProvider

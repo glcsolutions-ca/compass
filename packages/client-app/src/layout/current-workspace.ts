@@ -1,5 +1,5 @@
 import type { AuthShellLoaderData } from "~/features/auth/types";
-import { CHAT_WORKSPACE_QUERY_PARAM } from "~/lib/routes/chat-routes";
+import { readPreferredWorkspaceSlug } from "~/features/workspaces/workspace-preference";
 
 function readDefaultWorkspaceSlug(auth: AuthShellLoaderData): string {
   return (
@@ -32,19 +32,14 @@ export function resolveCurrentWorkspaceSlug(input: {
   search: string;
   matches: ReadonlyArray<{ data?: unknown }>;
 }): string {
-  const legacyWorkspaceMatch = /^\/w\/([^/]+)/u.exec(input.pathname);
-  if (legacyWorkspaceMatch?.[1]) {
-    return decodeURIComponent(legacyWorkspaceMatch[1]).trim();
-  }
-
   const workspacePathMatch = /^\/workspaces\/([^/]+)(?:\/|$)/u.exec(input.pathname);
   if (workspacePathMatch?.[1]) {
     return decodeURIComponent(workspacePathMatch[1]).trim();
   }
 
-  const queryWorkspaceSlug = new URLSearchParams(input.search).get(CHAT_WORKSPACE_QUERY_PARAM);
-  if (typeof queryWorkspaceSlug === "string" && queryWorkspaceSlug.trim().length > 0) {
-    return queryWorkspaceSlug.trim();
+  const preferredWorkspaceSlug = readPreferredWorkspaceSlug();
+  if (preferredWorkspaceSlug) {
+    return preferredWorkspaceSlug;
   }
 
   const matchWorkspaceSlug = readMatchWorkspaceSlug(input.matches);

@@ -8,15 +8,15 @@ import {
 describe("new thread routing", () => {
   it("targets workspace chat routes", () => {
     const target = resolveNewThreadTarget("acme");
-    expect(target).toBe("/chat?workspace=acme");
+    expect(target).toBe("/chat");
   });
 
-  it("adds a fresh thread token to workspace chat targets", () => {
+  it("keeps new-thread hrefs on the canonical chat route", () => {
     const href = buildNewThreadHref({
       workspaceSlug: "acme",
       threadToken: "thread-123"
     });
-    expect(href).toBe("/chat?workspace=acme&thread=thread-123");
+    expect(href).toBe("/chat");
   });
 
   it("builds deep links for chat thread routes", () => {

@@ -8,10 +8,8 @@ import {
 } from "~/features/chat/thread-client";
 import { resolveThreadCreateWorkspaceSlug } from "~/features/chat/chat-context";
 import { readDefaultExecutionMode } from "~/features/chat/default-execution-mode";
-import {
-  CHAT_WORKSPACE_QUERY_PARAM,
-  resolveThreadHandle
-} from "~/features/chat/new-thread-routing";
+import { resolveThreadHandle } from "~/features/chat/new-thread-routing";
+import { resolvePreferredWorkspaceSlug } from "~/features/workspaces/workspace-preference";
 import {
   ChatClientRequestIdSchema,
   ChatExecutionModeSchema,
@@ -56,18 +54,6 @@ interface PromptActionInput {
 interface ResolvedThreadTarget {
   threadId: string;
   threadHandle: string | null;
-}
-
-function parseRequestedWorkspaceSlug(request: Request): string | null {
-  const requestedWorkspaceCandidate = new URL(request.url).searchParams.get(
-    CHAT_WORKSPACE_QUERY_PARAM
-  );
-  if (!requestedWorkspaceCandidate) {
-    return null;
-  }
-
-  const requestedWorkspaceSlug = requestedWorkspaceCandidate.trim();
-  return requestedWorkspaceSlug.length > 0 ? requestedWorkspaceSlug : null;
 }
 
 function createErrorAction(input: {
@@ -229,7 +215,7 @@ async function resolveThreadForPromptAction(input: {
   let resolvedWorkspaceSlug: string;
   try {
     resolvedWorkspaceSlug =
-      parseRequestedWorkspaceSlug(input.request) || resolveThreadCreateWorkspaceSlug(auth);
+      resolvePreferredWorkspaceSlug(auth) || resolveThreadCreateWorkspaceSlug(auth);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to resolve workspace context.";
     return createErrorAction({

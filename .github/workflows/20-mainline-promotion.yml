@@ -183,8 +183,8 @@ jobs:
   release:
     name: Release
     if: >-
-      ${{ (github.event_name == 'push' && needs.acceptance.result == 'success')
-          || github.event_name == 'workflow_dispatch' }}
+      ${{ always() && ((github.event_name == 'push' && needs.acceptance.result == 'success')
+          || github.event_name == 'workflow_dispatch') }}
     needs:
       - resolve_candidate
       - acceptance

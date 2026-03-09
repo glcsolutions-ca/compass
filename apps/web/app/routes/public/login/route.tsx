@@ -40,7 +40,7 @@ function withDesktopClientHint(href: string, desktopRuntime: boolean): string {
 export const meta: MetaFunction = () => {
   return [
     { title: "Compass Login" },
-    { name: "description", content: "Sign in to Compass with Microsoft Entra ID" }
+    { name: "description", content: "Sign in to Compass with Microsoft Entra ID." }
   ];
 };
 

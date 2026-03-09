@@ -9,7 +9,7 @@ Compass uses a production-first delivery model with six focused workflows.
 - `10-commit-stage.yml`: authoritative candidate build on `merge_group`
 - `20-acceptance.yml`: triggered by successful `Commit Stage` completion for the merge-queue SHA
 - `30-release.yml`: triggered by successful `Acceptance` completion for the same candidate
-- `40-infra.yml`: validates/applies infrastructure only for infra-owned changes
+- `40-infra.yml`: validates/applies infrastructure only for infra-owned files and direct infra-workflow support files
 
 ## Stage model
 
@@ -34,7 +34,7 @@ The candidate is built once during Commit and then promoted without rebuilds.
 - `pnpm test`: fast local lint, typecheck, and unit-test suite
 - `20-acceptance.yml`: behavioral validation of the published candidate
 - `30-release.yml`: deployment of the exact accepted candidate
-- `40-infra.yml`: Bicep validation and infra apply for infra-owned changes
+- `40-infra.yml`: Bicep validation and infra apply for Azure infra files, infra scripts, and the direct files the workflow executes
 
 ## Operating guidance
 

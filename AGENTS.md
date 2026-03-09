@@ -64,5 +64,5 @@ The current target architecture is:
 - Treat `10-commit-stage.yml` as the authoritative merge-group-only path that builds, smokes, and publishes the candidate once.
 - Treat `20-acceptance.yml` as the candidate-validation path triggered from successful Commit Stage runs.
 - Treat `30-release.yml` as the candidate-promotion path triggered from successful Acceptance runs.
-- Treat `40-infra.yml` as the separate infra validation/apply path for infra-owned changes.
+- Treat `40-infra.yml` as the separate infra validation/apply path for Azure infra files, infra scripts, and the direct workflow support files it executes.
 - Treat non-deployed platform tooling as out of the required merge-queue path unless it is brought back into deploy scope.

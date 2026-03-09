@@ -92,7 +92,7 @@ Later stages do not rebuild images or substitute different digests.
 - Merge queue build concurrency starts at `2`.
 - `Commit Stage` is the only required status check.
 - Deployments are not required before merging.
-- Infra validation and apply run in `40-infra.yml`, not in the app delivery path.
+- Infra validation and apply run in `40-infra.yml` only for Azure infra files, infra scripts, and its direct workflow support files, not in the app delivery path.
 
 ## Operating Guidance
 

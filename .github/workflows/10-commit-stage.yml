@@ -96,14 +96,14 @@ jobs:
 
       - name: Record digest artifact
         run: |
-          mkdir -p .artifacts/image-digests
-          printf '%s' '${{ steps.build_image.outputs.digest }}' > .artifacts/image-digests/${{ matrix.image.id }}.digest
+          mkdir -p artifacts/image-digests
+          printf '%s' '${{ steps.build_image.outputs.digest }}' > artifacts/image-digests/${{ matrix.image.id }}.digest
 
       - name: Upload digest artifact
         uses: actions/upload-artifact@v4
         with:
           name: image-digest-${{ matrix.image.id }}
-          path: .artifacts/image-digests/${{ matrix.image.id }}.digest
+          path: artifacts/image-digests/${{ matrix.image.id }}.digest
           if-no-files-found: error
           retention-days: 1
 
@@ -138,15 +138,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: image-digest-*
-          path: .artifacts/image-digests
+          path: artifacts/image-digests
           merge-multiple: true
 
       - name: Create smoke manifest
         run: |
           set -euo pipefail
-          api_digest="$(cat .artifacts/image-digests/api.digest)"
-          web_digest="$(cat .artifacts/image-digests/web.digest)"
-          migrations_digest="$(cat .artifacts/image-digests/migrations.digest)"
+          api_digest="$(cat artifacts/image-digests/api.digest)"
+          web_digest="$(cat artifacts/image-digests/web.digest)"
+          migrations_digest="$(cat artifacts/image-digests/migrations.digest)"
           jq -n \
             --arg candidate_id "${{ needs.prepare.outputs.candidate_id }}" \
             --arg source_revision "${{ needs.prepare.outputs.source_revision }}" \
@@ -215,16 +215,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: image-digest-*
-          path: .artifacts/image-digests
+          path: artifacts/image-digests
           merge-multiple: true
 
       - name: Capture canonical image refs
         id: refs
         run: |
           set -euo pipefail
-          api_digest="$(cat .artifacts/image-digests/api.digest)"
-          web_digest="$(cat .artifacts/image-digests/web.digest)"
-          migrations_digest="$(cat .artifacts/image-digests/migrations.digest)"
+          api_digest="$(cat artifacts/image-digests/api.digest)"
+          web_digest="$(cat artifacts/image-digests/web.digest)"
+          migrations_digest="$(cat artifacts/image-digests/migrations.digest)"
           {
             echo "api_image_ref=${REGISTRY_BASE}/${API_IMAGE_NAME}@${api_digest}"
             echo "web_image_ref=${REGISTRY_BASE}/${WEB_IMAGE_NAME}@${web_digest}"

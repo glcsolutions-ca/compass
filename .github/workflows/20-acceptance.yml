@@ -86,16 +86,16 @@ jobs:
 
       - name: Record candidate metadata
         run: |
-          mkdir -p .artifacts/acceptance
+          mkdir -p artifacts/acceptance
           jq -n \
             --arg candidate_id "${{ steps.resolve.outputs.candidate_id }}" \
             --arg source_revision "${{ steps.resolve.outputs.source_revision }}" \
             '{candidateId: $candidate_id, sourceRevision: $source_revision}' \
-            > .artifacts/acceptance/candidate-metadata.json
+            > artifacts/acceptance/candidate-metadata.json
 
       - name: Generate acceptance attestation predicate
         run: |
-          predicate_path="${GITHUB_WORKSPACE}/.artifacts/attestations/acceptance-predicate.json"
+          predicate_path="${GITHUB_WORKSPACE}/artifacts/attestations/acceptance-predicate.json"
           mkdir -p "$(dirname "${predicate_path}")"
           pnpm --filter @compass/pipeline-tools run acceptance:predicate:generate -- \
             --out "${predicate_path}" \
@@ -112,7 +112,7 @@ jobs:
           subject-name: ${{ env.RELEASE_UNITS_REPO }}
           subject-digest: ${{ steps.resolve.outputs.release_unit_digest }}
           predicate-type: ${{ env.ACCEPTANCE_PREDICATE_TYPE }}
-          predicate-path: ${{ github.workspace }}/.artifacts/attestations/acceptance-predicate.json
+          predicate-path: ${{ github.workspace }}/artifacts/attestations/acceptance-predicate.json
 
       - name: Upload acceptance artifacts
         if: always()
@@ -121,7 +121,7 @@ jobs:
           name: acceptance-artifacts
           path: |
             ${{ runner.temp }}/acceptance-diagnostics
-            .artifacts/acceptance/candidate-metadata.json
-            .artifacts/attestations/acceptance-predicate.json
+            artifacts/acceptance/candidate-metadata.json
+            artifacts/attestations/acceptance-predicate.json
           if-no-files-found: warn
           retention-days: 7

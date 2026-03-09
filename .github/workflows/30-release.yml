@@ -48,6 +48,11 @@ jobs:
         run: |
           set -euo pipefail
           metadata_path="${RUNNER_TEMP}/acceptance-artifacts/candidate-metadata.json"
+          if [ ! -f "$metadata_path" ]; then
+            echo "Missing candidate metadata at ${metadata_path}" >&2
+            find "${RUNNER_TEMP}/acceptance-artifacts" -maxdepth 4 -type f | sort >&2 || true
+            exit 1
+          fi
           {
             echo "candidate_id=$(jq -er '.candidateId' "$metadata_path")"
             echo "source_revision=$(jq -er '.sourceRevision' "$metadata_path")"
@@ -216,7 +221,7 @@ jobs:
 
       - name: Record release evidence
         run: |
-          mkdir -p .artifacts/release
+          mkdir -p artifacts/release
           node platform/pipeline/stages/03-release/scripts/record-release-evidence.mjs \
             --manifest "$RUNNER_TEMP/release-candidate.json" \
             --stage-api-base-url "${{ steps.runtime.outputs.api_stage_base_url }}" \
@@ -224,11 +229,11 @@ jobs:
             --stage-smoke-verdict "${{ steps.stage_smoke.outputs.verdict }}" \
             --production-web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}" \
             --production-smoke-verdict "${{ steps.production_smoke.outputs.verdict }}" \
-            --out .artifacts/release/release-evidence.json
+            --out artifacts/release/release-evidence.json
 
       - name: Generate release attestation predicate
         run: |
-          predicate_path="${GITHUB_WORKSPACE}/.artifacts/attestations/release-predicate.json"
+          predicate_path="${GITHUB_WORKSPACE}/artifacts/attestations/release-predicate.json"
           mkdir -p "$(dirname "$predicate_path")"
           pnpm --filter @compass/pipeline-tools run release:predicate:generate -- \
             --out "$predicate_path" \
@@ -252,7 +257,7 @@ jobs:
           subject-name: ${{ env.RELEASE_UNITS_REPO }}
           subject-digest: ${{ steps.resolve.outputs.release_unit_digest }}
           predicate-type: ${{ env.RELEASE_PREDICATE_TYPE }}
-          predicate-path: ${{ github.workspace }}/.artifacts/attestations/release-predicate.json
+          predicate-path: ${{ github.workspace }}/artifacts/attestations/release-predicate.json
 
       - name: Upload release artifacts
         if: always()
@@ -260,7 +265,7 @@ jobs:
         with:
           name: release-artifacts
           path: |
-            .artifacts/release
-            .artifacts/attestations/release-predicate.json
+            artifacts/release
+            artifacts/attestations/release-predicate.json
           if-no-files-found: warn
           retention-days: 7

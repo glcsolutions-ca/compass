@@ -87,7 +87,7 @@ async function buildParameters() {
     (await getKeyVaultSecret(keyVaultName, "postgres-admin-password", { required: false }));
   if (!postgresAdminPassword) {
     throw new Error(
-      "POSTGRES_ADMIN_PASSWORD is required for the initial platform apply or must already exist in Key Vault"
+      "For the first production foundation apply, export POSTGRES_ADMIN_PASSWORD before running pnpm infra:apply. After foundation exists, pnpm infra:apply reads postgres-admin-password from Key Vault."
     );
   }
 

@@ -60,6 +60,14 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
+resource postgresAdminPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'postgres-admin-password'
+  properties: {
+    value: postgresAdminPassword
+  }
+}
+
 module postgres 'modules/postgres-flex.bicep' = {
   name: 'postgres'
   params: {

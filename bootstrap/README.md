@@ -16,10 +16,9 @@ Bootstrap is a manual admin workflow. It creates the control plane and the initi
 1. create `rg-compass-prd-cc-001`
 2. run `pnpm bootstrap:entra -- --reset-web-client-secret`
 3. run `pnpm bootstrap:github:apply`
-4. set the three runtime GHCR packages to `public` in GitHub:
+4. set the two runtime GHCR packages to `public` in GitHub:
    - `compass-api`
    - `compass-web`
-   - `compass-migrations`
 5. optionally set the organization package creation default to `public`
 6. run `pnpm bootstrap:ghcr` to verify package visibility
 7. run `pnpm infra:apply`
@@ -36,4 +35,4 @@ Bootstrap is a manual admin workflow. It creates the control plane and the initi
 - `bootstrap/.artifacts` is local-only and ignored by git.
 - `configure-github-repo.mjs` also ensures the repository labels required by `.github/labeler.yml` exist.
 - GitHub currently exposes container package visibility changes through the UI. The bootstrap path treats public GHCR package visibility as a one-time admin action and verifies it in CI/CD.
-- The real delivery pipeline starts with Commit on GitHub merge queue and continues on `main` after the merge.
+- The real delivery pipeline starts with Commit on GitHub merge queue and promotes the same candidate through Acceptance and Release.

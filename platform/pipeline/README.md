@@ -8,7 +8,7 @@ flowchart LR
     PR --> QA["Commit Stage (Queue Admission)"]
     PF --> MQ["Merge Queue"]
 
-    MQ --> BC["Build Candidate\n(api, web, migrations)"]
+    MQ --> BC["Build Candidate\n(api, web)"]
     BC --> SM["Candidate Smoke"]
     SM --> PC["Publish Candidate"]
     PC --> CS["Commit Stage"]
@@ -45,7 +45,7 @@ The design goal is simple:
 
 The `merge_group` path is the real Commit Stage. It:
 
-1. builds and pushes the API, Web, and migrations images
+1. builds and pushes the API and Web images
 2. runs a fast candidate smoke against those published digests
 3. publishes the immutable release candidate manifest and release unit
 

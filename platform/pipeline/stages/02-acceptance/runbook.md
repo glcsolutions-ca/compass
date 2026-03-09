@@ -15,7 +15,7 @@ Acceptance does not deploy to Azure.
 It runs the exact candidate locally in GitHub Actions:
 
 - local Postgres container
-- candidate migrations image
+- candidate API image running the migration and seed command
 - candidate API image with `AUTH_MODE=mock`
 - candidate Web image pointing at the candidate API
 

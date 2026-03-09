@@ -17,7 +17,6 @@ env:
   REGISTRY_BASE: ghcr.io/glcsolutions-ca
   API_IMAGE_NAME: compass-api
   WEB_IMAGE_NAME: compass-web
-  MIGRATIONS_IMAGE_NAME: compass-migrations
   MANIFESTS_REPO: ghcr.io/glcsolutions-ca/compass-release-manifests
   RELEASE_UNITS_REPO: ghcr.io/glcsolutions-ca/compass-release-units
 
@@ -59,9 +58,6 @@ jobs:
           - id: web
             dockerfile: apps/web/Dockerfile
             image_name: compass-web
-          - id: migrations
-            dockerfile: packages/database/Dockerfile.migrations
-            image_name: compass-migrations
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -146,20 +142,17 @@ jobs:
           set -euo pipefail
           api_digest="$(cat artifacts/image-digests/api.digest)"
           web_digest="$(cat artifacts/image-digests/web.digest)"
-          migrations_digest="$(cat artifacts/image-digests/migrations.digest)"
           jq -n \
             --arg candidate_id "${{ needs.prepare.outputs.candidate_id }}" \
             --arg source_revision "${{ needs.prepare.outputs.source_revision }}" \
             --arg api_image "${REGISTRY_BASE}/${API_IMAGE_NAME}@${api_digest}" \
             --arg web_image "${REGISTRY_BASE}/${WEB_IMAGE_NAME}@${web_digest}" \
-            --arg migrations_image "${REGISTRY_BASE}/${MIGRATIONS_IMAGE_NAME}@${migrations_digest}" \
             '{
               candidateId: $candidate_id,
               source: { revision: $source_revision },
               artifacts: {
                 apiImage: $api_image,
-                webImage: $web_image,
-                migrationsArtifact: $migrations_image
+                webImage: $web_image
               }
             }' > "$RUNNER_TEMP/release-candidate-smoke.json"
 
@@ -224,11 +217,9 @@ jobs:
           set -euo pipefail
           api_digest="$(cat artifacts/image-digests/api.digest)"
           web_digest="$(cat artifacts/image-digests/web.digest)"
-          migrations_digest="$(cat artifacts/image-digests/migrations.digest)"
           {
             echo "api_image_ref=${REGISTRY_BASE}/${API_IMAGE_NAME}@${api_digest}"
             echo "web_image_ref=${REGISTRY_BASE}/${WEB_IMAGE_NAME}@${web_digest}"
-            echo "migrations_image_ref=${REGISTRY_BASE}/${MIGRATIONS_IMAGE_NAME}@${migrations_digest}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Publish release unit
@@ -238,8 +229,7 @@ jobs:
           docker buildx imagetools create \
             --tag "${RELEASE_UNITS_REPO}:${{ needs.prepare.outputs.candidate_id }}" \
             "${{ steps.refs.outputs.api_image_ref }}" \
-            "${{ steps.refs.outputs.web_image_ref }}" \
-            "${{ steps.refs.outputs.migrations_image_ref }}"
+            "${{ steps.refs.outputs.web_image_ref }}"
           release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ needs.prepare.outputs.candidate_id }}" | jq -r '.digest')"
           echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
 
@@ -251,7 +241,6 @@ jobs:
             --source-revision "${{ needs.prepare.outputs.source_revision }}" \
             --api-image "${{ steps.refs.outputs.api_image_ref }}" \
             --web-image "${{ steps.refs.outputs.web_image_ref }}" \
-            --migrations-artifact "${{ steps.refs.outputs.migrations_image_ref }}" \
             --registry "${{ env.REGISTRY_BASE }}" \
             --commit-stage-run-id "${{ github.run_id }}" \
             --release-unit-digest "${{ steps.release_unit.outputs.release_unit_digest }}"

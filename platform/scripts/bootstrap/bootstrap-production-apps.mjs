@@ -98,18 +98,14 @@ export async function bootstrapProductionApps({ candidateId }) {
   const manifestPath = path.join(tempDir, "manifest.json");
   const explicitApiImage = envValue("BOOTSTRAP_API_IMAGE");
   const explicitWebImage = envValue("BOOTSTRAP_WEB_IMAGE");
-  const explicitMigrationsImage = envValue("BOOTSTRAP_MIGRATIONS_IMAGE");
-  const useExplicitImages = Boolean(
-    explicitApiImage && explicitWebImage && explicitMigrationsImage
-  );
+  const useExplicitImages = Boolean(explicitApiImage && explicitWebImage);
 
   try {
     const manifest = useExplicitImages
       ? {
           artifacts: {
             apiImage: explicitApiImage,
-            webImage: explicitWebImage,
-            migrationsArtifact: explicitMigrationsImage
+            webImage: explicitWebImage
           }
         }
       : await (async () => {
@@ -147,7 +143,7 @@ export async function bootstrapProductionApps({ candidateId }) {
       webProdImage: parameterEntry(manifest.artifacts.webImage),
       apiStageImage: parameterEntry(manifest.artifacts.apiImage),
       webStageImage: parameterEntry(manifest.artifacts.webImage),
-      migrationsImage: parameterEntry(manifest.artifacts.migrationsArtifact)
+      migrationsImage: parameterEntry(manifest.artifacts.apiImage)
     };
 
     return withParametersFile(parameters, async (parametersFile) => {
@@ -181,13 +177,11 @@ export async function main(argv = process.argv.slice(2)) {
   const candidateIdIndex = argv.indexOf("--candidate-id");
   const candidateId = candidateIdIndex >= 0 ? String(argv[candidateIdIndex + 1] || "").trim() : "";
   const hasExplicitImages = Boolean(
-    envValue("BOOTSTRAP_API_IMAGE") &&
-    envValue("BOOTSTRAP_WEB_IMAGE") &&
-    envValue("BOOTSTRAP_MIGRATIONS_IMAGE")
+    envValue("BOOTSTRAP_API_IMAGE") && envValue("BOOTSTRAP_WEB_IMAGE")
   );
   if (!candidateId && !hasExplicitImages) {
     throw new Error(
-      "--candidate-id is required unless BOOTSTRAP_API_IMAGE, BOOTSTRAP_WEB_IMAGE, and BOOTSTRAP_MIGRATIONS_IMAGE are all set"
+      "--candidate-id is required unless BOOTSTRAP_API_IMAGE and BOOTSTRAP_WEB_IMAGE are both set"
     );
   }
   const result = await bootstrapProductionApps({ candidateId });

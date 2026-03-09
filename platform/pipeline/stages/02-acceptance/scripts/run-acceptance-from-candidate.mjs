@@ -5,6 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseCliArgs, requireOption } from "../../../shared/scripts/cli-utils.mjs";
 import { readJsonFile } from "../../../shared/scripts/pipeline-contract-lib.mjs";
+import { MIGRATIONS_JOB_COMMAND } from "../../../shared/scripts/azure/run-migrations-azure.mjs";
 
 function run(command, args, { env = process.env, cwd, stdio = "pipe" } = {}) {
   return new Promise((resolve, reject) => {
@@ -151,11 +152,7 @@ async function captureLogs(outputDir, containers) {
 }
 
 async function prefetchCandidateImages(manifest) {
-  const images = [
-    manifest.artifacts.apiImage,
-    manifest.artifacts.webImage,
-    manifest.artifacts.migrationsArtifact
-  ];
+  const images = [manifest.artifacts.apiImage, manifest.artifacts.webImage];
   await Promise.all(images.map((image) => run("docker", ["pull", image])));
 }
 
@@ -225,7 +222,8 @@ export async function runCandidateRuntimeChecks({
       "SEED_DEFAULT_USER_EMAIL=smoke-user@compass.local",
       "-e",
       "SEED_DEFAULT_USER_DISPLAY_NAME=Smoke User",
-      manifest.artifacts.migrationsArtifact
+      manifest.artifacts.apiImage,
+      ...MIGRATIONS_JOB_COMMAND
     ]);
 
     await run("docker", [

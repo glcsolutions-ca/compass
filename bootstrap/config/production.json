@@ -25,5 +25,5 @@
     "deployAppDisplayName": "compass-deploy-prd",
     "redirectUriPath": "/v1/auth/entra/callback"
   },
-  "ghcrPackages": ["compass-api", "compass-web", "compass-migrations"]
+  "ghcrPackages": ["compass-api", "compass-web"]
 }

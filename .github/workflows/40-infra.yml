@@ -7,7 +7,8 @@ on:
     paths:
       - .github/workflows/40-infra.yml
       - .github/actions/setup-node-pnpm/action.yml
-      - platform/infra/**
+      - platform/infra/azure/**/*.bicep
+      - platform/infra/azure/environments/production.parameters.json
       - platform/scripts/infra/**
       - platform/scripts/dev/validate-bicep-templates.mjs
       - platform/pipeline/shared/scripts/azure/az-command.mjs
@@ -17,7 +18,8 @@ on:
     paths:
       - .github/workflows/40-infra.yml
       - .github/actions/setup-node-pnpm/action.yml
-      - platform/infra/**
+      - platform/infra/azure/**/*.bicep
+      - platform/infra/azure/environments/production.parameters.json
       - platform/scripts/infra/**
       - platform/scripts/dev/validate-bicep-templates.mjs
       - platform/pipeline/shared/scripts/azure/az-command.mjs

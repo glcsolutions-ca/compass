@@ -34,7 +34,7 @@ The candidate is built once during Commit and then promoted without rebuilds.
 - `pnpm test`: fast local lint, typecheck, and unit-test suite
 - `20-acceptance.yml`: behavioral validation of the published candidate
 - `30-release.yml`: deployment of the exact accepted candidate
-- `40-infra.yml`: Bicep validation and infra apply for `platform/infra/**`, `platform/scripts/infra/**`, and the direct files the workflow executes
+- `40-infra.yml`: Bicep validation and infra apply for Azure infra files, infra scripts, and the direct files the workflow executes
 
 ## Operating guidance
 

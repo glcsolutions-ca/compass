@@ -40,6 +40,38 @@ The current target architecture is:
 - `Queue Admission` exists only as a GitHub merge-queue prerequisite; it is not part of the deployment pipeline stage model
 - pull request labels are metadata only; they do not control delivery routing
 
+## Typical workflow
+
+1. Start from `main` and create a short-lived branch for one small change.
+2. Practice TDD: add or update the smallest failing test first.
+3. Run the narrowest local command that proves the failure.
+4. Make the minimal code change to get back to green.
+5. Refactor only after the test is green.
+6. Before push, run the relevant package-level checks and then `pnpm test`.
+7. Open a small PR quickly and prefer regular merge-queue flow over batching work.
+8. After the PR checks are green, enable auto-merge or run `gh pr merge --auto` so GitHub can place the PR into merge queue.
+
+Agents should prefer these commands during the normal edit loop:
+
+- `pnpm install`
+- `pnpm dev`
+- `pnpm --filter @compass/web test`
+- `pnpm --filter @compass/api test`
+- `pnpm --filter @compass/api test:integration`
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm test:acceptance`
+- `gh pr create --base main`
+- `gh pr merge --auto`
+
+Notes for agents:
+
+- Prefer the smallest relevant test command before running the full suite.
+- Treat `pnpm test` as the standard pre-push gate.
+- Expect `git push` to run local hooks; do not bypass them unless explicitly asked.
+- Keep PRs small enough that they can merge and deploy independently.
+
 ## Main commands
 
 - `pnpm install`

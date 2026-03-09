@@ -99,3 +99,4 @@ Later stages do not rebuild images or substitute different digests.
 - Treat the line as unhealthy if Acceptance or Release fails for the promoted candidate.
 - Keep PR-time work cheap and integrated-code verification authoritative.
 - Keep delivery policy in `platform/pipeline` and repo/ruleset state in `bootstrap/config`.
+- Remember that `workflow_run` stages are loaded from the default branch at trigger time, so workflow-definition changes take effect on the next promoted candidate.

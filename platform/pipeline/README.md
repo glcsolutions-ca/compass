@@ -100,3 +100,4 @@ Later stages do not rebuild images or substitute different digests.
 - Keep PR-time work cheap and integrated-code verification authoritative.
 - Keep delivery policy in `platform/pipeline` and repo/ruleset state in `bootstrap/config`.
 - Remember that `workflow_run` stages are loaded from the default branch at trigger time, so workflow-definition changes take effect on the next promoted candidate.
+- Validate Acceptance or Release workflow edits with one additional promoted candidate after the change merges, because the same candidate cannot prove a stage definition that was not on `main` when that stage started.

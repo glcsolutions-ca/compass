@@ -42,6 +42,7 @@ The candidate is built once during Commit and then promoted without rebuilds.
 - keep merge queue as the native entry point for publishing integrated candidates
 - keep platform policy and evidence in `platform/pipeline`
 - require only `Commit Stage` in the GitHub ruleset
+- validate `workflow_run` stage changes with one additional promoted candidate after merge, because downstream stages load from `main` when they start
 
 ## Related docs
 

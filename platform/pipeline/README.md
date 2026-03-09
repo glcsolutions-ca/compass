@@ -5,6 +5,7 @@ flowchart LR
     DEV["Developer / AI Agent"] --> LOCAL["pnpm test"]
     LOCAL --> PR["Pull Request"]
     PR --> PF["PR Labels"]
+    PR --> QA["Commit Stage (Queue Admission)"]
     PF --> MQ["Merge Queue"]
 
     MQ --> BC["Build Candidate\n(api, web, migrations)"]
@@ -37,7 +38,7 @@ The design goal is simple:
 
 `05-pr-labels.yml` applies PR metadata only.
 
-`10-commit-stage.yml` runs only on `merge_group`. It is the authoritative commit stage.
+`10-commit-stage.yml` runs a no-op `Commit Stage` queue-admission job on `pull_request` and the authoritative commit stage on `merge_group`.
 
 The `merge_group` path is the real Commit Stage. It:
 

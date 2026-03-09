@@ -60,6 +60,7 @@ The current target architecture is:
 - Treat `pnpm test` as the one common fast local suite for developers and agents.
 - Treat `05-pr-labels.yml` as metadata only.
 - Treat `10-commit-stage.yml` as the one required merge-queue check path:
+  - `pull_request`: no-op queue-admission status only
   - `merge_group`: build, smoke, and publish the candidate once
 - Treat `20-acceptance.yml` as the candidate-validation path triggered from successful Commit Stage runs.
 - Treat `30-release.yml` as the candidate-promotion path triggered from successful Acceptance runs.

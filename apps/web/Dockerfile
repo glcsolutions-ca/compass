@@ -14,7 +14,7 @@ COPY packages/sdk/package.json packages/sdk/package.json
 COPY packages/ui/package.json packages/ui/package.json
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-  pnpm install --frozen-lockfile --filter . --filter @compass/web...
+  pnpm install --frozen-lockfile --ignore-scripts --filter . --filter @compass/web...
 
 FROM deps AS build
 COPY packages/contracts ./packages/contracts

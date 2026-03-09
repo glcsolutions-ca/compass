@@ -15,7 +15,7 @@ COPY packages/runtime-protocol/package.json packages/runtime-protocol/package.js
 COPY packages/testkit/package.json packages/testkit/package.json
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-  pnpm install --frozen-lockfile --filter . --filter @compass/contracts... --filter @compass/api...
+  pnpm install --frozen-lockfile --ignore-scripts --filter . --filter @compass/contracts... --filter @compass/api...
 
 FROM deps AS build
 COPY apps/api ./apps/api

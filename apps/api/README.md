@@ -17,6 +17,7 @@ Purpose: contract-backed HTTP API for auth, workspaces, threads, and runtime end
 ## Run and verify
 
 ```bash
+pnpm test
 pnpm --filter @compass/api dev
 pnpm --filter @compass/api test
 pnpm --filter @compass/api test:integration

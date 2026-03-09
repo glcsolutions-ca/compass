@@ -20,11 +20,13 @@ FROM deps AS build
 COPY packages/contracts ./packages/contracts
 COPY packages/sdk ./packages/sdk
 COPY packages/ui ./packages/ui
-COPY apps/web ./apps/web
 
 ARG VITE_API_BASE_URL=http://localhost:3001
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-RUN pnpm --filter @compass/sdk build && pnpm --filter @compass/web build
+RUN pnpm --filter @compass/sdk build
+
+COPY apps/web ./apps/web
+RUN pnpm --filter @compass/web build
 
 FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 AS runtime
 COPY apps/web/nginx/nginx.conf /etc/nginx/nginx.conf

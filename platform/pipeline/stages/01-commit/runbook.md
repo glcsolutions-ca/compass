@@ -22,7 +22,7 @@ Commit publishes:
 
 ## Structure
 
-Commit Stage runs authoritatively on `merge_group`. A no-op `Commit Stage` queue-admission job also runs on `pull_request` because GitHub merge queue requires the required status context to exist on the PR head before it will request the integrated merge-group build. Pull request labeling still lives in `05 PR Labels` and is not part of the delivery stage model.
+Commit Stage runs authoritatively on `merge_group`. `09 Queue Admission` provides the no-op PR-head `Commit Stage` status because GitHub merge queue requires the required status context to exist on the PR head before it will request the integrated merge-group build. Pull request labeling still lives in `05 PR Labels` and is not part of the delivery stage model.
 
 The `merge_group` path runs:
 

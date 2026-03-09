@@ -18,9 +18,10 @@ flowchart LR
     INFRA["Infra Change"] --> IW["Infra Workflow"]
 ```
 
-Compass uses five focused workflows:
+Compass uses six focused workflows:
 
 - `05-pr-labels.yml`
+- `09-queue-admission.yml`
 - `10-commit-stage.yml`
 - `20-acceptance.yml`
 - `30-release.yml`
@@ -38,7 +39,9 @@ The design goal is simple:
 
 `05-pr-labels.yml` applies PR metadata only.
 
-`10-commit-stage.yml` runs a no-op `Commit Stage` queue-admission job on `pull_request` and the authoritative commit stage on `merge_group`.
+`09-queue-admission.yml` provides the no-op PR-head `Commit Stage` status required for merge queue admission.
+
+`10-commit-stage.yml` runs only on `merge_group` and is the authoritative commit stage.
 
 The `merge_group` path is the real Commit Stage. It:
 
@@ -60,7 +63,7 @@ The `merge_group` path is the real Commit Stage. It:
 
 `30-release.yml` is triggered by successful `Acceptance` completion. It:
 
-1. resolves the exact accepted candidate
+1. resolves the exact accepted candidate from the triggering SHA
 2. verifies the acceptance attestation
 3. deploys the same digests through stage and prod
 4. publishes release evidence and release attestation

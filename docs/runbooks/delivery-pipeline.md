@@ -1,11 +1,12 @@
 # Delivery Pipeline
 
-Compass uses a production-first delivery model with four focused workflows.
+Compass uses a production-first delivery model with six focused workflows.
 
 ## Workflow topology
 
 - `05-pr-labels.yml`: metadata only on `pull_request`
-- `10-commit-stage.yml`: no-op queue admission on `pull_request`, authoritative candidate build on `merge_group`
+- `09-queue-admission.yml`: no-op `Commit Stage` status on `pull_request`
+- `10-commit-stage.yml`: authoritative candidate build on `merge_group`
 - `20-acceptance.yml`: triggered by successful `Commit Stage` completion for the merge-queue SHA
 - `30-release.yml`: triggered by successful `Acceptance` completion for the same candidate
 - `40-infra.yml`: validates/applies infrastructure only for infra-owned changes

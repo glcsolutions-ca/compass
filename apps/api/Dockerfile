@@ -18,17 +18,19 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm install --frozen-lockfile --ignore-scripts --filter . --filter @compass/contracts... --filter @compass/api...
 
 FROM deps AS build
-COPY apps/api ./apps/api
 COPY packages/contracts ./packages/contracts
+RUN pnpm --filter @compass/contracts build
+
 COPY packages/runtime-agent ./packages/runtime-agent
 COPY packages/runtime-protocol ./packages/runtime-protocol
-COPY packages/database ./packages/database
-
-RUN pnpm --filter @compass/contracts build
 RUN pnpm --filter @compass/runtime-protocol build
 RUN pnpm --filter @compass/runtime-agent build
+
+COPY apps/api ./apps/api
 RUN pnpm --filter @compass/api build
 RUN pnpm --filter @compass/api deploy --prod /opt/app
+
+COPY packages/database ./packages/database
 
 FROM node:22-alpine@sha256:e4bf2a82ad0a4037d28035ae71529873c069b13eb0455466ae0bc13363826e34 AS runtime
 WORKDIR /app

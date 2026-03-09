@@ -2,12 +2,6 @@ name: Commit Stage
 run-name: ${{ format('Commit Stage / {0}', github.sha) }}
 
 on:
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
   merge_group:
     types:
       - checks_requested
@@ -28,22 +22,7 @@ env:
   RELEASE_UNITS_REPO: ghcr.io/glcsolutions-ca/compass-release-units
 
 jobs:
-  queue_admission:
-    if: github.event_name == 'pull_request'
-    name: Commit Stage
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Record queue admission
-        run: |
-          {
-            echo "## Commit Stage"
-            echo "- Mode: pull_request queue admission"
-            echo "- Action: no-op status required so merge queue can request the authoritative merge_group run"
-          } >> "$GITHUB_STEP_SUMMARY"
-
   prepare:
-    if: github.event_name == 'merge_group'
     name: Prepare Candidate
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -60,7 +39,6 @@ jobs:
         run: echo "source_revision=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
   build_candidate:
-    if: github.event_name == 'merge_group'
     name: Build Candidate / ${{ matrix.image.id }}
     needs:
       - prepare
@@ -130,7 +108,6 @@ jobs:
           retention-days: 1
 
   smoke_candidate:
-    if: github.event_name == 'merge_group'
     name: Candidate Smoke
     needs:
       - prepare
@@ -202,7 +179,6 @@ jobs:
           retention-days: 7
 
   publish_candidate:
-    if: github.event_name == 'merge_group'
     name: Publish Candidate
     needs:
       - prepare
@@ -291,7 +267,6 @@ jobs:
             manifest.json:application/vnd.compass.release-manifest.v1+json
 
   commit_stage:
-    if: github.event_name == 'merge_group'
     name: Commit Stage
     runs-on: ubuntu-latest
     needs:

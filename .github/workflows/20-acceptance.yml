@@ -84,6 +84,15 @@ jobs:
             --manifest "$RUNNER_TEMP/release-candidate.json" \
             --diagnostics-dir "$RUNNER_TEMP/acceptance-diagnostics"
 
+      - name: Record candidate metadata
+        run: |
+          mkdir -p .artifacts/acceptance
+          jq -n \
+            --arg candidate_id "${{ steps.resolve.outputs.candidate_id }}" \
+            --arg source_revision "${{ steps.resolve.outputs.source_revision }}" \
+            '{candidateId: $candidate_id, sourceRevision: $source_revision}' \
+            > .artifacts/acceptance/candidate-metadata.json
+
       - name: Generate acceptance attestation predicate
         run: |
           predicate_path="${GITHUB_WORKSPACE}/.artifacts/attestations/acceptance-predicate.json"
@@ -112,6 +121,7 @@ jobs:
           name: acceptance-artifacts
           path: |
             ${{ runner.temp }}/acceptance-diagnostics
+            .artifacts/acceptance/candidate-metadata.json
             .artifacts/attestations/acceptance-predicate.json
           if-no-files-found: warn
           retention-days: 7

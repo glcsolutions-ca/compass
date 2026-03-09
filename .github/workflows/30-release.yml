@@ -1,5 +1,5 @@
 name: Release
-run-name: ${{ format('Release / Run {0}', github.event.workflow_run.id) }}
+run-name: ${{ format('Release / {0}', github.event.workflow_run.head_sha) }}
 
 on:
   workflow_run:
@@ -29,7 +29,6 @@ jobs:
       group: production-release
       cancel-in-progress: false
     permissions:
-      actions: read
       contents: read
       packages: read
       id-token: write
@@ -38,22 +37,13 @@ jobs:
       name: production
       url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
     steps:
-      - name: Download acceptance artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: acceptance-artifacts
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: ${{ runner.temp }}/acceptance-artifacts
-
-      - name: Read candidate metadata
+      - name: Compute candidate metadata
         id: metadata
         run: |
           set -euo pipefail
-          metadata_path="${RUNNER_TEMP}/acceptance-artifacts/candidate-metadata.json"
           {
-            echo "candidate_id=$(jq -r '.candidateId' "$metadata_path")"
-            echo "source_revision=$(jq -r '.sourceRevision' "$metadata_path")"
+            echo "candidate_id=sha-${{ github.event.workflow_run.head_sha }}"
+            echo "source_revision=${{ github.event.workflow_run.head_sha }}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Checkout

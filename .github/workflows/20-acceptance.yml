@@ -77,13 +77,6 @@ jobs:
             echo "release_unit_digest=${release_unit_digest}"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Fetch release candidate manifest
-        run: |
-          pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
-            --candidate-id "${{ steps.resolve.outputs.candidate_id }}" \
-            --registry-repo "${MANIFESTS_REPO}" \
-            --out "$RUNNER_TEMP/release-candidate.json"
-
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
 
@@ -92,15 +85,6 @@ jobs:
           node platform/pipeline/stages/02-acceptance/scripts/run-acceptance-from-candidate.mjs \
             --manifest "$RUNNER_TEMP/release-candidate.json" \
             --diagnostics-dir "$RUNNER_TEMP/acceptance-diagnostics"
-
-      - name: Record candidate metadata
-        run: |
-          mkdir -p .artifacts/acceptance
-          jq -n \
-            --arg candidate_id "${{ steps.resolve.outputs.candidate_id }}" \
-            --arg source_revision "${{ steps.resolve.outputs.source_revision }}" \
-            '{candidateId: $candidate_id, sourceRevision: $source_revision}' \
-            > .artifacts/acceptance/candidate-metadata.json
 
       - name: Generate acceptance attestation predicate
         run: |
@@ -130,7 +114,6 @@ jobs:
           name: acceptance-artifacts
           path: |
             ${{ runner.temp }}/acceptance-diagnostics
-            .artifacts/acceptance/candidate-metadata.json
             .artifacts/attestations/acceptance-predicate.json
           if-no-files-found: warn
           retention-days: 7

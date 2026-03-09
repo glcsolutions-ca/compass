@@ -1,0 +1,30 @@
+name: Queue Admission
+run-name: ${{ format('Queue Admission / PR #{0}', github.event.pull_request.number) }}
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+
+concurrency:
+  group: queue-admission-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  commit_stage:
+    name: Commit Stage
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Record queue admission
+        run: |
+          {
+            echo "## Queue Admission"
+            echo "- Action: provide the required \`Commit Stage\` status on the PR head so merge queue can request the authoritative integrated build"
+          } >> "$GITHUB_STEP_SUMMARY"

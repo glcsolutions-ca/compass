@@ -20,6 +20,7 @@ The current target architecture is:
 - one Azure production resource group: `rg-compass-prd-cc-001`
 - one GitHub deployment environment: `production`
 - one PR labels workflow: `05-pr-labels.yml`
+- one queue-admission workflow: `09-queue-admission.yml`
 - one commit workflow: `10-commit-stage.yml`
 - one acceptance workflow: `20-acceptance.yml`
 - one release workflow: `30-release.yml`
@@ -59,9 +60,8 @@ The current target architecture is:
 - Treat merge queue as the native entry point to the real development pipeline.
 - Treat `pnpm test` as the one common fast local suite for developers and agents.
 - Treat `05-pr-labels.yml` as metadata only.
-- Treat `10-commit-stage.yml` as the one required merge-queue check path:
-  - `pull_request`: no-op queue-admission status only
-  - `merge_group`: build, smoke, and publish the candidate once
+- Treat `09-queue-admission.yml` as the PR-head no-op status that lets merge queue request the integrated build.
+- Treat `10-commit-stage.yml` as the authoritative merge-group-only path that builds, smokes, and publishes the candidate once.
 - Treat `20-acceptance.yml` as the candidate-validation path triggered from successful Commit Stage runs.
 - Treat `30-release.yml` as the candidate-promotion path triggered from successful Acceptance runs.
 - Treat `40-infra.yml` as the separate infra validation/apply path for infra-owned changes.

@@ -14,7 +14,7 @@ Those stages are implemented across three stage workflows:
 
 ## Trigger Map
 
-- `pull_request` runs `05-pr-labels.yml` and the no-op queue-admission `Commit Stage` status.
+- `pull_request` runs `05-pr-labels.yml` and `09-queue-admission.yml`.
 - `merge_group` runs the authoritative `Commit Stage`.
 - successful `Commit Stage` completion runs `Acceptance`.
 - successful `Acceptance` completion runs `Release`.
@@ -23,5 +23,5 @@ Those stages are implemented across three stage workflows:
 
 - `Commit Stage` is the only required merge-queue check.
 - PR labels are metadata only and run outside the stage pipeline.
-- The PR-head `Commit Stage` run is queue admission only; it does not build or publish artifacts.
+- `09-queue-admission.yml` is queue admission only; it does not build or publish artifacts.
 - The delivery pipeline begins with integrated code on `merge_group`, not with PR head builds.

@@ -114,14 +114,28 @@ jobs:
           predicate-type: ${{ env.ACCEPTANCE_PREDICATE_TYPE }}
           predicate-path: ${{ github.workspace }}/artifacts/attestations/acceptance-predicate.json
 
+      - name: Stage acceptance artifacts
+        if: always()
+        run: |
+          set -euo pipefail
+          artifact_dir="${RUNNER_TEMP}/acceptance-artifact-bundle"
+          rm -rf "$artifact_dir"
+          mkdir -p "$artifact_dir"
+          if [ -d "$RUNNER_TEMP/acceptance-diagnostics" ]; then
+            cp -R "$RUNNER_TEMP/acceptance-diagnostics" "$artifact_dir/diagnostics"
+          fi
+          if [ -f "artifacts/acceptance/candidate-metadata.json" ]; then
+            cp "artifacts/acceptance/candidate-metadata.json" "$artifact_dir/candidate-metadata.json"
+          fi
+          if [ -f "artifacts/attestations/acceptance-predicate.json" ]; then
+            cp "artifacts/attestations/acceptance-predicate.json" "$artifact_dir/acceptance-predicate.json"
+          fi
+
       - name: Upload acceptance artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: acceptance-artifacts
-          path: |
-            ${{ runner.temp }}/acceptance-diagnostics
-            artifacts/acceptance/candidate-metadata.json
-            artifacts/attestations/acceptance-predicate.json
+          path: ${{ runner.temp }}/acceptance-artifact-bundle
           if-no-files-found: warn
           retention-days: 7

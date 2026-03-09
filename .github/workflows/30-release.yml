@@ -47,10 +47,10 @@ jobs:
         id: metadata
         run: |
           set -euo pipefail
-          metadata_path="${RUNNER_TEMP}/acceptance-artifacts/candidate-metadata.json"
-          if [ ! -f "$metadata_path" ]; then
-            echo "Missing candidate metadata at ${metadata_path}" >&2
-            find "${RUNNER_TEMP}/acceptance-artifacts" -maxdepth 4 -type f | sort >&2 || true
+          metadata_path="$(find "${RUNNER_TEMP}/acceptance-artifacts" -type f -name candidate-metadata.json | sort | head -n 1)"
+          if [ -z "$metadata_path" ]; then
+            echo "Missing candidate metadata in downloaded acceptance artifact." >&2
+            find "${RUNNER_TEMP}/acceptance-artifacts" -maxdepth 6 -type f | sort >&2 || true
             exit 1
           fi
           {

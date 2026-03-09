@@ -30,8 +30,7 @@ export function createReleaseCandidate(options) {
     },
     artifacts: {
       apiImage: options.apiImage.trim(),
-      webImage: options.webImage.trim(),
-      migrationsArtifact: options.migrationsArtifact.trim()
+      webImage: options.webImage.trim()
     },
     provenance: {
       commitStageRunId: String(options.commitStageRunId).trim(),
@@ -73,7 +72,6 @@ export async function main(argv = process.argv.slice(2)) {
     sourceRevision: requireOption(options, "source-revision"),
     apiImage: requireOption(options, "api-image"),
     webImage: requireOption(options, "web-image"),
-    migrationsArtifact: requireOption(options, "migrations-artifact"),
     registry: requireOption(options, "registry"),
     commitStageRunId: requireOption(options, "commit-stage-run-id"),
     releaseUnitDigest: optionalOption(options, "release-unit-digest"),

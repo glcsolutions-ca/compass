@@ -8,7 +8,7 @@ export async function runProductionMigrations({ manifestPath, resourceGroup, job
   return runMigrationsAzure({
     resourceGroup,
     jobName,
-    migrationsImage: manifest.artifacts.migrationsArtifact
+    migrationsImage: manifest.artifacts.apiImage
   });
 }
 

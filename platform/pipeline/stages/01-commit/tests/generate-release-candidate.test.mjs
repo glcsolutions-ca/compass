@@ -12,8 +12,6 @@ describe("generate-release-candidate", () => {
         "ghcr.io/glcsolutions-ca/compass-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       webImage:
         "ghcr.io/glcsolutions-ca/compass-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      migrationsArtifact:
-        "ghcr.io/glcsolutions-ca/compass-migrations@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
       registry: "ghcr.io/glcsolutions-ca",
       commitStageRunId: "123456",
       releaseUnitDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
@@ -35,8 +33,6 @@ describe("generate-release-candidate", () => {
         "ghcr.io/glcsolutions-ca/compass-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       webImage:
         "ghcr.io/glcsolutions-ca/compass-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      migrationsArtifact:
-        "ghcr.io/glcsolutions-ca/compass-migrations@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
       registry: "ghcr.io/glcsolutions-ca",
       commitStageRunId: "123456",
       releaseUnitDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
@@ -59,8 +55,6 @@ describe("generate-release-candidate", () => {
           "ghcr.io/glcsolutions-ca/compass-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         webImage:
           "ghcr.io/glcsolutions-ca/compass-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        migrationsArtifact:
-          "ghcr.io/glcsolutions-ca/compass-migrations@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
         registry: "ghcr.io/glcsolutions-ca",
         commitStageRunId: "123456",
         releaseUnitDigest: "sha256:not-a-real-digest",

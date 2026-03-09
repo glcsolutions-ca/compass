@@ -21,11 +21,10 @@
     "artifacts": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["apiImage", "webImage", "migrationsArtifact"],
+      "required": ["apiImage", "webImage"],
       "properties": {
         "apiImage": { "$ref": "#/$defs/digestPinnedOciRef" },
-        "webImage": { "$ref": "#/$defs/digestPinnedOciRef" },
-        "migrationsArtifact": { "$ref": "#/$defs/digestPinnedOciRef" }
+        "webImage": { "$ref": "#/$defs/digestPinnedOciRef" }
       }
     },
     "provenance": {

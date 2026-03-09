@@ -72,7 +72,7 @@ function validateArtifacts(errors, artifacts) {
     errors,
     artifacts,
     "$.artifacts",
-    new Set(["apiImage", "webImage", "migrationsArtifact"])
+    new Set(["apiImage", "webImage"])
   );
 
   if (!isObject(artifacts)) {
@@ -81,8 +81,7 @@ function validateArtifacts(errors, artifacts) {
 
   const refs = {
     apiImage: artifacts.apiImage,
-    webImage: artifacts.webImage,
-    migrationsArtifact: artifacts.migrationsArtifact
+    webImage: artifacts.webImage
   };
 
   for (const [key, value] of Object.entries(refs)) {

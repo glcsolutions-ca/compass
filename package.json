@@ -33,10 +33,7 @@
     "bootstrap:entra": "node platform/scripts/bootstrap/ensure-entra-apps.mjs",
     "bootstrap:github:check": "node platform/scripts/bootstrap/configure-github-repo.mjs --check",
     "bootstrap:github:apply": "node platform/scripts/bootstrap/configure-github-repo.mjs --apply",
-    "bootstrap:ghcr": "node platform/scripts/bootstrap/ensure-ghcr-visibility.mjs",
-    "bootstrap:keyvault:seed": "node platform/scripts/bootstrap/seed-keyvault-secrets.mjs",
     "bootstrap:apps": "node platform/scripts/bootstrap/bootstrap-production-apps.mjs",
-    "bootstrap:web-domain": "node platform/scripts/bootstrap/configure-web-domain.mjs",
     "infra:whatif": "node platform/scripts/infra/apply-platform.mjs --mode what-if",
     "infra:apply": "node platform/scripts/infra/apply-platform.mjs --mode apply"
   },

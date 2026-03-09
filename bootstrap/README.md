@@ -1,38 +1,79 @@
-# Bootstrap
+# Production Bootstrap
 
-Bootstrap is a manual admin workflow. It creates the control plane and the initial production stack.
+Bootstrap is a one-time admin runbook. Its job is to stage production once, then hand off to the normal delivery pipeline.
 
-## Scripts
+## Phase A: Stage production
 
-- `platform/scripts/bootstrap/ensure-entra-apps.mjs`
-- `platform/scripts/bootstrap/configure-github-repo.mjs`
-- `platform/scripts/bootstrap/ensure-ghcr-visibility.mjs`
-- `platform/scripts/bootstrap/seed-keyvault-secrets.mjs`
-- `platform/scripts/bootstrap/bootstrap-production-apps.mjs`
-- `platform/scripts/bootstrap/configure-web-domain.mjs`
+```bash
+az login
+az account set --subscription 4514a0d0-2cdc-468e-be25-895aef2846ad
+az group create --name rg-compass-prd-cc-001 --location canadacentral
 
-## Sequence
+pnpm bootstrap:entra -- --reset-web-client-secret
+pnpm bootstrap:github:apply
+```
 
-1. create `rg-compass-prd-cc-001`
-2. run `pnpm bootstrap:entra -- --reset-web-client-secret`
-3. run `pnpm bootstrap:github:apply`
-4. set the two runtime GHCR packages to `public` in GitHub:
-   - `compass-api`
-   - `compass-web`
-5. optionally set the organization package creation default to `public`
-6. run `pnpm bootstrap:ghcr` to verify package visibility
-7. run `pnpm infra:apply`
-8. run `pnpm bootstrap:keyvault:seed`
-9. add the first PR to merge queue so Commit publishes the first candidate
-10. run `pnpm bootstrap:apps -- --candidate-id sha-<merged-main-sha>`
-11. discover the stage web ACA FQDN
-12. rerun `pnpm bootstrap:entra -- --stage-web-fqdn <fqdn>`
-13. run `pnpm bootstrap:web-domain`
+In GitHub, set the `compass-api` and `compass-web` container packages to `public`.
+
+```bash
+export POSTGRES_ADMIN_PASSWORD='replace-with-a-strong-random-password'
+pnpm infra:apply
+unset POSTGRES_ADMIN_PASSWORD
+```
+
+`pnpm infra:apply` creates the Azure foundation and writes `postgres-admin-password` into Key Vault during that same deployment.
+
+Set the remaining runtime secrets directly in Key Vault:
+
+```bash
+az keyvault secret set \
+  --vault-name kv-compass-prd-cc-001 \
+  --name entra-client-secret \
+  --value '<web-client-secret>'
+
+az keyvault secret set \
+  --vault-name kv-compass-prd-cc-001 \
+  --name auth-oidc-state-encryption-key \
+  --value '<strong-random-secret>'
+```
+
+Verify the database admin secret exists:
+
+```bash
+az keyvault secret show \
+  --vault-name kv-compass-prd-cc-001 \
+  --name postgres-admin-password \
+  --query id \
+  -o tsv
+```
+
+## Phase B: Create the initial app resources once
+
+1. Merge one PR so `Commit Stage` publishes a candidate to GHCR.
+2. Run:
+
+```bash
+pnpm bootstrap:apps -- --candidate-id sha-<merged-main-sha>
+```
+
+After that, the normal pipeline owns deploys and updates.
+
+## Optional follow-up tasks
+
+- If you need the stage web callback URL in Entra, rerun:
+
+```bash
+pnpm bootstrap:entra -- --stage-web-fqdn <fqdn>
+```
+
+- If you want to bind the production custom domain, run:
+
+```bash
+node platform/scripts/bootstrap/configure-web-domain.mjs
+```
 
 ## Notes
 
-- `ensure-entra-apps.mjs --reset-web-client-secret` writes the generated web client secret to `bootstrap/.artifacts/entra-apps.json` so it can be seeded into Key Vault.
 - `bootstrap/.artifacts` is local-only and ignored by git.
-- `configure-github-repo.mjs` also ensures the repository labels required by `.github/labeler.yml` exist.
-- GitHub currently exposes container package visibility changes through the UI. The bootstrap path treats public GHCR package visibility as a one-time admin action and verifies it in CI/CD.
-- The real delivery pipeline starts with Commit on GitHub merge queue and promotes the same candidate through Acceptance and Release.
+- `pnpm bootstrap:github:apply` configures GitHub deployment wiring only. Runtime secrets belong in Key Vault.
+- The delivery pipeline starts with `Commit Stage` on merge queue and promotes the same candidate through Acceptance and Release.

@@ -9,8 +9,10 @@ There is no Terraform in the runtime delivery path.
 
 ## Production boundary
 
-The active architecture uses one production resource group:
+The active architecture uses one production resource group, but that identifier is not tracked in
+the public repo.
 
-- `rg-compass-prd-cc-001`
+Live platform identifiers are stored as private GitHub repository variables and loaded through
+[live-config.mjs](/Users/justinkropp/.codex/worktrees/68b7/compass/platform/config/live-config.mjs).
 
 Key Vault, DNS, PostgreSQL, and ACA resources all stay in that resource group because they share the same workload lifecycle.

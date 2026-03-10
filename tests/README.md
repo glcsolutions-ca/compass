@@ -29,8 +29,12 @@ pnpm acceptance:web
 - colocated `*.integration.test.ts` files beside the app module they exercise when real adapters are required
 - `tests/acceptance/api` for black-box API flows
 - `tests/acceptance/web` for browser/user journeys
+- `tests/baselines/web` for optional visual/layout baselines that are not part of the required CDP path
 
 Desktop intentionally has no acceptance directory yet. We will only add one when desktop has a production-shaped release path and a real black-box suite.
+
+Required acceptance suites are expected to run with zero skips. Optional coverage belongs outside
+`tests/acceptance`.
 
 ## Acceptance references
 

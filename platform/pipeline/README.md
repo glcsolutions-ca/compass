@@ -31,6 +31,71 @@ The design goal is simple:
 - one build of the release unit
 - one candidate promoted without rebuilds
 - one set of explicit time budgets for the whole pipeline
+- one canonical live-config model: GitHub repository variables for non-secret sensitive values, Azure Key Vault for runtime secrets, GitHub environments for protection only
+
+## Current CDP shape
+
+Latest green reference run: [22914274341](https://github.com/glcsolutions-ca/compass/actions/runs/22914274341)
+
+```mermaid
+flowchart TD
+    subgraph CS["Commit Stage"]
+        B["Static Analysis<br/>1m 6s"]
+        C["Unit Tests<br/>58s"]
+        D["API Integration Tests<br/>27s"]
+        E["Build Candidate / api<br/>29s"]
+        F["Build Candidate / web<br/>1m 1s"]
+        G["Prepare Candidate Manifest<br/>19s"]
+        H["Smoke Candidate / API Runtime<br/>42s"]
+        I["Publish Candidate<br/>15s"]
+        J["Commit Stage Summary<br/>6s"]
+    end
+
+    subgraph AS["Acceptance Stage"]
+        K["Acceptance / API<br/>48s"]
+        L["Acceptance / Web<br/>1m 14s"]
+        M["Acceptance Stage Summary<br/>21s"]
+    end
+
+    subgraph RS["Release Stage"]
+        N["Verify Acceptance<br/>1m 12s"]
+        O["Deploy Stage<br/>1m 2s"]
+        P["Pre-Migration Stage Smoke<br/>1m 12s"]
+        Q["Run Production Migrations<br/>1m 52s"]
+        R["Post-Migration Stage Smoke<br/>5s"]
+        S["Deploy Production<br/>57s"]
+        T["Smoke Production<br/>6s"]
+        U["Record Evidence<br/>23s"]
+        V["Release Stage Summary<br/>5s"]
+    end
+
+    B --> G
+    C --> G
+    D --> G
+    E --> G
+    F --> G
+
+    G --> H
+    H --> I
+    H --> K
+    H --> L
+    I --> J
+
+    K --> M
+    L --> M
+    I --> M
+    J --> M
+
+    M --> N
+    N --> O
+    O --> P
+    P --> Q
+    Q --> R
+    R --> S
+    S --> T
+    T --> U
+    U --> V
+```
 
 ## Workflow topology
 

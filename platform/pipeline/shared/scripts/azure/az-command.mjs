@@ -55,6 +55,25 @@ export async function runAz(args, { output = "json" } = {}) {
   }
 }
 
+export async function runAzText(args) {
+  const baseArgs = [...args];
+
+  if (!baseArgs.includes("--only-show-errors")) {
+    baseArgs.push("--only-show-errors");
+  }
+
+  try {
+    const { stdout } = await execFileAsync("az", baseArgs, {
+      env: process.env,
+      maxBuffer: DEFAULT_MAX_BUFFER
+    });
+
+    return String(stdout || "").trim();
+  } catch (error) {
+    throw normalizeError(error, baseArgs);
+  }
+}
+
 export async function ensureAzLogin() {
   await runAz(["account", "show"]);
 }

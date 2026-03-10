@@ -23,6 +23,13 @@ The CDP is:
 
 The candidate is built once during Commit and then promoted without rebuilds.
 
+Required stage suites are strict by default:
+
+- Commit Stage integration tests provision their own Postgres dependency and fail if setup, migration,
+  seeding, or test execution fails.
+- Acceptance Stage contains only required black-box API and Web suites. Optional visual baselines live
+  outside `tests/acceptance` and are never part of the default stage path.
+
 ## Validation ownership
 
 - `pnpm verify`: local Commit Stage
@@ -53,11 +60,18 @@ that as delivery work, not background noise.
 
 ## Deployment scope
 
-- one Azure resource group: `rg-compass-prd-cc-001`
+- one Azure resource group, resolved from canonical GitHub repository variables
 - two GitHub deployment environments: `stage` and `production`
 - one stage/prod ACA pair for each deployed app: `api-stage`, `web-stage`, `api-prod`, `web-prod`
 - one migrations job
 - GHCR as the only image registry
+
+## Live config and secret model
+
+- GitHub repository variables: live non-secret but sensitive deployment values
+- Azure Key Vault: runtime secrets only
+- GitHub environments: deployment protection, history, and URL only
+- repo: code, pipeline logic, contracts, and public metadata only
 
 ## Commit Stage shape
 

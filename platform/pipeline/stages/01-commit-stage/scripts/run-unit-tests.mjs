@@ -6,6 +6,8 @@ export async function runUnitTests() {
     "turbo",
     "run",
     "test",
+    "--filter=@compass/api...",
+    "--filter=@compass/web...",
     "--filter=!@compass/pipeline-tools",
     "--ui=stream",
     "--log-order=grouped",

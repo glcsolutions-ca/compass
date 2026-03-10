@@ -1,13 +1,37 @@
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
 import { ensureAzLogin, runAz } from "../../pipeline/shared/scripts/azure/az-command.mjs";
-import { loadProductionConfig } from "../infra/platform-config.mjs";
+import {
+  ENTRA_BOOTSTRAP_VARIABLE_NAMES,
+  loadLivePlatformConfig
+} from "../../config/live-config.mjs";
+import {
+  ENTRA_APP_DISPLAY_NAMES,
+  ENTRA_REDIRECT_URI_PATH,
+  REPOSITORY_SLUG
+} from "../../config/public-metadata.mjs";
 
+const execFileAsync = promisify(execFile);
 const OUTPUT_PATH = path.resolve("bootstrap/.artifacts/entra-apps.json");
+const ENVIRONMENTS_CONFIG_PATH = path.resolve("bootstrap/config/github-environments.json");
 const GITHUB_OIDC_ISSUER = "https://token.actions.githubusercontent.com";
 const GITHUB_OIDC_AUDIENCE = ["api://AzureADTokenExchange"];
+
+async function gh(args) {
+  const result = await execFileAsync("gh", args, {
+    env: process.env,
+    maxBuffer: 20 * 1024 * 1024
+  });
+  return String(result.stdout || "").trim();
+}
+
+async function readJson(filePath) {
+  return JSON.parse(await readFile(path.resolve(filePath), "utf8"));
+}
 
 async function writeJson(filePath, value) {
   await mkdir(path.dirname(filePath), { recursive: true });
@@ -36,9 +60,7 @@ async function ensureAppRegistration(displayName, options = {}) {
     if (redirectUris.length > 0) {
       await runAz(
         ["ad", "app", "update", "--id", existing.appId, "--web-redirect-uris", ...redirectUris],
-        {
-          output: "none"
-        }
+        { output: "none" }
       );
     }
     return existing;
@@ -132,9 +154,7 @@ async function ensureFederatedCredential(appObjectId, credential) {
           "--parameters",
           `@${filePath}`
         ],
-        {
-          output: "none"
-        }
+        { output: "none" }
       );
     }
   } finally {
@@ -162,43 +182,58 @@ async function maybeRotateWebClientSecret(webAppId, resetWebClientSecret) {
   return String(credential?.password || "").trim();
 }
 
+async function setRepositoryVariable(name, value) {
+  await gh(["variable", "set", name, "--repo", REPOSITORY_SLUG, "--body", String(value)]);
+}
+
+async function loadGithubEnvironmentNames() {
+  const config = await readJson(ENVIRONMENTS_CONFIG_PATH);
+  const names = Array.isArray(config.environments)
+    ? config.environments
+        .map((entry) => (typeof entry?.name === "string" ? entry.name.trim() : ""))
+        .filter(Boolean)
+    : [];
+  return names.length > 0 ? names : ["stage", "production"];
+}
+
 export async function ensureEntraApps({
   stageWebFqdn,
   prodWebFqdn,
   resetWebClientSecret = false
 } = {}) {
   await ensureAzLogin();
-  const config = await loadProductionConfig();
-  await runAz(["account", "set", "--subscription", config.subscriptionId], {
+  const config = await loadLivePlatformConfig({
+    requiredVariableNames: ENTRA_BOOTSTRAP_VARIABLE_NAMES
+  });
+  await runAz(["account", "set", "--subscription", config.azureSubscriptionId], {
     output: "none"
   });
+
   const previousOutput = await readPreviousOutput(OUTPUT_PATH);
-  const redirectUriPath = config.entra.redirectUriPath;
   const redirectUris = [
-    `${config.webBaseUrl}${redirectUriPath}`,
-    prodWebFqdn ? `https://${prodWebFqdn}${redirectUriPath}` : "",
-    stageWebFqdn ? `https://${stageWebFqdn}${redirectUriPath}` : ""
+    `${config.productionWebBaseUrl}${ENTRA_REDIRECT_URI_PATH}`,
+    prodWebFqdn ? `https://${prodWebFqdn}${ENTRA_REDIRECT_URI_PATH}` : "",
+    stageWebFqdn ? `https://${stageWebFqdn}${ENTRA_REDIRECT_URI_PATH}` : ""
   ].filter(Boolean);
 
-  const apiApp = await ensureAppRegistration(config.entra.apiAppDisplayName);
-  const webApp = await ensureAppRegistration(config.entra.webAppDisplayName, { redirectUris });
-  const deployApp = await ensureAppRegistration(config.entra.deployAppDisplayName);
+  const apiApp = await ensureAppRegistration(ENTRA_APP_DISPLAY_NAMES.api);
+  const webApp = await ensureAppRegistration(ENTRA_APP_DISPLAY_NAMES.web, { redirectUris });
+  const deployApp = await ensureAppRegistration(ENTRA_APP_DISPLAY_NAMES.deploy);
   const deployServicePrincipal = await ensureServicePrincipal(deployApp.appId);
-  const githubEnvironments =
-    Array.isArray(config.githubEnvironments) && config.githubEnvironments.length > 0
-      ? config.githubEnvironments
-      : [config.githubEnvironment];
+
+  const githubEnvironments = await loadGithubEnvironmentNames();
   for (const environmentName of githubEnvironments) {
     await ensureFederatedCredential(deployApp.id, {
       name: `github-${environmentName}`,
       issuer: GITHUB_OIDC_ISSUER,
-      subject: `repo:${config.repository}:environment:${environmentName}`,
+      subject: `repo:${REPOSITORY_SLUG}:environment:${environmentName}`,
       audiences: GITHUB_OIDC_AUDIENCE,
-      description: `GitHub Actions ${environmentName} deployment for ${config.repository}`
+      description: `GitHub Actions ${environmentName} deployment for ${REPOSITORY_SLUG}`
     });
   }
+
   const resourceGroupScope = await runAz(
-    ["group", "show", "--name", config.resourceGroup, "--query", "id"],
+    ["group", "show", "--name", config.azureResourceGroup, "--query", "id"],
     { output: "tsv" }
   ).catch(() => "");
   if (resourceGroupScope) {
@@ -226,6 +261,8 @@ export async function ensureEntraApps({
   };
 
   await writeJson(OUTPUT_PATH, output);
+  await setRepositoryVariable("ENTRA_WEB_CLIENT_ID", output.webClientId);
+  await setRepositoryVariable("AZURE_DEPLOY_CLIENT_ID", output.deployClientId);
   console.info(`Wrote Entra app metadata: ${OUTPUT_PATH}`);
   return output;
 }

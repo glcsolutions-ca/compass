@@ -2,8 +2,7 @@ scope:infra:
   - changed-files:
       - any-glob-to-any-file:
           - platform/infra/azure/**
-          - platform/infra/azure/environments/**
-          - bootstrap/config/production.json
+          - platform/config/**
           - platform/scripts/bootstrap/**
 
 scope:runtime-api-web:
@@ -51,5 +50,4 @@ risk:high:
           - packages/database/migrations/**
           - platform/scripts/bootstrap/ensure-entra-apps.mjs
           - platform/scripts/bootstrap/configure-web-domain.mjs
-          - bootstrap/config/production.json
-          - platform/infra/azure/environments/production.parameters.json
+          - platform/config/**

@@ -1,5 +1,4 @@
 {
-  "repository": "glcsolutions-ca/compass",
   "environments": [
     {
       "name": "stage",

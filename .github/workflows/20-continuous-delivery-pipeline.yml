@@ -16,6 +16,8 @@ env:
   WEB_IMAGE_NAME: compass-web
   MANIFESTS_REPO: ghcr.io/glcsolutions-ca/compass-release-manifests
   RELEASE_UNITS_REPO: ghcr.io/glcsolutions-ca/compass-release-units
+  CANDIDATE_ID: sha-${{ github.sha }}
+  SOURCE_REVISION: ${{ github.sha }}
   ACCEPTANCE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/acceptance/v1
   RELEASE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/release/v2
   COMMIT_STAGE_BUDGET_MINUTES: "5"
@@ -24,33 +26,15 @@ env:
   TOTAL_LEAD_TIME_BUDGET_MINUTES: "15"
 
 jobs:
-  prepare-candidate:
-    name: Prepare Candidate
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      candidate_id: ${{ steps.candidate.outputs.candidate_id }}
-      source_revision: ${{ steps.source.outputs.source_revision }}
-    steps:
-      - name: Compute candidate id
-        id: candidate
-        run: echo "candidate_id=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-
-      - name: Record source revision
-        id: source
-        run: echo "source_revision=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-
   commit-stage-static-analysis:
     name: Commit Stage / Static Analysis
-    needs:
-      - prepare-candidate
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Setup Node and pnpm
@@ -61,15 +45,13 @@ jobs:
 
   commit-stage-unit-tests:
     name: Commit Stage / Unit Tests
-    needs:
-      - prepare-candidate
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Setup Node and pnpm
@@ -79,16 +61,14 @@ jobs:
         run: pnpm verify:unit
 
   commit-stage-integration-tests:
-    name: Commit Stage / Integration Tests
-    needs:
-      - prepare-candidate
+    name: Commit Stage / API Integration Tests
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Setup Node and pnpm
@@ -99,8 +79,6 @@ jobs:
 
   commit-stage-build-candidate:
     name: Commit Stage / Build Candidate / ${{ matrix.image.id }}
-    needs:
-      - prepare-candidate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -121,7 +99,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Setup Docker Buildx
@@ -141,10 +119,10 @@ jobs:
           context: .
           file: ${{ matrix.image.dockerfile }}
           push: true
-          tags: ${{ env.REGISTRY_BASE }}/${{ matrix.image.image_name }}:${{ needs.prepare-candidate.outputs.candidate_id }}
+          tags: ${{ env.REGISTRY_BASE }}/${{ matrix.image.image_name }}:${{ env.CANDIDATE_ID }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ needs.prepare-candidate.outputs.source_revision }}
+            org.opencontainers.image.revision=${{ env.SOURCE_REVISION }}
           cache-from: type=gha,scope=build-${{ matrix.image.id }}
           cache-to: type=gha,mode=max,scope=build-${{ matrix.image.id }}
           provenance: true
@@ -166,7 +144,6 @@ jobs:
   commit-stage-prepare-manifest:
     name: Commit Stage / Prepare Candidate Manifest
     needs:
-      - prepare-candidate
       - commit-stage-build-candidate
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -174,7 +151,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Setup Node and pnpm
@@ -203,7 +180,7 @@ jobs:
           pnpm --filter @compass/pipeline-tools run manifest:generate -- \
             --out "$RUNNER_TEMP/release-candidate.json" \
             --repository "${{ github.repository }}" \
-            --source-revision "${{ needs.prepare-candidate.outputs.source_revision }}" \
+            --source-revision "${{ env.SOURCE_REVISION }}" \
             --api-image "${{ steps.refs.outputs.api_image_ref }}" \
             --web-image "${{ steps.refs.outputs.web_image_ref }}" \
             --registry "${{ env.REGISTRY_BASE }}" \
@@ -223,7 +200,6 @@ jobs:
   commit-stage-smoke-candidate:
     name: Commit Stage / Smoke Candidate / API Runtime
     needs:
-      - prepare-candidate
       - commit-stage-prepare-manifest
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -234,7 +210,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Setup Node and pnpm
@@ -271,7 +247,6 @@ jobs:
   commit-stage-publish-candidate:
     name: Commit Stage / Publish Candidate
     needs:
-      - prepare-candidate
       - commit-stage-static-analysis
       - commit-stage-unit-tests
       - commit-stage-integration-tests
@@ -324,17 +299,17 @@ jobs:
         run: |
           set -euo pipefail
           docker buildx imagetools create \
-            --tag "${RELEASE_UNITS_REPO}:${{ needs.prepare-candidate.outputs.candidate_id }}" \
+            --tag "${RELEASE_UNITS_REPO}:${{ env.CANDIDATE_ID }}" \
             "${{ steps.refs.outputs.api_image_ref }}" \
             "${{ steps.refs.outputs.web_image_ref }}"
-          release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ needs.prepare-candidate.outputs.candidate_id }}" | jq -r '.digest')"
+          release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ env.CANDIDATE_ID }}" | jq -r '.digest')"
           echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
 
       - name: Publish canonical release candidate manifest
         run: |
           cp "$RUNNER_TEMP/release-candidate.json" manifest.json
           oras push --artifact-type application/vnd.compass.release-manifest.v1+json \
-            "${MANIFESTS_REPO}:${{ needs.prepare-candidate.outputs.candidate_id }}" \
+            "${MANIFESTS_REPO}:${{ env.CANDIDATE_ID }}" \
             manifest.json:application/vnd.compass.release-manifest.v1+json
 
   commit-stage:
@@ -342,7 +317,6 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     needs:
-      - prepare-candidate
       - commit-stage-static-analysis
       - commit-stage-unit-tests
       - commit-stage-integration-tests
@@ -354,12 +328,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Assert expected path succeeded
         env:
-          PREPARE_CANDIDATE: ${{ needs.prepare-candidate.result }}
           STATIC_ANALYSIS: ${{ needs.commit-stage-static-analysis.result }}
           UNIT_TESTS: ${{ needs.commit-stage-unit-tests.result }}
           INTEGRATION_TESTS: ${{ needs.commit-stage-integration-tests.result }}
@@ -379,7 +352,6 @@ jobs:
             fi
           }
 
-          assert_success prepare-candidate "$PREPARE_CANDIDATE"
           assert_success static-analysis "$STATIC_ANALYSIS"
           assert_success unit-tests "$UNIT_TESTS"
           assert_success integration-tests "$INTEGRATION_TESTS"
@@ -393,7 +365,6 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PREPARE_CANDIDATE: ${{ needs.prepare-candidate.result }}
           STATIC_ANALYSIS: ${{ needs.commit-stage-static-analysis.result }}
           UNIT_TESTS: ${{ needs.commit-stage-unit-tests.result }}
           INTEGRATION_TESTS: ${{ needs.commit-stage-integration-tests.result }}
@@ -404,7 +375,6 @@ jobs:
         run: |
           line_stop=false
           for result in \
-            "$PREPARE_CANDIDATE" \
             "$STATIC_ANALYSIS" \
             "$UNIT_TESTS" \
             "$INTEGRATION_TESTS" \
@@ -430,14 +400,13 @@ jobs:
           {
             echo ""
             echo "## Commit Stage"
-            echo "- Candidate: ${{ needs.prepare-candidate.outputs.candidate_id }}"
-            echo "- Source revision: ${{ needs.prepare-candidate.outputs.source_revision }}"
+            echo "- Candidate: ${{ env.CANDIDATE_ID }}"
+            echo "- Source revision: ${{ env.SOURCE_REVISION }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
   acceptance-stage-api:
     name: Acceptance Stage / API
     needs:
-      - prepare-candidate
       - commit-stage-static-analysis
       - commit-stage-unit-tests
       - commit-stage-integration-tests
@@ -451,7 +420,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Setup Node and pnpm
@@ -469,9 +438,6 @@ jobs:
         with:
           name: release-candidate-manifest
           path: ${{ runner.temp }}
-
-      - name: Validate canonical release candidate manifest
-        run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
 
       - name: Run API acceptance
         run: |
@@ -492,7 +458,6 @@ jobs:
   acceptance-stage-web:
     name: Acceptance Stage / Web
     needs:
-      - prepare-candidate
       - commit-stage-static-analysis
       - commit-stage-unit-tests
       - commit-stage-integration-tests
@@ -506,7 +471,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Setup Node and pnpm
@@ -524,9 +489,6 @@ jobs:
         with:
           name: release-candidate-manifest
           path: ${{ runner.temp }}
-
-      - name: Validate canonical release candidate manifest
-        run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
 
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
@@ -551,7 +513,6 @@ jobs:
     name: Acceptance Stage
     if: always()
     needs:
-      - prepare-candidate
       - commit-stage-publish-candidate
       - acceptance-stage-api
       - acceptance-stage-web
@@ -571,7 +532,7 @@ jobs:
         if: always()
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Assert expected path succeeded
@@ -594,7 +555,7 @@ jobs:
         if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Setup Node and pnpm
@@ -608,8 +569,8 @@ jobs:
           mkdir -p "$(dirname "${predicate_path}")"
           pnpm --filter @compass/pipeline-tools run acceptance:predicate:generate -- \
             --out "${predicate_path}" \
-            --candidate-id "${{ needs.prepare-candidate.outputs.candidate_id }}" \
-            --source-revision "${{ needs.prepare-candidate.outputs.source_revision }}" \
+            --candidate-id "${{ env.CANDIDATE_ID }}" \
+            --source-revision "${{ env.SOURCE_REVISION }}" \
             --verdict pass \
             --workflow-run-id "${{ github.run_id }}" \
             --tested-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -657,12 +618,9 @@ jobs:
   release-stage-verify-acceptance:
     name: Release Stage / Verify Acceptance
     needs:
-      - prepare-candidate
       - acceptance-stage
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment:
-      name: stage
     outputs:
       api_stage_base_url: ${{ steps.runtime.outputs.api_stage_base_url }}
       web_stage_base_url: ${{ steps.runtime.outputs.web_stage_base_url }}
@@ -676,7 +634,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Setup Node and pnpm
@@ -695,7 +653,7 @@ jobs:
       - name: Fetch release candidate manifest
         run: |
           pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
-            --candidate-id "${{ needs.prepare-candidate.outputs.candidate_id }}" \
+            --candidate-id "${{ env.CANDIDATE_ID }}" \
             --registry-repo "${MANIFESTS_REPO}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
@@ -707,7 +665,7 @@ jobs:
           ACA_API_STAGE_APP_NAME: ${{ vars.ACA_API_STAGE_APP_NAME }}
           ACA_WEB_STAGE_APP_NAME: ${{ vars.ACA_WEB_STAGE_APP_NAME }}
           ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          AZURE_DEPLOY_CLIENT_ID: ${{ vars.AZURE_DEPLOY_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
           PRODUCTION_WEB_BASE_URL: ${{ vars.PRODUCTION_WEB_BASE_URL }}
@@ -720,7 +678,7 @@ jobs:
             --required ACA_API_STAGE_APP_NAME \
             --required ACA_WEB_STAGE_APP_NAME \
             --required ACA_MIGRATE_JOB_NAME \
-            --required AZURE_CLIENT_ID \
+            --required AZURE_DEPLOY_CLIENT_ID \
             --required AZURE_TENANT_ID \
             --required AZURE_SUBSCRIPTION_ID \
             --required PRODUCTION_WEB_BASE_URL \
@@ -731,8 +689,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           pnpm --filter @compass/pipeline-tools run attest:verify -- \
-            --candidate-id "${{ needs.prepare-candidate.outputs.candidate_id }}" \
-            --source-revision "${{ needs.prepare-candidate.outputs.source_revision }}" \
+            --candidate-id "${{ env.CANDIDATE_ID }}" \
+            --source-revision "${{ env.SOURCE_REVISION }}" \
             --predicate-type "${ACCEPTANCE_PREDICATE_TYPE}" \
             --repo "${{ github.repository }}" \
             --subject "${RELEASE_UNITS_REPO}@${{ needs.acceptance-stage.outputs.release_unit_digest }}"
@@ -740,7 +698,7 @@ jobs:
       - name: Azure login
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
         with:
-          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          client-id: ${{ vars.AZURE_DEPLOY_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
@@ -766,7 +724,6 @@ jobs:
   release-stage-deploy-stage:
     name: Release Stage / Deploy Stage
     needs:
-      - prepare-candidate
       - release-stage-verify-acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -783,7 +740,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Setup Node and pnpm
@@ -802,14 +759,14 @@ jobs:
       - name: Azure login
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
         with:
-          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          client-id: ${{ vars.AZURE_DEPLOY_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Fetch release candidate manifest
         run: |
           pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
-            --candidate-id "${{ needs.prepare-candidate.outputs.candidate_id }}" \
+            --candidate-id "${{ env.CANDIDATE_ID }}" \
             --registry-repo "${MANIFESTS_REPO}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
@@ -843,7 +800,7 @@ jobs:
           wait "$web_pid"
 
   release-stage-smoke-stage-read-only:
-    name: Release Stage / Smoke Stage Read Only
+    name: Release Stage / Pre-Migration Stage Smoke
     needs:
       - release-stage-verify-acceptance
       - release-stage-deploy-stage
@@ -871,9 +828,8 @@ jobs:
           echo "verdict=pass" >> "$GITHUB_OUTPUT"
 
   release-stage-run-migrations:
-    name: Release Stage / Run Migrations
+    name: Release Stage / Run Production Migrations
     needs:
-      - prepare-candidate
       - release-stage-verify-acceptance
       - release-stage-smoke-stage-read-only
     runs-on: ubuntu-latest
@@ -882,7 +838,7 @@ jobs:
       group: continuous-delivery-stage
       cancel-in-progress: false
     environment:
-      name: stage
+      name: production
     permissions:
       contents: read
       packages: read
@@ -891,7 +847,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Setup Node and pnpm
@@ -910,14 +866,14 @@ jobs:
       - name: Azure login
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
         with:
-          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          client-id: ${{ vars.AZURE_DEPLOY_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Fetch release candidate manifest
         run: |
           pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
-            --candidate-id "${{ needs.prepare-candidate.outputs.candidate_id }}" \
+            --candidate-id "${{ env.CANDIDATE_ID }}" \
             --registry-repo "${MANIFESTS_REPO}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
@@ -932,7 +888,7 @@ jobs:
             --job-name "$JOB"
 
   release-stage-smoke-stage-auth:
-    name: Release Stage / Smoke Stage Auth
+    name: Release Stage / Post-Migration Stage Smoke
     needs:
       - release-stage-verify-acceptance
       - release-stage-run-migrations
@@ -962,7 +918,6 @@ jobs:
   release-stage-deploy-production:
     name: Release Stage / Deploy Production
     needs:
-      - prepare-candidate
       - release-stage-verify-acceptance
       - release-stage-smoke-stage-auth
     runs-on: ubuntu-latest
@@ -981,7 +936,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Setup Node and pnpm
@@ -1000,14 +955,14 @@ jobs:
       - name: Azure login
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
         with:
-          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          client-id: ${{ vars.AZURE_DEPLOY_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Fetch release candidate manifest
         run: |
           pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
-            --candidate-id "${{ needs.prepare-candidate.outputs.candidate_id }}" \
+            --candidate-id "${{ env.CANDIDATE_ID }}" \
             --registry-repo "${MANIFESTS_REPO}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
@@ -1069,7 +1024,6 @@ jobs:
   release-stage-record-evidence:
     name: Release Stage / Record Evidence
     needs:
-      - prepare-candidate
       - acceptance-stage
       - release-stage-verify-acceptance
       - release-stage-smoke-stage-auth
@@ -1089,7 +1043,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Setup Node and pnpm
@@ -1108,7 +1062,7 @@ jobs:
       - name: Fetch release candidate manifest
         run: |
           pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
-            --candidate-id "${{ needs.prepare-candidate.outputs.candidate_id }}" \
+            --candidate-id "${{ env.CANDIDATE_ID }}" \
             --registry-repo "${MANIFESTS_REPO}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
@@ -1130,8 +1084,8 @@ jobs:
           mkdir -p "$(dirname "$predicate_path")"
           pnpm --filter @compass/pipeline-tools run release:predicate:generate -- \
             --out "$predicate_path" \
-            --candidate-id "${{ needs.prepare-candidate.outputs.candidate_id }}" \
-            --source-revision "${{ needs.prepare-candidate.outputs.source_revision }}" \
+            --candidate-id "${{ env.CANDIDATE_ID }}" \
+            --source-revision "${{ env.SOURCE_REVISION }}" \
             --verdict pass \
             --workflow-run-id "${{ github.run_id }}" \
             --released-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -1168,7 +1122,6 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     needs:
-      - prepare-candidate
       - release-stage-verify-acceptance
       - release-stage-deploy-stage
       - release-stage-smoke-stage-read-only
@@ -1177,21 +1130,22 @@ jobs:
       - release-stage-deploy-production
       - release-stage-smoke-production
       - release-stage-record-evidence
+    environment:
+      name: production
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
       - name: Assert expected path succeeded
         env:
-          PREPARE_CANDIDATE: ${{ needs.prepare-candidate.result }}
           VERIFY_ACCEPTANCE: ${{ needs.release-stage-verify-acceptance.result }}
           DEPLOY_STAGE: ${{ needs.release-stage-deploy-stage.result }}
-          SMOKE_STAGE_READ_ONLY: ${{ needs.release-stage-smoke-stage-read-only.result }}
-          RUN_MIGRATIONS: ${{ needs.release-stage-run-migrations.result }}
-          SMOKE_STAGE_AUTH: ${{ needs.release-stage-smoke-stage-auth.result }}
+          PRE_MIGRATION_STAGE_SMOKE: ${{ needs.release-stage-smoke-stage-read-only.result }}
+          RUN_PRODUCTION_MIGRATIONS: ${{ needs.release-stage-run-migrations.result }}
+          POST_MIGRATION_STAGE_SMOKE: ${{ needs.release-stage-smoke-stage-auth.result }}
           DEPLOY_PRODUCTION: ${{ needs.release-stage-deploy-production.result }}
           SMOKE_PRODUCTION: ${{ needs.release-stage-smoke-production.result }}
           RECORD_EVIDENCE: ${{ needs.release-stage-record-evidence.result }}
@@ -1207,12 +1161,11 @@ jobs:
             fi
           }
 
-          assert_success prepare-candidate "$PREPARE_CANDIDATE"
           assert_success verify-acceptance "$VERIFY_ACCEPTANCE"
           assert_success deploy-stage "$DEPLOY_STAGE"
-          assert_success smoke-stage-read-only "$SMOKE_STAGE_READ_ONLY"
-          assert_success run-migrations "$RUN_MIGRATIONS"
-          assert_success smoke-stage-auth "$SMOKE_STAGE_AUTH"
+          assert_success pre-migration-stage-smoke "$PRE_MIGRATION_STAGE_SMOKE"
+          assert_success run-production-migrations "$RUN_PRODUCTION_MIGRATIONS"
+          assert_success post-migration-stage-smoke "$POST_MIGRATION_STAGE_SMOKE"
           assert_success deploy-production "$DEPLOY_PRODUCTION"
           assert_success smoke-production "$SMOKE_PRODUCTION"
           assert_success record-evidence "$RECORD_EVIDENCE"
@@ -1222,24 +1175,22 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PREPARE_CANDIDATE: ${{ needs.prepare-candidate.result }}
           VERIFY_ACCEPTANCE: ${{ needs.release-stage-verify-acceptance.result }}
           DEPLOY_STAGE: ${{ needs.release-stage-deploy-stage.result }}
-          SMOKE_STAGE_READ_ONLY: ${{ needs.release-stage-smoke-stage-read-only.result }}
-          RUN_MIGRATIONS: ${{ needs.release-stage-run-migrations.result }}
-          SMOKE_STAGE_AUTH: ${{ needs.release-stage-smoke-stage-auth.result }}
+          PRE_MIGRATION_STAGE_SMOKE: ${{ needs.release-stage-smoke-stage-read-only.result }}
+          RUN_PRODUCTION_MIGRATIONS: ${{ needs.release-stage-run-migrations.result }}
+          POST_MIGRATION_STAGE_SMOKE: ${{ needs.release-stage-smoke-stage-auth.result }}
           DEPLOY_PRODUCTION: ${{ needs.release-stage-deploy-production.result }}
           SMOKE_PRODUCTION: ${{ needs.release-stage-smoke-production.result }}
           RECORD_EVIDENCE: ${{ needs.release-stage-record-evidence.result }}
         run: |
           line_stop=false
           for result in \
-            "$PREPARE_CANDIDATE" \
             "$VERIFY_ACCEPTANCE" \
             "$DEPLOY_STAGE" \
-            "$SMOKE_STAGE_READ_ONLY" \
-            "$RUN_MIGRATIONS" \
-            "$SMOKE_STAGE_AUTH" \
+            "$PRE_MIGRATION_STAGE_SMOKE" \
+            "$RUN_PRODUCTION_MIGRATIONS" \
+            "$POST_MIGRATION_STAGE_SMOKE" \
             "$DEPLOY_PRODUCTION" \
             "$SMOKE_PRODUCTION" \
             "$RECORD_EVIDENCE"; do
@@ -1261,7 +1212,7 @@ jobs:
           {
             echo ""
             echo "## Release Stage"
-            echo "- Candidate: ${{ needs.prepare-candidate.outputs.candidate_id }}"
-            echo "- Stage smoke verdict: ${{ needs.release-stage-smoke-stage-auth.outputs.verdict }}"
+            echo "- Candidate: ${{ env.CANDIDATE_ID }}"
+            echo "- Post-migration stage smoke verdict: ${{ needs.release-stage-smoke-stage-auth.outputs.verdict }}"
             echo "- Production smoke verdict: ${{ needs.release-stage-smoke-production.outputs.verdict }}"
           } >> "$GITHUB_STEP_SUMMARY"

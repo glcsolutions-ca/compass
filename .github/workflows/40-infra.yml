@@ -8,7 +8,7 @@ on:
       - .github/workflows/40-infra.yml
       - .github/actions/setup-node-pnpm/action.yml
       - platform/infra/azure/**/*.bicep
-      - platform/infra/azure/environments/production.parameters.json
+      - platform/config/**
       - platform/scripts/infra/**
       - platform/scripts/dev/validate-bicep-templates.mjs
       - platform/pipeline/shared/scripts/azure/az-command.mjs
@@ -19,7 +19,7 @@ on:
       - .github/workflows/40-infra.yml
       - .github/actions/setup-node-pnpm/action.yml
       - platform/infra/azure/**/*.bicep
-      - platform/infra/azure/environments/production.parameters.json
+      - platform/config/**
       - platform/scripts/infra/**
       - platform/scripts/dev/validate-bicep-templates.mjs
       - platform/pipeline/shared/scripts/azure/az-command.mjs
@@ -56,6 +56,29 @@ jobs:
       id-token: write
     environment:
       name: production
+    env:
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_PUBLIC_DNS_ZONE_NAME: ${{ vars.AZURE_PUBLIC_DNS_ZONE_NAME }}
+      AZURE_VNET_NAME: ${{ vars.AZURE_VNET_NAME }}
+      AZURE_ACA_SUBNET_NAME: ${{ vars.AZURE_ACA_SUBNET_NAME }}
+      AZURE_POSTGRES_SUBNET_NAME: ${{ vars.AZURE_POSTGRES_SUBNET_NAME }}
+      AZURE_VNET_ADDRESS_PREFIX: ${{ vars.AZURE_VNET_ADDRESS_PREFIX }}
+      AZURE_ACA_SUBNET_PREFIX: ${{ vars.AZURE_ACA_SUBNET_PREFIX }}
+      AZURE_POSTGRES_SUBNET_PREFIX: ${{ vars.AZURE_POSTGRES_SUBNET_PREFIX }}
+      AZURE_POSTGRES_PRIVATE_DNS_ZONE_NAME: ${{ vars.AZURE_POSTGRES_PRIVATE_DNS_ZONE_NAME }}
+      AZURE_CONTAINERAPPS_ENV_NAME: ${{ vars.AZURE_CONTAINERAPPS_ENV_NAME }}
+      AZURE_LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.AZURE_LOG_ANALYTICS_WORKSPACE_NAME }}
+      AZURE_KEY_VAULT_NAME: ${{ vars.AZURE_KEY_VAULT_NAME }}
+      AZURE_POSTGRES_SERVER_NAME: ${{ vars.AZURE_POSTGRES_SERVER_NAME }}
+      AZURE_POSTGRES_DATABASE_NAME: ${{ vars.AZURE_POSTGRES_DATABASE_NAME }}
+      AZURE_POSTGRES_ADMIN_USERNAME: ${{ vars.AZURE_POSTGRES_ADMIN_USERNAME }}
+      AZURE_POSTGRES_SKU_NAME: ${{ vars.AZURE_POSTGRES_SKU_NAME }}
+      AZURE_POSTGRES_SKU_TIER: ${{ vars.AZURE_POSTGRES_SKU_TIER }}
+      AZURE_POSTGRES_VERSION: ${{ vars.AZURE_POSTGRES_VERSION }}
+      AZURE_POSTGRES_STORAGE_MB: ${{ vars.AZURE_POSTGRES_STORAGE_MB }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -68,7 +91,7 @@ jobs:
       - name: Azure login
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
         with:
-          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          client-id: ${{ vars.AZURE_DEPLOY_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 

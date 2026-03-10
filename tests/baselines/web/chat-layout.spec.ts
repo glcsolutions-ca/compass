@@ -1,5 +1,5 @@
 import { test } from "@playwright/test";
-import { runSmokeSpec } from "./support/flow-runner";
+import { runSmokeSpec } from "../../acceptance/web/support/flow-runner";
 
 const shouldRunLayout = process.env.SMOKE_CHAT_LAYOUT?.trim().toLowerCase() === "true";
 

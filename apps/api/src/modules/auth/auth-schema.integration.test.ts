@@ -1,56 +1,12 @@
-import path from "node:path";
-import { existsSync, readFileSync } from "node:fs";
-import { parseEnv } from "node:util";
 import { Client } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-const repoRoot = path.resolve(import.meta.dirname, "../../../../../");
-function resolveIntegrationDatabaseUrl(repoRootPath: string): string {
-  const explicit = process.env.DATABASE_URL?.trim();
-  if (explicit) {
-    return explicit;
-  }
-
-  const envPaths = [
-    path.join(repoRootPath, "packages/database/postgres/.env.local"),
-    path.join(repoRootPath, "packages/database/postgres/.env"),
-    path.join(repoRootPath, "packages/database/postgres/.env.example")
-  ];
-
-  for (const envPath of envPaths) {
-    if (!existsSync(envPath)) {
-      continue;
-    }
-
-    const values = parseEnv(readFileSync(envPath, "utf8"));
-    const fromFile = values.DATABASE_URL?.trim();
-    if (fromFile) {
-      return fromFile;
-    }
-
-    const port = values.POSTGRES_PORT?.trim() || "5432";
-    return `postgres://compass:compass@localhost:${port}/compass`;
-  }
-
-  return "postgres://compass:compass@localhost:5432/compass";
+const databaseUrl = process.env.DATABASE_URL?.trim();
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is required for auth schema integration tests.");
 }
 
-const databaseUrl = resolveIntegrationDatabaseUrl(repoRoot);
-async function canConnectToDatabase(connectionString: string): Promise<boolean> {
-  const client = new Client({ connectionString });
-  try {
-    await client.connect();
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await client.end().catch(() => {});
-  }
-}
-
-const databaseAvailable = await canConnectToDatabase(databaseUrl);
-
-describe.skipIf(!databaseAvailable)("organization/workspace auth schema constraints", () => {
+describe("organization/workspace auth schema constraints", () => {
   const client = new Client({ connectionString: databaseUrl });
 
   beforeAll(async () => {

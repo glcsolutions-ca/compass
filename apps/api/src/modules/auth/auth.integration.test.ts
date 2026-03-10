@@ -1,6 +1,3 @@
-import path from "node:path";
-import { existsSync, readFileSync } from "node:fs";
-import { parseEnv } from "node:util";
 import { Client } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
@@ -13,6 +10,7 @@ import {
   type OidcIdTokenClaims
 } from "./auth-service.js";
 import { buildApiApp } from "../../http/build-app.js";
+import { buildDefaultWorkspacesService } from "../workspaces/workspaces-service.js";
 
 const FIXED_NOW = new Date("2026-02-26T17:00:00.000Z");
 const SAME_ORIGIN = "http://localhost:3000";
@@ -134,36 +132,6 @@ function extractCookie(setCookieHeader: string[] | string | undefined): string {
   return sessionCookie.split(";")[0];
 }
 
-function resolveIntegrationDatabaseUrl(repoRootPath: string): string {
-  const explicit = process.env.DATABASE_URL?.trim();
-  if (explicit) {
-    return explicit;
-  }
-
-  const envPaths = [
-    path.join(repoRootPath, "packages/database/postgres/.env.local"),
-    path.join(repoRootPath, "packages/database/postgres/.env"),
-    path.join(repoRootPath, "packages/database/postgres/.env.example")
-  ];
-
-  for (const envPath of envPaths) {
-    if (!existsSync(envPath)) {
-      continue;
-    }
-
-    const values = parseEnv(readFileSync(envPath, "utf8"));
-    const fromFile = values.DATABASE_URL?.trim();
-    if (fromFile) {
-      return fromFile;
-    }
-
-    const port = values.POSTGRES_PORT?.trim() || "5432";
-    return `postgres://compass:compass@localhost:${port}/compass`;
-  }
-
-  return "postgres://compass:compass@localhost:5432/compass";
-}
-
 function extractInviteToken(payload: unknown): string {
   if (!payload || typeof payload !== "object") {
     throw new Error("Invite payload is not an object");
@@ -181,24 +149,24 @@ function parseAppRedirect(location: string): URL {
   return new URL(location, "https://compass.glcsolutions.ca");
 }
 
-async function canConnectToDatabase(connectionString: string): Promise<boolean> {
-  const client = new Client({ connectionString });
-  try {
-    await client.connect();
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await client.end().catch(() => {});
-  }
+const databaseUrl = process.env.DATABASE_URL?.trim();
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is required for API integration tests.");
 }
 
-const repoRoot = path.resolve(import.meta.dirname, "../../../../../");
-const databaseUrl = resolveIntegrationDatabaseUrl(repoRoot);
-const databaseAvailable = await canConnectToDatabase(databaseUrl);
-
-describe.skipIf(!databaseAvailable)("API auth integration", () => {
+describe("API auth integration", () => {
   const repository = new AuthRepository(databaseUrl);
+
+  function buildIntegrationApiApp(input: { authService: AuthService; now?: () => Date }) {
+    return buildApiApp({
+      authService: input.authService,
+      workspacesService: buildDefaultWorkspacesService({
+        repository,
+        authService: input.authService
+      }),
+      now: input.now
+    });
+  }
 
   beforeAll(async () => {
     await repository.listWorkspaceMemberships("non-existent-user");
@@ -234,7 +202,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       oidcClient: new FakeOidcClient({ claimsByCode })
     });
 
-    const app = buildApiApp({
+    const app = buildIntegrationApiApp({
       now: () => new Date(FIXED_NOW),
       authService
     });
@@ -367,7 +335,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
 
     const startDesktop = await request(app).get("/v1/auth/entra/start?client=desktop");
     expect(startDesktop.status).toBe(302);
@@ -425,7 +393,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
 
     const callback = await request(app).get(
       "/v1/auth/entra/callback?code=code-user-1&state=bad-state"
@@ -454,7 +422,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
 
     const start = await request(app).get("/v1/auth/entra/start");
     const state = parseRedirectLocation(start.headers.location).searchParams.get("state");
@@ -484,7 +452,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
 
     const callback = await request(app).get(
       "/v1/auth/entra/callback?error=access_denied&error_description=AADSTS65001%3A%20Consent%20required"
@@ -506,7 +474,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
     const start = await request(app).get(
       "/v1/auth/entra/start?returnTo=%2Ft%2Facme%2Fprojects%2F123"
     );
@@ -539,7 +507,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
     const start = await request(app).get("/v1/auth/entra/start");
 
     expect(start.status).toBe(503);
@@ -558,7 +526,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
 
     const start = await request(app).get(
       "/v1/auth/entra/admin-consent/start?tenantHint=contoso.onmicrosoft.com&returnTo=%2Ft%2Facme"
@@ -601,7 +569,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
 
     const start = await request(app).get(
       "/v1/auth/entra/admin-consent/start?tenantHint=contoso.onmicrosoft.com&returnTo=%2Ft%2Facme%2Fprojects%2F123"
@@ -632,7 +600,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
 
     const response = await request(app).get("/v1/workspaces/acme");
 
@@ -662,7 +630,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       oidcClient: new FakeOidcClient({ claimsByCode })
     });
 
-    const app = buildApiApp({
+    const app = buildIntegrationApiApp({
       now: () => new Date(FIXED_NOW),
       authService
     });
@@ -739,7 +707,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
 
     const start = await request(app).get("/v1/auth/entra/start");
     const state = parseRedirectLocation(start.headers.location).searchParams.get("state");
@@ -771,7 +739,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
     const start = await request(app).get("/v1/auth/entra/start");
     const state = parseRedirectLocation(start.headers.location).searchParams.get("state");
 
@@ -802,7 +770,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
     const start = await request(app).get("/v1/auth/entra/start");
     const state = parseRedirectLocation(start.headers.location).searchParams.get("state");
     const callback = await request(app).get(
@@ -841,7 +809,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
     });
 
     const nowValue = new Date(FIXED_NOW);
-    const app = buildApiApp({ authService, now: () => new Date(nowValue) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(nowValue) });
 
     const firstStart = await request(app).get("/v1/auth/entra/start");
     const firstState = parseRedirectLocation(firstStart.headers.location).searchParams.get("state");
@@ -911,7 +879,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
     const start = await request(app).get("/v1/auth/entra/start");
     const state = parseRedirectLocation(start.headers.location).searchParams.get("state");
     const callback = await request(app).get(
@@ -950,7 +918,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       oidcClient: new FakeOidcClient({ claimsByCode })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
 
     const ownerStart = await request(app).get("/v1/auth/entra/start");
     const ownerState = parseRedirectLocation(ownerStart.headers.location).searchParams.get("state");
@@ -1031,7 +999,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       oidcClient: new FakeOidcClient({ claimsByCode })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
 
     const ownerStart = await request(app).get("/v1/auth/entra/start");
     const ownerState = parseRedirectLocation(ownerStart.headers.location).searchParams.get("state");
@@ -1106,7 +1074,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
     const start = await request(app).get("/v1/auth/entra/start?returnTo=%2F");
     expect(start.status).toBe(302);
     const startLocation = parseRedirectLocation(start.headers.location);
@@ -1154,7 +1122,7 @@ describe.skipIf(!databaseAvailable)("API auth integration", () => {
       })
     });
 
-    const app = buildApiApp({ authService, now: () => new Date(FIXED_NOW) });
+    const app = buildIntegrationApiApp({ authService, now: () => new Date(FIXED_NOW) });
 
     const start = await request(app)
       .get("/v1/auth/entra/start?returnTo=%2Fchat")

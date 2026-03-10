@@ -14,7 +14,7 @@ Creates the long-lived production support platform:
 - ACA environment
 - Key Vault
 - PostgreSQL
-- Azure DNS zone `compass.glcsolutions.ca`
+- Azure DNS zone for the public web domain
 
 This template does not create the stage/prod apps.
 
@@ -30,22 +30,22 @@ Admin-only bootstrap template used once to create:
 
 After bootstrap, the normal release workflow updates those apps imperatively with `az containerapp update`.
 
-## Parameters
+## Live config
 
-The only environment parameter file is:
+Live non-secret but sensitive values do not live in the repo.
 
-- `platform/infra/azure/environments/production.parameters.json`
+The canonical live config source is:
 
-It contains non-secret values only.
+- [live-config.mjs](/Users/justinkropp/.codex/worktrees/68b7/compass/platform/config/live-config.mjs)
+
+Runtime secrets live only in Azure Key Vault.
 
 ## Naming
 
-The repo uses CAF-style names:
+The repo uses CAF-style naming, for example:
 
-- `rg-compass-prd-cc-001`
-- `cae-compass-prd-cc-001`
-- `ca-compass-api-prd-cc-001`
-- `ca-compass-web-prd-cc-001`
-- `ca-compass-api-stg-prd-cc-001`
-- `ca-compass-web-stg-prd-cc-001`
-- `caj-compass-migrate-prd-cc-001`
+- `rg-<workload>-<env>-<region>-<nnn>`
+- `cae-<workload>-<env>-<region>-<nnn>`
+- `ca-<workload>-api-<env>-<region>-<nnn>`
+- `ca-<workload>-web-<env>-<region>-<nnn>`
+- `caj-<workload>-migrate-<env>-<region>-<nnn>`

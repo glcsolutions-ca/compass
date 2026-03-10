@@ -1,6 +1,9 @@
 import { pathToFileURL } from "node:url";
 import { ensureAzLogin, runAz } from "../../pipeline/shared/scripts/azure/az-command.mjs";
-import { loadProductionConfig, loadArmParameters } from "../infra/platform-config.mjs";
+import {
+  WEB_DOMAIN_VARIABLE_NAMES,
+  loadLivePlatformConfig
+} from "../../config/live-config.mjs";
 
 async function ensureTxtRecord(resourceGroup, zoneName, recordName, value) {
   await runAz(
@@ -123,16 +126,17 @@ async function ensureARecord(resourceGroup, zoneName, recordName, ipAddress) {
 
 export async function configureWebDomain() {
   await ensureAzLogin();
-  const config = await loadProductionConfig();
-  const parameters = await loadArmParameters();
-  const zoneName = parameters.dnsZoneName;
-  const webAppName = config.environmentVars.ACA_WEB_PROD_APP_NAME;
+  const config = await loadLivePlatformConfig({
+    requiredVariableNames: WEB_DOMAIN_VARIABLE_NAMES
+  });
+  const zoneName = config.azurePublicDnsZoneName;
+  const webAppName = config.acaWebProdAppName;
   const verificationId = await runAz(
     [
       "containerapp",
       "show",
       "--resource-group",
-      config.resourceGroup,
+      config.azureResourceGroup,
       "--name",
       webAppName,
       "--query",
@@ -146,9 +150,9 @@ export async function configureWebDomain() {
       "env",
       "show",
       "--resource-group",
-      config.resourceGroup,
+      config.azureResourceGroup,
       "--name",
-      parameters.environmentName,
+      config.azureContainerAppsEnvName,
       "--query",
       "properties.staticIp"
     ],
@@ -161,7 +165,7 @@ export async function configureWebDomain() {
       "zone",
       "show",
       "--resource-group",
-      config.resourceGroup,
+      config.azureResourceGroup,
       "--name",
       zoneName,
       "--query",
@@ -175,8 +179,8 @@ export async function configureWebDomain() {
     console.info(`- ${nameserver}`);
   }
 
-  await ensureTxtRecord(config.resourceGroup, zoneName, "asuid", verificationId);
-  await ensureARecord(config.resourceGroup, zoneName, "@", staticIp);
+  await ensureTxtRecord(config.azureResourceGroup, zoneName, "asuid", verificationId);
+  await ensureARecord(config.azureResourceGroup, zoneName, "@", staticIp);
 
   await runAz(
     [
@@ -184,20 +188,20 @@ export async function configureWebDomain() {
       "hostname",
       "bind",
       "--resource-group",
-      config.resourceGroup,
+      config.azureResourceGroup,
       "--name",
       webAppName,
       "--hostname",
-      config.webCustomDomain,
+      config.productionWebCustomDomain,
       "--environment",
-      parameters.environmentName,
+      config.azureContainerAppsEnvName,
       "--validation-method",
       "DNS"
     ],
     { output: "none" }
   );
 
-  console.info(`Configured custom domain for ${config.webCustomDomain}`);
+  console.info(`Configured custom domain for ${config.productionWebCustomDomain}`);
 }
 
 export async function main() {

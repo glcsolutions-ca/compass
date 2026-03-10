@@ -1,19 +1,15 @@
-import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { promisify } from "node:util";
 import { fetchReleaseCandidate } from "../../pipeline/shared/scripts/fetch-release-candidate.mjs";
 import { readJsonFile } from "../../pipeline/shared/scripts/pipeline-contract-lib.mjs";
 import { ensureAzLogin, runAz } from "../../pipeline/shared/scripts/azure/az-command.mjs";
 import {
-  loadArmParameters,
-  loadProductionConfig,
-  PRODUCTION_PARAMETER_FILE
-} from "../infra/platform-config.mjs";
-
-const execFileAsync = promisify(execFile);
+  BOOTSTRAP_APPS_VARIABLE_NAMES,
+  buildAppsBootstrapParameters,
+  loadLivePlatformConfig
+} from "../../config/live-config.mjs";
 
 function envValue(name) {
   const value = process.env[name];
@@ -48,23 +44,6 @@ async function getKeyVaultSecret(vaultName, secretName, { required = true } = {}
   }
 }
 
-async function templateParameterNames(templateFile) {
-  const { stdout } = await execFileAsync(
-    "az",
-    ["bicep", "build", "--file", templateFile, "--stdout"],
-    {
-      env: process.env,
-      maxBuffer: 20 * 1024 * 1024
-    }
-  );
-  const document = JSON.parse(String(stdout || "{}"));
-  return new Set(Object.keys(document.parameters || {}));
-}
-
-async function loadEntraSyncOutput(filePath = "bootstrap/.artifacts/entra-apps.json") {
-  return JSON.parse(await readFile(path.resolve(filePath), "utf8"));
-}
-
 async function withParametersFile(parameters, callback) {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "compass-bootstrap-apps-"));
   const filePath = path.join(tempDir, "parameters.json");
@@ -91,9 +70,9 @@ async function withParametersFile(parameters, callback) {
 
 export async function bootstrapProductionApps({ candidateId }) {
   await ensureAzLogin();
-  const config = await loadProductionConfig();
-  const baseParameters = await loadArmParameters(PRODUCTION_PARAMETER_FILE);
-  const entra = await loadEntraSyncOutput();
+  const config = await loadLivePlatformConfig({
+    requiredVariableNames: BOOTSTRAP_APPS_VARIABLE_NAMES
+  });
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "compass-bootstrap-candidate-"));
   const manifestPath = path.join(tempDir, "manifest.json");
   const explicitApiImage = envValue("BOOTSTRAP_API_IMAGE");
@@ -116,35 +95,23 @@ export async function bootstrapProductionApps({ candidateId }) {
           );
           return readJsonFile(manifestPath);
         })();
-    const vaultName = String(baseParameters.keyVaultName || "").trim();
+
     const postgresAdminPassword =
       envValue("POSTGRES_ADMIN_PASSWORD") ||
-      (await getKeyVaultSecret(vaultName, "postgres-admin-password", { required: true }));
+      (await getKeyVaultSecret(config.azureKeyVaultName, "postgres-admin-password", {
+        required: true
+      }));
 
     const templateFile = path.resolve("platform/infra/azure/apps-bootstrap.bicep");
-    const allowedParameters = await templateParameterNames(templateFile);
-
-    const parameters = {
-      ...Object.fromEntries(
-        Object.entries(baseParameters)
-          .filter(([name]) => allowedParameters.has(name))
-          .map(([name, value]) => [name, parameterEntry(value)])
-      ),
-      postgresAdminPassword: parameterEntry(postgresAdminPassword),
-      entraClientId: parameterEntry(
-        envValue("ENTRA_WEB_CLIENT_ID") || String(entra.webClientId || "").trim()
-      ),
-      seedDefaultAppClientId: parameterEntry(
-        String(baseParameters.seedDefaultAppClientId || "").trim() ||
-          envValue("ENTRA_WEB_CLIENT_ID") ||
-          String(entra.webClientId || "").trim()
-      ),
-      apiProdImage: parameterEntry(manifest.artifacts.apiImage),
-      webProdImage: parameterEntry(manifest.artifacts.webImage),
-      apiStageImage: parameterEntry(manifest.artifacts.apiImage),
-      webStageImage: parameterEntry(manifest.artifacts.webImage),
-      migrationsImage: parameterEntry(manifest.artifacts.apiImage)
-    };
+    const parameters = Object.fromEntries(
+      Object.entries(
+        buildAppsBootstrapParameters(config, {
+          postgresAdminPassword,
+          apiProdImage: manifest.artifacts.apiImage,
+          webProdImage: manifest.artifacts.webImage
+        })
+      ).map(([name, value]) => [name, parameterEntry(value)])
+    );
 
     return withParametersFile(parameters, async (parametersFile) => {
       const result = await runAz([
@@ -152,7 +119,7 @@ export async function bootstrapProductionApps({ candidateId }) {
         "group",
         "create",
         "--resource-group",
-        config.resourceGroup,
+        config.azureResourceGroup,
         "--name",
         "compass-apps-bootstrap",
         "--template-file",
@@ -162,7 +129,7 @@ export async function bootstrapProductionApps({ candidateId }) {
       ]);
 
       return {
-        resourceGroup: config.resourceGroup,
+        resourceGroup: config.azureResourceGroup,
         candidateId,
         stageWebFqdn: result?.properties?.outputs?.stageWebFqdn?.value || "",
         result

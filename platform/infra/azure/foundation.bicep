@@ -18,7 +18,7 @@ param postgresSkuName string = 'Standard_B1ms'
 param postgresSkuTier string = 'Burstable'
 param postgresVersion string = '16'
 param postgresStorageMb int = 32768
-param dnsZoneName string = 'compass.glcsolutions.ca'
+param dnsZoneName string
 
 module network 'modules/network.bicep' = {
   name: 'network'

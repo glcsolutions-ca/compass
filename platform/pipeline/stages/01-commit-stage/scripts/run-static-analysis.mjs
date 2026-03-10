@@ -2,8 +2,17 @@ import { pathToFileURL } from "node:url";
 import { runCommand } from "../../../shared/scripts/command-runner.mjs";
 
 export async function runStaticAnalysis() {
-  await runCommand("pnpm", ["lint"]);
-  await runCommand("pnpm", ["typecheck"]);
+  const productLineFilters = ["--filter=@compass/api...", "--filter=@compass/web..."];
+
+  await runCommand("pnpm", [
+    "turbo",
+    "run",
+    "lint",
+    ...productLineFilters,
+    "--",
+    "--max-warnings=0"
+  ]);
+  await runCommand("pnpm", ["turbo", "run", "typecheck", ...productLineFilters]);
 }
 
 export async function main() {

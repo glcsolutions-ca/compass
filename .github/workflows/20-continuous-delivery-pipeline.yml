@@ -156,7 +156,7 @@ jobs:
           printf '%s' '${{ steps.build_image.outputs.digest }}' > artifacts/image-digests/${{ matrix.image.id }}.digest
 
       - name: Upload digest artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: image-digest-${{ matrix.image.id }}
           path: artifacts/image-digests/${{ matrix.image.id }}.digest
@@ -213,7 +213,7 @@ jobs:
         run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
 
       - name: Upload canonical manifest artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-candidate-manifest
           path: ${{ runner.temp }}/release-candidate.json
@@ -261,7 +261,7 @@ jobs:
 
       - name: Upload smoke artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: commit-stage-smoke-artifacts
           path: ${{ runner.temp }}/commit-smoke-diagnostics
@@ -494,7 +494,7 @@ jobs:
 
       - name: Upload API acceptance artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: acceptance-stage-api-artifacts
           path: ${{ runner.temp }}/acceptance-api-diagnostics
@@ -551,7 +551,7 @@ jobs:
 
       - name: Upload Web acceptance artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: acceptance-stage-web-artifacts
           path: ${{ runner.temp }}/acceptance-web-diagnostics
@@ -658,7 +658,7 @@ jobs:
 
       - name: Upload acceptance predicate
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: acceptance-stage-artifacts
           path: artifacts/attestations/acceptance-predicate.json
@@ -1186,7 +1186,7 @@ jobs:
 
       - name: Upload release artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-stage-artifacts
           path: |

@@ -32,6 +32,38 @@ interface UseChatTimelineOutput {
   assistantMessages: AssistantStoreMessage[];
 }
 
+function readPayloadObject(payload: unknown): Record<string, unknown> | null {
+  return payload && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
+}
+
+function readTrimmedString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function mapTurnIdsByClientRequestId(events: readonly ChatEvent[]): Map<string, string> {
+  const turnIdsByClientRequestId = new Map<string, string>();
+
+  for (const event of events) {
+    if (event.method !== "turn.started" || !event.turnId) {
+      continue;
+    }
+
+    const clientRequestId = readTrimmedString(readPayloadObject(event.payload)?.clientRequestId);
+    if (!clientRequestId) {
+      continue;
+    }
+
+    turnIdsByClientRequestId.set(clientRequestId, event.turnId);
+  }
+
+  return turnIdsByClientRequestId;
+}
+
 function upsertTimelinePromptRecords(
   current: TimelinePromptRecord[],
   nextRecord: TimelinePromptRecord
@@ -160,6 +192,7 @@ export function useChatTimeline({
 
   const timeline = useMemo(() => {
     const normalized = normalizeChatEvents(events);
+    const turnIdsByClientRequestId = mapTurnIdsByClientRequestId(events);
     const normalizedUserTurnIds = new Set<string>();
     const normalizedAssistantTurnIds = new Set<string>();
     for (const item of normalized) {
@@ -178,9 +211,10 @@ export function useChatTimeline({
     }
     const promptFallbackItems: ChatTimelineItem[] = timelinePrompts.flatMap((record) => {
       const items: ChatTimelineItem[] = [];
-      const hasNormalizedUser = record.turnId ? normalizedUserTurnIds.has(record.turnId) : false;
-      const hasNormalizedAssistant = record.turnId
-        ? normalizedAssistantTurnIds.has(record.turnId)
+      const resolvedTurnId = record.turnId ?? turnIdsByClientRequestId.get(record.clientRequestId) ?? null;
+      const hasNormalizedUser = resolvedTurnId ? normalizedUserTurnIds.has(resolvedTurnId) : false;
+      const hasNormalizedAssistant = resolvedTurnId
+        ? normalizedAssistantTurnIds.has(resolvedTurnId)
         : false;
 
       if (!hasNormalizedUser) {
@@ -195,7 +229,7 @@ export function useChatTimeline({
               text: record.text
             }
           ],
-          turnId: record.turnId,
+          turnId: resolvedTurnId,
           cursor: null,
           streaming: false,
           createdAt: record.createdAt
@@ -209,7 +243,7 @@ export function useChatTimeline({
           role: "assistant",
           text: "",
           parts: [],
-          turnId: record.turnId,
+          turnId: resolvedTurnId,
           cursor: null,
           streaming: true,
           createdAt: record.createdAt
@@ -228,7 +262,7 @@ export function useChatTimeline({
               text: record.answer
             }
           ],
-          turnId: record.turnId,
+          turnId: resolvedTurnId,
           cursor: null,
           streaming: false,
           createdAt: record.createdAt
@@ -241,7 +275,7 @@ export function useChatTimeline({
           kind: "status",
           label: "Send failed",
           detail: record.error,
-          turnId: record.turnId,
+          turnId: resolvedTurnId,
           cursor: null,
           createdAt: record.createdAt
         });

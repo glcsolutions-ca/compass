@@ -299,4 +299,87 @@ describe("useChatTimeline", () => {
       })
     ]);
   });
+
+  it("deduplicates optimistic prompt fallbacks when turn.started echoes the same client request id", () => {
+    const normalizedTimeline: ChatTimelineItem[] = [
+      {
+        id: "evt-1-user",
+        kind: "message",
+        role: "user",
+        text: "pending hello",
+        parts: [{ type: "text", text: "pending hello" }],
+        turnId: "turn-echo",
+        cursor: 1,
+        streaming: false,
+        createdAt: "2026-03-01T00:00:00.000Z"
+      },
+      {
+        id: "evt-2-assistant",
+        kind: "message",
+        role: "assistant",
+        text: "Acknowledged",
+        parts: [{ type: "text", text: "Acknowledged" }],
+        turnId: "turn-echo",
+        cursor: 2,
+        streaming: false,
+        createdAt: "2026-03-01T00:00:00.100Z"
+      }
+    ];
+    normalizeChatEventsMock.mockReturnValue(normalizedTimeline);
+    buildAssistantStoreMessagesMock.mockImplementation(
+      ({ timeline }: { timeline: ChatTimelineItem[] }): AssistantStoreMessage[] =>
+        timeline as AssistantStoreMessage[]
+    );
+
+    const { result } = renderHook(
+      (props: {
+        resetKey: string;
+        events: ChatEvent[];
+        submitResult: ChatActionData | undefined;
+        pendingSubmission: {
+          intent: "sendMessage";
+          clientRequestId: string;
+          prompt: string;
+          threadId: string | null;
+          executionMode: "cloud";
+          createdAt: string;
+        } | null;
+      }) => useChatTimeline(props),
+      {
+        initialProps: {
+          resetKey: "workspace-1:thread-1",
+          events: [
+            createEvent({
+              cursor: 1,
+              turnId: "turn-echo",
+              method: "turn.started",
+              payload: {
+                text: "pending hello",
+                clientRequestId: "req-pending"
+              }
+            })
+          ],
+          submitResult: undefined,
+          pendingSubmission: {
+            intent: "sendMessage",
+            clientRequestId: "req-pending",
+            prompt: "pending hello",
+            threadId: "thread-1",
+            executionMode: "cloud",
+            createdAt: "2026-03-01T00:00:00.000Z"
+          }
+        }
+      }
+    );
+
+    expect(result.current.timeline).toEqual(normalizedTimeline);
+    expect(
+      result.current.timeline.filter(
+        (item) => item.kind === "message" && item.role === "user" && item.text === "pending hello"
+      )
+    ).toHaveLength(1);
+    expect(result.current.timeline.some((item) => item.id.startsWith("prompt-req-pending"))).toBe(
+      false
+    );
+  });
 });

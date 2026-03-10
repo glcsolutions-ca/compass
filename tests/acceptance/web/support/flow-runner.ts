@@ -123,6 +123,13 @@ async function submitComposerPrompt({
     return false;
   };
 
+  const readSendBlockedReason = async (): Promise<string | null> => {
+    const composerRegion = composerInput.locator("xpath=ancestor::div[contains(@class, 'aui-composer-root')]").first();
+    const alertText = await composerRegion.getByRole("alert").textContent().catch(() => null);
+    const statusText = await composerRegion.getByRole("status").textContent().catch(() => null);
+    return (alertText ?? statusText)?.trim() || null;
+  };
+
   await composerInput.click();
   await composerInput.fill(promptText);
   if (await tryClickSendButton()) {
@@ -137,7 +144,34 @@ async function submitComposerPrompt({
     return;
   }
 
-  await composerInput.press("Enter");
+  const blockedReason = await readSendBlockedReason();
+  throw new Error(
+    blockedReason
+      ? `Send prompt remained disabled: ${blockedReason}`
+      : "Send prompt remained disabled after hydration retries."
+  );
+}
+
+async function waitForNextPromptReady({
+  page,
+  sendButton,
+  timeoutMs = 20_000
+}: {
+  page: Page;
+  sendButton: ReturnType<Page["getByRole"]>;
+  timeoutMs?: number;
+}): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const visible = await sendButton.isVisible().catch(() => false);
+    if (visible) {
+      return;
+    }
+
+    await page.waitForTimeout(200);
+  }
+
+  throw new Error("Send prompt control did not return after the previous turn.");
 }
 
 async function ensureSidebarState(
@@ -760,7 +794,11 @@ async function runFlow(
             promptText
           });
 
-          const sentPromptLocator = chatCanvasRoot.getByText(promptText, { exact: true });
+          const sentPromptLocator = chatCanvasRoot
+            .locator(".aui-user-message-root:visible")
+            .filter({
+              has: page.getByText(promptText, { exact: true })
+            });
           let sentPromptVisible = false;
           let renderedPromptCount = 0;
           try {
@@ -786,6 +824,13 @@ async function runFlow(
             pass: !sentPromptVisible || renderedPromptCount === 1,
             details: `count=${renderedPromptCount.toString()}`
           });
+
+          if (index < promptValues.length - 1) {
+            await waitForNextPromptReady({
+              page,
+              sendButton
+            });
+          }
         }
 
         const applicationErrorVisible = await page

@@ -86,7 +86,7 @@ export function enforceNetworkTarget(target, policy) {
       why: "Commit-stage and integration tests must avoid external network dependencies.",
       fixes: [
         "Mock the external client at the boundary.",
-        "If this must be real browser evidence, move it to tests/acceptance/web and run pnpm test:acceptance:web."
+        "If this must be real browser evidence, move it to tests/acceptance/web and run pnpm acceptance."
       ],
       docPath
     });
@@ -104,7 +104,7 @@ export function enforceNetworkTarget(target, policy) {
       why,
       fixes: [
         "Mock DB boundaries in commit-stage tests.",
-        "Move DB wiring tests beside the module under test as *.integration.test.ts and run pnpm test:integration."
+        "Move DB wiring tests beside the module under test as *.integration.test.ts and run the owning package integration command."
       ],
       docPath: "tests/README.md#isolation-rules"
     });

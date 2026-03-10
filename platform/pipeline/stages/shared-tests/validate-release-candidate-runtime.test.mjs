@@ -29,6 +29,14 @@ describe("validate-release-candidate-runtime", () => {
     expect(validateReleaseCandidateRuntimeDocument(baseManifest())).toHaveLength(0);
   });
 
+  it("accepts digest-pinned refs with a registry port", () => {
+    const manifest = baseManifest();
+    manifest.artifacts.apiImage =
+      "localhost:5000/compass-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    expect(validateReleaseCandidateRuntimeDocument(manifest)).toHaveLength(0);
+  });
+
   it("fails invalid provenance.releaseUnitDigest", () => {
     const manifest = baseManifest();
     manifest.provenance.releaseUnitDigest = "sha256:bad";

@@ -7,6 +7,8 @@ import { parseCliArgs, requireOption } from "../../../shared/scripts/cli-utils.m
 import { readJsonFile } from "../../../shared/scripts/pipeline-contract-lib.mjs";
 import { MIGRATIONS_JOB_COMMAND } from "../../../shared/scripts/azure/run-migrations-azure.mjs";
 
+const ACCEPTANCE_SUITES = new Set(["api", "web", "desktop"]);
+
 function run(command, args, { env = process.env, cwd, stdio = "pipe" } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -70,19 +72,56 @@ function readCommandOutput(command, args, { env = process.env, cwd } = {}) {
   };
 }
 
-async function waitForPostgres(containerName) {
-  const deadline = Date.now() + 60000;
+async function waitForPostgres(containerName, { timeoutMs = 120000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let lastReadinessOutput = "";
   while (Date.now() < deadline) {
-    const result = spawnSync("docker", ["exec", containerName, "pg_isready", "-U", "postgres"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    if (result.status === 0) {
+    const state = readContainerState(containerName);
+    if (state && state.Running === false) {
+      const status = typeof state.Status === "string" ? state.Status : "exited";
+      const exitCode =
+        typeof state.ExitCode === "number" && Number.isFinite(state.ExitCode)
+          ? state.ExitCode
+          : "unknown";
+      throw new Error(
+        `Container ${containerName} stopped before Postgres was ready (status=${status}, exitCode=${exitCode})`
+      );
+    }
+
+    const readiness = readCommandOutput("docker", [
+      "exec",
+      containerName,
+      "pg_isready",
+      "-U",
+      "postgres",
+      "-d",
+      "compass"
+    ]);
+    if (readiness.status === 0) {
       return;
     }
+
+    const logs = readCommandOutput("docker", ["logs", containerName]);
+    const combinedLogs = `${logs.stdout}\n${logs.stderr}`;
+    if (/ready to accept connections/iu.test(combinedLogs)) {
+      return;
+    }
+
+    lastReadinessOutput =
+      readiness.stderr.trim() ||
+      readiness.stdout.trim() ||
+      combinedLogs
+        .trim()
+        .split("\n")
+        .slice(-5)
+        .join("\n");
+
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
-  throw new Error("Timed out waiting for local Postgres");
+
+  throw new Error(
+    `Timed out waiting for local Postgres${lastReadinessOutput ? `\n${lastReadinessOutput}` : ""}`
+  );
 }
 
 function readContainerState(containerName) {
@@ -151,27 +190,65 @@ async function captureLogs(outputDir, containers) {
   }
 }
 
-async function prefetchCandidateImages(manifest) {
-  const images = [manifest.artifacts.apiImage, manifest.artifacts.webImage];
+function normalizeSuites(inputSuites) {
+  const asArray =
+    typeof inputSuites === "undefined"
+      ? ["api", "web"]
+      : Array.isArray(inputSuites)
+        ? inputSuites
+        : [inputSuites];
+
+  const normalized = [...new Set(asArray.map((suite) => String(suite).trim()).filter(Boolean))];
+  if (normalized.length === 0) {
+    throw new Error("At least one acceptance suite is required.");
+  }
+
+  for (const suite of normalized) {
+    if (!ACCEPTANCE_SUITES.has(suite)) {
+      throw new Error(`Unsupported acceptance suite '${suite}'.`);
+    }
+  }
+
+  return normalized;
+}
+
+async function prefetchCandidateImages(manifest, { includeWebImage }) {
+  const images = [manifest.artifacts.apiImage];
+  if (includeWebImage) {
+    images.push(manifest.artifacts.webImage);
+  }
   await Promise.all(images.map((image) => run("docker", ["pull", image])));
 }
 
-export async function runAcceptanceFromCandidate({ manifestPath, outputDir }) {
+export async function runAcceptanceFromCandidate({
+  manifestPath,
+  outputDir,
+  suites = ["api", "web"],
+  apiHostPort = 3001,
+  webHostPort = 3000
+}) {
   return runCandidateRuntimeChecks({
     manifestPath,
     outputDir,
-    includeBrowserSmoke: true,
-    includeSystemSmoke: true
+    suites,
+    apiHostPort,
+    webHostPort
   });
 }
 
 export async function runCandidateRuntimeChecks({
   manifestPath,
   outputDir,
-  includeBrowserSmoke = true,
-  includeSystemSmoke = true
+  suites = ["api"],
+  apiHostPort = 3001,
+  webHostPort = 3000
 }) {
   const manifest = await readJsonFile(manifestPath);
+  const selectedSuites = normalizeSuites(suites);
+  const shouldRunApiAcceptance = selectedSuites.includes("api");
+  const shouldRunWebAcceptance = selectedSuites.includes("web");
+  const shouldRunDesktopAcceptance = selectedSuites.includes("desktop");
+  const shouldStartWebContainer = shouldRunWebAcceptance;
   const network = `compass-acceptance-${Date.now()}`;
   const postgresContainer = `${network}-postgres`;
   const apiContainer = `${network}-api`;
@@ -180,7 +257,7 @@ export async function runCandidateRuntimeChecks({
   const diagnosticsDir = path.resolve(outputDir);
 
   await mkdir(diagnosticsDir, { recursive: true });
-  await prefetchCandidateImages(manifest);
+  await prefetchCandidateImages(manifest, { includeWebImage: shouldStartWebContainer });
   await run("docker", ["network", "create", network]);
 
   try {
@@ -234,7 +311,7 @@ export async function runCandidateRuntimeChecks({
       "--network",
       network,
       "-p",
-      "127.0.0.1:3001:3001",
+      `127.0.0.1:${apiHostPort}:3001`,
       "-e",
       "API_HOST=0.0.0.0",
       "-e",
@@ -248,7 +325,7 @@ export async function runCandidateRuntimeChecks({
       "-e",
       "AUTH_MODE=mock",
       "-e",
-      "WEB_BASE_URL=http://127.0.0.1:3000",
+      `WEB_BASE_URL=http://127.0.0.1:${webHostPort}`,
       "-e",
       "LOG_LEVEL=warn",
       "-e",
@@ -260,44 +337,55 @@ export async function runCandidateRuntimeChecks({
       manifest.artifacts.apiImage
     ]);
 
-    await run("docker", [
-      "run",
-      "-d",
-      "--name",
-      webContainer,
-      "--network",
-      network,
-      "-p",
-      "127.0.0.1:3000:3000",
-      "-e",
-      `API_BASE_URL=http://${apiContainer}:3001`,
-      manifest.artifacts.webImage
-    ]);
+    if (shouldStartWebContainer) {
+      await run("docker", [
+        "run",
+        "-d",
+        "--name",
+        webContainer,
+        "--network",
+        network,
+        "-p",
+        `127.0.0.1:${webHostPort}:3000`,
+        "-e",
+        `API_BASE_URL=http://${apiContainer}:3001`,
+        manifest.artifacts.webImage
+      ]);
+    }
 
-    await waitForContainerHttp(apiContainer, "http://127.0.0.1:3001/health");
-    await waitForContainerHttp(webContainer, "http://127.0.0.1:3000/login");
+    await waitForContainerHttp(apiContainer, `http://127.0.0.1:${apiHostPort}/health`);
+    if (shouldStartWebContainer) {
+      await waitForContainerHttp(webContainer, `http://127.0.0.1:${webHostPort}/login`);
+    }
 
     const systemEnv = {
       ...process.env,
       HEAD_SHA: manifest.source.revision,
       TESTED_SHA: manifest.source.revision,
-      BASE_URL: "http://127.0.0.1:3001",
-      TARGET_API_BASE_URL: "http://127.0.0.1:3001"
+      BASE_URL: `http://127.0.0.1:${apiHostPort}`,
+      TARGET_API_BASE_URL: `http://127.0.0.1:${apiHostPort}`
     };
     const e2eEnv = {
       ...process.env,
-      WEB_BASE_URL: "http://127.0.0.1:3000"
+      WEB_BASE_URL: `http://127.0.0.1:${webHostPort}`
     };
 
-    if (includeSystemSmoke) {
-      await run("pnpm", ["test:acceptance:api"], {
+    if (shouldRunApiAcceptance) {
+      await run("pnpm", ["acceptance:api"], {
         env: systemEnv,
         cwd: path.resolve("."),
         stdio: "inherit"
       });
     }
-    if (includeBrowserSmoke) {
-      await run("pnpm", ["test:acceptance:web"], {
+    if (shouldRunWebAcceptance) {
+      await run("pnpm", ["acceptance:web"], {
+        env: e2eEnv,
+        cwd: path.resolve("."),
+        stdio: "inherit"
+      });
+    }
+    if (shouldRunDesktopAcceptance) {
+      await run("pnpm", ["acceptance:desktop"], {
         env: e2eEnv,
         cwd: path.resolve("."),
         stdio: "inherit"
@@ -308,8 +396,9 @@ export async function runCandidateRuntimeChecks({
       schemaVersion: "acceptance-runtime.v1",
       candidateId: manifest.candidateId,
       sourceRevision: manifest.source.revision,
-      apiBaseUrl: "http://127.0.0.1:3001",
-      webBaseUrl: "http://127.0.0.1:3000",
+      suites: selectedSuites,
+      apiBaseUrl: `http://127.0.0.1:${apiHostPort}`,
+      webBaseUrl: shouldStartWebContainer ? `http://127.0.0.1:${webHostPort}` : null,
       verdict: "pass",
       completedAt: new Date().toISOString()
     };
@@ -325,6 +414,7 @@ export async function runCandidateRuntimeChecks({
       schemaVersion: "acceptance-runtime.v1",
       candidateId: manifest.candidateId,
       sourceRevision: manifest.source.revision,
+      suites: selectedSuites,
       verdict: "fail",
       completedAt: new Date().toISOString(),
       error: error instanceof Error ? error.message : String(error)
@@ -349,8 +439,9 @@ export async function main(argv = process.argv.slice(2)) {
   await runCandidateRuntimeChecks({
     manifestPath: requireOption(options, "manifest"),
     outputDir: diagnosticsDir,
-    includeBrowserSmoke: true,
-    includeSystemSmoke: true
+    suites: options.suite,
+    apiHostPort: Number(options["api-host-port"] || "3001"),
+    webHostPort: Number(options["web-host-port"] || "3000")
   });
 }
 

@@ -42,23 +42,16 @@ tests/
 
 - `pnpm install`
 - `pnpm dev`
-- `pnpm dev:desktop`
-- `pnpm test:integration`
-- `pnpm test:acceptance`
-- `pnpm lint`
-- `pnpm typecheck`
-- `pnpm test`
+- `pnpm verify`
+- `pnpm acceptance`
 - `pnpm build`
 - `pnpm format`
 - `pnpm format:check`
+- `pnpm dev:desktop`
 - `pnpm infra:apply`
 
-Primary commands are self-sufficient. `pnpm dev`, `pnpm test:integration`, and
-`pnpm test:acceptance*` start what they need from a cold local state, reuse a healthy `pnpm dev:up`
-stack when one already exists, and clean up only what they started.
-
-Use `pnpm dev:up` and `pnpm dev:down` only when you want to keep the shared local stack running
-across multiple commands for speed.
+`pnpm dev` is the fast source-mode loop. `pnpm verify` is the local Commit Stage and
+`pnpm acceptance` is the local Acceptance Stage against the locally built candidate.
 
 ## Product boundaries
 

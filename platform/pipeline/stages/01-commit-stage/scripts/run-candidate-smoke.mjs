@@ -1,14 +1,15 @@
 import { pathToFileURL } from "node:url";
 import { parseCliArgs, requireOption } from "../../../shared/scripts/cli-utils.mjs";
-import { runCandidateRuntimeChecks } from "../../02-acceptance/scripts/run-acceptance-from-candidate.mjs";
+import { runCandidateRuntimeChecks } from "../../02-acceptance-stage/scripts/run-acceptance-from-candidate.mjs";
 
 export async function main(argv = process.argv.slice(2)) {
   const options = parseCliArgs(argv);
   await runCandidateRuntimeChecks({
     manifestPath: requireOption(options, "manifest"),
     outputDir: requireOption(options, "diagnostics-dir"),
-    includeBrowserSmoke: false,
-    includeSystemSmoke: true
+    apiHostPort: Number(options["api-host-port"] || "3001"),
+    webHostPort: Number(options["web-host-port"] || "3000"),
+    suites: ["api"]
   });
 }
 

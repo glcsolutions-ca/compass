@@ -1,8 +1,9 @@
 import path from "node:path";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { parseEnv } from "node:util";
+import { Client } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
-import { Client } from "pg";
 import {
   ApiError,
   AuthRepository,
@@ -139,32 +140,28 @@ function resolveIntegrationDatabaseUrl(repoRootPath: string): string {
     return explicit;
   }
 
-  const envPath = path.join(repoRootPath, "packages/database/postgres/.env");
-  const content = readFileSync(envPath, "utf8");
-  const lines = content.split(/\r?\n/u);
-  const values = new Map<string, string>();
+  const envPaths = [
+    path.join(repoRootPath, "packages/database/postgres/.env.local"),
+    path.join(repoRootPath, "packages/database/postgres/.env"),
+    path.join(repoRootPath, "packages/database/postgres/.env.example")
+  ];
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) {
+  for (const envPath of envPaths) {
+    if (!existsSync(envPath)) {
       continue;
     }
 
-    const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/u);
-    if (!match) {
-      continue;
+    const values = parseEnv(readFileSync(envPath, "utf8"));
+    const fromFile = values.DATABASE_URL?.trim();
+    if (fromFile) {
+      return fromFile;
     }
 
-    values.set(match[1], match[2].trim());
+    const port = values.POSTGRES_PORT?.trim() || "5432";
+    return `postgres://compass:compass@localhost:${port}/compass`;
   }
 
-  const fromFile = values.get("DATABASE_URL")?.trim();
-  if (fromFile) {
-    return fromFile;
-  }
-
-  const port = values.get("POSTGRES_PORT")?.trim() || "5432";
-  return `postgres://compass:compass@localhost:${port}/compass`;
+  return "postgres://compass:compass@localhost:5432/compass";
 }
 
 function extractInviteToken(payload: unknown): string {

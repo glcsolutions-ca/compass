@@ -11,7 +11,9 @@ export async function main(argv = process.argv.slice(2)) {
       outputDir: requireOption(options, "diagnostics-dir"),
       apiHostPort: Number(options["api-host-port"] || "3001"),
       webHostPort: Number(options["web-host-port"] || "3000"),
-      includeWebImage: true
+      // Commit Stage proves the candidate boots, migrates, and serves the minimal public API.
+      // User-facing web behavior belongs to Acceptance Stage.
+      includeWebImage: false
     },
     async (runtime) =>
       runApiSmoke({

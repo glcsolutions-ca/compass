@@ -19,7 +19,7 @@ Commit Stage owns:
 3. integration tests
 4. candidate image build
 5. canonical manifest generation
-6. candidate smoke against that manifest
+6. API runtime smoke against that manifest
 7. candidate publication
 
 `pnpm verify` mirrors this stage locally. The local path runs the same stage-owned scripts, builds the same candidate contract, and smokes that candidate without publishing to shared registries.
@@ -35,6 +35,21 @@ Commit publishes:
 
 The manifest is generated once from the built digests before smoke and then reused unchanged for publication and all later stages.
 
+## Commit proof
+
+Commit Stage answers one question:
+
+Can this integrated change produce a trustworthy release candidate quickly enough to promote?
+
+The proof boundary is intentionally narrow:
+
+- static analysis, unit tests, and integration tests catch fast code-level and adapter failures
+- image build proves the exact deployable candidate can be packaged
+- API runtime smoke proves the migrated API candidate boots from the built image and serves the minimum public contract
+- publication makes the already-proven candidate available to downstream stages
+
+Commit does not prove user journeys. Browser behavior and end-to-end product flows belong to Acceptance Stage.
+
 ## Scope
 
 Commit Stage covers the deployed product surface:
@@ -46,6 +61,16 @@ Commit Stage covers the deployed product surface:
 - `sdk`
 
 Infra validation and apply live in the separate infra workflow.
+
+## Smoke scope
+
+Commit smoke is deliberately smaller than Acceptance:
+
+- starts the candidate API image against a real ephemeral Postgres
+- runs the same migrations path the candidate will use later
+- verifies the public API comes up and exposes the minimum health and contract endpoints
+
+It does not start the Web image and it does not assert user-facing flows. Those belong to Acceptance Stage, which boots the full candidate and exercises public browser behavior.
 
 ## Runtime target
 

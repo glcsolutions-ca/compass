@@ -221,7 +221,7 @@ jobs:
           retention-days: 1
 
   commit-stage-smoke-candidate:
-    name: Commit Stage / Smoke Candidate
+    name: Commit Stage / Smoke Candidate / API Runtime
     needs:
       - prepare-candidate
       - commit-stage-prepare-manifest
@@ -253,7 +253,7 @@ jobs:
           name: release-candidate-manifest
           path: ${{ runner.temp }}
 
-      - name: Run candidate smoke
+      - name: Run API runtime smoke
         run: |
           node platform/pipeline/stages/01-commit-stage/scripts/run-candidate-smoke.mjs \
             --manifest "$RUNNER_TEMP/release-candidate.json" \

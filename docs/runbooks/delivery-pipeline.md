@@ -68,9 +68,11 @@ Commit Stage is the fast integrated gate on `main`. It owns:
 3. integration tests
 4. candidate image build
 5. canonical manifest generation
-6. candidate smoke against that manifest
+6. API runtime smoke against that manifest
 7. candidate publication
 
 Commit is where the pipeline tries to catch the majority of failures quickly and produce the immutable candidate that later stages promote without rebuilding.
+
+The Commit smoke boundary is intentionally narrow. It proves the migrated API candidate boots from the built image and serves the minimum public contract. It does not prove user-visible browser behavior. That black-box product proof belongs to Acceptance Stage.
 
 Bootstrap is separate from the CDP. The one-time production staging flow lives in [bootstrap/README.md](/Users/justinkropp/.codex/worktrees/68b7/compass/bootstrap/README.md).

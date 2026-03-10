@@ -13,10 +13,20 @@ Compass is a product-first monorepo. Local development should start from the pro
 
 - `pnpm install`
 - `pnpm dev`
+- `pnpm dev:desktop`
+- `pnpm lint`
+- `pnpm typecheck`
 - `pnpm test`
 - `pnpm build`
+- `pnpm format`
+- `pnpm format:check`
 - `pnpm test:acceptance`
 - `pnpm infra:whatif`
+
+`pnpm dev` is the default browser-hosted local experience. It brings up the required local stack and
+opens the web app once it is healthy.
+
+Use `pnpm dev -- --no-open` when you want the same startup flow without opening a browser tab.
 
 ## Package boundaries
 
@@ -41,6 +51,11 @@ Compass is a product-first monorepo. Local development should start from the pro
 - `pnpm --filter @compass/database run postgres:down`
 - `pnpm --filter @compass/database run migrate:up`
 
+## Advanced local stack controls
+
+- `pnpm dev:up` starts the shared local stack in the background.
+- `pnpm dev:down` stops the background local stack.
+
 ## Admin-only tooling
 
-Bootstrap and deployment recovery scripts are intentionally not part of normal feature development. Use the scripts in `platform/scripts/bootstrap` and `platform/scripts/infra` only when you are operating the platform.
+Bootstrap and deployment recovery scripts are intentionally not part of normal feature development. Use the root `scripts/` directory for daily developer commands, and the scripts in `platform/scripts/bootstrap` and `platform/scripts/infra` only when you are operating the platform.

@@ -86,7 +86,7 @@ export function enforceNetworkTarget(target, policy) {
       why: "Commit-stage and integration tests must avoid external network dependencies.",
       fixes: [
         "Mock the external client at the boundary.",
-        "If this must be real browser evidence, move it to tests/acceptance/web and run pnpm test:e2e."
+        "If this must be real browser evidence, move it to tests/acceptance/web and run pnpm test:acceptance:web."
       ],
       docPath
     });

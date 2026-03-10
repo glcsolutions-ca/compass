@@ -27,6 +27,8 @@ packages/
   testkit/
   ui/
 
+scripts/
+
 platform/
   infra/
   pipeline/
@@ -40,8 +42,13 @@ tests/
 
 - `pnpm install`
 - `pnpm dev`
+- `pnpm dev:desktop`
+- `pnpm lint`
+- `pnpm typecheck`
 - `pnpm test`
 - `pnpm build`
+- `pnpm format`
+- `pnpm format:check`
 - `pnpm test:acceptance`
 - `pnpm infra:apply`
 

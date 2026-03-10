@@ -1,8 +1,8 @@
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveDatabaseUrlFromSources } from "../../../packages/database/scripts/constants.mjs";
-import { normalizeEnvValue, readEnvLayer } from "../shared/env-files.mjs";
+import { resolveDatabaseUrlFromSources } from "../../packages/database/scripts/constants.mjs";
+import { normalizeEnvValue, readEnvLayer } from "../../platform/scripts/shared/env-files.mjs";
 
 const SERVICE_ENV_PATHS = {
   api: "apps/api/.env",

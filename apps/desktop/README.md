@@ -14,6 +14,7 @@ platform integration concerns.
 ## Local usage
 
 - `pnpm dev:desktop` starts the local API/web stack if needed, then launches Electron.
+- `pnpm dev` is the default browser-hosted local experience.
 - `pnpm --filter @compass/desktop build` compiles the main and preload bundles.
 - `pnpm --filter @compass/desktop start` launches the compiled desktop host.
 

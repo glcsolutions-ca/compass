@@ -1,5 +1,5 @@
 import { Client } from "pg";
-import { resolveLocalDevEnv } from "./local-env.mjs";
+import { resolveLocalDevEnv } from "./lib/local-env.mjs";
 
 function normalize(value) {
   if (typeof value !== "string") {
@@ -34,7 +34,7 @@ async function main() {
     );
     console.error("Fix:");
     console.error("  pnpm dev");
-    console.error("  or pnpm --filter @compass/db-tools run postgres:up");
+    console.error("  or pnpm --filter @compass/database run postgres:up");
     process.exitCode = 1;
     return;
   }

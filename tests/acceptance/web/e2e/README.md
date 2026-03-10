@@ -5,7 +5,7 @@ Purpose: browser acceptance coverage for the core Compass product flows.
 ## Run
 
 ```bash
-pnpm test:e2e
+pnpm test:acceptance:web
 ```
 
 ## Source Of Truth

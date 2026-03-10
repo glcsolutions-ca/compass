@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "env:setup": "node ../../platform/scripts/dev/env-setup.mjs",
+    "env:setup": "node ../../scripts/env-setup.mjs",
     "lint": "eslint . --ext .mjs --max-warnings=0",
     "test": "vitest run --config vitest.config.mts --passWithNoTests",
     "typecheck": "tsc -p tsconfig.ref.json --noEmit",

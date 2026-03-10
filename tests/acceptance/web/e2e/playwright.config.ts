@@ -49,7 +49,7 @@ export default defineConfig({
   reporter: "line",
   webServer: useManagedWebServer
     ? {
-        command: "pnpm dev",
+        command: "pnpm dev -- --no-open",
         url: baseURL,
         env: {
           ...process.env,

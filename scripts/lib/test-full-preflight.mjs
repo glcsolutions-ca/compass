@@ -1,7 +1,6 @@
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { Client } from "pg";
-import { normalizeEnvValue, readEnvLayer, resolveLayeredEnvValue } from "../shared/env-files.mjs";
+import { normalizeEnvValue, readEnvLayer, resolveLayeredEnvValue } from "../../platform/scripts/shared/env-files.mjs";
 
 function buildLocalDatabaseUrlFromPort(port) {
   return `postgres://compass:compass@localhost:${port}/compass`;
@@ -112,7 +111,7 @@ export async function resolveDatabaseUrlForFullTest({
   };
 }
 
-function printPreflightError(error, logger = console) {
+export function printPreflightError(error, logger = console) {
   logger.error(`${error.code} ${error.summary}`);
   for (const detail of error.details) {
     logger.error(detail);
@@ -140,22 +139,4 @@ export async function runTestFullPreflight({
   }
 
   logger.info(`test:full preflight passed (${source}).`);
-}
-
-async function main() {
-  try {
-    await runTestFullPreflight();
-  } catch (error) {
-    if (error instanceof PreflightError) {
-      printPreflightError(error);
-      process.exitCode = 1;
-      return;
-    }
-
-    throw error;
-  }
-}
-
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  void main();
 }

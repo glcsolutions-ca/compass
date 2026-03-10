@@ -45,7 +45,7 @@ git push origin HEAD:main
 git push -u origin HEAD
 gh pr create --base main
 
-# 8. If using a PR, wait for Verify and squash merge once the branch is current
+# 8. If using a PR, wait for In Sync and squash merge once the branch is current
 gh pr merge --squash
 ```
 

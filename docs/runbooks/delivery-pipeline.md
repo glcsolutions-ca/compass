@@ -9,7 +9,7 @@ Compass uses one production-shaped delivery model:
 ## Workflow topology
 
 - `05-pr-labels.yml`: metadata only on `pull_request`
-- `10-pr-verify.yml`: runs `pnpm verify` on the PR head and fails stale branches
+- `10-pr-sync.yml`: fails stale branches only
 - `20-continuous-delivery-pipeline.yml`: authoritative candidate build, acceptance, and release on `push` to `main`
 - `40-infra.yml`: validates and applies infrastructure only for infra-owned files and direct infra-workflow support files
 
@@ -27,7 +27,7 @@ The candidate is built once during Commit and then promoted without rebuilds.
 
 - `pnpm verify`: local Commit Stage
 - `pnpm acceptance`: local Acceptance Stage
-- `10-pr-verify.yml`: preventive PR verification and stale-branch detection
+- `10-pr-sync.yml`: preventive stale-branch detection only
 - `20-continuous-delivery-pipeline.yml`: builds, validates, and deploys the exact promoted candidate
 - `40-infra.yml`: Bicep validation and infra apply for Azure infra files and direct support files
 
@@ -37,7 +37,7 @@ The candidate is built once during Commit and then promoted without rebuilds.
 - direct pushes to `main` are allowed by judgment
 - PRs are optional collaboration, not the source of truth
 - PRs must be rebased onto `main` before merge
-- the required PR status check is `Verify`
+- the required PR status check is `In Sync`
 - `main` stays linear and PRs merge by squash only
 - if Commit, Acceptance, or Release goes red on `main`, the line stops until fixed forward
 

@@ -21,6 +21,8 @@ The cloud pipeline is:
 
 The candidate is built once during Commit and then promoted without rebuilds.
 
+Bootstrap is separate from this pipeline. The one-time production staging flow lives in [bootstrap/README.md](/Users/justinkropp/.codex/worktrees/0370/compass/bootstrap/README.md), and steady-state Release should not absorb first-time environment creation concerns.
+
 ## Deployment scope
 
 - one Azure resource group: `rg-compass-prd-cc-001`

@@ -920,6 +920,7 @@ jobs:
   release-stage-smoke-production:
     name: Release Stage / Smoke Production
     needs:
+      - release-stage-prepare-deployment
       - release-stage-deploy-production
     runs-on: ubuntu-latest
     concurrency:

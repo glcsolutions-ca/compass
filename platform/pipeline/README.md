@@ -5,7 +5,6 @@ flowchart LR
     DEV["Developer / AI Agent"] --> VERIFY["pnpm verify"]
     VERIFY --> PR["Pull Request (Optional)"]
     VERIFY --> MAIN["Push To Main"]
-    PR --> LABELS["PR Labels"]
     PR --> PRSYNC["PR Sync"]
     MAIN --> CDP["Continuous Delivery Pipeline"]
 
@@ -13,12 +12,11 @@ flowchart LR
     COMMIT --> ACCEPT["Acceptance Stage"]
     ACCEPT --> RELEASE["Release Stage"]
 
-    INFRA["Infra Change"] --> INFRAWF["Infra Workflow"]
+    INFRA["Operator / Infra Change"] --> INFRAWF["Infra Workflow"]
 ```
 
-Compass uses four focused workflows:
+Compass uses three focused workflows:
 
-- `05-pr-labels.yml`
 - `10-pr-sync.yml`
 - `20-continuous-delivery-pipeline.yml`
 - `40-infra.yml`
@@ -35,38 +33,37 @@ The design goal is simple:
 
 ## Current CDP shape
 
-Latest green reference run: [22914274341](https://github.com/glcsolutions-ca/compass/actions/runs/22914274341)
+Latest green reference run: [22918898880](https://github.com/glcsolutions-ca/compass/actions/runs/22918898880)
 
 ```mermaid
 flowchart TD
     subgraph CS["Commit Stage"]
-        B["Static Analysis<br/>1m 6s"]
-        C["Unit Tests<br/>58s"]
-        D["API Integration Tests<br/>27s"]
-        E["Build Candidate / api<br/>29s"]
-        F["Build Candidate / web<br/>1m 1s"]
-        G["Prepare Candidate Manifest<br/>19s"]
-        H["Smoke Candidate / API Runtime<br/>42s"]
-        I["Publish Candidate<br/>15s"]
-        J["Commit Stage Summary<br/>6s"]
+        B["Static Analysis"]
+        C["Unit Tests"]
+        D["API Integration Tests"]
+        E["Build Candidate / api"]
+        F["Build Candidate / web"]
+        G["Prepare Candidate Manifest"]
+        H["Smoke Candidate / API Runtime"]
+        I["Publish Candidate"]
+        J["Commit Stage Summary"]
     end
 
     subgraph AS["Acceptance Stage"]
-        K["Acceptance / API<br/>48s"]
-        L["Acceptance / Web<br/>1m 14s"]
-        M["Acceptance Stage Summary<br/>21s"]
+        K["Acceptance / API"]
+        L["Acceptance / Web"]
+        M["Acceptance Stage Summary"]
     end
 
     subgraph RS["Release Stage"]
-        N["Verify Acceptance<br/>1m 12s"]
-        O["Deploy Stage<br/>1m 2s"]
-        P["Pre-Migration Stage Smoke<br/>1m 12s"]
-        Q["Run Production Migrations<br/>1m 52s"]
-        R["Post-Migration Stage Smoke<br/>5s"]
-        S["Deploy Production<br/>57s"]
-        T["Smoke Production<br/>6s"]
-        U["Record Evidence<br/>23s"]
-        V["Release Stage Summary<br/>5s"]
+        N["Prepare Deployment"]
+        O["Deploy Stage"]
+        P["Pre-Migration Stage Smoke"]
+        Q["Run Production Migrations"]
+        R["Post-Migration Stage Smoke"]
+        S["Deploy Production"]
+        T["Smoke Production"]
+        U["Release Stage Summary"]
     end
 
     B --> G
@@ -94,18 +91,13 @@ flowchart TD
     R --> S
     S --> T
     T --> U
-    U --> V
 ```
 
 ## Workflow topology
 
 ### PR Sync
 
-`05-pr-labels.yml` applies PR metadata only.
-
-`10-pr-sync.yml` runs on `pull_request`. It:
-
-1. checks that the branch is rebased onto `main`
+`10-pr-sync.yml` runs on `pull_request`. It only checks that the branch is rebased onto `main`.
 
 PRs are optional and lightweight. They are a collaboration tool, not the authoritative integration mechanism.
 
@@ -121,8 +113,7 @@ The `push` to `main` path is the real delivery pipeline. It:
 4. runs candidate smoke against that exact manifest
 5. publishes the immutable release candidate manifest and release unit
 6. runs black-box API and Web acceptance against that exact candidate
-7. verifies the accepted candidate and deploys it through stage and production
-8. publishes release evidence and release attestation
+7. prepares deployment from the accepted candidate and deploys it through stage and production
 
 ## Candidate model
 
@@ -156,6 +147,7 @@ The same manifest contract is used:
 - keep branches short-lived and rebase onto `origin/main` before integration
 - use `pnpm verify` as the canonical pre-integration local gate
 - use `pnpm acceptance` when you need black-box local acceptance against the candidate
+- use `pnpm platform:check` and `pnpm platform:apply` as the only public operator commands
 - keep PR checks minimal and keep full validation on the same repo-owned stage scripts used locally and on `main`
 - treat the line as unhealthy if Acceptance Stage or Release Stage fails for the promoted candidate
 - treat red `main` as a line-stop until fixed forward
@@ -170,5 +162,4 @@ The CDP uses explicit target budgets:
 - Release Stage: 10 minutes
 - Total lead time: 15 minutes
 
-These are not decorative numbers. Stage summaries report the actual duration against the target, and
-budget breaches are treated as pipeline defects to fix before they become the new normal.
+These are not decorative numbers. Stage summaries report the actual duration against the target, and budget breaches are treated as pipeline defects to fix before they become the new normal.

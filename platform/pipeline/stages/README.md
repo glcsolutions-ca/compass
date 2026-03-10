@@ -12,7 +12,7 @@ Those stages are implemented inside:
 
 ## Trigger map
 
-- `pull_request` runs `05-pr-labels.yml` and `10-pr-sync.yml`
+- `pull_request` runs `10-pr-sync.yml`
 - `push` to `main` runs the authoritative `Commit Stage`
 - successful `Commit Stage` completion inside the same workflow runs `Acceptance Stage`
 - successful `Acceptance Stage` completion inside the same workflow runs `Release Stage`
@@ -20,6 +20,5 @@ Those stages are implemented inside:
 ## Notes
 
 - `In Sync` is the only required PR status check
-- PR labels are metadata only and run outside the stage pipeline
 - PR sync checking is preventive only and does not publish artifacts
 - the CDP begins with integrated code on `main`, not on a PR head

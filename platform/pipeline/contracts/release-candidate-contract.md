@@ -22,7 +22,6 @@ Candidate provenance also records:
 - the source repository and revision
 - the Commit Stage run id
 - the registry
-- the release unit digest when available
 
 The manifest is generated once from the built API and Web digests before Commit Stage smoke. Commit smoke, Acceptance Stage, and Release Stage all consume that same manifest contract.
 
@@ -36,7 +35,6 @@ The required promotion path is:
 
 A candidate is releasable only if:
 
-- the acceptance attestation exists and passed
 - the exact candidate manifest is still retrievable from GHCR
 
 ## Release rules
@@ -46,4 +44,4 @@ A candidate is releasable only if:
 - migrations run after stage health smoke and before stage auth smoke and prod deploy
 - stage auth smoke runs after migrations because Entra login startup persists OIDC request state in the database
 - prod deploy uses the same candidate image digests that were tested on stage
-- production smoke must pass before release attestation is written
+- production smoke must pass before Release Stage completes

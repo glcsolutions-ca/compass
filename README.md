@@ -44,14 +44,16 @@ tests/
 - `pnpm dev`
 - `pnpm verify`
 - `pnpm acceptance`
+- `pnpm platform:check`
+- `pnpm platform:apply`
 - `pnpm build`
 - `pnpm format`
 - `pnpm format:check`
 - `pnpm dev:desktop`
-- `pnpm infra:apply`
 
 `pnpm dev` is the fast source-mode loop. `pnpm verify` is the local Commit Stage and
-`pnpm acceptance` is the local Acceptance Stage against the locally built candidate.
+`pnpm acceptance` is the local Acceptance Stage against the locally built candidate. `pnpm platform:check`
+and `pnpm platform:apply` are the only public operator commands.
 
 ## Product boundaries
 
@@ -67,8 +69,8 @@ tests/
 ## Testing
 
 - unit tests are colocated beside source as `*.test.ts(x)`
-- black-box acceptance tests live in `tests/acceptance/{api,web,desktop}`
-- delivery validation and evidence stay in `platform/pipeline`
+- black-box acceptance tests live in `tests/acceptance/{api,web}`
+- delivery validation stays in `platform/pipeline`
 
 ## Docs
 

@@ -5,12 +5,14 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { REPOSITORY_SLUG, GITHUB_ENVIRONMENT_NAMES } from "../../config/public-metadata.mjs";
-import { REQUIRED_REPO_VARIABLE_NAMES } from "../../config/live-config.mjs";
+import {
+  DEPRECATED_REPO_VARIABLE_NAMES,
+  REQUIRED_REPO_VARIABLE_NAMES
+} from "../../config/live-config.mjs";
 import { assertCanonicalGithubConfig } from "./github-config-lib.mjs";
 
 const execFileAsync = promisify(execFile);
 const ENVIRONMENTS_CONFIG_PATH = path.resolve("bootstrap/config/github-environments.json");
-const LABELS_CONFIG_PATH = path.resolve("bootstrap/config/github-labels.json");
 const RULESET_CONFIG_PATH = path.resolve("bootstrap/config/repository-rules.json");
 
 async function gh(args, { input } = {}) {
@@ -84,51 +86,6 @@ async function configureRuleset(repository, ruleset, apply) {
   await withTempJson("compass-gh-ruleset-", ruleset, (inputPath) =>
     gh(["api", "--method", method, endpoint, "--input", inputPath])
   );
-}
-
-async function configureLabels(repository, labels, apply) {
-  const existingLabels = JSON.parse(
-    (await gh(["label", "list", "--repo", repository, "--json", "name,color,description"])) || "[]"
-  );
-  const existingByName = new Map(existingLabels.map((entry) => [entry.name, entry]));
-
-  for (const label of labels) {
-    const current = existingByName.get(label.name);
-    const desiredColor = String(label.color || "")
-      .replace(/^#/, "")
-      .trim();
-    const desiredDescription = String(label.description || "").trim();
-    const currentColor = String(current?.color || "")
-      .replace(/^#/, "")
-      .trim();
-    const currentDescription = String(current?.description || "").trim();
-    const needsUpdate =
-      !current ||
-      currentColor.toLowerCase() !== desiredColor.toLowerCase() ||
-      currentDescription !== desiredDescription;
-
-    if (!needsUpdate) {
-      continue;
-    }
-
-    if (!apply) {
-      console.info(`[check] ensure label ${label.name}`);
-      continue;
-    }
-
-    await gh([
-      "label",
-      "create",
-      label.name,
-      "--repo",
-      repository,
-      "--color",
-      desiredColor,
-      "--description",
-      desiredDescription,
-      "--force"
-    ]);
-  }
 }
 
 async function configureEnvironment(repository, environmentConfig, apply) {
@@ -209,6 +166,24 @@ async function listVariables(repository, environmentName) {
   }
 }
 
+async function clearDeprecatedRepositoryVariables(repository, apply) {
+  const existingVars = await listVariables(repository);
+  const existingNames = new Set(existingVars.map((entry) => String(entry?.name || "").trim()));
+
+  for (const name of DEPRECATED_REPO_VARIABLE_NAMES) {
+    if (!existingNames.has(name)) {
+      continue;
+    }
+
+    if (!apply) {
+      console.info(`[check] gh variable delete ${name}`);
+      continue;
+    }
+
+    await gh(["variable", "delete", name, "--repo", repository]);
+  }
+}
+
 async function listSecrets(repository, environmentName) {
   try {
     return JSON.parse(
@@ -266,14 +241,12 @@ async function collectGithubConfigState(repository, environmentNames) {
 export async function configureGithubRepo({ apply = false } = {}) {
   const repository = REPOSITORY_SLUG;
   const environmentsConfig = await readJson(ENVIRONMENTS_CONFIG_PATH);
-  const labelsConfig = await readJson(LABELS_CONFIG_PATH);
   const rulesetConfig = await readJson(RULESET_CONFIG_PATH);
   const environmentConfigs = environmentsConfig.environments || [];
   const configuredNames = environmentConfigs.map((entry) => entry.name);
   const environmentNames =
     configuredNames.length > 0 ? configuredNames : [...GITHUB_ENVIRONMENT_NAMES];
 
-  await configureLabels(repository, labelsConfig.labels || [], apply);
   await configureMergeSettings(repository, rulesetConfig.merge_settings, apply);
   await configureRuleset(repository, rulesetConfig.main_ruleset, apply);
 
@@ -285,6 +258,8 @@ export async function configureGithubRepo({ apply = false } = {}) {
     await configureEnvironment(repository, environmentConfig, apply);
     await clearEnvironmentScopedConfig(repository, environmentConfig.name, apply);
   }
+
+  await clearDeprecatedRepositoryVariables(repository, apply);
 
   const state = await collectGithubConfigState(repository, environmentNames);
   assertCanonicalGithubConfig({

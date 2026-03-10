@@ -1,6 +1,9 @@
 # Production Bootstrap
 
-Bootstrap is a one-time admin runbook. Its job is to stage production once, then hand off to the normal delivery pipeline.
+Bootstrap is now a single reconciliation path. The public operator commands are:
+
+- `pnpm platform:check`
+- `pnpm platform:apply`
 
 ## Canonical config model
 
@@ -9,97 +12,58 @@ Bootstrap is a one-time admin runbook. Its job is to stage production once, then
 - GitHub environments: protection, history, and environment URL only
 - repo: code, pipeline logic, contracts, and public metadata only
 
-Before bootstrapping, seed the canonical repo variables in GitHub. `pnpm bootstrap:github:check`
-fails until they exist.
-
-## Phase A: Stage production
+## Required repository variables
 
 ```bash
-az login
-export AZURE_SUBSCRIPTION_ID="$(gh variable get AZURE_SUBSCRIPTION_ID --repo glcsolutions-ca/compass)"
-export AZURE_RESOURCE_GROUP="$(gh variable get AZURE_RESOURCE_GROUP --repo glcsolutions-ca/compass)"
-export AZURE_LOCATION="$(gh variable get AZURE_LOCATION --repo glcsolutions-ca/compass)"
-
-az account set --subscription "$AZURE_SUBSCRIPTION_ID"
-az group create --name "$AZURE_RESOURCE_GROUP" --location "$AZURE_LOCATION"
-
-pnpm bootstrap:entra -- --reset-web-client-secret
-pnpm bootstrap:github:apply
-
-unset AZURE_SUBSCRIPTION_ID AZURE_RESOURCE_GROUP AZURE_LOCATION
+AZURE_DEPLOY_CLIENT_ID
+AZURE_TENANT_ID
+AZURE_SUBSCRIPTION_ID
+AZURE_LOCATION
+DEPLOYMENT_STAMP
+PRODUCTION_WEB_BASE_URL
+AUTH_MODE
+ENTRA_WEB_CLIENT_ID
+ENTRA_ALLOWED_TENANT_IDS
+AZURE_VNET_ADDRESS_PREFIX
+AZURE_ACA_SUBNET_PREFIX
+AZURE_POSTGRES_SUBNET_PREFIX
 ```
 
-In GitHub, set the `compass-api` and `compass-web` container packages to `public`.
+Everything else is derived from `DEPLOYMENT_STAMP`, `PRODUCTION_WEB_BASE_URL`, and stable defaults in code.
+
+## Required Key Vault secrets
 
 ```bash
-export POSTGRES_ADMIN_PASSWORD='replace-with-a-strong-random-password'
-pnpm infra:apply
-unset POSTGRES_ADMIN_PASSWORD
+postgres-admin-password
+entra-client-secret
+auth-oidc-state-encryption-key
 ```
 
-`pnpm infra:apply` creates the Azure foundation and writes `postgres-admin-password` into Key Vault during that same deployment.
+## Reconcile the platform
 
-Set the remaining runtime secrets directly in Key Vault:
+Use the operator path to check then apply:
 
 ```bash
-export AZURE_KEY_VAULT_NAME="$(gh variable get AZURE_KEY_VAULT_NAME --repo glcsolutions-ca/compass)"
-
-az keyvault secret set \
-  --vault-name "$AZURE_KEY_VAULT_NAME" \
-  --name entra-client-secret \
-  --value '<web-client-secret>'
-
-az keyvault secret set \
-  --vault-name "$AZURE_KEY_VAULT_NAME" \
-  --name auth-oidc-state-encryption-key \
-  --value '<strong-random-secret>'
-
-unset AZURE_KEY_VAULT_NAME
+pnpm platform:check
+pnpm platform:apply -- --candidate-id sha-<main-sha>
 ```
 
-Verify the database admin secret exists:
+`pnpm platform:apply` reconciles, in order:
 
-```bash
-export AZURE_KEY_VAULT_NAME="$(gh variable get AZURE_KEY_VAULT_NAME --repo glcsolutions-ca/compass)"
+1. Entra app registrations and deploy identity repo vars
+2. GitHub rulesets and empty deployment environments
+3. Azure infrastructure
+4. App bootstrap from the provided candidate
+5. Production custom-domain wiring
 
-az keyvault secret show \
-  --vault-name "$AZURE_KEY_VAULT_NAME" \
-  --name postgres-admin-password \
-  --query id \
-  -o tsv
+If the app resources already exist, `pnpm platform:apply` can run without `--candidate-id`. If they do not exist yet, the command fails with a clear instruction to provide one.
 
-unset AZURE_KEY_VAULT_NAME
-```
-
-## Phase B: Create the initial app resources once
-
-1. Push directly to `main` or merge one change to `main` so `Continuous Delivery Pipeline` publishes a candidate to GHCR.
-2. Run:
-
-```bash
-pnpm bootstrap:apps -- --candidate-id sha-<main-sha>
-```
-
-After that, the normal pipeline owns deploys and updates.
-
-## Optional follow-up tasks
-
-- If you need the stage web callback URL in Entra, rerun:
-
-```bash
-pnpm bootstrap:entra -- --stage-web-fqdn <fqdn>
-```
-
-- If you want to bind the production custom domain, run:
-
-```bash
-node platform/scripts/bootstrap/configure-web-domain.mjs
-```
+After bootstrap, the normal CDP owns all later deployments.
 
 ## Notes
 
 - `bootstrap/.artifacts` is local-only and ignored by git.
-- `pnpm bootstrap:entra` writes `ENTRA_WEB_CLIENT_ID` and `AZURE_DEPLOY_CLIENT_ID` into GitHub repository variables.
-- `pnpm bootstrap:github:apply` configures labels, rulesets, and deployment environments, and removes any environment-scoped vars/secrets so GitHub environments remain protection-only.
+- `pnpm platform:apply` writes `ENTRA_WEB_CLIENT_ID` and `AZURE_DEPLOY_CLIENT_ID` into GitHub repository variables when needed.
+- GitHub environments remain protection-only; they must not hold vars or secrets.
 - Runtime secrets belong in Key Vault.
 - The delivery pipeline starts with `Commit Stage` in `20-continuous-delivery-pipeline.yml` and promotes the same candidate through Acceptance Stage and Release Stage.

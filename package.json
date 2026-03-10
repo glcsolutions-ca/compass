@@ -27,6 +27,8 @@
     "acceptance": "node scripts/acceptance.mjs",
     "acceptance:api": "tsx tests/acceptance/api/thread-lifecycle.ts",
     "acceptance:web": "playwright test tests/acceptance/web --config tests/acceptance/web/playwright.config.ts --reporter=line --workers=1",
+    "platform:check": "node scripts/platform-check.mjs",
+    "platform:apply": "node scripts/platform-apply.mjs",
     "bootstrap:entra": "node platform/scripts/bootstrap/ensure-entra-apps.mjs",
     "bootstrap:github:check": "node platform/scripts/bootstrap/configure-github-repo.mjs --check",
     "bootstrap:github:apply": "node platform/scripts/bootstrap/configure-github-repo.mjs --apply",

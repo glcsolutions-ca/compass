@@ -4,7 +4,7 @@
 
 ```text
 compass/
-├─ .github/{actions,workflows,labeler.yml}
+├─ .github/{actions,workflows}
 ├─ apps/{api,web,desktop}
 ├─ bootstrap/{README.md,config}
 ├─ docs/{architecture,adr,spikes}
@@ -60,6 +60,10 @@ pnpm verify
 
 # Local Acceptance Stage against the local candidate
 pnpm acceptance
+
+# Canonical operator checks / reconciliation
+pnpm platform:check
+pnpm platform:apply -- --candidate-id sha-<main-sha>
 
 # Web unit tests
 pnpm --filter @compass/web test

@@ -37,14 +37,6 @@ export function validateReleaseCandidateDocument(document) {
   return normalizeErrors(errors);
 }
 
-export function validateAcceptanceAttestationPredicateDocument(document) {
-  return normalizeErrors(validateBySchema("acceptanceAttestationPredicate", document));
-}
-
-export function validateReleaseAttestationPredicateDocument(document) {
-  return normalizeErrors(validateBySchema("releaseAttestationPredicate", document));
-}
-
 export async function readJsonFile(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
 }

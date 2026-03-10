@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertCanonicalGithubConfig,
+  findDeprecatedRepositoryVariables,
   findEnvironmentScopedConfigViolations,
   findMissingRepositoryVariables
 } from "../../../scripts/bootstrap/github-config-lib.mjs";
@@ -13,6 +14,15 @@ describe("github-config-lib", () => {
         "AZURE_SUBSCRIPTION_ID"
       ])
     ).toEqual(["AZURE_SUBSCRIPTION_ID"]);
+  });
+
+  it("reports deprecated canonical repo variables", () => {
+    expect(
+      findDeprecatedRepositoryVariables(
+        [{ name: "AZURE_RESOURCE_GROUP" }, { name: "AZURE_TENANT_ID" }],
+        ["AZURE_RESOURCE_GROUP", "ACA_API_PROD_APP_NAME"]
+      )
+    ).toEqual(["AZURE_RESOURCE_GROUP"]);
   });
 
   it("reports environment-scoped config violations", () => {
@@ -37,6 +47,7 @@ describe("github-config-lib", () => {
       assertCanonicalGithubConfig({
         repositoryVariables: [{ name: "AZURE_TENANT_ID" }],
         requiredVariableNames: ["AZURE_TENANT_ID", "AZURE_SUBSCRIPTION_ID"],
+        deprecatedVariableNames: [],
         environmentNames: ["stage"],
         environmentVariablesByName: { stage: [{ name: "AZURE_RESOURCE_GROUP" }] },
         environmentSecretsByName: { stage: [] }
@@ -46,11 +57,27 @@ describe("github-config-lib", () => {
     );
   });
 
+  it("fails when deprecated repo vars remain", () => {
+    expect(() =>
+      assertCanonicalGithubConfig({
+        repositoryVariables: [{ name: "AZURE_TENANT_ID" }, { name: "AZURE_RESOURCE_GROUP" }],
+        requiredVariableNames: ["AZURE_TENANT_ID"],
+        deprecatedVariableNames: ["AZURE_RESOURCE_GROUP"],
+        environmentNames: ["stage"],
+        environmentVariablesByName: { stage: [] },
+        environmentSecretsByName: { stage: [] }
+      })
+    ).toThrow(
+      "Canonical GitHub configuration violations:\n- Deprecated repository variable 'AZURE_RESOURCE_GROUP' should be removed"
+    );
+  });
+
   it("passes when repo vars are present and environments are protection-only", () => {
     expect(() =>
       assertCanonicalGithubConfig({
         repositoryVariables: [{ name: "AZURE_TENANT_ID" }, { name: "AZURE_SUBSCRIPTION_ID" }],
         requiredVariableNames: ["AZURE_TENANT_ID", "AZURE_SUBSCRIPTION_ID"],
+        deprecatedVariableNames: [],
         environmentNames: ["stage", "production"],
         environmentVariablesByName: { stage: [], production: [] },
         environmentSecretsByName: { stage: [], production: [] }
@@ -58,4 +85,3 @@ describe("github-config-lib", () => {
     ).not.toThrow();
   });
 });
-

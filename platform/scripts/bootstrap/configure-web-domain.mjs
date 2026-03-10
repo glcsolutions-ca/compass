@@ -1,9 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { ensureAzLogin, runAz } from "../../pipeline/shared/scripts/azure/az-command.mjs";
-import {
-  WEB_DOMAIN_VARIABLE_NAMES,
-  loadLivePlatformConfig
-} from "../../config/live-config.mjs";
+import { loadDeliveryConfig } from "../../config/live-config.mjs";
 
 async function ensureTxtRecord(resourceGroup, zoneName, recordName, value) {
   await runAz(
@@ -124,11 +121,26 @@ async function ensureARecord(resourceGroup, zoneName, recordName, ipAddress) {
   }
 }
 
+async function isHostnameAlreadyBound(resourceGroup, appName, hostname) {
+  const hostnames = await runAz(
+    [
+      "containerapp",
+      "hostname",
+      "list",
+      "--resource-group",
+      resourceGroup,
+      "--name",
+      appName
+    ],
+    { output: "json" }
+  ).catch(() => []);
+
+  return hostnames.some((entry) => String(entry?.name || "").trim() === hostname);
+}
+
 export async function configureWebDomain() {
   await ensureAzLogin();
-  const config = await loadLivePlatformConfig({
-    requiredVariableNames: WEB_DOMAIN_VARIABLE_NAMES
-  });
+  const config = await loadDeliveryConfig();
   const zoneName = config.azurePublicDnsZoneName;
   const webAppName = config.acaWebProdAppName;
   const verificationId = await runAz(
@@ -181,6 +193,11 @@ export async function configureWebDomain() {
 
   await ensureTxtRecord(config.azureResourceGroup, zoneName, "asuid", verificationId);
   await ensureARecord(config.azureResourceGroup, zoneName, "@", staticIp);
+
+  if (await isHostnameAlreadyBound(config.azureResourceGroup, webAppName, config.productionWebCustomDomain)) {
+    console.info(`Custom domain already bound for ${config.productionWebCustomDomain}`);
+    return;
+  }
 
   await runAz(
     [

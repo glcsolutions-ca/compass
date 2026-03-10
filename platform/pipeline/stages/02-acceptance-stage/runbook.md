@@ -31,12 +31,6 @@ Those suites are black-box only:
 
 Desktop is intentionally outside Acceptance Stage until it has a first-class production-shaped release path and a real black-box suite to match it.
 
-## Evidence
-
-Acceptance produces an attestation tied to the release unit subject.
-
-Release Stage must verify that attestation before mutating production.
-
 ## Stage boundary
 
 Acceptance Stage is intentionally slower and broader than Commit Stage, but it stays focused on user-observable behavior for the already-built candidate. It is not a place to hide technical integration checks or implementation-specific assertions.

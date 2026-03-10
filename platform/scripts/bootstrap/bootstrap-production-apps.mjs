@@ -6,9 +6,8 @@ import { fetchReleaseCandidate } from "../../pipeline/shared/scripts/fetch-relea
 import { readJsonFile } from "../../pipeline/shared/scripts/pipeline-contract-lib.mjs";
 import { ensureAzLogin, runAz } from "../../pipeline/shared/scripts/azure/az-command.mjs";
 import {
-  BOOTSTRAP_APPS_VARIABLE_NAMES,
   buildAppsBootstrapParameters,
-  loadLivePlatformConfig
+  loadDeliveryConfig
 } from "../../config/live-config.mjs";
 
 function envValue(name) {
@@ -70,9 +69,7 @@ async function withParametersFile(parameters, callback) {
 
 export async function bootstrapProductionApps({ candidateId }) {
   await ensureAzLogin();
-  const config = await loadLivePlatformConfig({
-    requiredVariableNames: BOOTSTRAP_APPS_VARIABLE_NAMES
-  });
+  const config = await loadDeliveryConfig();
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "compass-bootstrap-candidate-"));
   const manifestPath = path.join(tempDir, "manifest.json");
   const explicitApiImage = envValue("BOOTSTRAP_API_IMAGE");
@@ -138,6 +135,49 @@ export async function bootstrapProductionApps({ candidateId }) {
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
+}
+
+export async function appBootstrapTargetsExist() {
+  await ensureAzLogin();
+  const config = await loadDeliveryConfig();
+  await runAz(["account", "set", "--subscription", config.azureSubscriptionId], {
+    output: "none"
+  });
+  const appNames = [
+    config.acaApiProdAppName,
+    config.acaWebProdAppName,
+    config.acaApiStageAppName,
+    config.acaWebStageAppName
+  ];
+
+  const checks = await Promise.all(
+    appNames.map(async (appName) => {
+      try {
+        await runAz(
+          [
+            "containerapp",
+            "show",
+            "--resource-group",
+            config.azureResourceGroup,
+            "--name",
+            appName,
+            "--query",
+            "name"
+          ],
+          { output: "tsv" }
+        );
+        return [appName, true];
+      } catch {
+        return [appName, false];
+      }
+    })
+  );
+
+  const byName = Object.fromEntries(checks);
+  return {
+    exists: Object.values(byName).every(Boolean),
+    byName
+  };
 }
 
 export async function main(argv = process.argv.slice(2)) {

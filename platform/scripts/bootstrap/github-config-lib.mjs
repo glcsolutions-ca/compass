@@ -1,5 +1,8 @@
 import { GITHUB_ENVIRONMENT_NAMES } from "../../config/public-metadata.mjs";
-import { REQUIRED_REPO_VARIABLE_NAMES } from "../../config/live-config.mjs";
+import {
+  DEPRECATED_REPO_VARIABLE_NAMES,
+  REQUIRED_REPO_VARIABLE_NAMES
+} from "../../config/live-config.mjs";
 
 function normalizeNames(entries = []) {
   return new Set(
@@ -15,6 +18,14 @@ export function findMissingRepositoryVariables(
 ) {
   const existing = normalizeNames(existingVariables);
   return requiredVariableNames.filter((name) => !existing.has(name)).sort();
+}
+
+export function findDeprecatedRepositoryVariables(
+  existingVariables,
+  deprecatedVariableNames = DEPRECATED_REPO_VARIABLE_NAMES
+) {
+  const existing = normalizeNames(existingVariables);
+  return deprecatedVariableNames.filter((name) => existing.has(name)).sort();
 }
 
 export function findEnvironmentScopedConfigViolations({
@@ -47,11 +58,16 @@ export function findEnvironmentScopedConfigViolations({
 export function assertCanonicalGithubConfig({
   repositoryVariables,
   requiredVariableNames = REQUIRED_REPO_VARIABLE_NAMES,
+  deprecatedVariableNames = DEPRECATED_REPO_VARIABLE_NAMES,
   environmentNames = GITHUB_ENVIRONMENT_NAMES,
   environmentVariablesByName = {},
   environmentSecretsByName = {}
 }) {
   const missingVariables = findMissingRepositoryVariables(repositoryVariables, requiredVariableNames);
+  const deprecatedVariables = findDeprecatedRepositoryVariables(
+    repositoryVariables,
+    deprecatedVariableNames
+  );
   const scopedViolations = findEnvironmentScopedConfigViolations({
     environmentNames,
     environmentVariablesByName,
@@ -60,6 +76,7 @@ export function assertCanonicalGithubConfig({
 
   const issues = [
     ...missingVariables.map((name) => `Missing repository variable '${name}'`),
+    ...deprecatedVariables.map((name) => `Deprecated repository variable '${name}' should be removed`),
     ...scopedViolations
   ];
 

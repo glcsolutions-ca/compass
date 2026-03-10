@@ -1,120 +1,60 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { ENTRA_REDIRECT_URI_PATH, REPOSITORY_SLUG } from "./public-metadata.mjs";
+import { REPOSITORY_SLUG } from "./public-metadata.mjs";
+import {
+  buildDeploymentNaming,
+  buildEntraRedirectUri,
+  deriveProductionWebCustomDomain
+} from "./naming.mjs";
 
 const execFileAsync = promisify(execFile);
 
 const STRING = "string";
-const INTEGER = "integer";
 
 const LIVE_CONFIG_SPECS = Object.freeze([
   { name: "AZURE_DEPLOY_CLIENT_ID", property: "azureDeployClientId", type: STRING },
   { name: "AZURE_TENANT_ID", property: "azureTenantId", type: STRING },
   { name: "AZURE_SUBSCRIPTION_ID", property: "azureSubscriptionId", type: STRING },
-  { name: "AZURE_RESOURCE_GROUP", property: "azureResourceGroup", type: STRING },
   { name: "AZURE_LOCATION", property: "azureLocation", type: STRING },
-  { name: "AZURE_PUBLIC_DNS_ZONE_NAME", property: "azurePublicDnsZoneName", type: STRING },
-  { name: "AZURE_VNET_NAME", property: "azureVnetName", type: STRING },
-  { name: "AZURE_ACA_SUBNET_NAME", property: "azureAcaSubnetName", type: STRING },
-  { name: "AZURE_POSTGRES_SUBNET_NAME", property: "azurePostgresSubnetName", type: STRING },
-  { name: "AZURE_VNET_ADDRESS_PREFIX", property: "azureVnetAddressPrefix", type: STRING },
-  { name: "AZURE_ACA_SUBNET_PREFIX", property: "azureAcaSubnetPrefix", type: STRING },
-  { name: "AZURE_POSTGRES_SUBNET_PREFIX", property: "azurePostgresSubnetPrefix", type: STRING },
-  {
-    name: "AZURE_POSTGRES_PRIVATE_DNS_ZONE_NAME",
-    property: "azurePostgresPrivateDnsZoneName",
-    type: STRING
-  },
-  { name: "AZURE_CONTAINERAPPS_ENV_NAME", property: "azureContainerAppsEnvName", type: STRING },
-  {
-    name: "AZURE_LOG_ANALYTICS_WORKSPACE_NAME",
-    property: "azureLogAnalyticsWorkspaceName",
-    type: STRING
-  },
-  { name: "AZURE_KEY_VAULT_NAME", property: "azureKeyVaultName", type: STRING },
-  { name: "AZURE_POSTGRES_SERVER_NAME", property: "azurePostgresServerName", type: STRING },
-  {
-    name: "AZURE_POSTGRES_DATABASE_NAME",
-    property: "azurePostgresDatabaseName",
-    type: STRING
-  },
-  {
-    name: "AZURE_POSTGRES_ADMIN_USERNAME",
-    property: "azurePostgresAdminUsername",
-    type: STRING
-  },
-  { name: "AZURE_POSTGRES_SKU_NAME", property: "azurePostgresSkuName", type: STRING },
-  { name: "AZURE_POSTGRES_SKU_TIER", property: "azurePostgresSkuTier", type: STRING },
-  { name: "AZURE_POSTGRES_VERSION", property: "azurePostgresVersion", type: STRING },
-  { name: "AZURE_POSTGRES_STORAGE_MB", property: "azurePostgresStorageMb", type: INTEGER },
-  { name: "ACA_API_PROD_APP_NAME", property: "acaApiProdAppName", type: STRING },
-  { name: "ACA_WEB_PROD_APP_NAME", property: "acaWebProdAppName", type: STRING },
-  { name: "ACA_API_STAGE_APP_NAME", property: "acaApiStageAppName", type: STRING },
-  { name: "ACA_WEB_STAGE_APP_NAME", property: "acaWebStageAppName", type: STRING },
-  { name: "ACA_MIGRATE_JOB_NAME", property: "acaMigrateJobName", type: STRING },
+  { name: "DEPLOYMENT_STAMP", property: "deploymentStamp", type: STRING },
   { name: "PRODUCTION_WEB_BASE_URL", property: "productionWebBaseUrl", type: STRING },
   { name: "AUTH_MODE", property: "authMode", type: STRING },
   { name: "ENTRA_WEB_CLIENT_ID", property: "entraWebClientId", type: STRING },
   { name: "ENTRA_ALLOWED_TENANT_IDS", property: "entraAllowedTenantIds", type: STRING },
-  {
-    name: "DYNAMIC_SESSIONS_POOL_MANAGEMENT_ENDPOINT",
-    property: "dynamicSessionsPoolManagementEndpoint",
-    type: STRING
-  },
-  { name: "API_LOG_LEVEL", property: "apiLogLevel", type: STRING },
-  { name: "DB_MIGRATION_LOCK_TIMEOUT", property: "dbMigrationLockTimeout", type: STRING },
-  {
-    name: "DB_MIGRATION_STATEMENT_TIMEOUT",
-    property: "dbMigrationStatementTimeout",
-    type: STRING
-  },
-  { name: "SEED_DEFAULT_TENANT_ID", property: "seedDefaultTenantId", type: STRING },
-  {
-    name: "SEED_DEFAULT_APP_CLIENT_ID",
-    property: "seedDefaultAppClientId",
-    type: STRING,
-    allowEmpty: true
-  },
-  {
-    name: "SEED_DEFAULT_USER_OID",
-    property: "seedDefaultUserOid",
-    type: STRING,
-    allowEmpty: true
-  },
-  { name: "SEED_DEFAULT_USER_EMAIL", property: "seedDefaultUserEmail", type: STRING },
-  {
-    name: "SEED_DEFAULT_USER_DISPLAY_NAME",
-    property: "seedDefaultUserDisplayName",
-    type: STRING
-  }
+  { name: "AZURE_VNET_ADDRESS_PREFIX", property: "azureVnetAddressPrefix", type: STRING },
+  { name: "AZURE_ACA_SUBNET_PREFIX", property: "azureAcaSubnetPrefix", type: STRING },
+  { name: "AZURE_POSTGRES_SUBNET_PREFIX", property: "azurePostgresSubnetPrefix", type: STRING }
 ]);
 
 const SPEC_BY_NAME = new Map(LIVE_CONFIG_SPECS.map((spec) => [spec.name, spec]));
 
-export const REQUIRED_REPO_VARIABLE_NAMES = Object.freeze(
-  LIVE_CONFIG_SPECS.filter((spec) => !spec.allowEmpty).map((spec) => spec.name)
-);
+export const REQUIRED_REPO_VARIABLE_NAMES = Object.freeze(LIVE_CONFIG_SPECS.map((spec) => spec.name));
 
-export const ENTRA_BOOTSTRAP_VARIABLE_NAMES = Object.freeze([
+export const DELIVERY_REPO_VARIABLE_NAMES = Object.freeze([
+  "AZURE_DEPLOY_CLIENT_ID",
   "AZURE_TENANT_ID",
   "AZURE_SUBSCRIPTION_ID",
-  "AZURE_RESOURCE_GROUP",
-  "AZURE_KEY_VAULT_NAME",
-  "PRODUCTION_WEB_BASE_URL"
+  "AZURE_LOCATION",
+  "DEPLOYMENT_STAMP",
+  "PRODUCTION_WEB_BASE_URL",
+  "AUTH_MODE",
+  "ENTRA_WEB_CLIENT_ID",
+  "ENTRA_ALLOWED_TENANT_IDS"
 ]);
 
-export const INFRA_VARIABLE_NAMES = Object.freeze([
-  "AZURE_TENANT_ID",
-  "AZURE_SUBSCRIPTION_ID",
+export const INFRASTRUCTURE_REPO_VARIABLE_NAMES = Object.freeze([
+  ...DELIVERY_REPO_VARIABLE_NAMES,
+  "AZURE_VNET_ADDRESS_PREFIX",
+  "AZURE_ACA_SUBNET_PREFIX",
+  "AZURE_POSTGRES_SUBNET_PREFIX"
+]);
+
+export const DEPRECATED_REPO_VARIABLE_NAMES = Object.freeze([
   "AZURE_RESOURCE_GROUP",
-  "AZURE_LOCATION",
   "AZURE_PUBLIC_DNS_ZONE_NAME",
   "AZURE_VNET_NAME",
   "AZURE_ACA_SUBNET_NAME",
   "AZURE_POSTGRES_SUBNET_NAME",
-  "AZURE_VNET_ADDRESS_PREFIX",
-  "AZURE_ACA_SUBNET_PREFIX",
-  "AZURE_POSTGRES_SUBNET_PREFIX",
   "AZURE_POSTGRES_PRIVATE_DNS_ZONE_NAME",
   "AZURE_CONTAINERAPPS_ENV_NAME",
   "AZURE_LOG_ANALYTICS_WORKSPACE_NAME",
@@ -125,20 +65,12 @@ export const INFRA_VARIABLE_NAMES = Object.freeze([
   "AZURE_POSTGRES_SKU_NAME",
   "AZURE_POSTGRES_SKU_TIER",
   "AZURE_POSTGRES_VERSION",
-  "AZURE_POSTGRES_STORAGE_MB"
-]);
-
-export const BOOTSTRAP_APPS_VARIABLE_NAMES = Object.freeze([
-  ...INFRA_VARIABLE_NAMES,
+  "AZURE_POSTGRES_STORAGE_MB",
   "ACA_API_PROD_APP_NAME",
   "ACA_WEB_PROD_APP_NAME",
   "ACA_API_STAGE_APP_NAME",
   "ACA_WEB_STAGE_APP_NAME",
   "ACA_MIGRATE_JOB_NAME",
-  "PRODUCTION_WEB_BASE_URL",
-  "AUTH_MODE",
-  "ENTRA_WEB_CLIENT_ID",
-  "ENTRA_ALLOWED_TENANT_IDS",
   "DYNAMIC_SESSIONS_POOL_MANAGEMENT_ENDPOINT",
   "API_LOG_LEVEL",
   "DB_MIGRATION_LOCK_TIMEOUT",
@@ -147,38 +79,17 @@ export const BOOTSTRAP_APPS_VARIABLE_NAMES = Object.freeze([
   "SEED_DEFAULT_APP_CLIENT_ID",
   "SEED_DEFAULT_USER_OID",
   "SEED_DEFAULT_USER_EMAIL",
-  "SEED_DEFAULT_USER_DISPLAY_NAME"
-]);
-
-export const WEB_DOMAIN_VARIABLE_NAMES = Object.freeze([
-  "AZURE_RESOURCE_GROUP",
-  "AZURE_PUBLIC_DNS_ZONE_NAME",
-  "AZURE_CONTAINERAPPS_ENV_NAME",
-  "ACA_WEB_PROD_APP_NAME",
-  "PRODUCTION_WEB_BASE_URL"
+  "SEED_DEFAULT_USER_DISPLAY_NAME",
+  "PRODUCTION_API_BASE_URL",
+  "ENTRA_API_CLIENT_ID"
 ]);
 
 function trimString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function parseInteger(name, value) {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`${name} must be an integer (received '${value}')`);
-  }
-  return parsed;
-}
-
-function parseValue(spec, value) {
-  if (spec.type === INTEGER) {
-    return parseInteger(spec.name, value);
-  }
-  return value;
-}
-
-function normalizeRequestedNames(requiredVariableNames, optionalVariableNames) {
-  const names = [...new Set([...requiredVariableNames, ...optionalVariableNames])];
+function normalizeRequestedNames(requiredVariableNames) {
+  const names = [...new Set(requiredVariableNames)];
   for (const name of names) {
     if (!SPEC_BY_NAME.has(name)) {
       throw new Error(`Unknown live config variable '${name}'`);
@@ -187,17 +98,7 @@ function normalizeRequestedNames(requiredVariableNames, optionalVariableNames) {
   return names;
 }
 
-export function deriveProductionWebCustomDomain(productionWebBaseUrl) {
-  const url = new URL(String(productionWebBaseUrl || "").trim());
-  return url.host;
-}
-
-export function buildEntraRedirectUri(productionWebBaseUrl) {
-  const origin = new URL(String(productionWebBaseUrl || "").trim()).origin.replace(/\/+$/u, "");
-  return `${origin}${ENTRA_REDIRECT_URI_PATH}`;
-}
-
-export function normalizeLivePlatformConfig(values, { repository = REPOSITORY_SLUG } = {}) {
+function normalizeBaseConfig(values, { repository = REPOSITORY_SLUG } = {}) {
   const resolved = {
     repository,
     variables: {}
@@ -208,17 +109,23 @@ export function normalizeLivePlatformConfig(values, { repository = REPOSITORY_SL
       continue;
     }
     resolved.variables[spec.name] = values[spec.name];
-    resolved[spec.property] = parseValue(spec, values[spec.name]);
-  }
-
-  if (resolved.productionWebBaseUrl) {
-    resolved.productionWebCustomDomain = deriveProductionWebCustomDomain(
-      resolved.productionWebBaseUrl
-    );
-    resolved.entraRedirectUri = buildEntraRedirectUri(resolved.productionWebBaseUrl);
+    resolved[spec.property] = values[spec.name];
   }
 
   return resolved;
+}
+
+function buildResolvedConfig(baseConfig) {
+  return {
+    ...baseConfig,
+    ...buildDeploymentNaming({
+      deploymentStamp: baseConfig.deploymentStamp,
+      productionWebBaseUrl: baseConfig.productionWebBaseUrl,
+      azureLocation: baseConfig.azureLocation,
+      azureSubscriptionId: baseConfig.azureSubscriptionId,
+      azureTenantId: baseConfig.azureTenantId
+    })
+  };
 }
 
 export async function fetchRepositoryVariable(name, { repository = REPOSITORY_SLUG } = {}) {
@@ -242,48 +149,60 @@ export async function fetchRepositoryVariable(name, { repository = REPOSITORY_SL
   }
 }
 
-export async function loadLivePlatformConfig({
+async function loadBaseConfig({
   env = process.env,
   repository = REPOSITORY_SLUG,
   requiredVariableNames = REQUIRED_REPO_VARIABLE_NAMES,
-  optionalVariableNames = [],
   getRepositoryVariable = fetchRepositoryVariable
 } = {}) {
-  const requestedNames = normalizeRequestedNames(requiredVariableNames, optionalVariableNames);
-  const requiredSet = new Set(requiredVariableNames);
+  const requestedNames = normalizeRequestedNames(requiredVariableNames);
   const values = {};
   const missing = [];
 
   await Promise.all(
     requestedNames.map(async (name) => {
-      const spec = SPEC_BY_NAME.get(name);
       const explicit = trimString(env[name]);
-      if (explicit || (spec?.allowEmpty && typeof env[name] === "string")) {
+      if (explicit) {
         values[name] = explicit;
         return;
       }
 
       const fetched = await getRepositoryVariable(name, { repository });
-      if (
-        typeof fetched === "string" &&
-        (fetched.length > 0 || spec?.allowEmpty)
-      ) {
+      if (typeof fetched === "string" && fetched.length > 0) {
         values[name] = fetched;
         return;
       }
 
-      if (requiredSet.has(name)) {
-        missing.push(name);
-      }
+      missing.push(name);
     })
   );
 
   if (missing.length > 0) {
     missing.sort();
-    throw new Error(`Missing required repository variables:\n${missing.map((name) => `- ${name}`).join("\n")}`);
+    throw new Error(
+      `Missing required repository variables:\n${missing.map((name) => `- ${name}`).join("\n")}`
+    );
   }
 
-  return normalizeLivePlatformConfig(values, { repository });
+  return normalizeBaseConfig(values, { repository });
+}
+
+export async function loadDeliveryConfig(options = {}) {
+  return buildResolvedConfig(
+    await loadBaseConfig({
+      ...options,
+      requiredVariableNames: DELIVERY_REPO_VARIABLE_NAMES
+    })
+  );
+}
+
+export async function loadInfrastructureConfig(options = {}) {
+  return buildResolvedConfig(
+    await loadBaseConfig({
+      ...options,
+      requiredVariableNames: INFRASTRUCTURE_REPO_VARIABLE_NAMES
+    })
+  );
 }
 
 export function buildMainTemplateParameters(config, { postgresAdminPassword }) {
@@ -349,9 +268,11 @@ export function buildAppsBootstrapParameters(
     migrationLockTimeout: config.dbMigrationLockTimeout,
     migrationStatementTimeout: config.dbMigrationStatementTimeout,
     seedDefaultTenantId: config.seedDefaultTenantId,
-    seedDefaultAppClientId: config.seedDefaultAppClientId || config.entraWebClientId,
+    seedDefaultAppClientId: config.seedDefaultAppClientId,
     seedDefaultUserOid: config.seedDefaultUserOid,
     seedDefaultUserEmail: config.seedDefaultUserEmail,
     seedDefaultUserDisplayName: config.seedDefaultUserDisplayName
   };
 }
+
+export { buildEntraRedirectUri, deriveProductionWebCustomDomain };

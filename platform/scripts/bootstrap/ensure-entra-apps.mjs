@@ -5,10 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
 import { ensureAzLogin, runAz } from "../../pipeline/shared/scripts/azure/az-command.mjs";
-import {
-  ENTRA_BOOTSTRAP_VARIABLE_NAMES,
-  loadLivePlatformConfig
-} from "../../config/live-config.mjs";
+import { loadDeliveryConfig } from "../../config/live-config.mjs";
 import {
   ENTRA_APP_DISPLAY_NAMES,
   ENTRA_REDIRECT_URI_PATH,
@@ -197,15 +194,73 @@ async function loadGithubEnvironmentNames() {
   return names.length > 0 ? names : ["stage", "production"];
 }
 
+export async function assertEntraBootstrapState() {
+  await ensureAzLogin();
+  const config = await loadDeliveryConfig();
+  await runAz(["account", "set", "--subscription", config.azureSubscriptionId], {
+    output: "none"
+  });
+
+  const apiApp = await getAppByDisplayName(ENTRA_APP_DISPLAY_NAMES.api);
+  if (!apiApp) {
+    throw new Error(`Missing Entra app registration '${ENTRA_APP_DISPLAY_NAMES.api}'`);
+  }
+
+  const webApp = await getAppByDisplayName(ENTRA_APP_DISPLAY_NAMES.web);
+  if (!webApp) {
+    throw new Error(`Missing Entra app registration '${ENTRA_APP_DISPLAY_NAMES.web}'`);
+  }
+
+  const deployApp = await getAppByDisplayName(ENTRA_APP_DISPLAY_NAMES.deploy);
+  if (!deployApp) {
+    throw new Error(`Missing Entra app registration '${ENTRA_APP_DISPLAY_NAMES.deploy}'`);
+  }
+
+  await runAz(["ad", "sp", "show", "--id", deployApp.appId], { output: "none" });
+
+  if (String(webApp.appId || "").trim() !== config.entraWebClientId) {
+    throw new Error(
+      `ENTRA_WEB_CLIENT_ID is '${config.entraWebClientId}', but Entra app '${ENTRA_APP_DISPLAY_NAMES.web}' is '${webApp.appId}'`
+    );
+  }
+
+  if (String(deployApp.appId || "").trim() !== config.azureDeployClientId) {
+    throw new Error(
+      `AZURE_DEPLOY_CLIENT_ID is '${config.azureDeployClientId}', but Entra app '${ENTRA_APP_DISPLAY_NAMES.deploy}' is '${deployApp.appId}'`
+    );
+  }
+
+  const credentialNames = new Set(
+    (await runAz(["ad", "app", "federated-credential", "list", "--id", deployApp.id])).map(
+      (entry) => String(entry?.name || "").trim()
+    )
+  );
+  const requiredCredentialNames = [
+    ...(await loadGithubEnvironmentNames()).map((name) => `github-${name}`),
+    "github-main"
+  ];
+
+  for (const name of requiredCredentialNames) {
+    if (!credentialNames.has(name)) {
+      throw new Error(`Missing federated credential '${name}' on deploy app '${deployApp.appId}'`);
+    }
+  }
+
+  return {
+    apiAppId: apiApp.appId,
+    webAppId: webApp.appId,
+    deployAppId: deployApp.appId,
+    credentialNames: [...credentialNames].sort()
+  };
+}
+
 export async function ensureEntraApps({
   stageWebFqdn,
   prodWebFqdn,
   resetWebClientSecret = false
 } = {}) {
   await ensureAzLogin();
-  const config = await loadLivePlatformConfig({
-    requiredVariableNames: ENTRA_BOOTSTRAP_VARIABLE_NAMES
-  });
+  const config = await loadDeliveryConfig();
   await runAz(["account", "set", "--subscription", config.azureSubscriptionId], {
     output: "none"
   });

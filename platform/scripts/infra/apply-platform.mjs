@@ -13,9 +13,8 @@ import {
   runAzText
 } from "../../pipeline/shared/scripts/azure/az-command.mjs";
 import {
-  INFRA_VARIABLE_NAMES,
   buildMainTemplateParameters,
-  loadLivePlatformConfig
+  loadInfrastructureConfig
 } from "../../config/live-config.mjs";
 
 function envValue(name) {
@@ -52,9 +51,7 @@ async function getKeyVaultSecret(vaultName, secretName, { required = true } = {}
 }
 
 async function buildParameters() {
-  const config = await loadLivePlatformConfig({
-    requiredVariableNames: INFRA_VARIABLE_NAMES
-  });
+  const config = await loadInfrastructureConfig();
   const templateFile = path.resolve("platform/infra/azure/main.bicep");
   const postgresAdminPassword =
     envValue("POSTGRES_ADMIN_PASSWORD") ||
@@ -64,7 +61,7 @@ async function buildParameters() {
 
   if (!postgresAdminPassword) {
     throw new Error(
-      "For the first foundation apply, export POSTGRES_ADMIN_PASSWORD before running pnpm infra:apply. After the foundation exists, pnpm infra:apply reads postgres-admin-password from Key Vault."
+      "For the first foundation apply, export POSTGRES_ADMIN_PASSWORD before running pnpm platform:apply. After the foundation exists, platform apply reads postgres-admin-password from Key Vault."
     );
   }
 

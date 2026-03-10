@@ -8,7 +8,6 @@ Compass uses one production-shaped delivery model:
 
 ## Workflow topology
 
-- `05-pr-labels.yml`: metadata only on `pull_request`
 - `10-pr-sync.yml`: fails stale branches only
 - `20-continuous-delivery-pipeline.yml`: authoritative candidate build, acceptance, and release on `push` to `main`
 - `40-infra.yml`: validates and applies infrastructure only for infra-owned files and direct infra-workflow support files
@@ -25,10 +24,8 @@ The candidate is built once during Commit and then promoted without rebuilds.
 
 Required stage suites are strict by default:
 
-- Commit Stage integration tests provision their own Postgres dependency and fail if setup, migration,
-  seeding, or test execution fails.
-- Acceptance Stage contains only required black-box API and Web suites. Optional visual baselines live
-  outside `tests/acceptance` and are never part of the default stage path.
+- Commit Stage integration tests provision their own Postgres dependency and fail if setup, migration, seeding, or test execution fails.
+- Acceptance Stage contains only required black-box API and Web suites.
 
 ## Validation ownership
 
@@ -48,45 +45,9 @@ Required stage suites are strict by default:
 - `main` stays linear and PRs merge by squash only
 - if Commit, Acceptance, or Release goes red on `main`, the line stops until fixed forward
 
-## Time budgets
-
-- Commit Stage target: 5 minutes
-- Acceptance Stage target: 5 minutes
-- Release Stage target: 10 minutes
-- Total CDP target: 15 minutes
-
-These budgets are part of the pipeline contract. If the pipeline starts drifting above them, treat
-that as delivery work, not background noise.
-
-## Deployment scope
-
-- one Azure resource group, resolved from canonical GitHub repository variables
-- two GitHub deployment environments: `stage` and `production`
-- one stage/prod ACA pair for each deployed app: `api-stage`, `web-stage`, `api-prod`, `web-prod`
-- one migrations job
-- GHCR as the only image registry
-
 ## Live config and secret model
 
 - GitHub repository variables: live non-secret but sensitive deployment values
 - Azure Key Vault: runtime secrets only
 - GitHub environments: deployment protection, history, and URL only
 - repo: code, pipeline logic, contracts, and public metadata only
-
-## Commit Stage shape
-
-Commit Stage is the fast integrated gate on `main`. It owns:
-
-1. static analysis
-2. unit tests
-3. integration tests
-4. candidate image build
-5. canonical manifest generation
-6. API runtime smoke against that manifest
-7. candidate publication
-
-Commit is where the pipeline tries to catch the majority of failures quickly and produce the immutable candidate that later stages promote without rebuilding.
-
-The Commit smoke boundary is intentionally narrow. It proves the migrated API candidate boots from the built image and serves the minimum public contract. It does not prove user-visible browser behavior. That black-box product proof belongs to Acceptance Stage.
-
-Bootstrap is separate from the CDP. The one-time production staging flow lives in [bootstrap/README.md](/Users/justinkropp/.codex/worktrees/68b7/compass/bootstrap/README.md).

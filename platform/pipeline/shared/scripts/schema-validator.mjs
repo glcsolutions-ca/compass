@@ -14,22 +14,14 @@ function loadSchema(relativePath) {
 }
 
 const SCHEMAS = {
-  releaseCandidate: loadSchema("contracts/schemas/release-candidate.schema.json"),
-  acceptanceAttestationPredicate: loadSchema(
-    "contracts/schemas/acceptance-attestation-predicate.schema.json"
-  ),
-  releaseAttestationPredicate: loadSchema(
-    "contracts/schemas/release-attestation-predicate.schema.json"
-  )
+  releaseCandidate: loadSchema("contracts/schemas/release-candidate.schema.json")
 };
 
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 addFormats(ajv);
 
 const VALIDATORS = {
-  releaseCandidate: ajv.compile(SCHEMAS.releaseCandidate),
-  acceptanceAttestationPredicate: ajv.compile(SCHEMAS.acceptanceAttestationPredicate),
-  releaseAttestationPredicate: ajv.compile(SCHEMAS.releaseAttestationPredicate)
+  releaseCandidate: ajv.compile(SCHEMAS.releaseCandidate)
 };
 
 function toDotPath(instancePath) {

@@ -18,8 +18,6 @@ env:
   RELEASE_UNITS_REPO: ghcr.io/glcsolutions-ca/compass-release-units
   CANDIDATE_ID: sha-${{ github.sha }}
   SOURCE_REVISION: ${{ github.sha }}
-  ACCEPTANCE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/acceptance/v1
-  RELEASE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/release/v2
   COMMIT_STAGE_BUDGET_MINUTES: "5"
   ACCEPTANCE_STAGE_BUDGET_MINUTES: "5"
   RELEASE_STAGE_BUDGET_MINUTES: "10"
@@ -254,8 +252,6 @@ jobs:
       - commit-stage-smoke-candidate
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    outputs:
-      release_unit_digest: ${{ steps.release_unit.outputs.release_unit_digest }}
     permissions:
       contents: read
       packages: write
@@ -295,15 +291,12 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Publish release unit
-        id: release_unit
         run: |
           set -euo pipefail
           docker buildx imagetools create \
             --tag "${RELEASE_UNITS_REPO}:${{ env.CANDIDATE_ID }}" \
             "${{ steps.refs.outputs.api_image_ref }}" \
             "${{ steps.refs.outputs.web_image_ref }}"
-          release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ env.CANDIDATE_ID }}" | jq -r '.digest')"
-          echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
 
       - name: Publish canonical release candidate manifest
         run: |
@@ -517,12 +510,8 @@ jobs:
       - acceptance-stage-api
       - acceptance-stage-web
     runs-on: ubuntu-latest
-    outputs:
-      release_unit_digest: ${{ needs.commit-stage-publish-candidate.outputs.release_unit_digest }}
     permissions:
       contents: read
-      id-token: write
-      attestations: write
     env:
       PUBLISH_CANDIDATE: ${{ needs.commit-stage-publish-candidate.result }}
       API_ACCEPTANCE: ${{ needs.acceptance-stage-api.result }}
@@ -551,49 +540,6 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout
-        if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ env.SOURCE_REVISION }}
-          persist-credentials: false
-
-      - name: Setup Node and pnpm
-        if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
-        uses: ./.github/actions/setup-node-pnpm
-
-      - name: Generate acceptance attestation predicate
-        if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
-        run: |
-          predicate_path="${GITHUB_WORKSPACE}/artifacts/attestations/acceptance-predicate.json"
-          mkdir -p "$(dirname "${predicate_path}")"
-          pnpm --filter @compass/pipeline-tools run acceptance:predicate:generate -- \
-            --out "${predicate_path}" \
-            --candidate-id "${{ env.CANDIDATE_ID }}" \
-            --source-revision "${{ env.SOURCE_REVISION }}" \
-            --verdict pass \
-            --workflow-run-id "${{ github.run_id }}" \
-            --tested-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --suite-summary 'api=pass web=pass'
-
-      - name: Attest acceptance verdict to candidate subject
-        if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
-        with:
-          subject-name: ${{ env.RELEASE_UNITS_REPO }}
-          subject-digest: ${{ needs.commit-stage-publish-candidate.outputs.release_unit_digest }}
-          predicate-type: ${{ env.ACCEPTANCE_PREDICATE_TYPE }}
-          predicate-path: ${{ github.workspace }}/artifacts/attestations/acceptance-predicate.json
-
-      - name: Upload acceptance predicate
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: acceptance-stage-artifacts
-          path: artifacts/attestations/acceptance-predicate.json
-          if-no-files-found: warn
-          retention-days: 7
-
       - name: Write acceptance summary
         if: always()
         continue-on-error: true
@@ -615,17 +561,23 @@ jobs:
             --total-budget-minutes "${TOTAL_LEAD_TIME_BUDGET_MINUTES}" \
             --line-stop "$line_stop"
 
-  release-stage-verify-acceptance:
-    name: Release Stage / Verify Acceptance
+  release-stage-prepare-deployment:
+    name: Release Stage / Prepare Deployment
     needs:
       - acceptance-stage
     runs-on: ubuntu-latest
     timeout-minutes: 45
     outputs:
+      resource_group: ${{ steps.config.outputs.resource_group }}
+      api_prod_app_name: ${{ steps.config.outputs.api_prod_app_name }}
+      web_prod_app_name: ${{ steps.config.outputs.web_prod_app_name }}
+      api_stage_app_name: ${{ steps.config.outputs.api_stage_app_name }}
+      web_stage_app_name: ${{ steps.config.outputs.web_stage_app_name }}
+      migrate_job_name: ${{ steps.config.outputs.migrate_job_name }}
+      production_web_base_url: ${{ steps.config.outputs.production_web_base_url }}
       api_stage_base_url: ${{ steps.runtime.outputs.api_stage_base_url }}
       web_stage_base_url: ${{ steps.runtime.outputs.web_stage_base_url }}
       prod_api_base_url: ${{ steps.runtime.outputs.prod_api_base_url }}
-      release_unit_digest: ${{ needs.acceptance-stage.outputs.release_unit_digest }}
     permissions:
       contents: read
       packages: read
@@ -636,9 +588,6 @@ jobs:
         with:
           ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
-
-      - name: Setup Node and pnpm
-        uses: ./.github/actions/setup-node-pnpm
 
       - name: Setup ORAS
         uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
@@ -652,48 +601,34 @@ jobs:
 
       - name: Fetch release candidate manifest
         run: |
-          pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
+          node platform/pipeline/shared/scripts/fetch-release-candidate.mjs \
             --candidate-id "${{ env.CANDIDATE_ID }}" \
             --registry-repo "${MANIFESTS_REPO}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
-      - name: Assert release environment config
+      - name: Resolve delivery config
+        id: config
         env:
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          ACA_API_PROD_APP_NAME: ${{ vars.ACA_API_PROD_APP_NAME }}
-          ACA_WEB_PROD_APP_NAME: ${{ vars.ACA_WEB_PROD_APP_NAME }}
-          ACA_API_STAGE_APP_NAME: ${{ vars.ACA_API_STAGE_APP_NAME }}
-          ACA_WEB_STAGE_APP_NAME: ${{ vars.ACA_WEB_STAGE_APP_NAME }}
-          ACA_MIGRATE_JOB_NAME: ${{ vars.ACA_MIGRATE_JOB_NAME }}
           AZURE_DEPLOY_CLIENT_ID: ${{ vars.AZURE_DEPLOY_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+          DEPLOYMENT_STAMP: ${{ vars.DEPLOYMENT_STAMP }}
           PRODUCTION_WEB_BASE_URL: ${{ vars.PRODUCTION_WEB_BASE_URL }}
+          AUTH_MODE: ${{ vars.AUTH_MODE }}
           ENTRA_WEB_CLIENT_ID: ${{ vars.ENTRA_WEB_CLIENT_ID }}
+          ENTRA_ALLOWED_TENANT_IDS: ${{ vars.ENTRA_ALLOWED_TENANT_IDS }}
         run: |
-          pnpm --filter @compass/pipeline-tools run env:assert -- \
-            --required AZURE_RESOURCE_GROUP \
-            --required ACA_API_PROD_APP_NAME \
-            --required ACA_WEB_PROD_APP_NAME \
-            --required ACA_API_STAGE_APP_NAME \
-            --required ACA_WEB_STAGE_APP_NAME \
-            --required ACA_MIGRATE_JOB_NAME \
-            --required AZURE_DEPLOY_CLIENT_ID \
-            --required AZURE_TENANT_ID \
-            --required AZURE_SUBSCRIPTION_ID \
-            --required PRODUCTION_WEB_BASE_URL \
-            --required ENTRA_WEB_CLIENT_ID
-
-      - name: Verify acceptance attestation
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          pnpm --filter @compass/pipeline-tools run attest:verify -- \
-            --candidate-id "${{ env.CANDIDATE_ID }}" \
-            --source-revision "${{ env.SOURCE_REVISION }}" \
-            --predicate-type "${ACCEPTANCE_PREDICATE_TYPE}" \
-            --repo "${{ github.repository }}" \
-            --subject "${RELEASE_UNITS_REPO}@${{ needs.acceptance-stage.outputs.release_unit_digest }}"
+          json="$(node platform/pipeline/stages/03-release-stage/scripts/prepare-deployment-context.mjs)"
+          {
+            echo "resource_group=$(printf '%s' "$json" | jq -r '.resourceGroup')"
+            echo "api_prod_app_name=$(printf '%s' "$json" | jq -r '.apiProdAppName')"
+            echo "web_prod_app_name=$(printf '%s' "$json" | jq -r '.webProdAppName')"
+            echo "api_stage_app_name=$(printf '%s' "$json" | jq -r '.apiStageAppName')"
+            echo "web_stage_app_name=$(printf '%s' "$json" | jq -r '.webStageAppName')"
+            echo "migrate_job_name=$(printf '%s' "$json" | jq -r '.migrateJobName')"
+            echo "production_web_base_url=$(printf '%s' "$json" | jq -r '.productionWebBaseUrl')"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Azure login
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
@@ -704,17 +639,12 @@ jobs:
 
       - name: Resolve runtime context
         id: runtime
-        env:
-          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
-          API_PROD: ${{ vars.ACA_API_PROD_APP_NAME }}
-          API_STAGE: ${{ vars.ACA_API_STAGE_APP_NAME }}
-          WEB_STAGE: ${{ vars.ACA_WEB_STAGE_APP_NAME }}
         run: |
           json="$(node platform/pipeline/stages/03-release-stage/scripts/resolve-runtime-context.mjs \
-            --resource-group "$RG" \
-            --api-stage-app-name "$API_STAGE" \
-            --web-stage-app-name "$WEB_STAGE" \
-            --api-prod-app-name "$API_PROD")"
+            --resource-group "${{ steps.config.outputs.resource_group }}" \
+            --api-stage-app-name "${{ steps.config.outputs.api_stage_app_name }}" \
+            --web-stage-app-name "${{ steps.config.outputs.web_stage_app_name }}" \
+            --api-prod-app-name "${{ steps.config.outputs.api_prod_app_name }}")"
           {
             echo "api_stage_base_url=$(printf '%s' "$json" | jq -r '.apiStageBaseUrl')"
             echo "web_stage_base_url=$(printf '%s' "$json" | jq -r '.webStageBaseUrl')"
@@ -724,7 +654,7 @@ jobs:
   release-stage-deploy-stage:
     name: Release Stage / Deploy Stage
     needs:
-      - release-stage-verify-acceptance
+      - release-stage-prepare-deployment
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
@@ -743,9 +673,6 @@ jobs:
           ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
 
-      - name: Setup Node and pnpm
-        uses: ./.github/actions/setup-node-pnpm
-
       - name: Setup ORAS
         uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
 
@@ -765,35 +692,31 @@ jobs:
 
       - name: Fetch release candidate manifest
         run: |
-          pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
+          node platform/pipeline/shared/scripts/fetch-release-candidate.mjs \
             --candidate-id "${{ env.CANDIDATE_ID }}" \
             --registry-repo "${MANIFESTS_REPO}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
       - name: Deploy stage apps from candidate
-        env:
-          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
-          API_STAGE_APP_NAME: ${{ vars.ACA_API_STAGE_APP_NAME }}
-          WEB_STAGE_APP_NAME: ${{ vars.ACA_WEB_STAGE_APP_NAME }}
         run: |
           set -euo pipefail
 
           node platform/pipeline/stages/03-release-stage/scripts/deploy-stage-app-from-candidate.mjs \
             --manifest "$RUNNER_TEMP/release-candidate.json" \
-            --resource-group "$RG" \
+            --resource-group "${{ needs.release-stage-prepare-deployment.outputs.resource_group }}" \
             --app api \
-            --app-name "$API_STAGE_APP_NAME" \
-            --stage-api-base-url "${{ needs.release-stage-verify-acceptance.outputs.api_stage_base_url }}" \
-            --stage-web-base-url "${{ needs.release-stage-verify-acceptance.outputs.web_stage_base_url }}" &
+            --app-name "${{ needs.release-stage-prepare-deployment.outputs.api_stage_app_name }}" \
+            --stage-api-base-url "${{ needs.release-stage-prepare-deployment.outputs.api_stage_base_url }}" \
+            --stage-web-base-url "${{ needs.release-stage-prepare-deployment.outputs.web_stage_base_url }}" &
           api_pid=$!
 
           node platform/pipeline/stages/03-release-stage/scripts/deploy-stage-app-from-candidate.mjs \
             --manifest "$RUNNER_TEMP/release-candidate.json" \
-            --resource-group "$RG" \
+            --resource-group "${{ needs.release-stage-prepare-deployment.outputs.resource_group }}" \
             --app web \
-            --app-name "$WEB_STAGE_APP_NAME" \
-            --stage-api-base-url "${{ needs.release-stage-verify-acceptance.outputs.api_stage_base_url }}" \
-            --stage-web-base-url "${{ needs.release-stage-verify-acceptance.outputs.web_stage_base_url }}" &
+            --app-name "${{ needs.release-stage-prepare-deployment.outputs.web_stage_app_name }}" \
+            --stage-api-base-url "${{ needs.release-stage-prepare-deployment.outputs.api_stage_base_url }}" \
+            --stage-web-base-url "${{ needs.release-stage-prepare-deployment.outputs.web_stage_base_url }}" &
           web_pid=$!
 
           wait "$api_pid"
@@ -802,7 +725,7 @@ jobs:
   release-stage-smoke-stage-read-only:
     name: Release Stage / Pre-Migration Stage Smoke
     needs:
-      - release-stage-verify-acceptance
+      - release-stage-prepare-deployment
       - release-stage-deploy-stage
     runs-on: ubuntu-latest
     concurrency:
@@ -822,15 +745,15 @@ jobs:
         id: smoke
         run: |
           node platform/pipeline/stages/03-release-stage/scripts/run-stage-smoke.mjs \
-            --api-base-url "${{ needs.release-stage-verify-acceptance.outputs.api_stage_base_url }}" \
-            --web-base-url "${{ needs.release-stage-verify-acceptance.outputs.web_stage_base_url }}" \
+            --api-base-url "${{ needs.release-stage-prepare-deployment.outputs.api_stage_base_url }}" \
+            --web-base-url "${{ needs.release-stage-prepare-deployment.outputs.web_stage_base_url }}" \
             --include-auth false
           echo "verdict=pass" >> "$GITHUB_OUTPUT"
 
   release-stage-run-migrations:
     name: Release Stage / Run Production Migrations
     needs:
-      - release-stage-verify-acceptance
+      - release-stage-prepare-deployment
       - release-stage-smoke-stage-read-only
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -849,9 +772,6 @@ jobs:
         with:
           ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
-
-      - name: Setup Node and pnpm
-        uses: ./.github/actions/setup-node-pnpm
 
       - name: Setup ORAS
         uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
@@ -872,25 +792,22 @@ jobs:
 
       - name: Fetch release candidate manifest
         run: |
-          pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
+          node platform/pipeline/shared/scripts/fetch-release-candidate.mjs \
             --candidate-id "${{ env.CANDIDATE_ID }}" \
             --registry-repo "${MANIFESTS_REPO}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
       - name: Run production migrations
-        env:
-          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
-          JOB: ${{ vars.ACA_MIGRATE_JOB_NAME }}
         run: |
           node platform/pipeline/stages/03-release-stage/scripts/run-production-migrations.mjs \
             --manifest "$RUNNER_TEMP/release-candidate.json" \
-            --resource-group "$RG" \
-            --job-name "$JOB"
+            --resource-group "${{ needs.release-stage-prepare-deployment.outputs.resource_group }}" \
+            --job-name "${{ needs.release-stage-prepare-deployment.outputs.migrate_job_name }}"
 
   release-stage-smoke-stage-auth:
     name: Release Stage / Post-Migration Stage Smoke
     needs:
-      - release-stage-verify-acceptance
+      - release-stage-prepare-deployment
       - release-stage-run-migrations
     runs-on: ubuntu-latest
     concurrency:
@@ -910,15 +827,15 @@ jobs:
         id: smoke
         run: |
           node platform/pipeline/stages/03-release-stage/scripts/run-stage-smoke.mjs \
-            --api-base-url "${{ needs.release-stage-verify-acceptance.outputs.api_stage_base_url }}" \
-            --web-base-url "${{ needs.release-stage-verify-acceptance.outputs.web_stage_base_url }}" \
+            --api-base-url "${{ needs.release-stage-prepare-deployment.outputs.api_stage_base_url }}" \
+            --web-base-url "${{ needs.release-stage-prepare-deployment.outputs.web_stage_base_url }}" \
             --include-auth true
           echo "verdict=pass" >> "$GITHUB_OUTPUT"
 
   release-stage-deploy-production:
     name: Release Stage / Deploy Production
     needs:
-      - release-stage-verify-acceptance
+      - release-stage-prepare-deployment
       - release-stage-smoke-stage-auth
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -931,16 +848,13 @@ jobs:
       id-token: write
     environment:
       name: production
-      url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
+      url: ${{ needs.release-stage-prepare-deployment.outputs.production_web_base_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
-
-      - name: Setup Node and pnpm
-        uses: ./.github/actions/setup-node-pnpm
 
       - name: Setup ORAS
         uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
@@ -961,35 +875,31 @@ jobs:
 
       - name: Fetch release candidate manifest
         run: |
-          pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
+          node platform/pipeline/shared/scripts/fetch-release-candidate.mjs \
             --candidate-id "${{ env.CANDIDATE_ID }}" \
             --registry-repo "${MANIFESTS_REPO}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
       - name: Deploy production apps from candidate
-        env:
-          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
-          API_PROD_APP_NAME: ${{ vars.ACA_API_PROD_APP_NAME }}
-          WEB_PROD_APP_NAME: ${{ vars.ACA_WEB_PROD_APP_NAME }}
         run: |
           set -euo pipefail
 
           node platform/pipeline/stages/03-release-stage/scripts/deploy-prod-app-from-candidate.mjs \
             --manifest "$RUNNER_TEMP/release-candidate.json" \
-            --resource-group "$RG" \
+            --resource-group "${{ needs.release-stage-prepare-deployment.outputs.resource_group }}" \
             --app api \
-            --app-name "$API_PROD_APP_NAME" \
-            --prod-api-base-url "${{ needs.release-stage-verify-acceptance.outputs.prod_api_base_url }}" \
-            --prod-web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}" &
+            --app-name "${{ needs.release-stage-prepare-deployment.outputs.api_prod_app_name }}" \
+            --prod-api-base-url "${{ needs.release-stage-prepare-deployment.outputs.prod_api_base_url }}" \
+            --prod-web-base-url "${{ needs.release-stage-prepare-deployment.outputs.production_web_base_url }}" &
           api_pid=$!
 
           node platform/pipeline/stages/03-release-stage/scripts/deploy-prod-app-from-candidate.mjs \
             --manifest "$RUNNER_TEMP/release-candidate.json" \
-            --resource-group "$RG" \
+            --resource-group "${{ needs.release-stage-prepare-deployment.outputs.resource_group }}" \
             --app web \
-            --app-name "$WEB_PROD_APP_NAME" \
-            --prod-api-base-url "${{ needs.release-stage-verify-acceptance.outputs.prod_api_base_url }}" \
-            --prod-web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}" &
+            --app-name "${{ needs.release-stage-prepare-deployment.outputs.web_prod_app_name }}" \
+            --prod-api-base-url "${{ needs.release-stage-prepare-deployment.outputs.prod_api_base_url }}" \
+            --prod-web-base-url "${{ needs.release-stage-prepare-deployment.outputs.production_web_base_url }}" &
           web_pid=$!
 
           wait "$api_pid"
@@ -1005,7 +915,7 @@ jobs:
       cancel-in-progress: false
     environment:
       name: production
-      url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
+      url: ${{ needs.release-stage-prepare-deployment.outputs.production_web_base_url }}
     outputs:
       verdict: ${{ steps.smoke.outputs.verdict }}
     steps:
@@ -1018,118 +928,21 @@ jobs:
         id: smoke
         run: |
           node platform/pipeline/stages/03-release-stage/scripts/run-production-smoke.mjs \
-            --web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}"
+            --web-base-url "${{ needs.release-stage-prepare-deployment.outputs.production_web_base_url }}"
           echo "verdict=pass" >> "$GITHUB_OUTPUT"
-
-  release-stage-record-evidence:
-    name: Release Stage / Record Evidence
-    needs:
-      - acceptance-stage
-      - release-stage-verify-acceptance
-      - release-stage-smoke-stage-auth
-      - release-stage-deploy-production
-      - release-stage-smoke-production
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment:
-      name: production
-      url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
-    permissions:
-      contents: read
-      packages: read
-      id-token: write
-      attestations: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ env.SOURCE_REVISION }}
-          persist-credentials: false
-
-      - name: Setup Node and pnpm
-        uses: ./.github/actions/setup-node-pnpm
-
-      - name: Setup ORAS
-        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
-
-      - name: Login to GHCR
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Fetch release candidate manifest
-        run: |
-          pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
-            --candidate-id "${{ env.CANDIDATE_ID }}" \
-            --registry-repo "${MANIFESTS_REPO}" \
-            --out "$RUNNER_TEMP/release-candidate.json"
-
-      - name: Record release evidence
-        run: |
-          mkdir -p artifacts/release
-          node platform/pipeline/stages/03-release-stage/scripts/record-release-evidence.mjs \
-            --manifest "$RUNNER_TEMP/release-candidate.json" \
-            --stage-api-base-url "${{ needs.release-stage-verify-acceptance.outputs.api_stage_base_url }}" \
-            --stage-web-base-url "${{ needs.release-stage-verify-acceptance.outputs.web_stage_base_url }}" \
-            --stage-smoke-verdict "${{ needs.release-stage-smoke-stage-auth.outputs.verdict }}" \
-            --production-web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}" \
-            --production-smoke-verdict "${{ needs.release-stage-smoke-production.outputs.verdict }}" \
-            --out artifacts/release/release-evidence.json
-
-      - name: Generate release attestation predicate
-        run: |
-          predicate_path="${GITHUB_WORKSPACE}/artifacts/attestations/release-predicate.json"
-          mkdir -p "$(dirname "$predicate_path")"
-          pnpm --filter @compass/pipeline-tools run release:predicate:generate -- \
-            --out "$predicate_path" \
-            --candidate-id "${{ env.CANDIDATE_ID }}" \
-            --source-revision "${{ env.SOURCE_REVISION }}" \
-            --verdict pass \
-            --workflow-run-id "${{ github.run_id }}" \
-            --released-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --deployment-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --api-image "$(jq -r '.artifacts.apiImage' "$RUNNER_TEMP/release-candidate.json")" \
-            --web-image "$(jq -r '.artifacts.webImage' "$RUNNER_TEMP/release-candidate.json")" \
-            --stage-api-base-url "${{ needs.release-stage-verify-acceptance.outputs.api_stage_base_url }}" \
-            --stage-web-base-url "${{ needs.release-stage-verify-acceptance.outputs.web_stage_base_url }}" \
-            --stage-smoke-verdict "${{ needs.release-stage-smoke-stage-auth.outputs.verdict }}" \
-            --production-web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}" \
-            --production-smoke-verdict "${{ needs.release-stage-smoke-production.outputs.verdict }}"
-
-      - name: Attest release verdict to candidate subject
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
-        with:
-          subject-name: ${{ env.RELEASE_UNITS_REPO }}
-          subject-digest: ${{ needs.release-stage-verify-acceptance.outputs.release_unit_digest }}
-          predicate-type: ${{ env.RELEASE_PREDICATE_TYPE }}
-          predicate-path: ${{ github.workspace }}/artifacts/attestations/release-predicate.json
-
-      - name: Upload release artifacts
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-stage-artifacts
-          path: |
-            artifacts/release
-            artifacts/attestations/release-predicate.json
-          if-no-files-found: warn
-          retention-days: 7
 
   release-stage:
     name: Release Stage
     if: always()
     runs-on: ubuntu-latest
     needs:
-      - release-stage-verify-acceptance
+      - release-stage-prepare-deployment
       - release-stage-deploy-stage
       - release-stage-smoke-stage-read-only
       - release-stage-run-migrations
       - release-stage-smoke-stage-auth
       - release-stage-deploy-production
       - release-stage-smoke-production
-      - release-stage-record-evidence
     environment:
       name: production
     steps:
@@ -1141,14 +954,13 @@ jobs:
 
       - name: Assert expected path succeeded
         env:
-          VERIFY_ACCEPTANCE: ${{ needs.release-stage-verify-acceptance.result }}
+          PREPARE_DEPLOYMENT: ${{ needs.release-stage-prepare-deployment.result }}
           DEPLOY_STAGE: ${{ needs.release-stage-deploy-stage.result }}
           PRE_MIGRATION_STAGE_SMOKE: ${{ needs.release-stage-smoke-stage-read-only.result }}
           RUN_PRODUCTION_MIGRATIONS: ${{ needs.release-stage-run-migrations.result }}
           POST_MIGRATION_STAGE_SMOKE: ${{ needs.release-stage-smoke-stage-auth.result }}
           DEPLOY_PRODUCTION: ${{ needs.release-stage-deploy-production.result }}
           SMOKE_PRODUCTION: ${{ needs.release-stage-smoke-production.result }}
-          RECORD_EVIDENCE: ${{ needs.release-stage-record-evidence.result }}
         run: |
           set -euo pipefail
 
@@ -1161,39 +973,36 @@ jobs:
             fi
           }
 
-          assert_success verify-acceptance "$VERIFY_ACCEPTANCE"
+          assert_success prepare-deployment "$PREPARE_DEPLOYMENT"
           assert_success deploy-stage "$DEPLOY_STAGE"
           assert_success pre-migration-stage-smoke "$PRE_MIGRATION_STAGE_SMOKE"
           assert_success run-production-migrations "$RUN_PRODUCTION_MIGRATIONS"
           assert_success post-migration-stage-smoke "$POST_MIGRATION_STAGE_SMOKE"
           assert_success deploy-production "$DEPLOY_PRODUCTION"
           assert_success smoke-production "$SMOKE_PRODUCTION"
-          assert_success record-evidence "$RECORD_EVIDENCE"
 
       - name: Write release summary
         if: always()
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERIFY_ACCEPTANCE: ${{ needs.release-stage-verify-acceptance.result }}
+          PREPARE_DEPLOYMENT: ${{ needs.release-stage-prepare-deployment.result }}
           DEPLOY_STAGE: ${{ needs.release-stage-deploy-stage.result }}
           PRE_MIGRATION_STAGE_SMOKE: ${{ needs.release-stage-smoke-stage-read-only.result }}
           RUN_PRODUCTION_MIGRATIONS: ${{ needs.release-stage-run-migrations.result }}
           POST_MIGRATION_STAGE_SMOKE: ${{ needs.release-stage-smoke-stage-auth.result }}
           DEPLOY_PRODUCTION: ${{ needs.release-stage-deploy-production.result }}
           SMOKE_PRODUCTION: ${{ needs.release-stage-smoke-production.result }}
-          RECORD_EVIDENCE: ${{ needs.release-stage-record-evidence.result }}
         run: |
           line_stop=false
           for result in \
-            "$VERIFY_ACCEPTANCE" \
+            "$PREPARE_DEPLOYMENT" \
             "$DEPLOY_STAGE" \
             "$PRE_MIGRATION_STAGE_SMOKE" \
             "$RUN_PRODUCTION_MIGRATIONS" \
             "$POST_MIGRATION_STAGE_SMOKE" \
             "$DEPLOY_PRODUCTION" \
-            "$SMOKE_PRODUCTION" \
-            "$RECORD_EVIDENCE"; do
+            "$SMOKE_PRODUCTION"; do
             if [ "$result" != "success" ]; then
               line_stop=true
             fi
@@ -1213,6 +1022,8 @@ jobs:
             echo ""
             echo "## Release Stage"
             echo "- Candidate: ${{ env.CANDIDATE_ID }}"
+            echo "- Stage targets: ${{ needs.release-stage-prepare-deployment.outputs.api_stage_app_name }}, ${{ needs.release-stage-prepare-deployment.outputs.web_stage_app_name }}"
+            echo "- Production targets: ${{ needs.release-stage-prepare-deployment.outputs.api_prod_app_name }}, ${{ needs.release-stage-prepare-deployment.outputs.web_prod_app_name }}"
             echo "- Post-migration stage smoke verdict: ${{ needs.release-stage-smoke-stage-auth.outputs.verdict }}"
             echo "- Production smoke verdict: ${{ needs.release-stage-smoke-production.outputs.verdict }}"
           } >> "$GITHUB_STEP_SUMMARY"

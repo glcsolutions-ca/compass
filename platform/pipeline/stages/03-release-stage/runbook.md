@@ -13,7 +13,7 @@ Release Stage takes an accepted candidate and deploys it to production without r
 Release uses two distinct GitHub environments:
 
 - `stage` for candidate verification and non-production mutation
-- `production` for production deploy, smoke, and release evidence
+- `production` for production deploy and smoke
 
 Commit Stage and Acceptance Stage are free to run for newer commits while stage and production mutations remain serialized.
 
@@ -21,14 +21,13 @@ Commit Stage and Acceptance Stage are free to run for newer commits while stage 
 
 Forward release:
 
-1. verify the acceptance attestation
+1. prepare deployment from the accepted candidate
 2. deploy the candidate digests to `api-stage` and `web-stage`
 3. run read-only stage smoke
 4. run migrations against the production database
 5. run stage auth smoke
 6. deploy the same digests to `api-prod` and `web-prod`
 7. run production smoke
-8. record release evidence and attestation
 
 ## Mainline rule
 

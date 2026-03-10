@@ -26,7 +26,6 @@ Compass is a product-first monorepo. Use the product surfaces first and only dro
 - `pnpm acceptance:api`
 - `pnpm acceptance:web`
 - `pnpm dev:desktop`
-- `pnpm infra:whatif`
 
 ## Testing model
 
@@ -62,4 +61,4 @@ Rule of thumb:
 
 ## Admin-only tooling
 
-Bootstrap and deployment recovery scripts are intentionally not part of normal feature development. Use the root `scripts/` directory for developer entrypoints and `platform/scripts/bootstrap` or `platform/scripts/infra` only when operating the platform.
+Bootstrap and deployment recovery scripts are intentionally not part of normal feature development. Use `pnpm platform:check` and `pnpm platform:apply` as the only public operator commands.

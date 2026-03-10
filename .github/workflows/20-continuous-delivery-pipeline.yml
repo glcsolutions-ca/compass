@@ -18,6 +18,10 @@ env:
   RELEASE_UNITS_REPO: ghcr.io/glcsolutions-ca/compass-release-units
   ACCEPTANCE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/acceptance/v1
   RELEASE_PREDICATE_TYPE: https://compass.glcsolutions.ca/pipeline/attestations/release/v2
+  COMMIT_STAGE_BUDGET_MINUTES: "5"
+  ACCEPTANCE_STAGE_BUDGET_MINUTES: "5"
+  RELEASE_STAGE_BUDGET_MINUTES: "10"
+  TOTAL_LEAD_TIME_BUDGET_MINUTES: "15"
 
 jobs:
   prepare-candidate:
@@ -430,6 +434,10 @@ jobs:
             --repo "${{ github.repository }}" \
             --run-id "${{ github.run_id }}" \
             --headline "Commit Stage Timing" \
+            --commit-budget-minutes "${COMMIT_STAGE_BUDGET_MINUTES}" \
+            --acceptance-budget-minutes "${ACCEPTANCE_STAGE_BUDGET_MINUTES}" \
+            --release-budget-minutes "${RELEASE_STAGE_BUDGET_MINUTES}" \
+            --total-budget-minutes "${TOTAL_LEAD_TIME_BUDGET_MINUTES}" \
             --line-stop "$line_stop"
 
           {
@@ -672,6 +680,10 @@ jobs:
             --repo "${{ github.repository }}" \
             --run-id "${{ github.run_id }}" \
             --headline "Acceptance Stage Timing" \
+            --commit-budget-minutes "${COMMIT_STAGE_BUDGET_MINUTES}" \
+            --acceptance-budget-minutes "${ACCEPTANCE_STAGE_BUDGET_MINUTES}" \
+            --release-budget-minutes "${RELEASE_STAGE_BUDGET_MINUTES}" \
+            --total-budget-minutes "${TOTAL_LEAD_TIME_BUDGET_MINUTES}" \
             --line-stop "$line_stop"
 
   release-stage-verify-acceptance:
@@ -1272,6 +1284,10 @@ jobs:
             --repo "${{ github.repository }}" \
             --run-id "${{ github.run_id }}" \
             --headline "Release Stage Timing" \
+            --commit-budget-minutes "${COMMIT_STAGE_BUDGET_MINUTES}" \
+            --acceptance-budget-minutes "${ACCEPTANCE_STAGE_BUDGET_MINUTES}" \
+            --release-budget-minutes "${RELEASE_STAGE_BUDGET_MINUTES}" \
+            --total-budget-minutes "${TOTAL_LEAD_TIME_BUDGET_MINUTES}" \
             --line-stop "$line_stop"
 
           {

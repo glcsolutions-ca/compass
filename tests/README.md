@@ -12,11 +12,15 @@ This repository uses one strict taxonomy:
 ```bash
 pnpm verify
 pnpm acceptance
-pnpm acceptance:api
-pnpm acceptance:web
-pnpm acceptance:desktop
 pnpm --filter @compass/api test:integration
 pnpm --filter @compass/pipeline-tools test
+```
+
+Focused suite commands exist when you are working on one acceptance surface:
+
+```bash
+pnpm acceptance:api
+pnpm acceptance:web
 ```
 
 ## Directory model
@@ -25,7 +29,8 @@ pnpm --filter @compass/pipeline-tools test
 - colocated `*.integration.test.ts` files beside the app module they exercise when real adapters are required
 - `tests/acceptance/api` for black-box API flows
 - `tests/acceptance/web` for browser/user journeys
-- `tests/acceptance/desktop` for desktop black-box workflows
+
+Desktop intentionally has no acceptance directory yet. We will only add one when desktop has a production-shaped release path and a real black-box suite.
 
 ## Acceptance references
 

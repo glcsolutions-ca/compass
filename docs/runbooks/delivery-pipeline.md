@@ -41,6 +41,16 @@ The candidate is built once during Commit and then promoted without rebuilds.
 - `main` stays linear and PRs merge by squash only
 - if Commit, Acceptance, or Release goes red on `main`, the line stops until fixed forward
 
+## Time budgets
+
+- Commit Stage target: 5 minutes
+- Acceptance Stage target: 5 minutes
+- Release Stage target: 10 minutes
+- Total CDP target: 15 minutes
+
+These budgets are part of the pipeline contract. If the pipeline starts drifting above them, treat
+that as delivery work, not background noise.
+
 ## Deployment scope
 
 - one Azure resource group: `rg-compass-prd-cc-001`

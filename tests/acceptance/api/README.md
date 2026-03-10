@@ -20,3 +20,6 @@ Set target endpoint via:
 ## Source of truth
 
 - `tests/acceptance/api/thread-lifecycle.ts`
+
+This suite is intentionally business-facing. It proves an authenticated user can work with threads
+through the public HTTP interface without asserting internal implementation details.

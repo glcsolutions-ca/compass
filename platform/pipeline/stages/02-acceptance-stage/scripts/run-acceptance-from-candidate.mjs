@@ -5,7 +5,7 @@ import { parseCliArgs, requireOption } from "../../../shared/scripts/cli-utils.m
 import { runCommand } from "../../../shared/scripts/command-runner.mjs";
 import { withCandidateRuntime } from "../../../shared/scripts/run-candidate-runtime.mjs";
 
-const ACCEPTANCE_SUITES = new Set(["api", "web", "desktop"]);
+const ACCEPTANCE_SUITES = new Set(["api", "web"]);
 
 function normalizeSuites(inputSuites) {
   const asArray =
@@ -55,7 +55,6 @@ export async function runCandidateRuntimeChecks({
   const selectedSuites = normalizeSuites(suites);
   const shouldRunApiAcceptance = selectedSuites.includes("api");
   const shouldRunWebAcceptance = selectedSuites.includes("web");
-  const shouldRunDesktopAcceptance = selectedSuites.includes("desktop");
   const diagnosticsDir = path.resolve(outputDir);
 
   await mkdir(diagnosticsDir, { recursive: true });
@@ -93,13 +92,6 @@ export async function runCandidateRuntimeChecks({
           cwd: path.resolve(".")
         });
       }
-      if (shouldRunDesktopAcceptance) {
-        await runCommand("pnpm", ["acceptance:desktop"], {
-          env: e2eEnv,
-          cwd: path.resolve(".")
-        });
-      }
-
       const result = {
         schemaVersion: "acceptance-runtime.v1",
         candidateId: manifest.candidateId,

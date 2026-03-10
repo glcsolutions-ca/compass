@@ -23,7 +23,8 @@ Compass is a product-first monorepo. Use the product surfaces first and only dro
 - `pnpm --filter @compass/web test`
 - `pnpm --filter @compass/api test`
 - `pnpm --filter @compass/api test:integration`
-- `pnpm acceptance:desktop`
+- `pnpm acceptance:api`
+- `pnpm acceptance:web`
 - `pnpm dev:desktop`
 - `pnpm infra:whatif`
 
@@ -31,9 +32,9 @@ Compass is a product-first monorepo. Use the product surfaces first and only dro
 
 - colocated unit tests live beside source as `*.test.ts(x)`
 - colocated integration tests live beside source as `*.integration.test.ts`
-- black-box acceptance tests live under `tests/acceptance/{api,web,desktop}`
+- black-box acceptance tests live under `tests/acceptance/{api,web}`
 - the required CDP Acceptance Stage currently runs `api` and `web` only
-- desktop acceptance remains black-box but sits outside the required CDP path until desktop has a first-class release path
+- desktop currently has no acceptance suite because it does not yet have a production-shaped release path
 
 ## Git integration rules
 

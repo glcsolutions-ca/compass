@@ -29,7 +29,7 @@ Those suites are black-box only:
 - API acceptance interacts over public HTTP
 - Web acceptance interacts through the browser and public UI
 
-Desktop acceptance remains black-box, but it is outside the required CDP path until desktop has a first-class release path in the same promotion model.
+Desktop is intentionally outside Acceptance Stage until it has a first-class production-shaped release path and a real black-box suite to match it.
 
 ## Evidence
 

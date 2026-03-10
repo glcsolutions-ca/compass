@@ -10,7 +10,7 @@ compass/
 ├─ docs/{architecture,adr,spikes}
 ├─ packages/{contracts,database,runtime-agent,runtime-protocol,sdk,testkit,ui}
 ├─ platform/{infra,pipeline,scripts}
-└─ tests/acceptance/{api,desktop,web}
+└─ tests/acceptance/{api,web}
 ```
 
 ## Typical workflow
@@ -69,6 +69,10 @@ pnpm --filter @compass/api test
 
 # API integration tests
 pnpm --filter @compass/api test:integration
+
+# Focused acceptance runs when needed
+pnpm acceptance:api
+pnpm acceptance:web
 ```
 
 ## Mental model

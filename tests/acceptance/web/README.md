@@ -15,3 +15,6 @@ pnpm acceptance:web
 - `tests/acceptance/web/thread-lifecycle.spec.ts`
 - `tests/acceptance/web/chat-layout.spec.ts`
 - `tests/acceptance/web/playwright.config.ts`
+
+These suites are black-box user journeys. They interact through the browser and assert
+user-observable behavior rather than internal component wiring.

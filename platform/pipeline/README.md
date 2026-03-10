@@ -30,6 +30,7 @@ The design goal is simple:
 - one authoritative candidate publication point: `push` to `main`
 - one build of the release unit
 - one candidate promoted without rebuilds
+- one set of explicit time budgets for the whole pipeline
 
 ## Workflow topology
 
@@ -94,3 +95,15 @@ The same manifest contract is used:
 - treat the line as unhealthy if Acceptance Stage or Release Stage fails for the promoted candidate
 - treat red `main` as a line-stop until fixed forward
 - let Commit and Acceptance for newer commits run immediately while stage and production mutations remain serialized
+
+## Time budgets
+
+The CDP uses explicit target budgets:
+
+- Commit Stage: 5 minutes
+- Acceptance Stage: 5 minutes
+- Release Stage: 10 minutes
+- Total lead time: 15 minutes
+
+These are not decorative numbers. Stage summaries report the actual duration against the target, and
+budget breaches are treated as pipeline defects to fix before they become the new normal.

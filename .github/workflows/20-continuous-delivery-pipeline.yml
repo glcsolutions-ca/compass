@@ -451,7 +451,10 @@ jobs:
     name: Acceptance Stage / API
     needs:
       - prepare-candidate
-      - commit-stage
+      - commit-stage-static-analysis
+      - commit-stage-unit-tests
+      - commit-stage-integration-tests
+      - commit-stage-smoke-candidate
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -467,9 +470,6 @@ jobs:
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
 
-      - name: Setup ORAS
-        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
-
       - name: Login to GHCR
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
         with:
@@ -477,13 +477,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve release candidate manifest
-        run: |
-          pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
-            --candidate-id "${{ needs.prepare-candidate.outputs.candidate_id }}" \
-            --registry-repo "${MANIFESTS_REPO}" \
-            --out "$RUNNER_TEMP/release-candidate.json"
-          pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
+      - name: Download canonical manifest artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-candidate-manifest
+          path: ${{ runner.temp }}
+
+      - name: Validate canonical release candidate manifest
+        run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
 
       - name: Run API acceptance
         run: |
@@ -505,7 +506,10 @@ jobs:
     name: Acceptance Stage / Web
     needs:
       - prepare-candidate
-      - commit-stage
+      - commit-stage-static-analysis
+      - commit-stage-unit-tests
+      - commit-stage-integration-tests
+      - commit-stage-smoke-candidate
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -521,9 +525,6 @@ jobs:
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
 
-      - name: Setup ORAS
-        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
-
       - name: Login to GHCR
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
         with:
@@ -531,13 +532,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve release candidate manifest
-        run: |
-          pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
-            --candidate-id "${{ needs.prepare-candidate.outputs.candidate_id }}" \
-            --registry-repo "${MANIFESTS_REPO}" \
-            --out "$RUNNER_TEMP/release-candidate.json"
-          pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
+      - name: Download canonical manifest artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-candidate-manifest
+          path: ${{ runner.temp }}
+
+      - name: Validate canonical release candidate manifest
+        run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
 
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
@@ -563,6 +565,7 @@ jobs:
     if: always()
     needs:
       - prepare-candidate
+      - commit-stage-publish-candidate
       - acceptance-stage-api
       - acceptance-stage-web
     runs-on: ubuntu-latest
@@ -574,6 +577,7 @@ jobs:
       id-token: write
       attestations: write
     env:
+      PUBLISH_CANDIDATE: ${{ needs.commit-stage-publish-candidate.result }}
       API_ACCEPTANCE: ${{ needs.acceptance-stage-api.result }}
       WEB_ACCEPTANCE: ${{ needs.acceptance-stage-web.result }}
     steps:
@@ -587,6 +591,10 @@ jobs:
       - name: Assert expected path succeeded
         run: |
           set -euo pipefail
+          if [ "$PUBLISH_CANDIDATE" != "success" ]; then
+            echo "commit-stage-publish-candidate finished with $PUBLISH_CANDIDATE" >&2
+            exit 1
+          fi
           if [ "$API_ACCEPTANCE" != "success" ]; then
             echo "acceptance-stage-api finished with $API_ACCEPTANCE" >&2
             exit 1
@@ -597,22 +605,22 @@ jobs:
           fi
 
       - name: Checkout
-        if: ${{ env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
+        if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.prepare-candidate.outputs.source_revision }}
           persist-credentials: false
 
       - name: Setup Node and pnpm
-        if: ${{ env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
+        if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Setup ORAS
-        if: ${{ env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
+        if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
 
       - name: Login to GHCR
-        if: ${{ env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
+        if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
         with:
           registry: ghcr.io
@@ -620,7 +628,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve release candidate manifest
-        if: ${{ env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
+        if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         id: resolve
         run: |
           set -euo pipefail
@@ -634,7 +642,7 @@ jobs:
           echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
 
       - name: Generate acceptance attestation predicate
-        if: ${{ env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
+        if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         run: |
           predicate_path="${GITHUB_WORKSPACE}/artifacts/attestations/acceptance-predicate.json"
           mkdir -p "$(dirname "${predicate_path}")"
@@ -648,7 +656,7 @@ jobs:
             --suite-summary 'api=pass web=pass'
 
       - name: Attest acceptance verdict to candidate subject
-        if: ${{ env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
+        if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-name: ${{ env.RELEASE_UNITS_REPO }}

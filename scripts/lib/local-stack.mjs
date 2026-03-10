@@ -3,6 +3,7 @@ import { constants as fsConstants } from "node:fs";
 import { mkdir, open, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { Client } from "pg";
 import { ensureEnvSetup } from "../env-setup.mjs";
 import { resolveLocalDevEnv } from "./local-env.mjs";
 
@@ -47,6 +48,44 @@ function delay(ms, signal) {
 
     signal?.addEventListener("abort", onAbort, { once: true });
   });
+}
+
+async function canConnectDatabase(databaseUrl, { signal } = {}) {
+  if (!databaseUrl) {
+    return false;
+  }
+
+  const client = new Client({ connectionString: databaseUrl });
+  try {
+    await client.connect();
+    throwIfAborted(signal);
+    await client.query("SELECT 1");
+    return true;
+  } catch (error) {
+    if (signal?.aborted) {
+      throw createAbortError();
+    }
+
+    return false;
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
+async function waitForDatabaseHealth(databaseUrl, timeoutMs = 30_000, { signal } = {}) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    throwIfAborted(signal);
+
+    if (await canConnectDatabase(databaseUrl, { signal })) {
+      return;
+    }
+
+    await delay(250, signal);
+  }
+
+  throw new Error(`Health check failed for database ${databaseUrl ?? "<missing DATABASE_URL>"}`);
 }
 
 export function mapExitCode(code, signal) {
@@ -106,6 +145,19 @@ function runWorkspaceCommand(command, args, cwd, { allowFailure = false, env = p
 
       reject(new Error(`${command} ${args.join(" ")} failed with exit code ${String(code)}`));
     });
+  });
+}
+
+function spawnWorkspaceProcess(
+  command,
+  args,
+  { cwd = ROOT_DIR, env = process.env, detached = false } = {}
+) {
+  return spawn(command, args, {
+    cwd,
+    stdio: "inherit",
+    env,
+    detached
   });
 }
 
@@ -283,6 +335,26 @@ async function startDependencies(rootDir, env) {
   );
 }
 
+async function stopDependencies(rootDir, env) {
+  await runWorkspaceCommand(
+    process.execPath,
+    [path.resolve(rootDir, "packages/database/scripts/postgres-compose.mjs"), "down"],
+    rootDir,
+    {
+      allowFailure: true,
+      env
+    }
+  );
+}
+
+function startApiProcess(rootDir, env) {
+  return spawnWorkspaceProcess(pnpmCommand(), ["--filter", "@compass/api", "dev"], {
+    cwd: rootDir,
+    env,
+    detached: process.platform !== "win32"
+  });
+}
+
 function launchAppStack(rootDir, env) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [DEV_APPS_RUNNER_PATH], {
@@ -314,6 +386,43 @@ function launchAppStack(rootDir, env) {
       resolve(mapExitCode(code, signal));
     });
   });
+}
+
+function startManagedFullStack(rootDir, env) {
+  return spawnWorkspaceProcess(process.execPath, [DEV_APPS_RUNNER_PATH], {
+    cwd: rootDir,
+    env,
+    detached: process.platform !== "win32"
+  });
+}
+
+async function stopManagedChild(child, { timeoutMs = 10_000 } = {}) {
+  const childPid = child.pid;
+  if (!Number.isInteger(childPid) || childPid < 1) {
+    return;
+  }
+
+  if (process.platform !== "win32") {
+    await killProcessGroupIfRunning(childPid, { timeoutMs }).catch(() => {});
+  }
+
+  if (!(await isPidRunning(childPid))) {
+    return;
+  }
+
+  child.kill("SIGTERM");
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (!(await isPidRunning(childPid))) {
+      return;
+    }
+
+    await delay(100);
+  }
+
+  if (await isPidRunning(childPid)) {
+    child.kill("SIGKILL");
+  }
 }
 
 async function launchAppStackDetached(rootDir, env) {
@@ -370,6 +479,33 @@ export async function isHealthy(url, { signal } = {}) {
   }
 }
 
+export async function areServicesHealthy(services, env, { signal } = {}) {
+  for (const service of services) {
+    if (service === "database") {
+      if (!(await canConnectDatabase(env.DATABASE_URL, { signal }))) {
+        return false;
+      }
+      continue;
+    }
+
+    if (service === "api") {
+      if (!(await isHealthy(`${env.VITE_API_BASE_URL.replace(/\/$/, "")}/health`, { signal }))) {
+        return false;
+      }
+      continue;
+    }
+
+    if (service === "web") {
+      if (!(await isHealthy(`${env.WEB_BASE_URL.replace(/\/$/, "")}/health`, { signal }))) {
+        return false;
+      }
+      continue;
+    }
+  }
+
+  return true;
+}
+
 export async function waitForHttpHealth(url, timeoutMs = 30_000, { signal } = {}) {
   const startedAt = Date.now();
   let lastError = null;
@@ -407,11 +543,160 @@ export async function waitForLocalStackHealth(env, { timeoutMs = 30_000, signal 
   await waitForHttpHealth(webHealthUrl, timeoutMs, { signal });
 }
 
-export async function ensureLocalStack({
-  rootDir = ROOT_DIR,
-  env,
-  timeoutMs = 30_000
-} = {}) {
+async function waitForServices(services, env, { timeoutMs = 30_000, signal } = {}) {
+  for (const service of services) {
+    if (service === "database") {
+      await waitForDatabaseHealth(env.DATABASE_URL, timeoutMs, { signal });
+      continue;
+    }
+
+    if (service === "api") {
+      await waitForHttpHealth(`${env.VITE_API_BASE_URL.replace(/\/$/, "")}/health`, timeoutMs, {
+        signal
+      });
+      continue;
+    }
+
+    if (service === "web") {
+      await waitForHttpHealth(`${env.WEB_BASE_URL.replace(/\/$/, "")}/health`, timeoutMs, {
+        signal
+      });
+    }
+  }
+}
+
+async function hasConflictingManagedStack(rootDir) {
+  const lock = await readLock(rootDir);
+  if (!lock) {
+    return false;
+  }
+
+  const ownerPid = Number(lock.ownerPid);
+  if (lock.mode === "up") {
+    return await isProcessGroupRunning(ownerPid);
+  }
+
+  return await isPidRunning(ownerPid);
+}
+
+async function startPolicyServices(policy, rootDir, env) {
+  const cleanupTasks = [];
+
+  if (policy.startupTarget === "none") {
+    return async () => {};
+  }
+
+  if (policy.startupTarget === "dependencies") {
+    await startDependencies(rootDir, env);
+    cleanupTasks.push(async () => {
+      await stopDependencies(rootDir, env);
+    });
+  }
+
+  if (policy.startupTarget === "api") {
+    await startDependencies(rootDir, env);
+    cleanupTasks.push(async () => {
+      await stopDependencies(rootDir, env);
+    });
+
+    const apiProcess = startApiProcess(rootDir, env);
+    cleanupTasks.unshift(async () => {
+      await stopManagedChild(apiProcess);
+    });
+  }
+
+  if (policy.startupTarget === "full") {
+    await startDependencies(rootDir, env);
+    cleanupTasks.push(async () => {
+      await stopDependencies(rootDir, env);
+    });
+
+    const stackProcess = startManagedFullStack(rootDir, env);
+    cleanupTasks.unshift(async () => {
+      await stopManagedChild(stackProcess);
+    });
+  }
+
+  await waitForServices(policy.requiredServices, env);
+
+  return async () => {
+    for (const cleanupTask of cleanupTasks) {
+      await cleanupTask().catch(() => {});
+    }
+  };
+}
+
+async function prepareLocalStackForPolicy(policy, { rootDir = ROOT_DIR, env = process.env } = {}) {
+  const runtime = await resolveLocalRuntimeEnv({ rootDir, env });
+  const reusable =
+    policy.reuseExisting &&
+    policy.requiredServices.length > 0 &&
+    (await areServicesHealthy(policy.requiredServices, runtime.env));
+
+  if (reusable) {
+    return {
+      env: runtime.env,
+      reused: true,
+      cleanup: async () => {}
+    };
+  }
+
+  if ((await hasConflictingManagedStack(rootDir)) && policy.requiredServices.length > 0) {
+    throw new Error(
+      `${policy.name}: a managed local stack is already running but is not healthy enough for this workflow. Run 'pnpm dev:down' and retry.`
+    );
+  }
+
+  const cleanup = await startPolicyServices(policy, rootDir, runtime.env);
+  return {
+    env: runtime.env,
+    reused: false,
+    cleanup
+  };
+}
+
+export async function runWorkflowWithLocalStackPolicy(
+  policy,
+  workflow,
+  { rootDir = ROOT_DIR, env = process.env } = {}
+) {
+  const prepared = await prepareLocalStackForPolicy(policy, { rootDir, env });
+  const workflowEnv = policy.buildWorkflowEnv
+    ? policy.buildWorkflowEnv(prepared.env)
+    : prepared.env;
+
+  try {
+    return await workflow({
+      env: workflowEnv,
+      reused: prepared.reused
+    });
+  } finally {
+    if (policy.cleanupIfStarted && !prepared.reused) {
+      await prepared.cleanup();
+    }
+  }
+}
+
+export async function runCommandWithLocalStackPolicy(
+  policy,
+  { command, args, cwd = ROOT_DIR, env = process.env } = {}
+) {
+  return await runWorkflowWithLocalStackPolicy(
+    policy,
+    async ({ env: workflowEnv }) => {
+      await runCommand(command, args, {
+        cwd,
+        env: workflowEnv
+      });
+    },
+    {
+      rootDir: cwd,
+      env
+    }
+  );
+}
+
+export async function ensureLocalStack({ rootDir = ROOT_DIR, env, timeoutMs = 30_000 } = {}) {
   const runtime = env ? { env } : await resolveLocalRuntimeEnv({ rootDir });
 
   const apiHealthUrl = `${runtime.env.VITE_API_BASE_URL.replace(/\/$/, "")}/health`;

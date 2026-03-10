@@ -43,14 +43,22 @@ tests/
 - `pnpm install`
 - `pnpm dev`
 - `pnpm dev:desktop`
+- `pnpm test:integration`
+- `pnpm test:acceptance`
 - `pnpm lint`
 - `pnpm typecheck`
 - `pnpm test`
 - `pnpm build`
 - `pnpm format`
 - `pnpm format:check`
-- `pnpm test:acceptance`
 - `pnpm infra:apply`
+
+Primary commands are self-sufficient. `pnpm dev`, `pnpm test:integration`, and
+`pnpm test:acceptance*` start what they need from a cold local state, reuse a healthy `pnpm dev:up`
+stack when one already exists, and clean up only what they started.
+
+Use `pnpm dev:up` and `pnpm dev:down` only when you want to keep the shared local stack running
+across multiple commands for speed.
 
 ## Product boundaries
 

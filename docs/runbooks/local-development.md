@@ -14,19 +14,24 @@ Compass is a product-first monorepo. Local development should start from the pro
 - `pnpm install`
 - `pnpm dev`
 - `pnpm dev:desktop`
+- `pnpm test:integration`
+- `pnpm test:acceptance`
 - `pnpm lint`
 - `pnpm typecheck`
 - `pnpm test`
 - `pnpm build`
 - `pnpm format`
 - `pnpm format:check`
-- `pnpm test:acceptance`
 - `pnpm infra:whatif`
 
 `pnpm dev` is the default browser-hosted local experience. It brings up the required local stack and
 opens the web app once it is healthy.
 
 Use `pnpm dev -- --no-open` when you want the same startup flow without opening a browser tab.
+
+`pnpm test:integration` and `pnpm test:acceptance*` follow the same model. They bring up the
+required local services from a cold state, reuse a healthy `pnpm dev:up` stack when one already
+exists, and tear down only the infrastructure they started.
 
 ## Package boundaries
 
@@ -43,6 +48,7 @@ Use `pnpm dev -- --no-open` when you want the same startup flow without opening 
 - colocated unit tests live beside source as `*.test.ts(x)`
 - black-box acceptance tests live under `tests/acceptance/{api,web,desktop}`
 - `pnpm test` is the common fast local gate and is installed as a `pre-push` hook
+- `pnpm test:integration` and `pnpm test:acceptance*` are self-sufficient workflow commands
 - pipeline and infra validation stays under `platform/`
 
 ## Local database helpers
@@ -55,6 +61,12 @@ Use `pnpm dev -- --no-open` when you want the same startup flow without opening 
 
 - `pnpm dev:up` starts the shared local stack in the background.
 - `pnpm dev:down` stops the background local stack.
+
+Rule of thumb:
+
+- use `pnpm dev`, `pnpm test:integration`, and `pnpm test:acceptance:*` for normal day-to-day work
+- use `pnpm dev:up` and `pnpm dev:down` when you want to chain several workflows against the same
+  background stack
 
 ## Admin-only tooling
 

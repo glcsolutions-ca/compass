@@ -38,7 +38,6 @@ function resolveBaseUrl(): string {
 }
 
 const baseURL = resolveBaseUrl();
-const useManagedWebServer = process.env.WEB_BASE_URL === undefined;
 
 export default defineConfig({
   testDir: "./",
@@ -47,21 +46,6 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   reporter: "line",
-  webServer: useManagedWebServer
-    ? {
-        command: "pnpm dev -- --no-open",
-        url: baseURL,
-        env: {
-          ...process.env,
-          AUTH_MODE: "mock",
-          AGENT_GATEWAY_ENABLED: process.env.AGENT_GATEWAY_ENABLED ?? "true",
-          AGENT_CLOUD_MODE_ENABLED: process.env.AGENT_CLOUD_MODE_ENABLED ?? "true",
-          AGENT_RUNTIME_PROVIDER: process.env.AGENT_RUNTIME_PROVIDER ?? "mock"
-        },
-        reuseExistingServer: !process.env.CI,
-        timeout: 120_000
-      }
-    : undefined,
   use: {
     headless: true,
     baseURL,

@@ -136,7 +136,7 @@ jobs:
 
       - name: Build and push ${{ matrix.image.id }} image
         id: build_image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
           context: .
           file: ${{ matrix.image.dockerfile }}
@@ -181,7 +181,7 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Download digest artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: image-digest-*
           path: artifacts/image-digests
@@ -248,7 +248,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download canonical manifest artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-candidate-manifest
           path: ${{ runner.temp }}
@@ -306,14 +306,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download digest artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: image-digest-*
           path: artifacts/image-digests
           merge-multiple: true
 
       - name: Download canonical manifest artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-candidate-manifest
           path: ${{ runner.temp }}

@@ -25,6 +25,26 @@ async function readJson(filePath) {
   return JSON.parse(await readFile(path.resolve(filePath), "utf8"));
 }
 
+async function loadEntraConfig({ apply }) {
+  try {
+    return await readJson(ENTRA_OUTPUT_PATH);
+  } catch (error) {
+    if (apply || error?.code !== "ENOENT") {
+      throw error;
+    }
+
+    console.info(
+      `[check] missing ${ENTRA_OUTPUT_PATH}; using placeholder Entra ids for dry-run output`
+    );
+
+    return {
+      webClientId: "check-only-web-client-id",
+      apiClientId: "check-only-api-client-id",
+      deployClientId: "check-only-deploy-client-id"
+    };
+  }
+}
+
 async function withTempJson(prefix, payload, callback) {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), prefix));
   const payloadPath = path.join(tempDir, "payload.json");
@@ -276,7 +296,7 @@ async function syncEnvironmentConfig(repository, environmentName, config, entra,
 
 export async function configureGithubRepo({ apply = false } = {}) {
   const config = await loadProductionConfig();
-  const entra = await readJson(ENTRA_OUTPUT_PATH);
+  const entra = await loadEntraConfig({ apply });
   const environmentsConfig = await readJson(ENVIRONMENTS_CONFIG_PATH);
   const labelsConfig = await readJson(LABELS_CONFIG_PATH);
   const rulesetConfig = await readJson(RULESET_CONFIG_PATH);

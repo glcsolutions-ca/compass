@@ -6,7 +6,7 @@ export const PATTERNS = {
   candidateId: /^sha-[a-f0-9]{40}$/u,
   sourceRevision: /^[a-f0-9]{40}$/u,
   digestPinnedOciRef:
-    /^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*@sha256:[a-f0-9]{64}$/u
+    /^[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[0-9]+)?(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*@sha256:[a-f0-9]{64}$/u
 };
 
 const FORBIDDEN_RELEASE_FIELDS = new Set(["riskClass", "deploymentRequired", "promotionHalted"]);

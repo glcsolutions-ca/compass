@@ -5,7 +5,7 @@ Purpose: black-box API smoke checks for runtime health.
 ## Run
 
 ```bash
-pnpm test:acceptance:api
+pnpm acceptance:api
 ```
 
 The root command is self-sufficient. It will start the required local services when needed and
@@ -16,6 +16,6 @@ Set target endpoint via:
 - `TARGET_API_BASE_URL` (preferred), or
 - `BASE_URL`.
 
-## Source Of Truth
+## Source of truth
 
-- `tests/acceptance/api/system/smoke.ts`
+- `tests/acceptance/api/smoke.ts`

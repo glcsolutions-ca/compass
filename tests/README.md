@@ -1,39 +1,33 @@
 # Testing
 
-This repository uses a simpler product-first test taxonomy:
+This repository uses one strict taxonomy:
 
 1. Unit tests beside the source they verify.
 2. App-local integration tests beside the module they exercise.
 3. Acceptance tests under `tests/acceptance/*`.
 4. Pipeline tooling tests under `platform/pipeline`.
 
-## Core Commands
+## Core commands
 
 ```bash
-pnpm test
-pnpm test:integration
-pnpm test:acceptance
-pnpm test:acceptance:api
-pnpm test:acceptance:web
-pnpm test:full
-pnpm --filter @compass/pipeline-tools run test
+pnpm verify
+pnpm acceptance
+pnpm acceptance:api
+pnpm acceptance:web
+pnpm acceptance:desktop
+pnpm --filter @compass/api test:integration
+pnpm --filter @compass/pipeline-tools test
 ```
 
-Primary workflow commands are self-sufficient:
+## Directory model
 
-- `pnpm test` stays fast and does not manage infrastructure.
-- `pnpm test:integration` and `pnpm test:acceptance*` start what they need from a cold state.
-- If `pnpm dev:up` is already running, those commands reuse it and leave it running.
+- colocated `*.test.ts(x)` files beside the source they verify in `apps/*/src` and `packages/*/src`
+- colocated `*.integration.test.ts` files beside the app module they exercise when real adapters are required
+- `tests/acceptance/api` for black-box API flows
+- `tests/acceptance/web` for browser/user journeys
+- `tests/acceptance/desktop` for desktop black-box workflows
 
-## Directory Model
+## Acceptance references
 
-- colocated `*.test.ts(x)` files beside the source they verify in `apps/*/src` and `packages/*/src`.
-- colocated `*.integration.test.ts` files beside the app module they exercise when real adapters are required.
-- `tests/acceptance/api` for black-box API flows.
-- `tests/acceptance/web` for browser/user journeys.
-- `tests/acceptance/desktop` for desktop black-box workflows.
-
-## Acceptance References
-
-- `tests/acceptance/api/system/README.md`
-- `tests/acceptance/web/e2e/README.md`
+- `tests/acceptance/api/README.md`
+- `tests/acceptance/web/README.md`

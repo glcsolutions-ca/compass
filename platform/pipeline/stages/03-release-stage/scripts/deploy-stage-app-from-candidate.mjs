@@ -7,46 +7,53 @@ import {
   updateContainerApp
 } from "./release-azure-lib.mjs";
 
-export async function deployProdFromCandidate({
+export async function deployStageAppFromCandidate({
   manifestPath,
   resourceGroup,
-  apiAppName,
-  webAppName,
-  prodApiBaseUrl,
-  prodWebBaseUrl
+  app,
+  appName,
+  stageApiBaseUrl,
+  stageWebBaseUrl
 }) {
   const manifest = await readJsonFile(manifestPath);
-  await Promise.all([
-    updateContainerApp({
+
+  if (app === "api") {
+    await updateContainerApp({
       resourceGroup,
-      appName: apiAppName,
+      appName,
       image: manifest.artifacts.apiImage,
       env: buildManagedApiEnv({
-        apiPublicBaseUrl: prodApiBaseUrl,
-        webBaseUrl: prodWebBaseUrl
+        apiPublicBaseUrl: stageApiBaseUrl,
+        webBaseUrl: stageWebBaseUrl
       }),
-      minReplicas: 1
-    }),
-    updateContainerApp({
+      minReplicas: 0
+    });
+    return manifest;
+  }
+
+  if (app === "web") {
+    await updateContainerApp({
       resourceGroup,
-      appName: webAppName,
+      appName,
       image: manifest.artifacts.webImage,
-      env: buildManagedWebEnv({ apiBaseUrl: prodApiBaseUrl }),
-      minReplicas: 1
-    })
-  ]);
-  return manifest;
+      env: buildManagedWebEnv({ apiBaseUrl: stageApiBaseUrl }),
+      minReplicas: 0
+    });
+    return manifest;
+  }
+
+  throw new Error(`Unsupported stage app '${app}'`);
 }
 
 export async function main(argv = process.argv.slice(2)) {
   const options = parseCliArgs(argv);
-  await deployProdFromCandidate({
+  await deployStageAppFromCandidate({
     manifestPath: requireOption(options, "manifest"),
     resourceGroup: requireOption(options, "resource-group"),
-    apiAppName: requireOption(options, "api-app-name"),
-    webAppName: requireOption(options, "web-app-name"),
-    prodApiBaseUrl: requireOption(options, "prod-api-base-url"),
-    prodWebBaseUrl: requireOption(options, "prod-web-base-url")
+    app: requireOption(options, "app"),
+    appName: requireOption(options, "app-name"),
+    stageApiBaseUrl: requireOption(options, "stage-api-base-url"),
+    stageWebBaseUrl: requireOption(options, "stage-web-base-url")
   });
 }
 

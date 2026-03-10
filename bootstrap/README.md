@@ -49,11 +49,11 @@ az keyvault secret show \
 
 ## Phase B: Create the initial app resources once
 
-1. Merge one PR so `Commit Stage` publishes a candidate to GHCR.
+1. Push directly to `main` or merge one change to `main` so `Continuous Delivery Pipeline` publishes a candidate to GHCR.
 2. Run:
 
 ```bash
-pnpm bootstrap:apps -- --candidate-id sha-<merged-main-sha>
+pnpm bootstrap:apps -- --candidate-id sha-<main-sha>
 ```
 
 After that, the normal pipeline owns deploys and updates.
@@ -76,4 +76,4 @@ node platform/scripts/bootstrap/configure-web-domain.mjs
 
 - `bootstrap/.artifacts` is local-only and ignored by git.
 - `pnpm bootstrap:github:apply` configures GitHub deployment wiring only. Runtime secrets belong in Key Vault.
-- The delivery pipeline starts with `Commit Stage` on merge queue and promotes the same candidate through Acceptance and Release.
+- The delivery pipeline starts with `Commit Stage` in `20-continuous-delivery-pipeline.yml` and promotes the same candidate through Acceptance Stage and Release Stage.

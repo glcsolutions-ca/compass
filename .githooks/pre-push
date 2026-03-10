@@ -1,4 +1,12 @@
 #!/bin/sh
 set -eu
 
-pnpm test
+git fetch --quiet origin main
+
+if ! git merge-base --is-ancestor origin/main HEAD; then
+  echo "Push blocked: this branch is behind origin/main." >&2
+  echo "Run: git fetch origin && git rebase origin/main && pnpm verify" >&2
+  exit 1
+fi
+
+pnpm verify

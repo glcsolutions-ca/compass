@@ -42,8 +42,9 @@ Platform code never owns product business logic.
 - Runtime resources live under `/v1/runtime/*`.
 - User-facing browser URLs remain workspace-oriented and separate from the API surface.
 
-## CI ownership
+## Delivery ownership
 
-- `pnpm test` is the common fast local suite for developers and agents.
-- `Commit Stage` builds, smokes, and publishes the release candidate once.
-- `Acceptance` and `Release` promote the exact published candidate.
+- `pnpm verify` is the canonical local Commit Stage for developers and agents.
+- `pnpm acceptance` is the local Acceptance Stage against the local candidate.
+- `Continuous Delivery Pipeline` builds, smokes, and publishes the release candidate once.
+- `Acceptance Stage` and `Release Stage` promote the exact published candidate.

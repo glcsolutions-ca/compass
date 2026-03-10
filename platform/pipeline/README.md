@@ -1,103 +1,88 @@
-# Pipeline
+# Continuous Delivery Pipeline
 
 ```mermaid
 flowchart LR
-    DEV["Developer / AI Agent"] --> LOCAL["pnpm test"]
-    LOCAL --> PR["Pull Request"]
-    PR --> PF["PR Labels"]
-    PR --> QA["Commit Stage (Queue Admission)"]
-    PF --> MQ["Merge Queue"]
+    DEV["Developer / AI Agent"] --> VERIFY["pnpm verify"]
+    VERIFY --> PR["Pull Request (Optional)"]
+    VERIFY --> MAIN["Push To Main"]
+    PR --> LABELS["PR Labels"]
+    PR --> PRVERIFY["PR Verify"]
+    MAIN --> CDP["Continuous Delivery Pipeline"]
 
-    MQ --> BC["Build Candidate\n(api, web)"]
-    BC --> SM["Candidate Smoke"]
-    SM --> PC["Publish Candidate"]
-    PC --> CS["Commit Stage"]
-    CS --> ACC["Acceptance"]
-    ACC --> REL["Release"]
+    CDP --> COMMIT["Commit Stage"]
+    COMMIT --> ACCEPT["Acceptance Stage"]
+    ACCEPT --> RELEASE["Release Stage"]
 
-    INFRA["Infra Change"] --> IW["Infra Workflow"]
+    INFRA["Infra Change"] --> INFRAWF["Infra Workflow"]
 ```
 
-Compass uses six focused workflows:
+Compass uses four focused workflows:
 
 - `05-pr-labels.yml`
-- `09-queue-admission.yml`
-- `10-commit-stage.yml`
-- `20-acceptance.yml`
-- `30-release.yml`
+- `10-pr-verify.yml`
+- `20-continuous-delivery-pipeline.yml`
 - `40-infra.yml`
 
 The design goal is simple:
 
-- one required check name: `Commit Stage`
-- one authoritative candidate publication point: `merge_group`
+- one production-shaped path
+- one required PR check name: `Verify`
+- one authoritative candidate publication point: `push` to `main`
 - one build of the release unit
+- one candidate promoted without rebuilds
 
-## Workflow Topology
+## Workflow topology
 
-### Commit Stage
+### PR Verify
 
 `05-pr-labels.yml` applies PR metadata only.
 
-`09-queue-admission.yml` provides the no-op PR-head `Commit Stage` status required for merge queue admission.
+`10-pr-verify.yml` runs on `pull_request`. It:
 
-`10-commit-stage.yml` runs only on `merge_group` and is the authoritative commit stage.
+1. checks that the branch is rebased onto `main`
+2. runs the canonical local Commit Stage, `pnpm verify`
 
-The `merge_group` path is the real Commit Stage. It:
+PRs are optional and lightweight. They are a collaboration tool, not the authoritative integration mechanism.
 
-1. builds and pushes the API and Web images
-2. runs a fast candidate smoke against those published digests
-3. publishes the immutable release candidate manifest and release unit
+### Continuous Delivery Pipeline
 
-`Commit Stage` is the only required merge-queue check.
+`20-continuous-delivery-pipeline.yml` runs on `push` to `main` and owns the full stage model.
 
-### Acceptance
+The `push` to `main` path is the real delivery pipeline. It:
 
-`20-acceptance.yml` is triggered by successful `Commit Stage` completion for the merge-queue SHA. It:
+1. runs Commit Stage unit tests and integration tests in parallel
+2. builds and pushes the API and Web images in parallel
+3. runs candidate smoke against the built digests
+4. publishes the immutable release candidate manifest and release unit
+5. runs black-box API and Web acceptance against that exact candidate
+6. verifies the accepted candidate and deploys it through stage and production
+7. publishes release evidence and release attestation
 
-1. resolves the candidate from GHCR
-2. runs system and browser acceptance against the exact candidate
-3. publishes the acceptance attestation
-
-### Release
-
-`30-release.yml` is triggered by successful `Acceptance` completion. It:
-
-1. resolves the exact accepted candidate from the triggering SHA
-2. verifies the acceptance attestation
-3. deploys the same digests through stage and prod
-4. publishes release evidence and release attestation
-
-This keeps the Farley-style stage model intact:
-
-1. `Commit Stage`
-2. `Acceptance`
-3. `Release`
-
-The candidate is built once in Commit and promoted without rebuilds.
-
-## Candidate Model
+## Candidate model
 
 A release candidate is:
 
-- identified by `sha-<40-character-merge-queue-sha>`
-- immutable after Commit publication
-- the single artifact consumed by Acceptance and Release
+- identified by `sha-<40-character-main-sha>`
+- immutable after Commit Stage publication
+- the single artifact consumed by Acceptance Stage and Release Stage
 
 Later stages do not rebuild images or substitute different digests.
 
 ## Rules
 
-- Merge queue group size is `1`.
-- Merge queue build concurrency starts at `2`.
-- `Commit Stage` is the only required status check.
-- Deployments are not required before merging.
-- Infra validation and apply run in `40-infra.yml` only for Azure infra files, infra scripts, and its direct workflow support files, not in the app delivery path.
+- `main` stays linear
+- PRs merge by squash only
+- PRs are optional
+- `Verify` is the only required PR status check
+- direct pushes to `main` are allowed by judgment
+- the direct path relies on trust, the blocking `pre-push` hook, and fast CDP feedback
+- infra validation and apply run in `40-infra.yml`, not in the app delivery path
 
-## Operating Guidance
+## Operating guidance
 
-- Treat the line as unhealthy if Acceptance or Release fails for the promoted candidate.
-- Keep PR-time work cheap and integrated-code verification authoritative.
-- Keep delivery policy in `platform/pipeline` and repo/ruleset state in `bootstrap/config`.
-- Remember that `workflow_run` stages are loaded from the default branch at trigger time, so workflow-definition changes take effect on the next promoted candidate.
-- Validate Acceptance or Release workflow edits with one additional promoted candidate after the change merges, because the same candidate cannot prove a stage definition that was not on `main` when that stage started.
+- keep branches short-lived and rebase onto `origin/main` before integration
+- use `pnpm verify` as the canonical pre-integration local gate
+- use `pnpm acceptance` when you need black-box local acceptance against the candidate
+- keep local, PR, and mainline verification on the same repo-owned stage scripts
+- treat the line as unhealthy if Acceptance Stage or Release Stage fails for the promoted candidate
+- treat red `main` as a line-stop until fixed forward

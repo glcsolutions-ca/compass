@@ -539,6 +539,9 @@ jobs:
       - acceptance-stage
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
     outputs:
       api_stage_base_url: ${{ steps.runtime.outputs.api_stage_base_url }}
       web_stage_base_url: ${{ steps.runtime.outputs.web_stage_base_url }}
@@ -646,6 +649,9 @@ jobs:
       - release-stage-verify-acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
     strategy:
       matrix:
         app:
@@ -722,6 +728,9 @@ jobs:
       - release-stage-smoke-stage-read-only
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
     permissions:
       contents: read
       id-token: write
@@ -843,6 +852,9 @@ jobs:
     needs:
       - release-stage-deploy-production
     runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
     outputs:
       verdict: ${{ steps.smoke.outputs.verdict }}
     steps:
@@ -869,6 +881,9 @@ jobs:
       - release-stage-smoke-production
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
     permissions:
       contents: read
       packages: read

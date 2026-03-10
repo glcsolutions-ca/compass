@@ -21,6 +21,18 @@ async function gh(args, { input } = {}) {
   return String(result.stdout || "").trim();
 }
 
+function isNotFoundError(error) {
+  const message = [
+    error?.message,
+    error?.stderr,
+    error?.stdout,
+    error?.shortMessage
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return /HTTP 404|not found/iu.test(message);
+}
+
 async function readJson(filePath) {
   return JSON.parse(await readFile(path.resolve(filePath), "utf8"));
 }
@@ -212,18 +224,27 @@ async function syncEnvironmentConfig(repository, environmentName, config, entra,
   const desiredVarNames = new Set(Object.keys(mergedVars));
   const desiredSecretNames = new Set(["AZURE_DEPLOY_CLIENT_ID"]);
 
-  const existingVars = JSON.parse(
-    (await gh([
-      "variable",
-      "list",
-      "--repo",
-      repository,
-      "--env",
-      environmentName,
-      "--json",
-      "name"
-    ])) || "[]"
-  );
+  const existingVars = await (async () => {
+    try {
+      return JSON.parse(
+        (await gh([
+          "variable",
+          "list",
+          "--repo",
+          repository,
+          "--env",
+          environmentName,
+          "--json",
+          "name"
+        ])) || "[]"
+      );
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return [];
+      }
+      throw error;
+    }
+  })();
   for (const entry of existingVars) {
     if (desiredVarNames.has(entry.name)) {
       continue;
@@ -253,18 +274,27 @@ async function syncEnvironmentConfig(repository, environmentName, config, entra,
     ]);
   }
 
-  const existingSecrets = JSON.parse(
-    (await gh([
-      "secret",
-      "list",
-      "--repo",
-      repository,
-      "--env",
-      environmentName,
-      "--json",
-      "name"
-    ])) || "[]"
-  );
+  const existingSecrets = await (async () => {
+    try {
+      return JSON.parse(
+        (await gh([
+          "secret",
+          "list",
+          "--repo",
+          repository,
+          "--env",
+          environmentName,
+          "--json",
+          "name"
+        ])) || "[]"
+      );
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return [];
+      }
+      throw error;
+    }
+  })();
   for (const entry of existingSecrets) {
     if (desiredSecretNames.has(entry.name)) {
       continue;
@@ -300,19 +330,26 @@ export async function configureGithubRepo({ apply = false } = {}) {
   const environmentsConfig = await readJson(ENVIRONMENTS_CONFIG_PATH);
   const labelsConfig = await readJson(LABELS_CONFIG_PATH);
   const rulesetConfig = await readJson(RULESET_CONFIG_PATH);
-  const environmentConfig = (environmentsConfig.environments || []).find(
-    (entry) => entry.name === config.githubEnvironment
-  );
-
-  if (!environmentConfig) {
-    throw new Error(`No GitHub environment config found for ${config.githubEnvironment}`);
-  }
+  const environmentNames =
+    Array.isArray(config.githubEnvironments) && config.githubEnvironments.length > 0
+      ? config.githubEnvironments
+      : [config.githubEnvironment];
 
   await configureLabels(config.repository, labelsConfig.labels || [], apply);
   await configureMergeSettings(config.repository, rulesetConfig.merge_settings, apply);
   await configureRuleset(config.repository, rulesetConfig.main_ruleset, apply);
-  await configureEnvironment(config.repository, environmentConfig, apply);
-  await syncEnvironmentConfig(config.repository, environmentConfig.name, config, entra, apply);
+  for (const environmentName of environmentNames) {
+    const environmentConfig = (environmentsConfig.environments || []).find(
+      (entry) => entry.name === environmentName
+    );
+
+    if (!environmentConfig) {
+      throw new Error(`No GitHub environment config found for ${environmentName}`);
+    }
+
+    await configureEnvironment(config.repository, environmentConfig, apply);
+    await syncEnvironmentConfig(config.repository, environmentConfig.name, config, entra, apply);
+  }
 }
 
 export async function main(argv = process.argv.slice(2)) {

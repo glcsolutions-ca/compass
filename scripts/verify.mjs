@@ -7,6 +7,9 @@ import {
 
 async function main() {
   await runCommand(process.execPath, [
+    "platform/pipeline/stages/01-commit-stage/scripts/run-static-analysis.mjs"
+  ]);
+  await runCommand(process.execPath, [
     "platform/pipeline/stages/01-commit-stage/scripts/run-unit-tests.mjs"
   ]);
   await runCommand(process.execPath, [

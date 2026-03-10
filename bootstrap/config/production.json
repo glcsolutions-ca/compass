@@ -7,6 +7,7 @@
   "webCustomDomain": "compass.glcsolutions.ca",
   "location": "canadacentral",
   "githubEnvironment": "production",
+  "githubEnvironments": ["stage", "production"],
   "reviewers": [],
   "environmentVars": {
     "AZURE_TENANT_ID": "98dddcec-5421-457b-8cac-aa8d27fbafb6",

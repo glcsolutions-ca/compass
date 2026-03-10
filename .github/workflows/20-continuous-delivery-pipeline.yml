@@ -7,11 +7,8 @@ on:
       - main
 
 permissions:
+  actions: read
   contents: read
-
-concurrency:
-  group: continuous-delivery-main
-  cancel-in-progress: false
 
 env:
   REGISTRY_BASE: ghcr.io/glcsolutions-ca
@@ -38,6 +35,25 @@ jobs:
       - name: Record source revision
         id: source
         run: echo "source_revision=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+  commit-stage-static-analysis:
+    name: Commit Stage / Static Analysis
+    needs:
+      - prepare-candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          persist-credentials: false
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Run static analysis
+        run: pnpm verify:static
 
   commit-stage-unit-tests:
     name: Commit Stage / Unit Tests
@@ -143,11 +159,68 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  commit-stage-prepare-manifest:
+    name: Commit Stage / Prepare Candidate Manifest
+    needs:
+      - prepare-candidate
+      - commit-stage-build-candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          persist-credentials: false
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Download digest artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: image-digest-*
+          path: artifacts/image-digests
+          merge-multiple: true
+
+      - name: Capture canonical image refs
+        id: refs
+        run: |
+          set -euo pipefail
+          api_digest="$(cat artifacts/image-digests/api.digest)"
+          web_digest="$(cat artifacts/image-digests/web.digest)"
+          {
+            echo "api_image_ref=${REGISTRY_BASE}/${API_IMAGE_NAME}@${api_digest}"
+            echo "web_image_ref=${REGISTRY_BASE}/${WEB_IMAGE_NAME}@${web_digest}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate canonical release candidate manifest
+        run: |
+          pnpm --filter @compass/pipeline-tools run manifest:generate -- \
+            --out "$RUNNER_TEMP/release-candidate.json" \
+            --repository "${{ github.repository }}" \
+            --source-revision "${{ needs.prepare-candidate.outputs.source_revision }}" \
+            --api-image "${{ steps.refs.outputs.api_image_ref }}" \
+            --web-image "${{ steps.refs.outputs.web_image_ref }}" \
+            --registry "${{ env.REGISTRY_BASE }}" \
+            --commit-stage-run-id "${{ github.run_id }}"
+
+      - name: Validate canonical release candidate manifest
+        run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
+
+      - name: Upload canonical manifest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-manifest
+          path: ${{ runner.temp }}/release-candidate.json
+          if-no-files-found: error
+          retention-days: 1
+
   commit-stage-smoke-candidate:
     name: Commit Stage / Smoke Candidate
     needs:
       - prepare-candidate
-      - commit-stage-build-candidate
+      - commit-stage-prepare-manifest
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -170,36 +243,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download digest artifacts
+      - name: Download canonical manifest artifact
         uses: actions/download-artifact@v4
         with:
-          pattern: image-digest-*
-          path: artifacts/image-digests
-          merge-multiple: true
-
-      - name: Create smoke manifest
-        run: |
-          set -euo pipefail
-          api_digest="$(cat artifacts/image-digests/api.digest)"
-          web_digest="$(cat artifacts/image-digests/web.digest)"
-          jq -n \
-            --arg candidate_id "${{ needs.prepare-candidate.outputs.candidate_id }}" \
-            --arg source_revision "${{ needs.prepare-candidate.outputs.source_revision }}" \
-            --arg api_image "${REGISTRY_BASE}/${API_IMAGE_NAME}@${api_digest}" \
-            --arg web_image "${REGISTRY_BASE}/${WEB_IMAGE_NAME}@${web_digest}" \
-            '{
-              candidateId: $candidate_id,
-              source: { revision: $source_revision },
-              artifacts: {
-                apiImage: $api_image,
-                webImage: $web_image
-              }
-            }' > "$RUNNER_TEMP/release-candidate-smoke.json"
+          name: release-candidate-manifest
+          path: ${{ runner.temp }}
 
       - name: Run candidate smoke
         run: |
           node platform/pipeline/stages/01-commit-stage/scripts/run-candidate-smoke.mjs \
-            --manifest "$RUNNER_TEMP/release-candidate-smoke.json" \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
             --diagnostics-dir "$RUNNER_TEMP/commit-smoke-diagnostics"
 
       - name: Upload smoke artifacts
@@ -215,9 +268,10 @@ jobs:
     name: Commit Stage / Publish Candidate
     needs:
       - prepare-candidate
+      - commit-stage-static-analysis
       - commit-stage-unit-tests
       - commit-stage-integration-tests
-      - commit-stage-build-candidate
+      - commit-stage-prepare-manifest
       - commit-stage-smoke-candidate
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -254,6 +308,12 @@ jobs:
           path: artifacts/image-digests
           merge-multiple: true
 
+      - name: Download canonical manifest artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-candidate-manifest
+          path: ${{ runner.temp }}
+
       - name: Capture canonical image refs
         id: refs
         run: |
@@ -276,22 +336,10 @@ jobs:
           release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ needs.prepare-candidate.outputs.candidate_id }}" | jq -r '.digest')"
           echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
 
-      - name: Generate release candidate manifest
-        run: |
-          pnpm --filter @compass/pipeline-tools run manifest:generate -- \
-            --out "$RUNNER_TEMP/release-candidate.json" \
-            --repository "${{ github.repository }}" \
-            --source-revision "${{ needs.prepare-candidate.outputs.source_revision }}" \
-            --api-image "${{ steps.refs.outputs.api_image_ref }}" \
-            --web-image "${{ steps.refs.outputs.web_image_ref }}" \
-            --registry "${{ env.REGISTRY_BASE }}" \
-            --commit-stage-run-id "${{ github.run_id }}" \
-            --release-unit-digest "${{ steps.release_unit.outputs.release_unit_digest }}"
-
-      - name: Validate release candidate manifest
+      - name: Validate canonical release candidate manifest
         run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
 
-      - name: Publish release candidate manifest
+      - name: Publish canonical release candidate manifest
         run: |
           cp "$RUNNER_TEMP/release-candidate.json" manifest.json
           oras push --artifact-type application/vnd.compass.release-manifest.v1+json \
@@ -300,21 +348,26 @@ jobs:
 
   commit-stage:
     name: Commit Stage
+    if: always()
     runs-on: ubuntu-latest
     needs:
       - prepare-candidate
+      - commit-stage-static-analysis
       - commit-stage-unit-tests
       - commit-stage-integration-tests
       - commit-stage-build-candidate
+      - commit-stage-prepare-manifest
       - commit-stage-smoke-candidate
       - commit-stage-publish-candidate
     steps:
       - name: Assert expected path succeeded
         env:
           PREPARE_CANDIDATE: ${{ needs.prepare-candidate.result }}
+          STATIC_ANALYSIS: ${{ needs.commit-stage-static-analysis.result }}
           UNIT_TESTS: ${{ needs.commit-stage-unit-tests.result }}
           INTEGRATION_TESTS: ${{ needs.commit-stage-integration-tests.result }}
           BUILD_CANDIDATE: ${{ needs.commit-stage-build-candidate.result }}
+          PREPARE_MANIFEST: ${{ needs.commit-stage-prepare-manifest.result }}
           SMOKE_CANDIDATE: ${{ needs.commit-stage-smoke-candidate.result }}
           PUBLISH_CANDIDATE: ${{ needs.commit-stage-publish-candidate.result }}
         run: |
@@ -330,15 +383,50 @@ jobs:
           }
 
           assert_success prepare-candidate "$PREPARE_CANDIDATE"
+          assert_success static-analysis "$STATIC_ANALYSIS"
           assert_success unit-tests "$UNIT_TESTS"
           assert_success integration-tests "$INTEGRATION_TESTS"
           assert_success build-candidate "$BUILD_CANDIDATE"
+          assert_success prepare-manifest "$PREPARE_MANIFEST"
           assert_success smoke-candidate "$SMOKE_CANDIDATE"
           assert_success publish-candidate "$PUBLISH_CANDIDATE"
 
       - name: Write commit summary
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREPARE_CANDIDATE: ${{ needs.prepare-candidate.result }}
+          STATIC_ANALYSIS: ${{ needs.commit-stage-static-analysis.result }}
+          UNIT_TESTS: ${{ needs.commit-stage-unit-tests.result }}
+          INTEGRATION_TESTS: ${{ needs.commit-stage-integration-tests.result }}
+          BUILD_CANDIDATE: ${{ needs.commit-stage-build-candidate.result }}
+          PREPARE_MANIFEST: ${{ needs.commit-stage-prepare-manifest.result }}
+          SMOKE_CANDIDATE: ${{ needs.commit-stage-smoke-candidate.result }}
+          PUBLISH_CANDIDATE: ${{ needs.commit-stage-publish-candidate.result }}
         run: |
+          line_stop=false
+          for result in \
+            "$PREPARE_CANDIDATE" \
+            "$STATIC_ANALYSIS" \
+            "$UNIT_TESTS" \
+            "$INTEGRATION_TESTS" \
+            "$BUILD_CANDIDATE" \
+            "$PREPARE_MANIFEST" \
+            "$SMOKE_CANDIDATE" \
+            "$PUBLISH_CANDIDATE"; do
+            if [ "$result" != "success" ]; then
+              line_stop=true
+            fi
+          done
+
+          node platform/pipeline/shared/scripts/write-run-timing-summary.mjs \
+            --repo "${{ github.repository }}" \
+            --run-id "${{ github.run_id }}" \
+            --headline "Commit Stage Timing" \
+            --line-stop "$line_stop"
+
           {
+            echo ""
             echo "## Commit Stage"
             echo "- Candidate: ${{ needs.prepare-candidate.outputs.candidate_id }}"
             echo "- Source revision: ${{ needs.prepare-candidate.outputs.source_revision }}"
@@ -457,6 +545,7 @@ jobs:
 
   acceptance-stage:
     name: Acceptance Stage
+    if: always()
     needs:
       - prepare-candidate
       - acceptance-stage-api
@@ -469,20 +558,39 @@ jobs:
       packages: read
       id-token: write
       attestations: write
+    env:
+      API_ACCEPTANCE: ${{ needs.acceptance-stage-api.result }}
+      WEB_ACCEPTANCE: ${{ needs.acceptance-stage-web.result }}
     steps:
+      - name: Assert expected path succeeded
+        run: |
+          set -euo pipefail
+          if [ "$API_ACCEPTANCE" != "success" ]; then
+            echo "acceptance-stage-api finished with $API_ACCEPTANCE" >&2
+            exit 1
+          fi
+          if [ "$WEB_ACCEPTANCE" != "success" ]; then
+            echo "acceptance-stage-web finished with $WEB_ACCEPTANCE" >&2
+            exit 1
+          fi
+
       - name: Checkout
+        if: ${{ env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.prepare-candidate.outputs.source_revision }}
           persist-credentials: false
 
       - name: Setup Node and pnpm
+        if: ${{ env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Setup ORAS
+        if: ${{ env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
 
       - name: Login to GHCR
+        if: ${{ env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
@@ -490,6 +598,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve release candidate manifest
+        if: ${{ env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         id: resolve
         run: |
           set -euo pipefail
@@ -503,6 +612,7 @@ jobs:
           echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
 
       - name: Generate acceptance attestation predicate
+        if: ${{ env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         run: |
           predicate_path="${GITHUB_WORKSPACE}/artifacts/attestations/acceptance-predicate.json"
           mkdir -p "$(dirname "${predicate_path}")"
@@ -516,6 +626,7 @@ jobs:
             --suite-summary 'api=pass web=pass'
 
       - name: Attest acceptance verdict to candidate subject
+        if: ${{ env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-name: ${{ env.RELEASE_UNITS_REPO }}
@@ -532,6 +643,22 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Write acceptance summary
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          line_stop=false
+          if [ "$API_ACCEPTANCE" != "success" ] || [ "$WEB_ACCEPTANCE" != "success" ]; then
+            line_stop=true
+          fi
+
+          node platform/pipeline/shared/scripts/write-run-timing-summary.mjs \
+            --repo "${{ github.repository }}" \
+            --run-id "${{ github.run_id }}" \
+            --headline "Acceptance Stage Timing" \
+            --line-stop "$line_stop"
+
   release-stage-verify-acceptance:
     name: Release Stage / Verify Acceptance
     needs:
@@ -540,8 +667,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment:
-      name: production
-      url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
+      name: stage
     outputs:
       api_stage_base_url: ${{ steps.runtime.outputs.api_stage_base_url }}
       web_stage_base_url: ${{ steps.runtime.outputs.web_stage_base_url }}
@@ -578,7 +704,7 @@ jobs:
             --registry-repo "${MANIFESTS_REPO}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
-      - name: Assert production environment config
+      - name: Assert release environment config
         env:
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
           ACA_API_PROD_APP_NAME: ${{ vars.ACA_API_PROD_APP_NAME }}
@@ -643,20 +769,17 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   release-stage-deploy-stage:
-    name: Release Stage / Deploy Stage / ${{ matrix.app }}
+    name: Release Stage / Deploy Stage
     needs:
       - prepare-candidate
       - release-stage-verify-acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    concurrency:
+      group: continuous-delivery-stage
+      cancel-in-progress: false
     environment:
-      name: production
-      url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
-    strategy:
-      matrix:
-        app:
-          - api
-          - web
+      name: stage
     permissions:
       contents: read
       packages: read
@@ -695,18 +818,34 @@ jobs:
             --registry-repo "${MANIFESTS_REPO}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
-      - name: Deploy stage app from candidate
+      - name: Deploy stage apps from candidate
         env:
           RG: ${{ vars.AZURE_RESOURCE_GROUP }}
-          APP_NAME: ${{ matrix.app == 'api' && vars.ACA_API_STAGE_APP_NAME || vars.ACA_WEB_STAGE_APP_NAME }}
+          API_STAGE_APP_NAME: ${{ vars.ACA_API_STAGE_APP_NAME }}
+          WEB_STAGE_APP_NAME: ${{ vars.ACA_WEB_STAGE_APP_NAME }}
         run: |
+          set -euo pipefail
+
           node platform/pipeline/stages/03-release-stage/scripts/deploy-stage-app-from-candidate.mjs \
             --manifest "$RUNNER_TEMP/release-candidate.json" \
             --resource-group "$RG" \
-            --app "${{ matrix.app }}" \
-            --app-name "$APP_NAME" \
+            --app api \
+            --app-name "$API_STAGE_APP_NAME" \
             --stage-api-base-url "${{ needs.release-stage-verify-acceptance.outputs.api_stage_base_url }}" \
-            --stage-web-base-url "${{ needs.release-stage-verify-acceptance.outputs.web_stage_base_url }}"
+            --stage-web-base-url "${{ needs.release-stage-verify-acceptance.outputs.web_stage_base_url }}" &
+          api_pid=$!
+
+          node platform/pipeline/stages/03-release-stage/scripts/deploy-stage-app-from-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
+            --resource-group "$RG" \
+            --app web \
+            --app-name "$WEB_STAGE_APP_NAME" \
+            --stage-api-base-url "${{ needs.release-stage-verify-acceptance.outputs.api_stage_base_url }}" \
+            --stage-web-base-url "${{ needs.release-stage-verify-acceptance.outputs.web_stage_base_url }}" &
+          web_pid=$!
+
+          wait "$api_pid"
+          wait "$web_pid"
 
   release-stage-smoke-stage-read-only:
     name: Release Stage / Smoke Stage Read Only
@@ -714,6 +853,11 @@ jobs:
       - release-stage-verify-acceptance
       - release-stage-deploy-stage
     runs-on: ubuntu-latest
+    concurrency:
+      group: continuous-delivery-stage
+      cancel-in-progress: false
+    environment:
+      name: stage
     outputs:
       verdict: ${{ steps.smoke.outputs.verdict }}
     steps:
@@ -739,9 +883,11 @@ jobs:
       - release-stage-smoke-stage-read-only
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    concurrency:
+      group: continuous-delivery-stage
+      cancel-in-progress: false
     environment:
-      name: production
-      url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
+      name: stage
     permissions:
       contents: read
       packages: read
@@ -796,6 +942,11 @@ jobs:
       - release-stage-verify-acceptance
       - release-stage-run-migrations
     runs-on: ubuntu-latest
+    concurrency:
+      group: continuous-delivery-stage
+      cancel-in-progress: false
+    environment:
+      name: stage
     outputs:
       verdict: ${{ steps.smoke.outputs.verdict }}
     steps:
@@ -814,18 +965,16 @@ jobs:
           echo "verdict=pass" >> "$GITHUB_OUTPUT"
 
   release-stage-deploy-production:
-    name: Release Stage / Deploy Production / ${{ matrix.app }}
+    name: Release Stage / Deploy Production
     needs:
       - prepare-candidate
       - release-stage-verify-acceptance
       - release-stage-smoke-stage-auth
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    strategy:
-      matrix:
-        app:
-          - api
-          - web
+    concurrency:
+      group: continuous-delivery-production
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: read
@@ -867,24 +1016,43 @@ jobs:
             --registry-repo "${MANIFESTS_REPO}" \
             --out "$RUNNER_TEMP/release-candidate.json"
 
-      - name: Deploy production app from candidate
+      - name: Deploy production apps from candidate
         env:
           RG: ${{ vars.AZURE_RESOURCE_GROUP }}
-          APP_NAME: ${{ matrix.app == 'api' && vars.ACA_API_PROD_APP_NAME || vars.ACA_WEB_PROD_APP_NAME }}
+          API_PROD_APP_NAME: ${{ vars.ACA_API_PROD_APP_NAME }}
+          WEB_PROD_APP_NAME: ${{ vars.ACA_WEB_PROD_APP_NAME }}
         run: |
+          set -euo pipefail
+
           node platform/pipeline/stages/03-release-stage/scripts/deploy-prod-app-from-candidate.mjs \
             --manifest "$RUNNER_TEMP/release-candidate.json" \
             --resource-group "$RG" \
-            --app "${{ matrix.app }}" \
-            --app-name "$APP_NAME" \
+            --app api \
+            --app-name "$API_PROD_APP_NAME" \
             --prod-api-base-url "${{ needs.release-stage-verify-acceptance.outputs.prod_api_base_url }}" \
-            --prod-web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}"
+            --prod-web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}" &
+          api_pid=$!
+
+          node platform/pipeline/stages/03-release-stage/scripts/deploy-prod-app-from-candidate.mjs \
+            --manifest "$RUNNER_TEMP/release-candidate.json" \
+            --resource-group "$RG" \
+            --app web \
+            --app-name "$WEB_PROD_APP_NAME" \
+            --prod-api-base-url "${{ needs.release-stage-verify-acceptance.outputs.prod_api_base_url }}" \
+            --prod-web-base-url "${{ vars.PRODUCTION_WEB_BASE_URL }}" &
+          web_pid=$!
+
+          wait "$api_pid"
+          wait "$web_pid"
 
   release-stage-smoke-production:
     name: Release Stage / Smoke Production
     needs:
       - release-stage-deploy-production
     runs-on: ubuntu-latest
+    concurrency:
+      group: continuous-delivery-production
+      cancel-in-progress: false
     environment:
       name: production
       url: ${{ vars.PRODUCTION_WEB_BASE_URL }}
@@ -1002,6 +1170,7 @@ jobs:
 
   release-stage:
     name: Release Stage
+    if: always()
     runs-on: ubuntu-latest
     needs:
       - prepare-candidate
@@ -1048,8 +1217,43 @@ jobs:
           assert_success record-evidence "$RECORD_EVIDENCE"
 
       - name: Write release summary
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREPARE_CANDIDATE: ${{ needs.prepare-candidate.result }}
+          VERIFY_ACCEPTANCE: ${{ needs.release-stage-verify-acceptance.result }}
+          DEPLOY_STAGE: ${{ needs.release-stage-deploy-stage.result }}
+          SMOKE_STAGE_READ_ONLY: ${{ needs.release-stage-smoke-stage-read-only.result }}
+          RUN_MIGRATIONS: ${{ needs.release-stage-run-migrations.result }}
+          SMOKE_STAGE_AUTH: ${{ needs.release-stage-smoke-stage-auth.result }}
+          DEPLOY_PRODUCTION: ${{ needs.release-stage-deploy-production.result }}
+          SMOKE_PRODUCTION: ${{ needs.release-stage-smoke-production.result }}
+          RECORD_EVIDENCE: ${{ needs.release-stage-record-evidence.result }}
         run: |
+          line_stop=false
+          for result in \
+            "$PREPARE_CANDIDATE" \
+            "$VERIFY_ACCEPTANCE" \
+            "$DEPLOY_STAGE" \
+            "$SMOKE_STAGE_READ_ONLY" \
+            "$RUN_MIGRATIONS" \
+            "$SMOKE_STAGE_AUTH" \
+            "$DEPLOY_PRODUCTION" \
+            "$SMOKE_PRODUCTION" \
+            "$RECORD_EVIDENCE"; do
+            if [ "$result" != "success" ]; then
+              line_stop=true
+            fi
+          done
+
+          node platform/pipeline/shared/scripts/write-run-timing-summary.mjs \
+            --repo "${{ github.repository }}" \
+            --run-id "${{ github.run_id }}" \
+            --headline "Release Stage Timing" \
+            --line-stop "$line_stop"
+
           {
+            echo ""
             echo "## Release Stage"
             echo "- Candidate: ${{ needs.prepare-candidate.outputs.candidate_id }}"
             echo "- Stage smoke verdict: ${{ needs.release-stage-smoke-stage-auth.outputs.verdict }}"

@@ -8,6 +8,15 @@ Release Stage takes an accepted candidate and deploys it to production without r
 
 - successful `Acceptance Stage` completion inside `20 Continuous Delivery Pipeline`
 
+## Environment model
+
+Release uses two distinct GitHub environments:
+
+- `stage` for candidate verification and non-production mutation
+- `production` for production deploy, smoke, and release evidence
+
+Commit Stage and Acceptance Stage are free to run for newer commits while stage and production mutations remain serialized.
+
 ## Sequence
 
 Forward release:

@@ -49,13 +49,14 @@ PRs are optional and lightweight. They are a collaboration tool, not the authori
 
 The `push` to `main` path is the real delivery pipeline. It:
 
-1. runs Commit Stage unit tests and integration tests in parallel
+1. runs Commit Stage static analysis, unit tests, and integration tests in parallel
 2. builds and pushes the API and Web images in parallel
-3. runs candidate smoke against the built digests
-4. publishes the immutable release candidate manifest and release unit
-5. runs black-box API and Web acceptance against that exact candidate
-6. verifies the accepted candidate and deploys it through stage and production
-7. publishes release evidence and release attestation
+3. generates the canonical release candidate manifest once from those image digests
+4. runs candidate smoke against that exact manifest
+5. publishes the immutable release candidate manifest and release unit
+6. runs black-box API and Web acceptance against that exact candidate
+7. verifies the accepted candidate and deploys it through stage and production
+8. publishes release evidence and release attestation
 
 ## Candidate model
 
@@ -66,6 +67,13 @@ A release candidate is:
 - the single artifact consumed by Acceptance Stage and Release Stage
 
 Later stages do not rebuild images or substitute different digests.
+
+The same manifest contract is used:
+
+- locally by `pnpm verify` and `pnpm acceptance`
+- in GitHub Actions during Commit Stage smoke
+- in Acceptance Stage
+- in Release Stage
 
 ## Rules
 
@@ -85,3 +93,4 @@ Later stages do not rebuild images or substitute different digests.
 - keep PR checks minimal and keep full validation on the same repo-owned stage scripts used locally and on `main`
 - treat the line as unhealthy if Acceptance Stage or Release Stage fails for the promoted candidate
 - treat red `main` as a line-stop until fixed forward
+- let Commit and Acceptance for newer commits run immediately while stage and production mutations remain serialized

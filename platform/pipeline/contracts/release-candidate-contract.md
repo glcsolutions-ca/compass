@@ -24,6 +24,8 @@ Candidate provenance also records:
 - the registry
 - the release unit digest when available
 
+The manifest is generated once from the built API and Web digests before Commit Stage smoke. Commit smoke, Acceptance Stage, and Release Stage all consume that same manifest contract.
+
 ## Promotion path
 
 The required promotion path is:

@@ -1,6 +1,7 @@
-# API Acceptance Smoke
+# API Acceptance
 
-Purpose: black-box API smoke checks for runtime health.
+Purpose: black-box API acceptance that exercises a real authenticated thread lifecycle through the
+public HTTP interface.
 
 ## Run
 
@@ -18,4 +19,4 @@ Set target endpoint via:
 
 ## Source of truth
 
-- `tests/acceptance/api/smoke.ts`
+- `tests/acceptance/api/thread-lifecycle.ts`

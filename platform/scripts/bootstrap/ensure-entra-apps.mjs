@@ -184,13 +184,19 @@ export async function ensureEntraApps({
   const webApp = await ensureAppRegistration(config.entra.webAppDisplayName, { redirectUris });
   const deployApp = await ensureAppRegistration(config.entra.deployAppDisplayName);
   const deployServicePrincipal = await ensureServicePrincipal(deployApp.appId);
-  await ensureFederatedCredential(deployApp.id, {
-    name: `github-${config.githubEnvironment}`,
-    issuer: GITHUB_OIDC_ISSUER,
-    subject: `repo:${config.repository}:environment:${config.githubEnvironment}`,
-    audiences: GITHUB_OIDC_AUDIENCE,
-    description: `GitHub Actions ${config.githubEnvironment} deployment for ${config.repository}`
-  });
+  const githubEnvironments =
+    Array.isArray(config.githubEnvironments) && config.githubEnvironments.length > 0
+      ? config.githubEnvironments
+      : [config.githubEnvironment];
+  for (const environmentName of githubEnvironments) {
+    await ensureFederatedCredential(deployApp.id, {
+      name: `github-${environmentName}`,
+      issuer: GITHUB_OIDC_ISSUER,
+      subject: `repo:${config.repository}:environment:${environmentName}`,
+      audiences: GITHUB_OIDC_AUDIENCE,
+      description: `GitHub Actions ${environmentName} deployment for ${config.repository}`
+    });
+  }
   const resourceGroupScope = await runAz(
     ["group", "show", "--name", config.resourceGroup, "--query", "id"],
     { output: "tsv" }

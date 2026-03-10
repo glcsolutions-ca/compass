@@ -44,9 +44,23 @@ The candidate is built once during Commit and then promoted without rebuilds.
 ## Deployment scope
 
 - one Azure resource group: `rg-compass-prd-cc-001`
-- one GitHub deployment environment: `production`
+- two GitHub deployment environments: `stage` and `production`
 - one stage/prod ACA pair for each deployed app: `api-stage`, `web-stage`, `api-prod`, `web-prod`
 - one migrations job
 - GHCR as the only image registry
+
+## Commit Stage shape
+
+Commit Stage is the fast integrated gate on `main`. It owns:
+
+1. static analysis
+2. unit tests
+3. integration tests
+4. candidate image build
+5. canonical manifest generation
+6. candidate smoke against that manifest
+7. candidate publication
+
+Commit is where the pipeline tries to catch the majority of failures quickly and produce the immutable candidate that later stages promote without rebuilding.
 
 Bootstrap is separate from the CDP. The one-time production staging flow lives in [bootstrap/README.md](/Users/justinkropp/.codex/worktrees/68b7/compass/bootstrap/README.md).

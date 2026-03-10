@@ -2,6 +2,12 @@
   "repository": "glcsolutions-ca/compass",
   "environments": [
     {
+      "name": "stage",
+      "canAdminsBypass": false,
+      "requireReviewers": false,
+      "branchPolicies": ["main"]
+    },
+    {
       "name": "production",
       "canAdminsBypass": false,
       "requireReviewers": false,

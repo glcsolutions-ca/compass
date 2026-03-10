@@ -14,11 +14,13 @@ It is the first hard gate on code that has already landed on `main`. If Commit p
 
 Commit Stage owns:
 
-1. unit tests
-2. integration tests
-3. candidate image build
-4. candidate smoke
-5. candidate publication
+1. static analysis
+2. unit tests
+3. integration tests
+4. candidate image build
+5. canonical manifest generation
+6. candidate smoke against that manifest
+7. candidate publication
 
 `pnpm verify` mirrors this stage locally. The local path runs the same stage-owned scripts, builds the same candidate contract, and smokes that candidate without publishing to shared registries.
 
@@ -30,6 +32,8 @@ Commit publishes:
 - Web image digest
 - release candidate manifest
 - release unit OCI index
+
+The manifest is generated once from the built digests before smoke and then reused unchanged for publication and all later stages.
 
 ## Scope
 

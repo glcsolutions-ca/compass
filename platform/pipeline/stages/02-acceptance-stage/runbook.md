@@ -12,7 +12,7 @@ Acceptance Stage runs inside `20 Continuous Delivery Pipeline` on successful `Co
 
 Acceptance does not deploy to Azure.
 
-It runs the exact candidate locally in GitHub Actions:
+It runs the exact candidate in a local runtime that mirrors the product path as closely as practical:
 
 - local Postgres container
 - candidate API image running the migration and seed command

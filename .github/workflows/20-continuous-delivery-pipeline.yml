@@ -360,6 +360,12 @@ jobs:
       - commit-stage-smoke-candidate
       - commit-stage-publish-candidate
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          persist-credentials: false
+
       - name: Assert expected path succeeded
         env:
           PREPARE_CANDIDATE: ${{ needs.prepare-candidate.result }}
@@ -393,6 +399,7 @@ jobs:
 
       - name: Write commit summary
         if: always()
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PREPARE_CANDIDATE: ${{ needs.prepare-candidate.result }}
@@ -562,6 +569,13 @@ jobs:
       API_ACCEPTANCE: ${{ needs.acceptance-stage-api.result }}
       WEB_ACCEPTANCE: ${{ needs.acceptance-stage-web.result }}
     steps:
+      - name: Checkout summary scripts
+        if: always()
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          persist-credentials: false
+
       - name: Assert expected path succeeded
         run: |
           set -euo pipefail
@@ -645,6 +659,7 @@ jobs:
 
       - name: Write acceptance summary
         if: always()
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -1183,6 +1198,12 @@ jobs:
       - release-stage-smoke-production
       - release-stage-record-evidence
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
+          persist-credentials: false
+
       - name: Assert expected path succeeded
         env:
           PREPARE_CANDIDATE: ${{ needs.prepare-candidate.result }}
@@ -1218,6 +1239,7 @@ jobs:
 
       - name: Write release summary
         if: always()
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PREPARE_CANDIDATE: ${{ needs.prepare-candidate.result }}

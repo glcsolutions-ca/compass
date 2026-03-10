@@ -218,6 +218,21 @@ export async function withCandidateRuntime(
   };
 
   await mkdir(diagnosticsDir, { recursive: true });
+  await writeFile(
+    path.join(diagnosticsDir, "runtime-context.json"),
+    `${JSON.stringify(
+      {
+        sourceRevision: manifest.source.revision,
+        apiImage: manifest.artifacts.apiImage,
+        webImage: manifest.artifacts.webImage ?? null,
+        apiBaseUrl: runtime.apiBaseUrl,
+        webBaseUrl: runtime.webBaseUrl
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
   await prefetchCandidateImages(manifest, { includeWebImage });
   await run("docker", ["network", "create", network]);
 

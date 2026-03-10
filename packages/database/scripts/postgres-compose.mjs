@@ -17,7 +17,10 @@ async function main() {
   const postgresEnvLocalPath = path.join(POSTGRES_DIR, ".env.local");
   const composeFilePath = path.join(POSTGRES_DIR, "docker-compose.yml");
 
-  const args = ["compose", "--env-file", postgresEnvPath];
+  const args = ["compose"];
+  if (await exists(postgresEnvPath)) {
+    args.push("--env-file", postgresEnvPath);
+  }
   if (await exists(postgresEnvLocalPath)) {
     args.push("--env-file", postgresEnvLocalPath);
   }

@@ -245,6 +245,28 @@ export async function ensureEntraApps({
     });
   }
 
+  const keyVaultScope = await runAz(
+    [
+      "keyvault",
+      "show",
+      "--name",
+      config.azureKeyVaultName,
+      "--resource-group",
+      config.azureResourceGroup,
+      "--query",
+      "id"
+    ],
+    { output: "tsv" }
+  ).catch(() => "");
+  if (keyVaultScope) {
+    await ensureRoleAssignment({
+      scope: keyVaultScope,
+      principalId: deployServicePrincipal.id,
+      principalType: "ServicePrincipal",
+      roleName: "Key Vault Secrets User"
+    });
+  }
+
   const webClientSecret =
     (await maybeRotateWebClientSecret(webApp.appId, resetWebClientSecret)) ||
     String(previousOutput.webClientSecret || "").trim();

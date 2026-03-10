@@ -136,7 +136,7 @@ jobs:
 
       - name: Build and push ${{ matrix.image.id }} image
         id: build_image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
           context: .
           file: ${{ matrix.image.dockerfile }}
@@ -156,7 +156,7 @@ jobs:
           printf '%s' '${{ steps.build_image.outputs.digest }}' > artifacts/image-digests/${{ matrix.image.id }}.digest
 
       - name: Upload digest artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: image-digest-${{ matrix.image.id }}
           path: artifacts/image-digests/${{ matrix.image.id }}.digest
@@ -181,7 +181,7 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Download digest artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: image-digest-*
           path: artifacts/image-digests
@@ -213,7 +213,7 @@ jobs:
         run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
 
       - name: Upload canonical manifest artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-candidate-manifest
           path: ${{ runner.temp }}/release-candidate.json
@@ -248,7 +248,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download canonical manifest artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-candidate-manifest
           path: ${{ runner.temp }}
@@ -261,7 +261,7 @@ jobs:
 
       - name: Upload smoke artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: commit-stage-smoke-artifacts
           path: ${{ runner.temp }}/commit-smoke-diagnostics
@@ -306,14 +306,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download digest artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: image-digest-*
           path: artifacts/image-digests
           merge-multiple: true
 
       - name: Download canonical manifest artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-candidate-manifest
           path: ${{ runner.temp }}
@@ -494,7 +494,7 @@ jobs:
 
       - name: Upload API acceptance artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: acceptance-stage-api-artifacts
           path: ${{ runner.temp }}/acceptance-api-diagnostics
@@ -551,7 +551,7 @@ jobs:
 
       - name: Upload Web acceptance artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: acceptance-stage-web-artifacts
           path: ${{ runner.temp }}/acceptance-web-diagnostics
@@ -658,7 +658,7 @@ jobs:
 
       - name: Upload acceptance predicate
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: acceptance-stage-artifacts
           path: artifacts/attestations/acceptance-predicate.json
@@ -1186,7 +1186,7 @@ jobs:
 
       - name: Upload release artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-stage-artifacts
           path: |

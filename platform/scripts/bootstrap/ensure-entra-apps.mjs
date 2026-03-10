@@ -20,6 +20,7 @@ const OUTPUT_PATH = path.resolve("bootstrap/.artifacts/entra-apps.json");
 const ENVIRONMENTS_CONFIG_PATH = path.resolve("bootstrap/config/github-environments.json");
 const GITHUB_OIDC_ISSUER = "https://token.actions.githubusercontent.com";
 const GITHUB_OIDC_AUDIENCE = ["api://AzureADTokenExchange"];
+const GITHUB_MAIN_BRANCH_SUBJECT = `repo:${REPOSITORY_SLUG}:ref:refs/heads/main`;
 
 async function gh(args) {
   const result = await execFileAsync("gh", args, {
@@ -231,6 +232,13 @@ export async function ensureEntraApps({
       description: `GitHub Actions ${environmentName} deployment for ${REPOSITORY_SLUG}`
     });
   }
+  await ensureFederatedCredential(deployApp.id, {
+    name: "github-main",
+    issuer: GITHUB_OIDC_ISSUER,
+    subject: GITHUB_MAIN_BRANCH_SUBJECT,
+    audiences: GITHUB_OIDC_AUDIENCE,
+    description: `GitHub Actions main branch control-plane access for ${REPOSITORY_SLUG}`
+  });
 
   const resourceGroupScope = await runAz(
     ["group", "show", "--name", config.azureResourceGroup, "--query", "id"],

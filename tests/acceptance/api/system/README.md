@@ -5,7 +5,7 @@ Purpose: black-box API smoke checks for runtime health.
 ## Run
 
 ```bash
-pnpm test:system
+pnpm test:acceptance:api
 ```
 
 Set target endpoint via:

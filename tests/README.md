@@ -12,8 +12,9 @@ This repository uses a simpler product-first test taxonomy:
 ```bash
 pnpm test
 pnpm test:integration
-pnpm test:system
-pnpm test:e2e
+pnpm test:acceptance
+pnpm test:acceptance:api
+pnpm test:acceptance:web
 pnpm test:full
 pnpm --filter @compass/pipeline-tools run test
 ```

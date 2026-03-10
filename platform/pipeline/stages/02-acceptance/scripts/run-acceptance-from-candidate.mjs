@@ -290,14 +290,18 @@ export async function runCandidateRuntimeChecks({
     };
 
     if (includeSystemSmoke) {
-      await run("pnpm", ["test:system"], {
+      await run("pnpm", ["test:acceptance:api"], {
         env: systemEnv,
         cwd: path.resolve("."),
         stdio: "inherit"
       });
     }
     if (includeBrowserSmoke) {
-      await run("pnpm", ["test:e2e"], { env: e2eEnv, cwd: path.resolve("."), stdio: "inherit" });
+      await run("pnpm", ["test:acceptance:web"], {
+        env: e2eEnv,
+        cwd: path.resolve("."),
+        stdio: "inherit"
+      });
     }
 
     const result = {

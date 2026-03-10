@@ -2,19 +2,94 @@ import { spawn } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import { mkdir, open, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { ensureEnvSetup } from "./env-setup.mjs";
+import { fileURLToPath } from "node:url";
+import { ensureEnvSetup } from "../env-setup.mjs";
 import { resolveLocalDevEnv } from "./local-env.mjs";
 
+export const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ARTIFACTS_DIR = ".artifacts/dev";
 const LOCK_PATH = path.join(ARTIFACTS_DIR, "dev-stack.lock.json");
 const DEV_APPS_LOG_PATH = path.join(ARTIFACTS_DIR, "dev-apps.log");
-const DEV_APPS_RUNNER_PATH = path.resolve(process.cwd(), "platform/scripts/dev/run-apps.mjs");
+const DEV_APPS_RUNNER_PATH = path.resolve(ROOT_DIR, "scripts/lib/run-apps.mjs");
 
 function nowIso() {
   return new Date().toISOString();
 }
 
-function runCommand(command, args, cwd, { allowFailure = false, env = process.env } = {}) {
+function createAbortError() {
+  const error = new Error("Aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) {
+    throw createAbortError();
+  }
+}
+
+function delay(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, ms);
+
+    const onAbort = () => {
+      cleanup();
+      reject(createAbortError());
+    };
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    };
+
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+export function mapExitCode(code, signal) {
+  if (typeof code === "number") {
+    return code;
+  }
+
+  if (signal === "SIGINT") {
+    return 130;
+  }
+
+  if (signal === "SIGTERM") {
+    return 143;
+  }
+
+  return 1;
+}
+
+export function pnpmCommand() {
+  return process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+}
+
+export function runCommand(command, args, { cwd = ROOT_DIR, env = process.env } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      stdio: "inherit",
+      env
+    });
+
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      if (code === 0) {
+        resolve(undefined);
+        return;
+      }
+
+      reject(new Error(`${command} ${args.join(" ")} failed with exit code ${String(code)}`));
+    });
+  });
+}
+
+function runWorkspaceCommand(command, args, cwd, { allowFailure = false, env = process.env } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
@@ -25,7 +100,7 @@ function runCommand(command, args, cwd, { allowFailure = false, env = process.en
     child.once("error", reject);
     child.once("exit", (code) => {
       if (code === 0 || allowFailure) {
-        resolve();
+        resolve(undefined);
         return;
       }
 
@@ -167,7 +242,7 @@ async function killProcessGroupIfRunning(pgid, { timeoutMs = 10_000 } = {}) {
 }
 
 async function startDependencies(rootDir, env) {
-  await runCommand(
+  await runWorkspaceCommand(
     process.execPath,
     [
       path.resolve(rootDir, "packages/database/scripts/postgres-compose.mjs"),
@@ -182,14 +257,14 @@ async function startDependencies(rootDir, env) {
     }
   );
 
-  await runCommand(
+  await runWorkspaceCommand(
     process.execPath,
     [path.resolve(rootDir, "packages/database/scripts/check-migration-policy.mjs")],
     rootDir,
     { env }
   );
 
-  await runCommand(
+  await runWorkspaceCommand(
     process.execPath,
     [path.resolve(rootDir, "packages/database/scripts/migrate.mjs"), "up"],
     rootDir,
@@ -198,7 +273,7 @@ async function startDependencies(rootDir, env) {
     }
   );
 
-  await runCommand(
+  await runWorkspaceCommand(
     process.execPath,
     [path.resolve(rootDir, "packages/database/scripts/seed-postgres.mjs")],
     rootDir,
@@ -206,64 +281,6 @@ async function startDependencies(rootDir, env) {
       env
     }
   );
-}
-
-async function waitForHttpHealth(url, timeoutMs = 30_000) {
-  const startedAt = Date.now();
-  let lastError = null;
-
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        return;
-      }
-      lastError = new Error(`HTTP ${response.status}`);
-    } catch (error) {
-      lastError = error;
-    }
-
-    await new Promise((resolve) => {
-      setTimeout(resolve, 250);
-    });
-  }
-
-  const reason = lastError instanceof Error ? lastError.message : String(lastError ?? "unknown");
-  throw new Error(`Health check failed for ${url}: ${reason}`);
-}
-
-async function waitForStackHealth(env) {
-  const apiPort = env.API_PORT;
-  const webPort = env.WEB_PORT;
-
-  await waitForHttpHealth(`http://127.0.0.1:${apiPort}/health`);
-  await waitForHttpHealth(`http://127.0.0.1:${webPort}/health`);
-}
-
-async function down(rootDir, env) {
-  const lock = await readLock(rootDir);
-  const lockOwnerPid = Number(lock?.ownerPid);
-  const isDetachedOwner = lock?.mode === "up";
-  const shouldKillDetachedOwner =
-    isDetachedOwner && Number.isInteger(lockOwnerPid) && lockOwnerPid > 0;
-
-  if (shouldKillDetachedOwner) {
-    await killProcessGroupIfRunning(lockOwnerPid, { timeoutMs: 15_000 }).catch(() => {});
-    await killPidIfRunning(lockOwnerPid, { timeoutMs: 15_000 }).catch(() => {});
-  }
-
-  await runCommand(
-    process.execPath,
-    [path.resolve(rootDir, "packages/database/scripts/postgres-compose.mjs"), "down"],
-    rootDir,
-    {
-      allowFailure: true,
-      env
-    }
-  );
-
-  await removeLock(rootDir);
-  console.info("dev-stack: dependencies are down.");
 }
 
 function launchAppStack(rootDir, env) {
@@ -294,23 +311,7 @@ function launchAppStack(rootDir, env) {
     child.once("exit", (code, signal) => {
       process.off("SIGINT", onSigint);
       process.off("SIGTERM", onSigterm);
-
-      if (typeof code === "number") {
-        resolve(code);
-        return;
-      }
-
-      if (signal === "SIGINT") {
-        resolve(130);
-        return;
-      }
-
-      if (signal === "SIGTERM") {
-        resolve(143);
-        return;
-      }
-
-      resolve(1);
+      resolve(mapExitCode(code, signal));
     });
   });
 }
@@ -338,72 +339,178 @@ async function launchAppStackDetached(rootDir, env) {
   };
 }
 
-async function resolveRuntimeEnv(rootDir) {
+export async function resolveLocalRuntimeEnv({
+  rootDir = ROOT_DIR,
+  env = process.env,
+  extraEnv = {}
+} = {}) {
   await ensureEnvSetup({ rootDir });
-  const resolved = await resolveLocalDevEnv({
-    rootDir,
-    env: process.env
-  });
+  const resolved = await resolveLocalDevEnv({ rootDir, env });
 
   return {
     ports: resolved.ports,
     env: {
-      ...process.env,
-      ...resolved.env
+      ...env,
+      ...resolved.env,
+      ...extraEnv
     }
   };
 }
 
-async function run(rootDir) {
+export async function isHealthy(url, { signal } = {}) {
+  try {
+    const response = await fetch(url, { signal });
+    return response.ok;
+  } catch {
+    if (signal?.aborted) {
+      throw createAbortError();
+    }
+
+    return false;
+  }
+}
+
+export async function waitForHttpHealth(url, timeoutMs = 30_000, { signal } = {}) {
+  const startedAt = Date.now();
+  let lastError = null;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    throwIfAborted(signal);
+
+    try {
+      const response = await fetch(url, { signal });
+      if (response.ok) {
+        return;
+      }
+
+      lastError = new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      if (signal?.aborted) {
+        throw createAbortError();
+      }
+
+      lastError = error;
+    }
+
+    await delay(250, signal);
+  }
+
+  const reason = lastError instanceof Error ? lastError.message : String(lastError ?? "unknown");
+  throw new Error(`Health check failed for ${url}: ${reason}`);
+}
+
+export async function waitForLocalStackHealth(env, { timeoutMs = 30_000, signal } = {}) {
+  const apiHealthUrl = `${env.VITE_API_BASE_URL.replace(/\/$/, "")}/health`;
+  const webHealthUrl = `${env.WEB_BASE_URL.replace(/\/$/, "")}/health`;
+
+  await waitForHttpHealth(apiHealthUrl, timeoutMs, { signal });
+  await waitForHttpHealth(webHealthUrl, timeoutMs, { signal });
+}
+
+export async function ensureLocalStack({
+  rootDir = ROOT_DIR,
+  env,
+  timeoutMs = 30_000
+} = {}) {
+  const runtime = env ? { env } : await resolveLocalRuntimeEnv({ rootDir });
+
+  const apiHealthUrl = `${runtime.env.VITE_API_BASE_URL.replace(/\/$/, "")}/health`;
+  const webHealthUrl = `${runtime.env.WEB_BASE_URL.replace(/\/$/, "")}/health`;
+
+  if ((await isHealthy(apiHealthUrl)) && (await isHealthy(webHealthUrl))) {
+    return {
+      env: runtime.env,
+      reused: true
+    };
+  }
+
+  await upLocalStack({ rootDir, env: runtime.env });
+  await waitForLocalStackHealth(runtime.env, { timeoutMs });
+
+  return {
+    env: runtime.env,
+    reused: false
+  };
+}
+
+export async function downLocalStack({ rootDir = ROOT_DIR, env = process.env } = {}) {
+  await ensureEnvSetup({ rootDir });
+
+  const lock = await readLock(rootDir);
+  const lockOwnerPid = Number(lock?.ownerPid);
+  const isDetachedOwner = lock?.mode === "up";
+  const shouldKillDetachedOwner =
+    isDetachedOwner && Number.isInteger(lockOwnerPid) && lockOwnerPid > 0;
+
+  if (shouldKillDetachedOwner) {
+    await killProcessGroupIfRunning(lockOwnerPid, { timeoutMs: 15_000 }).catch(() => {});
+    await killPidIfRunning(lockOwnerPid, { timeoutMs: 15_000 }).catch(() => {});
+  }
+
+  await runWorkspaceCommand(
+    process.execPath,
+    [path.resolve(rootDir, "packages/database/scripts/postgres-compose.mjs"), "down"],
+    rootDir,
+    {
+      allowFailure: true,
+      env
+    }
+  );
+
+  await removeLock(rootDir);
+  console.info("dev-stack: dependencies are down.");
+}
+
+export async function runLocalStack({ rootDir = ROOT_DIR, env = process.env } = {}) {
   await clearStaleLockIfNeeded(rootDir);
-  const { env, ports } = await resolveRuntimeEnv(rootDir);
+  const runtime = await resolveLocalRuntimeEnv({ rootDir, env });
   await writeLock(rootDir, {
     mode: "run",
     ownerPid: process.pid,
     startedAt: nowIso(),
-    ports,
+    ports: runtime.ports,
     appLogPath: null
   });
 
-  let turboExitCode = 1;
+  let appsExitCode = 1;
   let cleanupError = null;
 
   try {
-    await startDependencies(rootDir, env);
+    await startDependencies(rootDir, runtime.env);
     console.info("dev-stack: dependencies are ready.");
-    turboExitCode = await launchAppStack(rootDir, env);
+    appsExitCode = await launchAppStack(rootDir, runtime.env);
   } finally {
     try {
-      await down(rootDir, env);
+      await downLocalStack({ rootDir, env: runtime.env });
     } catch (error) {
       cleanupError = error;
       console.error(error instanceof Error ? error.message : String(error));
     }
   }
 
-  process.exitCode = cleanupError && turboExitCode === 0 ? 1 : turboExitCode;
+  return cleanupError && appsExitCode === 0 ? 1 : appsExitCode;
 }
 
-async function up(rootDir) {
+export async function upLocalStack({ rootDir = ROOT_DIR, env = process.env } = {}) {
   await clearStaleLockIfNeeded(rootDir);
-  const { env, ports } = await resolveRuntimeEnv(rootDir);
+  const runtime = await resolveLocalRuntimeEnv({ rootDir, env });
 
   let appsPid = null;
   try {
-    await startDependencies(rootDir, env);
+    await startDependencies(rootDir, runtime.env);
     console.info("dev-stack: dependencies are ready.");
 
-    const detached = await launchAppStackDetached(rootDir, env);
+    const detached = await launchAppStackDetached(rootDir, runtime.env);
     appsPid = detached.pid;
     await writeLock(rootDir, {
       mode: "up",
       ownerPid: appsPid,
       startedAt: nowIso(),
-      ports,
+      ports: runtime.ports,
       appLogPath: detached.appLogPath
     });
 
-    await waitForStackHealth(env);
+    await waitForLocalStackHealth(runtime.env);
     console.info(
       `dev-stack: full stack is up in background (pid=${String(appsPid)}). Logs: ${detached.appLogPath}`
     );
@@ -411,36 +518,7 @@ async function up(rootDir) {
     if (Number.isInteger(appsPid) && appsPid > 0) {
       await killPidIfRunning(appsPid).catch(() => {});
     }
-    await down(rootDir, env).catch(() => {});
+    await downLocalStack({ rootDir, env: runtime.env }).catch(() => {});
     throw error;
   }
 }
-
-async function main() {
-  const action = process.argv[2];
-  const rootDir = process.cwd();
-
-  if (!action || !["run", "up", "down"].includes(action)) {
-    console.error("Usage: node platform/scripts/dev/dev-stack.mjs <run|up|down>");
-    process.exitCode = 1;
-    return;
-  }
-
-  if (action === "run") {
-    await run(rootDir);
-    return;
-  }
-
-  if (action === "up") {
-    await up(rootDir);
-    return;
-  }
-
-  await ensureEnvSetup({ rootDir });
-  await down(rootDir, process.env);
-}
-
-await main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});

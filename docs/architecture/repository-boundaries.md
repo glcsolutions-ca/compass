@@ -20,9 +20,10 @@ Compass is organized as a product-first monorepo.
 
 ## Platform namespace
 
+- `scripts`: developer-facing command entrypoints and shared local-dev helpers
 - `platform/infra`: deployment infrastructure
 - `platform/pipeline`: delivery policy, evidence, and release-candidate tooling
-- `platform/scripts`: bootstrap, infra helpers, and local development scripts
+- `platform/scripts`: platform-owned bootstrap, infra helpers, and specialized operational tooling
 
 Platform code never owns product business logic.
 

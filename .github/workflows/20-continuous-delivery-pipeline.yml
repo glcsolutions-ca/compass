@@ -279,22 +279,12 @@ jobs:
       - commit-stage-smoke-candidate
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      release_unit_digest: ${{ steps.release_unit.outputs.release_unit_digest }}
     permissions:
       contents: read
       packages: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ needs.prepare-candidate.outputs.source_revision }}
-          persist-credentials: false
-
-      - name: Setup Node and pnpm
-        uses: ./.github/actions/setup-node-pnpm
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
       - name: Setup ORAS
         uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
 
@@ -339,9 +329,6 @@ jobs:
             "${{ steps.refs.outputs.web_image_ref }}"
           release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${{ needs.prepare-candidate.outputs.candidate_id }}" | jq -r '.digest')"
           echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
-
-      - name: Validate canonical release candidate manifest
-        run: pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
 
       - name: Publish canonical release candidate manifest
         run: |
@@ -570,10 +557,9 @@ jobs:
       - acceptance-stage-web
     runs-on: ubuntu-latest
     outputs:
-      release_unit_digest: ${{ steps.resolve.outputs.release_unit_digest }}
+      release_unit_digest: ${{ needs.commit-stage-publish-candidate.outputs.release_unit_digest }}
     permissions:
       contents: read
-      packages: read
       id-token: write
       attestations: write
     env:
@@ -615,32 +601,6 @@ jobs:
         if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         uses: ./.github/actions/setup-node-pnpm
 
-      - name: Setup ORAS
-        if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
-        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
-
-      - name: Login to GHCR
-        if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Resolve release candidate manifest
-        if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
-        id: resolve
-        run: |
-          set -euo pipefail
-          candidate_id="${{ needs.prepare-candidate.outputs.candidate_id }}"
-          pnpm --filter @compass/pipeline-tools run manifest:fetch -- \
-            --candidate-id "$candidate_id" \
-            --registry-repo "${MANIFESTS_REPO}" \
-            --out "$RUNNER_TEMP/release-candidate.json"
-          pnpm --filter @compass/pipeline-tools run manifest:validate:runtime --file "$RUNNER_TEMP/release-candidate.json"
-          release_unit_digest="$(oras manifest fetch --descriptor "${RELEASE_UNITS_REPO}:${candidate_id}" | jq -r '.digest')"
-          echo "release_unit_digest=${release_unit_digest}" >> "$GITHUB_OUTPUT"
-
       - name: Generate acceptance attestation predicate
         if: ${{ env.PUBLISH_CANDIDATE == 'success' && env.API_ACCEPTANCE == 'success' && env.WEB_ACCEPTANCE == 'success' }}
         run: |
@@ -660,7 +620,7 @@ jobs:
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-name: ${{ env.RELEASE_UNITS_REPO }}
-          subject-digest: ${{ steps.resolve.outputs.release_unit_digest }}
+          subject-digest: ${{ needs.commit-stage-publish-candidate.outputs.release_unit_digest }}
           predicate-type: ${{ env.ACCEPTANCE_PREDICATE_TYPE }}
           predicate-path: ${{ github.workspace }}/artifacts/attestations/acceptance-predicate.json
 
